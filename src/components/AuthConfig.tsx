@@ -75,7 +75,12 @@ const AuthConfigSchema = Yup.object().shape({
 });
 
 const AuthConfig: React.FC = () => {
-  const { config, updateConfigSection } = useConfig();
+  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+
+  // Reset unsaved changes flag when component mounts
+  React.useEffect(() => {
+    setHasUnsavedChanges(false);
+  }, [setHasUnsavedChanges]);
 
   if (!config) {
     return null;
@@ -137,6 +142,7 @@ const AuthConfig: React.FC = () => {
                       checked={values.basic_auth?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('basic_auth.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="basic_auth.enabled"
                     />
@@ -155,6 +161,10 @@ const AuthConfig: React.FC = () => {
                       variant="outlined"
                       error={getIn(touched, 'basic_auth.username') && Boolean(getIn(errors, 'basic_auth.username'))}
                       helperText={getIn(touched, 'basic_auth.username') && getIn(errors, 'basic_auth.username')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -170,6 +180,10 @@ const AuthConfig: React.FC = () => {
                         (getIn(touched, 'basic_auth.password') && getIn(errors, 'basic_auth.password')) ||
                         "Password must be at least 16 characters, alphanumeric, and without spaces"
                       }
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                 </>
@@ -186,6 +200,7 @@ const AuthConfig: React.FC = () => {
                       checked={values.jwt_auth?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('jwt_auth.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="jwt_auth.enabled"
                     />
@@ -207,6 +222,10 @@ const AuthConfig: React.FC = () => {
                         (getIn(touched, 'jwt_auth.secret_key') && getIn(errors, 'jwt_auth.secret_key')) ||
                         "Secret key must be at least 32 characters, alphanumeric, and without spaces"
                       }
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -222,6 +241,10 @@ const AuthConfig: React.FC = () => {
                         (getIn(touched, 'jwt_auth.token_expiry') && getIn(errors, 'jwt_auth.token_expiry')) ||
                         "Duration format: e.g., 1h, 30m, 24h"
                       }
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -231,6 +254,7 @@ const AuthConfig: React.FC = () => {
                           checked={values.jwt_auth?.refresh_token || false}
                           onChange={(e) => {
                             setFieldValue('jwt_auth.refresh_token', e.target.checked);
+                            setHasUnsavedChanges(true);
                           }}
                           name="jwt_auth.refresh_token"
                         />
@@ -252,6 +276,10 @@ const AuthConfig: React.FC = () => {
                           (getIn(touched, 'jwt_auth.refresh_token_expiry') && getIn(errors, 'jwt_auth.refresh_token_expiry')) ||
                           "Duration format: e.g., 24h, 7d"
                         }
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
                       />
                     </Grid>
                   )}
@@ -262,6 +290,7 @@ const AuthConfig: React.FC = () => {
                           checked={values.jwt_auth?.store_in_redis || false}
                           onChange={(e) => {
                             setFieldValue('jwt_auth.store_in_redis', e.target.checked);
+                            setHasUnsavedChanges(true);
                           }}
                           name="jwt_auth.store_in_redis"
                         />

@@ -7,12 +7,14 @@ interface ConfigContextType {
   config: NauthilusConfig | null;
   loading: boolean;
   error: string | null;
+  hasUnsavedChanges: boolean;
   refreshConfig: () => Promise<void>;
   updateConfig: (config: NauthilusConfig) => Promise<void>;
   updateConfigSection: (section: string, data: any) => Promise<void>;
   uploadConfig: (file: File) => Promise<void>;
   downloadConfig: () => void;
   resetConfig: () => void;
+  setHasUnsavedChanges: (value: boolean) => void;
 }
 
 // Create the context with a default value
@@ -46,6 +48,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   const [config, setConfig] = useState<NauthilusConfig | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
   // Function to load the configuration from local storage
   const refreshConfig = async () => {
@@ -106,6 +109,9 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
       setConfig(newConfig);
+
+      // Reset unsaved changes flag since we've just saved
+      setHasUnsavedChanges(false);
     } catch (err) {
       setError(`Failed to update ${section} configuration. Please try again.`);
       console.error(`Error updating ${section} configuration:`, err);
@@ -147,6 +153,12 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     try {
       if (!config) {
         throw new Error('No configuration to download');
+      }
+
+      // Check if there are unsaved changes
+      if (hasUnsavedChanges) {
+        setError('Please save your changes before downloading the configuration.');
+        return;
       }
 
       // Validate required fields before allowing download
@@ -260,12 +272,14 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     config,
     loading,
     error,
+    hasUnsavedChanges,
     refreshConfig,
     updateConfig,
     updateConfigSection,
     uploadConfig,
     downloadConfig,
     resetConfig,
+    setHasUnsavedChanges,
   };
 
   return (

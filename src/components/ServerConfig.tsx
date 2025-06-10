@@ -124,7 +124,13 @@ const ServerConfigSchema = Yup.object().shape({
 });
 
 const ServerConfig: React.FC = () => {
-  const { config, updateConfigSection } = useConfig();
+  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+  const [customProtocol, setCustomProtocol] = React.useState<string>('');
+
+  // Reset unsaved changes flag when component mounts
+  React.useEffect(() => {
+    setHasUnsavedChanges(false);
+  }, [setHasUnsavedChanges]);
 
   if (!config) {
     return null;
@@ -136,7 +142,7 @@ const ServerConfig: React.FC = () => {
     max_password_history_entries: config.server.max_password_history_entries || 10,
     http3: config.server.http3 || false,
     haproxy_v2: config.server.haproxy_v2 || false,
-    instance_name: config.server.instance_name || '',
+    instance_name: config.server.instance_name || 'nauthilus',
     redis: config.server.redis,
 
 
@@ -262,6 +268,7 @@ const ServerConfig: React.FC = () => {
     }
   };
 
+
   return (
     <Formik
       initialValues={initialValues}
@@ -288,6 +295,10 @@ const ServerConfig: React.FC = () => {
                     (touched.address && errors.address) || 
                     "Enter a valid IPv4 or IPv6 address with port (e.g., 127.0.0.1:8080 or [::1]:8080)"
                   }
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -299,6 +310,10 @@ const ServerConfig: React.FC = () => {
                   variant="outlined"
                   error={touched.instance_name && Boolean(errors.instance_name)}
                   helperText={touched.instance_name && errors.instance_name}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -311,6 +326,10 @@ const ServerConfig: React.FC = () => {
                   type="number"
                   error={touched.max_concurrent_requests && Boolean(errors.max_concurrent_requests)}
                   helperText={touched.max_concurrent_requests && errors.max_concurrent_requests}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -330,7 +349,10 @@ const ServerConfig: React.FC = () => {
                   control={
                     <Checkbox
                       checked={values.http3}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                       name="http3"
                     />
                   }
@@ -1201,21 +1223,67 @@ const ServerConfig: React.FC = () => {
                         : [];
                       setFieldValue('brute_force_protocols', selectedProtocols);
                     }}
-                    renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
+                    renderValue={(selected) => (Array.isArray(selected) ? selected.map(s => s.toLowerCase()).join(', ') : '')}
                   >
-                    <MenuItem value="http">HTTP</MenuItem>
-                    <MenuItem value="smtp">SMTP</MenuItem>
-                    <MenuItem value="imap">IMAP</MenuItem>
-                    <MenuItem value="pop3">POP3</MenuItem>
-                    <MenuItem value="ftp">FTP</MenuItem>
-                    <MenuItem value="ssh">SSH</MenuItem>
-                    <MenuItem value="ldap">LDAP</MenuItem>
-                    <MenuItem value="radius">RADIUS</MenuItem>
+                    {/* Predefined protocols */}
+                    <MenuItem value="HTTP">HTTP</MenuItem>
+                    <MenuItem value="SMTP">SMTP</MenuItem>
+                    <MenuItem value="IMAP">IMAP</MenuItem>
+                    <MenuItem value="POP3">POP3</MenuItem>
+                    <MenuItem value="FTP">FTP</MenuItem>
+                    <MenuItem value="SSH">SSH</MenuItem>
+                    <MenuItem value="LDAP">LDAP</MenuItem>
+                    <MenuItem value="RADIUS">RADIUS</MenuItem>
+
+                    {/* Custom protocols */}
+                    {values.brute_force_protocols?.filter(p => 
+                      !["HTTP", "SMTP", "IMAP", "POP3", "FTP", "SSH", "LDAP", "RADIUS"].includes(p.name.toUpperCase())
+                    ).map(protocol => (
+                      <MenuItem key={protocol.name} value={protocol.name}>
+                        {protocol.name}
+                      </MenuItem>
+                    ))}
                   </Select>
                   <FormHelperText>
                     Select protocols to enable brute force protection for. Adding protocols to this list enables brute force protection.
                   </FormHelperText>
                 </FormControl>
+              </Grid>
+              <Grid item xs={12}>
+                <Typography variant="subtitle2" sx={{ mb: 1 }}>Custom Protocol</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <TextField
+                    fullWidth
+                    placeholder="Enter custom protocol"
+                    value={customProtocol || ''}
+                    onChange={(e) => setCustomProtocol(e.target.value)}
+                    sx={{ mr: 2 }}
+                  />
+                  <Button
+                    variant="contained"
+                    onClick={() => {
+                      if (customProtocol && customProtocol.trim() !== '') {
+                        const currentProtocols = values.brute_force_protocols || [];
+                        const protocolExists = currentProtocols.some(
+                          p => p.name.toLowerCase() === customProtocol.trim().toLowerCase()
+                        );
+
+                        if (!protocolExists) {
+                          setFieldValue('brute_force_protocols', [
+                            ...currentProtocols,
+                            { name: customProtocol.trim() }
+                          ]);
+                          setCustomProtocol('');
+                        }
+                      }
+                    }}
+                  >
+                    Add
+                  </Button>
+                </Box>
+                <FormHelperText>
+                  Add a custom protocol to the list. The protocol name will be converted to lowercase when processed.
+                </FormHelperText>
               </Grid>
             </Grid>
           </CollapsibleFormSection>

@@ -130,7 +130,12 @@ const RedisConfigSchema = Yup.object().shape({
 });
 
 const RedisConfig: React.FC = () => {
-  const { config, updateConfigSection } = useConfig();
+  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+
+  // Reset unsaved changes flag when component mounts
+  React.useEffect(() => {
+    setHasUnsavedChanges(false);
+  }, [setHasUnsavedChanges]);
   const [redisSetupType, setRedisSetupType] = useState<string>(() => {
     if (!config) return 'master';
 
@@ -149,6 +154,7 @@ const RedisConfig: React.FC = () => {
   // Handle Redis setup type change
   const handleRedisSetupTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     setRedisSetupType(event.target.value);
+    setHasUnsavedChanges(true);
   };
 
   if (!config) {
@@ -262,6 +268,10 @@ const RedisConfig: React.FC = () => {
                   InputProps={{ inputProps: { min: 0, max: 15 } }}
                   error={getIn(touched, 'redis.database_number') && Boolean(getIn(errors, 'redis.database_number'))}
                   helperText={(getIn(touched, 'redis.database_number') && getIn(errors, 'redis.database_number')) || "Redis database number (0-15)"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -273,6 +283,10 @@ const RedisConfig: React.FC = () => {
                   variant="outlined"
                   error={getIn(touched, 'redis.prefix') && Boolean(getIn(errors, 'redis.prefix'))}
                   helperText={(getIn(touched, 'redis.prefix') && getIn(errors, 'redis.prefix')) || "Prefix for Redis keys"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -284,6 +298,10 @@ const RedisConfig: React.FC = () => {
                   variant="outlined"
                   error={getIn(touched, 'redis.password_nonce') && Boolean(getIn(errors, 'redis.password_nonce'))}
                   helperText={(getIn(touched, 'redis.password_nonce') && getIn(errors, 'redis.password_nonce')) || "Nonce for password encryption (min 16 characters)"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -297,6 +315,10 @@ const RedisConfig: React.FC = () => {
                   InputProps={{ inputProps: { min: 1 } }}
                   error={getIn(touched, 'redis.pool_size') && Boolean(getIn(errors, 'redis.pool_size'))}
                   helperText={(getIn(touched, 'redis.pool_size') && getIn(errors, 'redis.pool_size')) || "Size of the connection pool"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -310,6 +332,10 @@ const RedisConfig: React.FC = () => {
                   InputProps={{ inputProps: { min: 0 } }}
                   error={getIn(touched, 'redis.idle_pool_size') && Boolean(getIn(errors, 'redis.idle_pool_size'))}
                   helperText={(getIn(touched, 'redis.idle_pool_size') && getIn(errors, 'redis.idle_pool_size')) || "Number of idle connections allowed"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>

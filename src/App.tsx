@@ -77,9 +77,11 @@ const menuItems: MenuItem[] = [
 const MainContent: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
+  const [navigationDialogOpen, setNavigationDialogOpen] = useState(false);
+  const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { config, loading, error, uploadConfig, downloadConfig, resetConfig } = useConfig();
+  const { config, loading, error, hasUnsavedChanges, uploadConfig, downloadConfig, resetConfig } = useConfig();
   const { mode, toggleColorMode } = useTheme();
   const muiTheme = useMuiTheme();
 
@@ -115,6 +117,32 @@ const MainContent: React.FC = () => {
     setResetDialogOpen(false);
   };
 
+  const handleNavigation = (path: string) => {
+    if (hasUnsavedChanges) {
+      // If there are unsaved changes, store the pending navigation and show the dialog
+      setPendingNavigation(path);
+      setNavigationDialogOpen(true);
+    } else {
+      // If no unsaved changes, navigate directly
+      navigate(path);
+    }
+  };
+
+  const handleNavigationConfirm = () => {
+    // User confirmed navigation despite unsaved changes
+    if (pendingNavigation) {
+      navigate(pendingNavigation);
+      setNavigationDialogOpen(false);
+      setPendingNavigation(null);
+    }
+  };
+
+  const handleNavigationCancel = () => {
+    // User canceled navigation
+    setNavigationDialogOpen(false);
+    setPendingNavigation(null);
+  };
+
   const drawer = (
     <div>
       <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -139,7 +167,7 @@ const MainContent: React.FC = () => {
       <List>
         {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
-            <ListItemButton onClick={() => navigate(item.path)}>
+            <ListItemButton onClick={() => handleNavigation(item.path)}>
               <ListItemIcon>
                 {item.icon}
               </ListItemIcon>
@@ -294,6 +322,21 @@ const MainContent: React.FC = () => {
         <DialogActions>
           <Button onClick={handleResetCancel}>Cancel</Button>
           <Button onClick={handleResetConfirm} color="error">Reset</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Navigation Confirmation Dialog */}
+      <Dialog
+        open={navigationDialogOpen}
+        onClose={handleNavigationCancel}
+      >
+        <DialogTitle>Unsaved Changes</DialogTitle>
+        <DialogContent>
+          You have unsaved changes. Do you want to continue without saving? Your changes will be lost.
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleNavigationCancel}>Cancel</Button>
+          <Button onClick={handleNavigationConfirm} color="primary">Continue Without Saving</Button>
         </DialogActions>
       </Dialog>
     </Box>

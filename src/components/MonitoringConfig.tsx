@@ -37,7 +37,12 @@ const MonitoringConfigSchema = Yup.object().shape({
 });
 
 const MonitoringConfig: React.FC = () => {
-  const { config, updateConfigSection } = useConfig();
+  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+
+  // Reset unsaved changes flag when component mounts
+  React.useEffect(() => {
+    setHasUnsavedChanges(false);
+  }, [setHasUnsavedChanges]);
 
   if (!config) {
     return null;
@@ -97,6 +102,7 @@ const MonitoringConfig: React.FC = () => {
                         checked={values.insights?.enable_pprof || false}
                         onChange={(e) => {
                           setFieldValue('insights.enable_pprof', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="insights.enable_pprof"
                       />
@@ -111,6 +117,7 @@ const MonitoringConfig: React.FC = () => {
                         checked={values.insights?.enable_block_profile || false}
                         onChange={(e) => {
                           setFieldValue('insights.enable_block_profile', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="insights.enable_block_profile"
                       />
@@ -125,6 +132,7 @@ const MonitoringConfig: React.FC = () => {
                         checked={values.insights?.monitor_connections || false}
                         onChange={(e) => {
                           setFieldValue('insights.monitor_connections', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="insights.monitor_connections"
                       />
@@ -148,6 +156,7 @@ const MonitoringConfig: React.FC = () => {
                         checked={values.prometheus_timer?.enabled || false}
                         onChange={(e) => {
                           setFieldValue('prometheus_timer.enabled', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="prometheus_timer.enabled"
                       />
@@ -164,6 +173,7 @@ const MonitoringConfig: React.FC = () => {
                         value={values.prometheus_timer?.labels || []}
                         onChange={(e) => {
                           setFieldValue('prometheus_timer.labels', e.target.value);
+                          setHasUnsavedChanges(true);
                         }}
                         renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                       >
