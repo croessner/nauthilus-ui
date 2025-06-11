@@ -361,7 +361,7 @@ const AuthConfig: React.FC = () => {
                                 }}
                               />
                               <FormHelperText>
-                                Default roles: authenticated, user_info, list_accounts
+                                Default roles: authenticate, user_info, list_accounts, security, admin
                               </FormHelperText>
                             </Grid>
                             <Grid item xs={12}>
@@ -388,7 +388,7 @@ const AuthConfig: React.FC = () => {
                     <Button
                       variant="outlined"
                       onClick={() => {
-                        const newUser = { username: '', password: '', roles: ['authenticated'] };
+                        const newUser = { username: '', password: '', roles: ['authenticate'] };
                         const newUsers = [...(values.jwt_auth?.users || []), newUser];
                         setFieldValue('jwt_auth.users', newUsers);
                       }}
