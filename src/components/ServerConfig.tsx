@@ -342,6 +342,10 @@ const ServerConfig: React.FC = () => {
                   type="number"
                   error={touched.max_password_history_entries && Boolean(errors.max_password_history_entries)}
                   helperText={touched.max_password_history_entries && errors.max_password_history_entries}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -364,7 +368,10 @@ const ServerConfig: React.FC = () => {
                   control={
                     <Checkbox
                       checked={values.haproxy_v2}
-                      onChange={handleChange}
+                      onChange={(e) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                       name="haproxy_v2"
                     />
                   }
@@ -387,6 +394,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.tls?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('tls.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="tls.enabled"
                     />
@@ -405,6 +413,10 @@ const ServerConfig: React.FC = () => {
                       variant="outlined"
                       error={getIn(touched, 'tls.cert') && Boolean(getIn(errors, 'tls.cert'))}
                       helperText={getIn(touched, 'tls.cert') && getIn(errors, 'tls.cert')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={12}>
@@ -416,6 +428,10 @@ const ServerConfig: React.FC = () => {
                       variant="outlined"
                       error={getIn(touched, 'tls.key') && Boolean(getIn(errors, 'tls.key'))}
                       helperText={getIn(touched, 'tls.key') && getIn(errors, 'tls.key')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -425,6 +441,7 @@ const ServerConfig: React.FC = () => {
                           checked={values.tls?.http_client_skip_verify || false}
                           onChange={(e) => {
                             setFieldValue('tls.http_client_skip_verify', e.target.checked);
+                            setHasUnsavedChanges(true);
                           }}
                           name="tls.http_client_skip_verify"
                         />
@@ -453,6 +470,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.auth_header || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_header', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.auth_header"
                     />
@@ -467,6 +485,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.auth_json || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_json', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.auth_json"
                     />
@@ -481,6 +500,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.auth_basic || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_basic', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.auth_basic"
                     />
@@ -495,6 +515,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.auth_nginx || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_nginx', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.auth_nginx"
                     />
@@ -509,6 +530,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.auth_saslauthd || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_saslauthd', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.auth_saslauthd"
                     />
@@ -523,6 +545,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.auth_jwt || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_jwt', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.auth_jwt"
                     />
@@ -537,6 +560,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.disabled_endpoints?.custom_hooks || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.custom_hooks', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="disabled_endpoints.custom_hooks"
                     />
@@ -909,6 +933,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.compression?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('compression.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="compression.enabled"
                     />
@@ -929,6 +954,10 @@ const ServerConfig: React.FC = () => {
                       InputProps={{ inputProps: { min: 1, max: 9 } }}
                       error={getIn(touched, 'compression.level') && Boolean(getIn(errors, 'compression.level'))}
                       helperText={(getIn(touched, 'compression.level') && getIn(errors, 'compression.level')) || "1 is fastest, 9 is best compression"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -942,6 +971,10 @@ const ServerConfig: React.FC = () => {
                       InputProps={{ inputProps: { min: 0 } }}
                       error={getIn(touched, 'compression.min_length') && Boolean(getIn(errors, 'compression.min_length'))}
                       helperText={(getIn(touched, 'compression.min_length') && getIn(errors, 'compression.min_length')) || "Minimum content length required for compression"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -952,6 +985,7 @@ const ServerConfig: React.FC = () => {
                         value={values.compression?.content_types || []}
                         onChange={(e) => {
                           setFieldValue('compression.content_types', e.target.value);
+                          setHasUnsavedChanges(true);
                         }}
                         renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                       >
@@ -987,6 +1021,7 @@ const ServerConfig: React.FC = () => {
                       checked={values.keep_alive?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('keep_alive.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
                       }}
                       name="keep_alive.enabled"
                     />
@@ -1005,6 +1040,10 @@ const ServerConfig: React.FC = () => {
                       variant="outlined"
                       error={getIn(touched, 'keep_alive.timeout') && Boolean(getIn(errors, 'keep_alive.timeout'))}
                       helperText={(getIn(touched, 'keep_alive.timeout') && getIn(errors, 'keep_alive.timeout')) || "Duration format (e.g., 60s, 2m)"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -1018,6 +1057,10 @@ const ServerConfig: React.FC = () => {
                       InputProps={{ inputProps: { min: 1 } }}
                       error={getIn(touched, 'keep_alive.max_idle_connections') && Boolean(getIn(errors, 'keep_alive.max_idle_connections'))}
                       helperText={(getIn(touched, 'keep_alive.max_idle_connections') && getIn(errors, 'keep_alive.max_idle_connections')) || "Maximum number of idle connections"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -1031,6 +1074,10 @@ const ServerConfig: React.FC = () => {
                       InputProps={{ inputProps: { min: 0 } }}
                       error={getIn(touched, 'keep_alive.max_idle_connections_per_host') && Boolean(getIn(errors, 'keep_alive.max_idle_connections_per_host'))}
                       helperText={(getIn(touched, 'keep_alive.max_idle_connections_per_host') && getIn(errors, 'keep_alive.max_idle_connections_per_host')) || "Maximum number of idle connections per host"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                 </>

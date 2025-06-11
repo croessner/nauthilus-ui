@@ -117,7 +117,8 @@ const RedisConfigSchema = Yup.object().shape({
         .nullable(),
       route_by_latency: Yup.boolean(),
       route_randomly: Yup.boolean(),
-      read_only: Yup.boolean(),
+      read_only: Yup.boolean(), // Deprecated
+      route_reads_to_replicas: Yup.boolean(),
       max_redirects: Yup.number()
         .min(0, 'Must be at least 0')
         .nullable(),
@@ -210,7 +211,8 @@ const RedisConfig: React.FC = () => {
         password: config.server.redis.cluster?.password || '',
         route_by_latency: config.server.redis.cluster?.route_by_latency || false,
         route_randomly: config.server.redis.cluster?.route_randomly || false,
-        read_only: config.server.redis.cluster?.read_only || false,
+        // Use the new parameter if available, otherwise fall back to the old one for backward compatibility
+        route_reads_to_replicas: config.server.redis.cluster?.route_reads_to_replicas || config.server.redis.cluster?.read_only || false,
         max_redirects: config.server.redis.cluster?.max_redirects || 3,
         read_timeout: config.server.redis.cluster?.read_timeout || '3s',
         write_timeout: config.server.redis.cluster?.write_timeout || '3s',
@@ -487,7 +489,7 @@ const RedisConfig: React.FC = () => {
                   <FieldArray name="redis.replica.addresses">
                     {({ push, remove, form }) => (
                       <div>
-                        {values.redis.replica.addresses && values.redis.replica.addresses.length > 0 ? (
+                        {values.redis.replica?.addresses && values.redis.replica.addresses.length > 0 ? (
                           values.redis.replica.addresses.map((address, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                               <Field
@@ -553,7 +555,7 @@ const RedisConfig: React.FC = () => {
                   <FieldArray name="redis.sentinels.addresses">
                     {({ push, remove, form }) => (
                       <div>
-                        {values.redis.sentinels.addresses && values.redis.sentinels.addresses.length > 0 ? (
+                        {values.redis.sentinels?.addresses && values.redis.sentinels.addresses.length > 0 ? (
                           values.redis.sentinels.addresses.map((address, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                               <Field
@@ -631,7 +633,7 @@ const RedisConfig: React.FC = () => {
                   <FieldArray name="redis.cluster.addresses">
                     {({ push, remove, form }) => (
                       <div>
-                        {values.redis.cluster.addresses && values.redis.cluster.addresses.length > 0 ? (
+                        {values.redis.cluster?.addresses && values.redis.cluster.addresses.length > 0 ? (
                           values.redis.cluster.addresses.map((address, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                               <Field
@@ -724,14 +726,14 @@ const RedisConfig: React.FC = () => {
                   <FormControlLabel
                     control={
                       <Checkbox
-                        checked={values.redis.cluster?.read_only || false}
+                        checked={values.redis.cluster?.route_reads_to_replicas || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.read_only', e.target.checked);
+                          setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked);
                         }}
-                        name="redis.cluster.read_only"
+                        name="redis.cluster.route_reads_to_replicas"
                       />
                     }
-                    label="Read Only"
+                    label="Route Reads To Replicas"
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>

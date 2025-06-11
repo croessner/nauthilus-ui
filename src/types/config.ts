@@ -143,7 +143,8 @@ export interface ClusterConfig {
   password?: string;
   route_by_latency?: boolean;
   route_randomly?: boolean;
-  read_only?: boolean;
+  read_only?: boolean; // Deprecated: Use route_reads_to_replicas instead
+  route_reads_to_replicas?: boolean;
   max_redirects?: number;
   read_timeout?: string;
   write_timeout?: string;
