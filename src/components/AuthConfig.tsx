@@ -9,7 +9,8 @@ import {
   Button, 
   Box,
   FormHelperText,
-  Typography
+  Typography,
+  Switch
 } from '@mui/material';
 import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
@@ -136,7 +137,7 @@ const AuthConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.basic_auth?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('basic_auth.enabled', e.target.checked);
@@ -194,7 +195,7 @@ const AuthConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.jwt_auth?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('jwt_auth.enabled', e.target.checked);
@@ -248,7 +249,7 @@ const AuthConfig: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <FormControlLabel
                       control={
-                        <Checkbox
+                        <Switch
                           checked={values.jwt_auth?.refresh_token || false}
                           onChange={(e) => {
                             setFieldValue('jwt_auth.refresh_token', e.target.checked);
@@ -284,7 +285,7 @@ const AuthConfig: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <FormControlLabel
                       control={
-                        <Checkbox
+                        <Switch
                           checked={values.jwt_auth?.store_in_redis || false}
                           onChange={(e) => {
                             setFieldValue('jwt_auth.store_in_redis', e.target.checked);

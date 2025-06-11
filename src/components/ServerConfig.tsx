@@ -13,7 +13,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Typography
+  Typography,
+  Switch
 } from '@mui/material';
 import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
@@ -351,7 +352,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.http3}
                       onChange={(e) => {
                         handleChange(e);
@@ -366,7 +367,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.haproxy_v2}
                       onChange={(e) => {
                         handleChange(e);
@@ -390,7 +391,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.tls?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('tls.enabled', e.target.checked);
@@ -437,7 +438,7 @@ const ServerConfig: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <FormControlLabel
                       control={
-                        <Checkbox
+                        <Switch
                           checked={values.tls?.http_client_skip_verify || false}
                           onChange={(e) => {
                             setFieldValue('tls.http_client_skip_verify', e.target.checked);
@@ -466,7 +467,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.auth_header || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_header', e.target.checked);
@@ -481,7 +482,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.auth_json || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_json', e.target.checked);
@@ -496,7 +497,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.auth_basic || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_basic', e.target.checked);
@@ -511,7 +512,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.auth_nginx || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_nginx', e.target.checked);
@@ -526,7 +527,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.auth_saslauthd || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_saslauthd', e.target.checked);
@@ -541,7 +542,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.auth_jwt || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.auth_jwt', e.target.checked);
@@ -556,7 +557,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.disabled_endpoints?.custom_hooks || false}
                       onChange={(e) => {
                         setFieldValue('disabled_endpoints.custom_hooks', e.target.checked);
@@ -929,7 +930,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.compression?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('compression.enabled', e.target.checked);
@@ -1017,7 +1018,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.keep_alive?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('keep_alive.enabled', e.target.checked);
@@ -1164,7 +1165,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.log?.json || false}
                       onChange={(e) => {
                         setFieldValue('log.json', e.target.checked);
@@ -1178,7 +1179,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.log?.color || false}
                       onChange={(e) => {
                         setFieldValue('log.color', e.target.checked);
@@ -1366,7 +1367,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.dns?.resolve_client_ip || false}
                       onChange={(e) => {
                         setFieldValue('dns.resolve_client_ip', e.target.checked);
@@ -1389,7 +1390,7 @@ const ServerConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.master_user?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('master_user.enabled', e.target.checked);

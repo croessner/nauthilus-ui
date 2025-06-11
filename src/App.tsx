@@ -53,6 +53,7 @@ import RedisConfig from './components/RedisConfig';
 // import FrontendConfig from './components/FrontendConfig';
 import MonitoringConfig from './components/MonitoringConfig';
 import LuaConfig from './components/LuaConfig';
+import LDAPConfig from './components/LDAPConfig';
 
 const drawerWidth = 240;
 
@@ -317,7 +318,7 @@ const MainContent: React.FC = () => {
               <Route path="/frontend" element={<div>Frontend Configuration (Coming Soon)</div>} />
               <Route path="/monitoring" element={<MonitoringConfig />} />
               <Route path="/lua" element={<LuaConfig />} />
-              <Route path="/ldap" element={<div>LDAP Configuration (Coming Soon)</div>} />
+              <Route path="/ldap" element={<LDAPConfig />} />
             </Routes>
           </>
         )}

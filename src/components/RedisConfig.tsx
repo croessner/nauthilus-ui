@@ -15,7 +15,8 @@ import {
   FormControl,
   FormLabel,
   InputAdornment,
-  IconButton
+  IconButton,
+  Switch
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -375,7 +376,7 @@ const RedisConfig: React.FC = () => {
               <Grid item xs={12} md={6}>
                 <FormControlLabel
                   control={
-                    <Checkbox
+                    <Switch
                       checked={values.redis.tls?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('redis.tls.enabled', e.target.checked);
@@ -413,7 +414,7 @@ const RedisConfig: React.FC = () => {
                   <Grid item xs={12} md={6}>
                     <FormControlLabel
                       control={
-                        <Checkbox
+                        <Switch
                           checked={values.redis.tls?.http_client_skip_verify || false}
                           onChange={(e) => {
                             setFieldValue('redis.tls.http_client_skip_verify', e.target.checked);
@@ -697,7 +698,7 @@ const RedisConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.redis.cluster?.route_by_latency || false}
                         onChange={(e) => {
                           setFieldValue('redis.cluster.route_by_latency', e.target.checked);
@@ -711,7 +712,7 @@ const RedisConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.redis.cluster?.route_randomly || false}
                         onChange={(e) => {
                           setFieldValue('redis.cluster.route_randomly', e.target.checked);
@@ -725,7 +726,7 @@ const RedisConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.redis.cluster?.route_reads_to_replicas || false}
                         onChange={(e) => {
                           setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked);

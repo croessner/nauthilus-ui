@@ -19,7 +19,8 @@ import {
   FormControlLabel,
   IconButton,
   Radio,
-  RadioGroup
+  RadioGroup,
+  Switch
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -800,7 +801,7 @@ const FeaturesConfig: React.FC = () => {
                                   <Grid item xs={12} md={6}>
                                     <FormControlLabel
                                       control={
-                                        <Checkbox
+                                        <Switch
                                           checked={values.rbl?.lists[index]?.allow_failure || false}
                                           onChange={(e) => {
                                             setFieldValue(`rbl.lists[${index}].allow_failure`, e.target.checked);
@@ -980,7 +981,7 @@ const FeaturesConfig: React.FC = () => {
                                   <Grid item xs={12} md={6}>
                                     <FormControlLabel
                                       control={
-                                        <Checkbox
+                                        <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.deep_check || false}
                                           onChange={(e) => {
                                             setFieldValue(`backend_server_monitoring.backend_servers[${index}].deep_check`, e.target.checked);
@@ -1043,7 +1044,7 @@ const FeaturesConfig: React.FC = () => {
                                   <Grid item xs={12} md={4}>
                                     <FormControlLabel
                                       control={
-                                        <Checkbox
+                                        <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.tls || false}
                                           onChange={(e) => {
                                             setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls`, e.target.checked);
@@ -1058,7 +1059,7 @@ const FeaturesConfig: React.FC = () => {
                                   <Grid item xs={12} md={4}>
                                     <FormControlLabel
                                       control={
-                                        <Checkbox
+                                        <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.tls_skip_verify || false}
                                           onChange={(e) => {
                                             setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls_skip_verify`, e.target.checked);
@@ -1073,7 +1074,7 @@ const FeaturesConfig: React.FC = () => {
                                   <Grid item xs={12} md={4}>
                                     <FormControlLabel
                                       control={
-                                        <Checkbox
+                                        <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.haproxy_v2 || false}
                                           onChange={(e) => {
                                             setFieldValue(`backend_server_monitoring.backend_servers[${index}].haproxy_v2`, e.target.checked);
@@ -1376,7 +1377,7 @@ const FeaturesConfig: React.FC = () => {
                         <Grid item xs={12} md={6}>
                           <FormControlLabel
                             control={
-                              <Checkbox
+                              <Switch
                                 checked={values.brute_force?.adaptive_toleration || false}
                                 onChange={(e) => {
                                   setFieldValue('brute_force.adaptive_toleration', e.target.checked);
@@ -1506,7 +1507,7 @@ const FeaturesConfig: React.FC = () => {
                                     <Grid item xs={12} md={6}>
                                       <FormControlLabel
                                         control={
-                                          <Checkbox
+                                          <Switch
                                             checked={values.brute_force?.custom_tolerations[index]?.adaptive_toleration || false}
                                             onChange={(e) => {
                                               setFieldValue(`brute_force.custom_tolerations[${index}].adaptive_toleration`, e.target.checked);

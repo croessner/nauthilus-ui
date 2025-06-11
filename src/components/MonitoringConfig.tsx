@@ -13,7 +13,8 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Typography
+  Typography,
+  Switch
 } from '@mui/material';
 import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
@@ -98,7 +99,7 @@ const MonitoringConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.insights?.enable_pprof || false}
                         onChange={(e) => {
                           setFieldValue('insights.enable_pprof', e.target.checked);
@@ -113,7 +114,7 @@ const MonitoringConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.insights?.enable_block_profile || false}
                         onChange={(e) => {
                           setFieldValue('insights.enable_block_profile', e.target.checked);
@@ -128,7 +129,7 @@ const MonitoringConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.insights?.monitor_connections || false}
                         onChange={(e) => {
                           setFieldValue('insights.monitor_connections', e.target.checked);
@@ -152,7 +153,7 @@ const MonitoringConfig: React.FC = () => {
                 <Grid item xs={12} md={6}>
                   <FormControlLabel
                     control={
-                      <Checkbox
+                      <Switch
                         checked={values.prometheus_timer?.enabled || false}
                         onChange={(e) => {
                           setFieldValue('prometheus_timer.enabled', e.target.checked);
