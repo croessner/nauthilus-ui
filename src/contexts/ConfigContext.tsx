@@ -15,6 +15,7 @@ interface ConfigContextType {
   downloadConfig: () => void;
   resetConfig: () => void;
   setHasUnsavedChanges: (value: boolean) => void;
+  setError: (error: string | null) => void;
 }
 
 // Create the context with a default value
@@ -171,6 +172,13 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       // Create a deep copy of the configuration to ensure all nested objects are included
       const configToDownload = JSON.parse(JSON.stringify(config));
 
+      // Ensure brute_force_protocols are lowercase
+      if (configToDownload.server?.brute_force_protocols) {
+        configToDownload.server.brute_force_protocols = configToDownload.server.brute_force_protocols.map((protocol: string) => 
+          protocol.toLowerCase()
+        );
+      }
+
       // Convert the configuration to YAML
       const yamlContent = yaml.dump(configToDownload);
 
@@ -280,6 +288,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     downloadConfig,
     resetConfig,
     setHasUnsavedChanges,
+    setError,
   };
 
   return (

@@ -31,7 +31,6 @@ const AuthConfigSchema = Yup.object().shape({
       then: (schema) => schema
         .required('Password is required when Basic Auth is enabled')
         .min(16, 'Password must be at least 16 characters')
-        .matches(/^[a-zA-Z0-9]+$/, 'Password must be alphanumeric')
         .matches(/^\S+$/, 'Password cannot contain spaces'),
       otherwise: (schema) => schema,
     }),
@@ -45,7 +44,6 @@ const AuthConfigSchema = Yup.object().shape({
       then: (schema) => schema
         .required('Secret key is required when JWT Auth is enabled')
         .min(32, 'Secret key must be at least 32 characters')
-        .matches(/^[a-zA-Z0-9]+$/, 'Secret key must be alphanumeric')
         .matches(/^\S+$/, 'Secret key cannot contain spaces'),
       otherwise: (schema) => schema,
     }),
@@ -178,7 +176,7 @@ const AuthConfig: React.FC = () => {
                       error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
                       helperText={
                         (getIn(touched, 'basic_auth.password') && getIn(errors, 'basic_auth.password')) ||
-                        "Password must be at least 16 characters, alphanumeric, and without spaces"
+                        "Password must be at least 16 characters and without spaces"
                       }
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);
@@ -220,7 +218,7 @@ const AuthConfig: React.FC = () => {
                       error={getIn(touched, 'jwt_auth.secret_key') && Boolean(getIn(errors, 'jwt_auth.secret_key'))}
                       helperText={
                         (getIn(touched, 'jwt_auth.secret_key') && getIn(errors, 'jwt_auth.secret_key')) ||
-                        "Secret key must be at least 32 characters, alphanumeric, and without spaces"
+                        "Secret key must be at least 32 characters and without spaces"
                       }
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);

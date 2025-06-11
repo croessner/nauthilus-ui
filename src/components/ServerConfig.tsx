@@ -1211,10 +1211,10 @@ const ServerConfig: React.FC = () => {
                 <FormControl fullWidth>
                   <Select
                     multiple
-                    value={values.log?.debug_modules?.map(module => module.name) || []}
+                    value={values.log?.debug_modules || []}
                     onChange={(e) => {
                       const selectedModules = Array.isArray(e.target.value) 
-                        ? e.target.value.map(name => ({ name })) 
+                        ? e.target.value
                         : [];
                       setFieldValue('log.debug_modules', selectedModules);
                     }}
@@ -1263,10 +1263,10 @@ const ServerConfig: React.FC = () => {
                 <FormControl fullWidth>
                   <Select
                     multiple
-                    value={values.brute_force_protocols?.map(protocol => protocol.name) || []}
+                    value={values.brute_force_protocols || []}
                     onChange={(e) => {
                       const selectedProtocols = Array.isArray(e.target.value) 
-                        ? e.target.value.map(name => ({ name })) 
+                        ? e.target.value
                         : [];
                       setFieldValue('brute_force_protocols', selectedProtocols);
                     }}
@@ -1284,10 +1284,10 @@ const ServerConfig: React.FC = () => {
 
                     {/* Custom protocols */}
                     {values.brute_force_protocols?.filter(p => 
-                      !["HTTP", "SMTP", "IMAP", "POP3", "FTP", "SSH", "LDAP", "RADIUS"].includes(p.name.toUpperCase())
+                      !["HTTP", "SMTP", "IMAP", "POP3", "FTP", "SSH", "LDAP", "RADIUS"].includes(p.toUpperCase())
                     ).map(protocol => (
-                      <MenuItem key={protocol.name} value={protocol.name}>
-                        {protocol.name}
+                      <MenuItem key={protocol} value={protocol}>
+                        {protocol}
                       </MenuItem>
                     ))}
                   </Select>
@@ -1312,13 +1312,13 @@ const ServerConfig: React.FC = () => {
                       if (customProtocol && customProtocol.trim() !== '') {
                         const currentProtocols = values.brute_force_protocols || [];
                         const protocolExists = currentProtocols.some(
-                          p => p.name.toLowerCase() === customProtocol.trim().toLowerCase()
+                          p => p.toLowerCase() === customProtocol.trim().toLowerCase()
                         );
 
                         if (!protocolExists) {
                           setFieldValue('brute_force_protocols', [
                             ...currentProtocols,
-                            { name: customProtocol.trim() }
+                            customProtocol.trim()
                           ]);
                           setCustomProtocol('');
                         }

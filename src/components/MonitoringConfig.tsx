@@ -177,10 +177,16 @@ const MonitoringConfig: React.FC = () => {
                         }}
                         renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                       >
-                        <MenuItem value="method">method</MenuItem>
-                        <MenuItem value="path">path</MenuItem>
-                        <MenuItem value="status">status</MenuItem>
-                        <MenuItem value="protocol">protocol</MenuItem>
+                        <MenuItem value="action">action</MenuItem>
+                        <MenuItem value="account">account</MenuItem>
+                        <MenuItem value="backend">backend</MenuItem>
+                        <MenuItem value="brute_force">brute_force</MenuItem>
+                        <MenuItem value="feature">feature</MenuItem>
+                        <MenuItem value="filter">filter</MenuItem>
+                        <MenuItem value="post_action">post_action</MenuItem>
+                        <MenuItem value="request">request</MenuItem>
+                        <MenuItem value="store_totp">store_totp</MenuItem>
+                        <MenuItem value="dns">dns</MenuItem>
                       </Select>
                       <FormHelperText>
                         Select labels to include in Prometheus metrics

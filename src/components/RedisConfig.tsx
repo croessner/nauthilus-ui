@@ -299,7 +299,7 @@ const RedisConfig: React.FC = () => {
                   label="Password Nonce"
                   variant="outlined"
                   error={getIn(touched, 'redis.password_nonce') && Boolean(getIn(errors, 'redis.password_nonce'))}
-                  helperText={(getIn(touched, 'redis.password_nonce') && getIn(errors, 'redis.password_nonce')) || "Nonce for password encryption (min 16 characters)"}
+                  helperText={(getIn(touched, 'redis.password_nonce') && getIn(errors, 'redis.password_nonce')) || "Nonce for password encryption (min 16 characters, can include symbols)"}
                   onChange={(e: React.ChangeEvent<any>) => {
                     handleChange(e);
                     setHasUnsavedChanges(true);

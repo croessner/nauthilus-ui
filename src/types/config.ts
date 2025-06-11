@@ -13,8 +13,8 @@ export interface ServerConfig {
   instance_name?: string;
   log?: LogConfig;
   backends?: BackendConfig[];
-  features?: FeatureConfig[];
-  brute_force_protocols?: ProtocolConfig[];
+  features?: string[];
+  brute_force_protocols?: string[];
   ory_hydra_admin_url?: string;
   dns?: DNSConfig;
   insights?: InsightsConfig;
@@ -71,11 +71,7 @@ export interface LogConfig {
   json?: boolean;
   color?: boolean;
   level?: string;
-  debug_modules?: DebugModuleConfig[];
-}
-
-export interface DebugModuleConfig {
-  name: string;
+  debug_modules?: string[];
 }
 
 export interface BackendConfig {
@@ -83,13 +79,6 @@ export interface BackendConfig {
   backend: string;
 }
 
-export interface FeatureConfig {
-  name: string;
-}
-
-export interface ProtocolConfig {
-  name: string;
-}
 
 
 export interface DNSConfig {
@@ -278,12 +267,20 @@ export interface LDAPAttributeMappingConfig {
 }
 
 // Lua Configuration
+export interface LuaSearchProtocolConfig {
+  protocol: string[];
+  cache_name: string;
+  backend_name?: string;
+}
+
 export interface LuaConfig {
   features?: LuaFeatureConfig[];
   filters?: LuaFilterConfig[];
   actions?: LuaActionConfig[];
   custom_hooks?: LuaCustomHookConfig[];
   config?: LuaScriptConfig;
+  search?: LuaSearchProtocolConfig[];
+  optional_lua_backends?: Record<string, LuaScriptConfig>;
 }
 
 export interface LuaFeatureConfig {
@@ -310,6 +307,9 @@ export interface LuaCustomHookConfig {
 }
 
 export interface LuaScriptConfig {
+  number_of_workers?: number;
+  package_path?: string;
+  backend_script_path?: string;
   init_script_path?: string;
   init_script_paths?: string[];
 }

@@ -48,11 +48,11 @@ import AuthConfig from './components/AuthConfig';
 
 // Import pages (to be created later)
 // import BackendsConfig from './components/BackendsConfig';
-// import FeaturesConfig from './components/FeaturesConfig';
+import FeaturesConfig from './components/FeaturesConfig';
 import RedisConfig from './components/RedisConfig';
 // import FrontendConfig from './components/FrontendConfig';
 import MonitoringConfig from './components/MonitoringConfig';
-// import LuaConfig from './components/LuaConfig';
+import LuaConfig from './components/LuaConfig';
 
 const drawerWidth = 240;
 
@@ -62,17 +62,6 @@ interface MenuItem {
   path: string;
 }
 
-const menuItems: MenuItem[] = [
-  { text: 'Server', icon: <SettingsIcon />, path: '/' },
-  { text: 'Authentication', icon: <SecurityIcon />, path: '/auth' },
-  { text: 'Backends', icon: <StorageIcon />, path: '/backends' },
-  { text: 'Features', icon: <FeaturedPlayListIcon />, path: '/features' },
-  { text: 'Redis', icon: <DnsIcon />, path: '/redis' },
-  { text: 'Frontend', icon: <WebIcon />, path: '/frontend' },
-  { text: 'Monitoring', icon: <MonitorHeartIcon />, path: '/monitoring' },
-  { text: 'Lua Scripts', icon: <CodeIcon />, path: '/lua' },
-];
-
 // Main content component
 const MainContent: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -81,9 +70,21 @@ const MainContent: React.FC = () => {
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { config, loading, error, hasUnsavedChanges, uploadConfig, downloadConfig, resetConfig } = useConfig();
+  const { config, loading, error, hasUnsavedChanges, uploadConfig, downloadConfig, resetConfig, setHasUnsavedChanges, setError } = useConfig();
   const { mode, toggleColorMode } = useTheme();
   const muiTheme = useMuiTheme();
+
+  // Define menu items
+  const menuItems: MenuItem[] = [
+    { text: 'Server', icon: <SettingsIcon />, path: '/' },
+    { text: 'Authentication', icon: <SecurityIcon />, path: '/auth' },
+    { text: 'Backends', icon: <StorageIcon />, path: '/backends' },
+    { text: 'Features', icon: <FeaturedPlayListIcon />, path: '/features' },
+    { text: 'Redis', icon: <DnsIcon />, path: '/redis' },
+    { text: 'Frontend', icon: <WebIcon />, path: '/frontend' },
+    { text: 'Monitoring', icon: <MonitorHeartIcon />, path: '/monitoring' },
+    { text: 'Lua', icon: <CodeIcon />, path: '/lua' },
+  ];
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -118,6 +119,11 @@ const MainContent: React.FC = () => {
   };
 
   const handleNavigation = (path: string) => {
+    // Clear any error messages when navigating
+    if (error) {
+      setError(null);
+    }
+
     if (hasUnsavedChanges) {
       // If there are unsaved changes, store the pending navigation and show the dialog
       setPendingNavigation(path);
@@ -131,6 +137,8 @@ const MainContent: React.FC = () => {
   const handleNavigationConfirm = () => {
     // User confirmed navigation despite unsaved changes
     if (pendingNavigation) {
+      // Reset the unsaved changes flag since the user chose to proceed without saving
+      setHasUnsavedChanges(false);
       navigate(pendingNavigation);
       setNavigationDialogOpen(false);
       setPendingNavigation(null);
@@ -292,21 +300,24 @@ const MainContent: React.FC = () => {
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
             <CircularProgress />
           </Box>
-        ) : error ? (
-          <Alert severity="error" sx={{ mt: 2 }}>
-            {error}
-          </Alert>
         ) : (
-          <Routes>
-            <Route path="/" element={<ServerConfig />} />
-            <Route path="/auth" element={<AuthConfig />} />
-            <Route path="/backends" element={<div>Backends Configuration (Coming Soon)</div>} />
-            <Route path="/features" element={<div>Features Configuration (Coming Soon)</div>} />
-            <Route path="/redis" element={<RedisConfig />} />
-            <Route path="/frontend" element={<div>Frontend Configuration (Coming Soon)</div>} />
-            <Route path="/monitoring" element={<MonitoringConfig />} />
-            <Route path="/lua" element={<div>Lua Scripts Configuration (Coming Soon)</div>} />
-          </Routes>
+          <>
+            {error && (
+              <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
+                {error}
+              </Alert>
+            )}
+            <Routes>
+              <Route path="/" element={<ServerConfig />} />
+              <Route path="/auth" element={<AuthConfig />} />
+              <Route path="/backends" element={<div>Backends Configuration (Coming Soon)</div>} />
+              <Route path="/features" element={<FeaturesConfig />} />
+              <Route path="/redis" element={<RedisConfig />} />
+              <Route path="/frontend" element={<div>Frontend Configuration (Coming Soon)</div>} />
+              <Route path="/monitoring" element={<MonitoringConfig />} />
+              <Route path="/lua" element={<LuaConfig />} />
+            </Routes>
+          </>
         )}
       </Box>
 
