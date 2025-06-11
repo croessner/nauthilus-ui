@@ -83,6 +83,7 @@ const MainContent: React.FC = () => {
     { text: 'Redis', icon: <DnsIcon />, path: '/redis' },
     { text: 'Frontend', icon: <WebIcon />, path: '/frontend' },
     { text: 'Monitoring', icon: <MonitorHeartIcon />, path: '/monitoring' },
+    { text: 'LDAP', icon: <SecurityIcon />, path: '/ldap' },
     { text: 'Lua', icon: <CodeIcon />, path: '/lua' },
   ];
 
@@ -316,6 +317,7 @@ const MainContent: React.FC = () => {
               <Route path="/frontend" element={<div>Frontend Configuration (Coming Soon)</div>} />
               <Route path="/monitoring" element={<MonitoringConfig />} />
               <Route path="/lua" element={<LuaConfig />} />
+              <Route path="/ldap" element={<div>LDAP Configuration (Coming Soon)</div>} />
             </Routes>
           </>
         )}

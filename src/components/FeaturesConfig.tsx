@@ -1,5 +1,5 @@
-import React, { useMemo } from 'react';
-import { Formik, Form, getIn } from 'formik';
+import React, { useMemo, useState } from 'react';
+import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import {
   Grid,
@@ -11,12 +11,61 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Paper
+  Paper,
+  Tabs,
+  Tab,
+  TextField,
+  Checkbox,
+  FormControlLabel,
+  IconButton,
+  Radio,
+  RadioGroup
 } from '@mui/material';
-import { NauthilusConfig, ServerConfig } from '../types/config';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete';
+import { 
+  NauthilusConfig, 
+  ServerConfig, 
+  BackendServerConfig
+} from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
-import CollapsibleFormSection from './common/CollapsibleFormSection';
+
+// Interface for tab panel props
+interface TabPanelProps {
+  children?: React.ReactNode;
+  index: number;
+  value: number;
+}
+
+// Tab Panel component
+const TabPanel = (props: TabPanelProps) => {
+  const { children, value, index, ...other } = props;
+
+  return (
+    <div
+      role="tabpanel"
+      hidden={value !== index}
+      id={`feature-tabpanel-${index}`}
+      aria-labelledby={`feature-tab-${index}`}
+      {...other}
+    >
+      {value === index && (
+        <Box sx={{ p: 3 }}>
+          {children}
+        </Box>
+      )}
+    </div>
+  );
+};
+
+// Helper function for tab accessibility
+const a11yProps = (index: number) => {
+  return {
+    id: `feature-tab-${index}`,
+    'aria-controls': `feature-tabpanel-${index}`,
+  };
+};
 
 // Built-in feature types
 const builtInFeatureTypes = [
@@ -33,10 +82,111 @@ const FeaturesConfigSchema = Yup.object().shape({
   selectedFeatures: Yup.array().of(
     Yup.string().required('Feature is required')
   ),
+  cleartext_networks: Yup.array().when('selectedFeatures', (selectedFeatures: string[], schema) => {
+    return selectedFeatures && selectedFeatures.includes('tls_encryption')
+      ? schema.of(Yup.string())
+      : schema;
+  }),
+  rbl: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
+    return selectedFeatures && selectedFeatures.includes('rbl')
+      ? schema.shape({
+          lists: Yup.array().of(
+            Yup.object().shape({
+              name: Yup.string().required('Name is required'),
+              rbl: Yup.string().required('RBL server is required'),
+              return_code: Yup.string().required('Return code is required'),
+            })
+          ),
+          threshold: Yup.number().min(0).max(100),
+          ip_whitelist: Yup.array().of(
+            Yup.string()
+          ),
+          soft_whitelist: Yup.object(),
+        })
+      : schema;
+  }),
+  relay_domains: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
+    return selectedFeatures && selectedFeatures.includes('relay_domains')
+      ? schema.shape({
+          static: Yup.array().of(
+            Yup.string().required('Domain is required')
+          ),
+        })
+      : schema;
+  }),
+  backend_server_monitoring: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
+    return selectedFeatures && selectedFeatures.includes('backend_server_monitoring')
+      ? schema.shape({
+          backend_servers: Yup.array().of(
+            Yup.object().shape({
+              protocol: Yup.string().required('Protocol is required'),
+              host: Yup.string().required('Host is required'),
+              port: Yup.number().min(1).max(65535),
+            })
+          ),
+        })
+      : schema;
+  }),
+  brute_force: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
+    return selectedFeatures && selectedFeatures.includes('brute_force')
+      ? schema.shape({
+          neural_network: Yup.object().shape({
+            max_training_records: Yup.number().min(1000).max(100000),
+            hidden_neurons: Yup.number().min(8).max(20),
+            threshold: Yup.number().min(0).max(1),
+            learning_rate: Yup.number().min(0.001).max(0.1),
+          }),
+          ip_whitelist: Yup.array().of(
+            Yup.string()
+          ),
+          soft_whitelist: Yup.object(),
+          buckets: Yup.array().of(
+            Yup.object().shape({
+              name: Yup.string().required('Name is required'),
+              period: Yup.string().required('Period is required'),
+              cidr: Yup.number().required('CIDR is required').min(1).max(128),
+              ipv4: Yup.boolean()
+                .test('ipv4-xor-ipv6', 'Either IPv4 or IPv6 must be selected, but not both', function(value) {
+                  const { ipv6 } = this.parent;
+                  // Either ipv4 or ipv6 must be true, but not both
+                  return (value === true && ipv6 !== true) || (value !== true && ipv6 === true);
+                }),
+              ipv6: Yup.boolean()
+                .test('ipv6-xor-ipv4', 'Either IPv4 or IPv6 must be selected, but not both', function(value) {
+                  const { ipv4 } = this.parent;
+                  // Either ipv4 or ipv6 must be true, but not both
+                  return (value === true && ipv4 !== true) || (value !== true && ipv4 === true);
+                }),
+              failed_requests: Yup.number().required('Failed requests is required').min(1),
+              filter_by_protocol: Yup.array().of(Yup.string()),
+              filter_by_oidc_cid: Yup.array().of(Yup.string()),
+            })
+          ),
+          tolerate_percent: Yup.number().min(0).max(100),
+          custom_tolerations: Yup.array().of(
+            Yup.object().shape({
+              ip_address: Yup.string().required('IP address is required'),
+              tolerate_percent: Yup.number().required('Tolerate percent is required').min(0).max(100),
+              tolerate_ttl: Yup.string().required('Tolerate TTL is required'),
+              adaptive_toleration: Yup.boolean(),
+              min_tolerate_percent: Yup.number().min(0).max(100),
+              max_tolerate_percent: Yup.number().min(0).max(100),
+              scale_factor: Yup.number().min(0.1).max(10),
+            })
+          ),
+          tolerate_ttl: Yup.string(),
+          adaptive_toleration: Yup.boolean(),
+          min_tolerate_percent: Yup.number().min(0).max(100),
+          max_tolerate_percent: Yup.number().min(0).max(100),
+          scale_factor: Yup.number().min(0.1).max(10),
+        })
+      : schema;
+  }),
 });
 
 const FeaturesConfig: React.FC = () => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
+  const [tabValue, setTabValue] = useState(0);
 
   // Get existing features (already as strings)
   const existingFeatureNames = config?.server?.features || [];
@@ -55,28 +205,130 @@ const FeaturesConfig: React.FC = () => {
     return builtInFeatureTypes;
   }, [config?.lua?.features]);
 
+  // Handle tab change
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
   // Initial values
   const initialValues = {
     selectedFeatures: existingFeatureNames,
+    cleartext_networks: config?.cleartext_networks || [],
+    rbl: {
+      soft_whitelist: config?.rbl?.soft_whitelist || {},
+      lists: config?.rbl?.lists || [{ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0 }],
+      threshold: config?.rbl?.threshold || 0,
+      ip_whitelist: config?.rbl?.ip_whitelist || [],
+    },
+    relay_domains: {
+      soft_whitelist: config?.relay_domains?.soft_whitelist || {},
+      static: config?.relay_domains?.static || [''],
+    },
+    backend_server_monitoring: {
+      backend_servers: config?.backend_server_monitoring?.backend_servers || [{
+        protocol: 'http',
+        host: '',
+        deep_check: false,
+        request_uri: '',
+        test_username: '',
+        test_password: '',
+        port: 80,
+        tls: false,
+        tls_skip_verify: false,
+        haproxy_v2: false,
+      }],
+    },
+    brute_force: {
+      soft_whitelist: config?.brute_force?.soft_whitelist || {},
+      ip_whitelist: config?.brute_force?.ip_whitelist || [],
+      buckets: config?.brute_force?.buckets || [{
+        name: '',
+        period: '1h',
+        cidr: 32,
+        ipv4: true,
+        ipv6: false,
+        failed_requests: 5,
+        filter_by_protocol: [],
+        filter_by_oidc_cid: [],
+      }],
+      tolerate_percent: config?.brute_force?.tolerate_percent || 0,
+      custom_tolerations: config?.brute_force?.custom_tolerations || [],
+      tolerate_ttl: config?.brute_force?.tolerate_ttl || '1h',
+      adaptive_toleration: config?.brute_force?.adaptive_toleration || false,
+      min_tolerate_percent: config?.brute_force?.min_tolerate_percent || 10,
+      max_tolerate_percent: config?.brute_force?.max_tolerate_percent || 50,
+      scale_factor: config?.brute_force?.scale_factor || 1.0,
+      neural_network: {
+        max_training_records: config?.brute_force?.neural_network?.max_training_records || 10000,
+        hidden_neurons: config?.brute_force?.neural_network?.hidden_neurons || 10,
+        activation_function: config?.brute_force?.neural_network?.activation_function || 'sigmoid',
+        static_weight: config?.brute_force?.neural_network?.static_weight || 0.4,
+        ml_weight: config?.brute_force?.neural_network?.ml_weight || 0.6,
+        threshold: config?.brute_force?.neural_network?.threshold || 0.7,
+        learning_rate: config?.brute_force?.neural_network?.learning_rate || 0.01,
+      },
+    },
+    newSoftWhitelistUsername: '',
+    newBruteForceWhitelistUsername: '',
   };
 
-  const handleSubmit = (values: any) => {
+  const handleSubmit = async (values: any) => {
     if (!config) return;
 
-    // Create a properly typed copy of the config
-    const updatedConfig: NauthilusConfig = { 
-      ...config as NauthilusConfig,
-      // Ensure server is properly initialized
-      server: {
-        ...(config?.server || {}) as ServerConfig,
-        features: values.selectedFeatures
+    try {
+      // Create a properly typed copy of the config
+      const updatedConfig: NauthilusConfig = { 
+        ...config as NauthilusConfig,
+        // Ensure server is properly initialized
+        server: {
+          ...(config?.server || {}) as ServerConfig,
+          features: values.selectedFeatures,
+        }
+      };
+
+      // Add cleartext_networks if TLS encryption is enabled
+      if (values.selectedFeatures.includes('tls_encryption')) {
+        updatedConfig.cleartext_networks = values.cleartext_networks;
       }
-    };
 
-    updateConfig(updatedConfig);
+      // Add feature-specific configurations
+      if (values.selectedFeatures.includes('rbl')) {
+        // Ensure rbl is properly structured
+        updatedConfig.rbl = {
+          ...values.rbl,
+          // Ensure soft_whitelist is properly structured as a direct property
+          soft_whitelist: values.rbl.soft_whitelist || {},
+        };
+      }
 
-    // Reset unsaved changes flag after saving
-    setHasUnsavedChanges(false);
+      if (values.selectedFeatures.includes('relay_domains')) {
+        // Ensure relay_domains is properly structured
+        updatedConfig.relay_domains = {
+          ...values.relay_domains,
+          // Ensure soft_whitelist is properly structured as a direct property
+          soft_whitelist: values.relay_domains.soft_whitelist || {},
+        };
+      }
+
+      if (values.selectedFeatures.includes('backend_server_monitoring')) {
+        updatedConfig.backend_server_monitoring = values.backend_server_monitoring;
+      }
+
+      if (values.selectedFeatures.includes('brute_force')) {
+        // Ensure brute_force is properly structured
+        updatedConfig.brute_force = {
+          ...values.brute_force,
+          // Ensure soft_whitelist is properly structured as a direct property
+          // rather than a nested object
+          soft_whitelist: values.brute_force.soft_whitelist || {},
+        };
+      }
+
+      // Wait for the update to complete before proceeding
+      await updateConfig(updatedConfig);
+    } catch (error) {
+      console.error("Error saving configuration:", error);
+    }
   };
 
   return (
@@ -90,67 +342,1649 @@ const FeaturesConfig: React.FC = () => {
         validationSchema={FeaturesConfigSchema}
         onSubmit={handleSubmit}
         enableReinitialize
-        onChangeCapture={() => setHasUnsavedChanges(true)}
       >
         {({ values, errors, touched, handleChange, setFieldValue }) => (
           <Form>
-            <FormSection title="Standard Features">
-              <Grid container spacing={2}>
-                <Grid item xs={12}>
-                  <Typography variant="body1" gutterBottom>
-                    Configure standard features for the server. Select multiple features from the dropdown.
-                  </Typography>
+            <Paper sx={{ mb: 3 }}>
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange} 
+                variant="scrollable"
+                scrollButtons="auto"
+                aria-label="feature configuration tabs"
+              >
+                <Tab label="Feature Selection" {...a11yProps(0)} />
+                <Tab 
+                  label="TLS Encryption" 
+                  {...a11yProps(1)} 
+                  disabled={!values.selectedFeatures.includes('tls_encryption')}
+                />
+                <Tab 
+                  label="RBL" 
+                  {...a11yProps(2)} 
+                  disabled={!values.selectedFeatures.includes('rbl')}
+                />
+                <Tab 
+                  label="Relay Domains" 
+                  {...a11yProps(3)} 
+                  disabled={!values.selectedFeatures.includes('relay_domains')}
+                />
+                <Tab 
+                  label="Backend Server Monitoring" 
+                  {...a11yProps(4)} 
+                  disabled={!values.selectedFeatures.includes('backend_server_monitoring')}
+                />
+                <Tab 
+                  label="Brute Force" 
+                  {...a11yProps(5)} 
+                  disabled={!values.selectedFeatures.includes('brute_force')}
+                />
+              </Tabs>
+            </Paper>
 
-                  <Paper sx={{ p: 2, mb: 2 }}>
-                    <FormControl 
-                      fullWidth 
-                      error={Boolean(
-                        getIn(touched, 'selectedFeatures') &&
-                        getIn(errors, 'selectedFeatures')
-                      )}
-                    >
-                      <InputLabel id="features-select-label">Features</InputLabel>
-                      <Select
-                        labelId="features-select-label"
-                        id="features-select"
-                        multiple
-                        value={values.selectedFeatures}
-                        onChange={(e) => {
-                          setFieldValue('selectedFeatures', e.target.value);
-                          setHasUnsavedChanges(true);
-                        }}
-                        renderValue={(selected) => {
-                          // Convert feature values to labels for display
-                          return (selected as string[])
-                            .map(value => {
-                              // Always use builtInFeatureTypes for rendering, even if the option is filtered out
-                              // This ensures we still show the correct label for any selected feature
-                              const feature = builtInFeatureTypes.find(type => type.value === value);
-                              return feature ? feature.label : value;
-                            })
-                            .join(', ');
-                        }}
+            {/* Feature Selection Tab */}
+            <TabPanel value={tabValue} index={0}>
+              <FormSection title="Standard Features">
+                <Grid container spacing={2}>
+                  <Grid item xs={12}>
+                    <Typography variant="body1" gutterBottom>
+                      Configure standard features for the server. Select multiple features from the dropdown.
+                    </Typography>
+
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <FormControl 
+                        fullWidth 
+                        error={Boolean(
+                          getIn(touched, 'selectedFeatures') &&
+                          getIn(errors, 'selectedFeatures')
+                        )}
                       >
-                        {filteredFeatureTypes.map((type) => (
-                          <MenuItem key={type.value} value={type.value}>
-                            {type.label}
-                          </MenuItem>
-                        ))}
-                      </Select>
-                      {Boolean(
-                        getIn(touched, 'selectedFeatures') &&
-                        getIn(errors, 'selectedFeatures')
-                      ) && (
-                        <FormHelperText>
-                          {getIn(errors, 'selectedFeatures')}
-                        </FormHelperText>
-                      )}
-                    </FormControl>
-                  </Paper>
+                        <InputLabel id="features-select-label">Features</InputLabel>
+                        <Select
+                          labelId="features-select-label"
+                          id="features-select"
+                          multiple
+                          value={values.selectedFeatures}
+                          onChange={(e) => {
+                            setFieldValue('selectedFeatures', e.target.value);
+                            setHasUnsavedChanges(true);
+                          }}
+                          renderValue={(selected) => {
+                            // Convert feature values to labels for display
+                            return (selected as string[])
+                              .map(value => {
+                                // Always use builtInFeatureTypes for rendering, even if the option is filtered out
+                                // This ensures we still show the correct label for any selected feature
+                                const feature = builtInFeatureTypes.find(type => type.value === value);
+                                return feature ? feature.label : value;
+                              })
+                              .join(', ');
+                          }}
+                        >
+                          {filteredFeatureTypes.map((type) => (
+                            <MenuItem key={type.value} value={type.value}>
+                              {type.label}
+                            </MenuItem>
+                          ))}
+                        </Select>
+                        {Boolean(
+                          getIn(touched, 'selectedFeatures') &&
+                          getIn(errors, 'selectedFeatures')
+                        ) && (
+                          <FormHelperText>
+                            {getIn(errors, 'selectedFeatures')}
+                          </FormHelperText>
+                        )}
+                      </FormControl>
+                    </Paper>
+                  </Grid>
                 </Grid>
-              </Grid>
-            </FormSection>
+              </FormSection>
+            </TabPanel>
 
+            {/* TLS Encryption Tab */}
+            <TabPanel value={tabValue} index={1}>
+              <FormSection title="TLS Encryption Configuration">
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Cleartext Networks</Typography>
+                    <Typography variant="body2" sx={{ mb: 2 }}>
+                      Networks that are allowed to connect without TLS encryption. IP addresses or CIDR notation (e.g., 192.168.1.0/24).
+                    </Typography>
+                    <FieldArray name="cleartext_networks">
+                      {({ push, remove }) => (
+                        <div>
+                          {values.cleartext_networks && values.cleartext_networks.length > 0 ? (
+                            values.cleartext_networks.map((network: string, index: number) => (
+                              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <Field
+                                  as={TextField}
+                                  fullWidth
+                                  name={`cleartext_networks[${index}]`}
+                                  label={`Network ${index + 1}`}
+                                  variant="outlined"
+                                  error={getIn(touched, `cleartext_networks[${index}]`) && Boolean(getIn(errors, `cleartext_networks[${index}]`))}
+                                  helperText={(getIn(touched, `cleartext_networks[${index}]`) && getIn(errors, `cleartext_networks[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
+                                  onChange={(e: React.ChangeEvent<any>) => {
+                                    handleChange(e);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                />
+                                <IconButton 
+                                  onClick={() => {
+                                    remove(index);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  sx={{ ml: 1 }}
+                                  color="error"
+                                  aria-label="Remove network"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            ))
+                          ) : (
+                            <Typography color="textSecondary" sx={{ mb: 2 }}>No cleartext networks added yet.</Typography>
+                          )}
+                          <Button
+                            startIcon={<AddIcon />}
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => {
+                              push('');
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Add Network
+                          </Button>
+                        </div>
+                      )}
+                    </FieldArray>
+                  </Grid>
+                </Grid>
+              </FormSection>
+            </TabPanel>
+
+            {/* RBL Tab */}
+            <TabPanel value={tabValue} index={2}>
+              <FormSection title="RBL Configuration">
+                <Grid container spacing={3}>
+                  <Grid item xs={12} md={6}>
+                    <Field
+                      as={TextField}
+                      fullWidth
+                      name="rbl.threshold"
+                      label="Threshold"
+                      variant="outlined"
+                      type="number"
+                      InputProps={{ inputProps: { min: 0, max: 100 } }}
+                      error={getIn(touched, 'rbl.threshold') && Boolean(getIn(errors, 'rbl.threshold'))}
+                      helperText={(getIn(touched, 'rbl.threshold') && getIn(errors, 'rbl.threshold')) || "Threshold value (0-100)"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Whitelist</Typography>
+                    <FieldArray name="rbl.ip_whitelist">
+                      {({ push, remove }) => (
+                        <div>
+                          {values.rbl?.ip_whitelist && values.rbl.ip_whitelist.length > 0 ? (
+                            values.rbl.ip_whitelist.map((ip: string, index: number) => (
+                              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <Field
+                                  as={TextField}
+                                  fullWidth
+                                  name={`rbl.ip_whitelist[${index}]`}
+                                  label={`IP Address/CIDR ${index + 1}`}
+                                  variant="outlined"
+                                  error={getIn(touched, `rbl.ip_whitelist[${index}]`) && Boolean(getIn(errors, `rbl.ip_whitelist[${index}]`))}
+                                  helperText={(getIn(touched, `rbl.ip_whitelist[${index}]`) && getIn(errors, `rbl.ip_whitelist[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
+                                  onChange={(e: React.ChangeEvent<any>) => {
+                                    handleChange(e);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                />
+                                <IconButton 
+                                  onClick={() => {
+                                    remove(index);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  sx={{ ml: 1 }}
+                                  color="error"
+                                  aria-label="Remove IP"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            ))
+                          ) : (
+                            <Typography color="textSecondary" sx={{ mb: 2 }}>No IP addresses added yet.</Typography>
+                          )}
+                          <Button
+                            startIcon={<AddIcon />}
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => {
+                              push('');
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Add IP Address
+                          </Button>
+                        </div>
+                      )}
+                    </FieldArray>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Soft Whitelist</Typography>
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        The soft whitelist allows you to specify which usernames are allowed to bypass RBL checks from specific IP addresses or networks.
+                      </Typography>
+                      <FieldArray name="rbl.soft_whitelist">
+                        {({ push, remove }) => (
+                          <div>
+                            {Object.keys(values.rbl?.soft_whitelist || {}).length > 0 ? (
+                              Object.entries(values.rbl?.soft_whitelist || {}).map(([username, networks], index) => (
+                                <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+                                  <Grid container spacing={2}>
+                                    <Grid item xs={12}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`rbl.soft_whitelist.${username}.username`}
+                                        label="Username"
+                                        variant="outlined"
+                                        value={username}
+                                        disabled
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2">Networks</Typography>
+                                      {Array.isArray(networks) && networks.map((network: string, netIndex: number) => (
+                                        <Box key={netIndex} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                          <Field
+                                            as={TextField}
+                                            fullWidth
+                                            name={`rbl.soft_whitelist.${username}[${netIndex}]`}
+                                            label={`Network ${netIndex + 1}`}
+                                            variant="outlined"
+                                            value={network}
+                                            onChange={(e: React.ChangeEvent<any>) => {
+                                              // Create a new array with the updated value
+                                              const updatedNetworks = [...networks];
+                                              updatedNetworks[netIndex] = e.target.value;
+
+                                              // Update the soft_whitelist object
+                                              const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                              updatedSoftWhitelist[username] = updatedNetworks;
+
+                                              setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                              setHasUnsavedChanges(true);
+                                            }}
+                                          />
+                                          <IconButton
+                                            onClick={() => {
+                                              // Create a new array without the removed network
+                                              const updatedNetworks = networks.filter((_, i) => i !== netIndex);
+
+                                              // Update the soft_whitelist object
+                                              const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+
+                                              if (updatedNetworks.length === 0) {
+                                                // Remove the username entry if no networks remain
+                                                delete updatedSoftWhitelist[username];
+                                              } else {
+                                                updatedSoftWhitelist[username] = updatedNetworks;
+                                              }
+
+                                              setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                              setHasUnsavedChanges(true);
+                                            }}
+                                            sx={{ ml: 1 }}
+                                            color="error"
+                                          >
+                                            <DeleteIcon />
+                                          </IconButton>
+                                        </Box>
+                                      ))}
+                                      <Button
+                                        startIcon={<AddIcon />}
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={() => {
+                                          // Add a new network to the existing username
+                                          const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                          updatedSoftWhitelist[username] = [...(networks as string[]), ''];
+
+                                          setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      >
+                                        Add Network
+                                      </Button>
+                                    </Grid>
+                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                      <Button
+                                        variant="outlined"
+                                        color="error"
+                                        startIcon={<DeleteIcon />}
+                                        onClick={() => {
+                                          // Remove the entire username entry
+                                          const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                          delete updatedSoftWhitelist[username];
+
+                                          setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      >
+                                        Remove User
+                                      </Button>
+                                    </Grid>
+                                  </Grid>
+                                </Paper>
+                              ))
+                            ) : (
+                              <Typography color="textSecondary" sx={{ mb: 2 }}>No soft whitelist entries added yet.</Typography>
+                            )}
+                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                name="newSoftWhitelistUsername"
+                                label="New Username"
+                                variant="outlined"
+                                value={values.newSoftWhitelistUsername || ''}
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  setFieldValue('newSoftWhitelistUsername', e.target.value);
+                                }}
+                              />
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                sx={{ ml: 1, height: 56 }}
+                                onClick={() => {
+                                  if (values.newSoftWhitelistUsername) {
+                                    // Add a new username with an empty network array
+                                    const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                    updatedSoftWhitelist[values.newSoftWhitelistUsername] = [''];
+
+                                    setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                    setFieldValue('newSoftWhitelistUsername', '');
+                                    setHasUnsavedChanges(true);
+                                  }
+                                }}
+                              >
+                                Add User
+                              </Button>
+                            </Box>
+                          </div>
+                        )}
+                      </FieldArray>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>RBL Lists</Typography>
+                    <FieldArray name="rbl.lists">
+                      {({ push, remove }) => (
+                        <div>
+                          {values.rbl?.lists && values.rbl.lists.length > 0 ? (
+                            values.rbl.lists.map((list, index) => (
+                              <Paper key={index} sx={{ p: 2, mb: 2 }}>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`rbl.lists[${index}].name`}
+                                      label="Name"
+                                      variant="outlined"
+                                      error={getIn(touched, `rbl.lists[${index}].name`) && Boolean(getIn(errors, `rbl.lists[${index}].name`))}
+                                      helperText={(getIn(touched, `rbl.lists[${index}].name`) && getIn(errors, `rbl.lists[${index}].name`)) || "Name of the RBL"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`rbl.lists[${index}].rbl`}
+                                      label="RBL Server"
+                                      variant="outlined"
+                                      error={getIn(touched, `rbl.lists[${index}].rbl`) && Boolean(getIn(errors, `rbl.lists[${index}].rbl`))}
+                                      helperText={(getIn(touched, `rbl.lists[${index}].rbl`) && getIn(errors, `rbl.lists[${index}].rbl`)) || "RBL server hostname"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`rbl.lists[${index}].return_code`}
+                                      label="Return Code"
+                                      variant="outlined"
+                                      error={getIn(touched, `rbl.lists[${index}].return_code`) && Boolean(getIn(errors, `rbl.lists[${index}].return_code`))}
+                                      helperText={(getIn(touched, `rbl.lists[${index}].return_code`) && getIn(errors, `rbl.lists[${index}].return_code`)) || "Return code (e.g., 127.0.0.2)"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`rbl.lists[${index}].weight`}
+                                      label="Weight"
+                                      variant="outlined"
+                                      type="number"
+                                      InputProps={{ inputProps: { min: -100, max: 100 } }}
+                                      error={getIn(touched, `rbl.lists[${index}].weight`) && Boolean(getIn(errors, `rbl.lists[${index}].weight`))}
+                                      helperText={(getIn(touched, `rbl.lists[${index}].weight`) && getIn(errors, `rbl.lists[${index}].weight`)) || "Weight (-100 to 100)"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={values.rbl?.lists[index]?.allow_failure || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`rbl.lists[${index}].allow_failure`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`rbl.lists[${index}].allow_failure`}
+                                        />
+                                      }
+                                      label="Allow Failure"
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                    <IconButton 
+                                      onClick={() => {
+                                        remove(index);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                      color="error"
+                                      aria-label="Remove RBL"
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </Grid>
+                                </Grid>
+                              </Paper>
+                            ))
+                          ) : (
+                            <Typography color="textSecondary" sx={{ mb: 2 }}>No RBL lists added yet.</Typography>
+                          )}
+                          <Button
+                            startIcon={<AddIcon />}
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => {
+                              push({ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0 });
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Add RBL List
+                          </Button>
+                        </div>
+                      )}
+                    </FieldArray>
+                  </Grid>
+                </Grid>
+              </FormSection>
+            </TabPanel>
+
+            {/* Relay Domains Tab */}
+            <TabPanel value={tabValue} index={3}>
+              <FormSection title="Relay Domains Configuration">
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Static Domains</Typography>
+                    <FieldArray name="relay_domains.static">
+                      {({ push, remove }) => (
+                        <div>
+                          {values.relay_domains?.static && values.relay_domains.static.length > 0 ? (
+                            values.relay_domains.static.map((domain: string, index: number) => (
+                              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <Field
+                                  as={TextField}
+                                  fullWidth
+                                  name={`relay_domains.static[${index}]`}
+                                  label={`Domain ${index + 1}`}
+                                  variant="outlined"
+                                  error={getIn(touched, `relay_domains.static[${index}]`) && Boolean(getIn(errors, `relay_domains.static[${index}]`))}
+                                  helperText={(getIn(touched, `relay_domains.static[${index}]`) && getIn(errors, `relay_domains.static[${index}]`)) || "Domain name"}
+                                  onChange={(e: React.ChangeEvent<any>) => {
+                                    handleChange(e);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                />
+                                <IconButton 
+                                  onClick={() => {
+                                    remove(index);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  sx={{ ml: 1 }}
+                                  color="error"
+                                  aria-label="Remove domain"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            ))
+                          ) : (
+                            <Typography color="textSecondary" sx={{ mb: 2 }}>No static domains added yet.</Typography>
+                          )}
+                          <Button
+                            startIcon={<AddIcon />}
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => {
+                              push('');
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Add Domain
+                          </Button>
+                        </div>
+                      )}
+                    </FieldArray>
+                  </Grid>
+                </Grid>
+              </FormSection>
+            </TabPanel>
+
+            {/* Backend Server Monitoring Tab */}
+            <TabPanel value={tabValue} index={4}>
+              <FormSection title="Backend Server Monitoring Configuration">
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Backend Servers</Typography>
+                    <FieldArray name="backend_server_monitoring.backend_servers">
+                      {({ push, remove }) => (
+                        <div>
+                          {values.backend_server_monitoring?.backend_servers && values.backend_server_monitoring.backend_servers.length > 0 ? (
+                            values.backend_server_monitoring.backend_servers.map((server: BackendServerConfig, index: number) => (
+                              <Paper key={index} sx={{ p: 2, mb: 2 }}>
+                                <Grid container spacing={2}>
+                                  <Grid item xs={12} md={6}>
+                                    <FormControl fullWidth>
+                                      <InputLabel id={`protocol-select-label-${index}`}>Protocol</InputLabel>
+                                      <Select
+                                        labelId={`protocol-select-label-${index}`}
+                                        id={`protocol-select-${index}`}
+                                        value={values.backend_server_monitoring.backend_servers[index].protocol}
+                                        name={`backend_server_monitoring.backend_servers[${index}].protocol`}
+                                        label="Protocol"
+                                        onChange={(e) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      >
+                                        <MenuItem value="imap">IMAP</MenuItem>
+                                        <MenuItem value="pop3">POP3</MenuItem>
+                                        <MenuItem value="lmtp">LMTP</MenuItem>
+                                        <MenuItem value="smtp">SMTP</MenuItem>
+                                        <MenuItem value="sieve">SIEVE</MenuItem>
+                                        <MenuItem value="http">HTTP</MenuItem>
+                                      </Select>
+                                    </FormControl>
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`backend_server_monitoring.backend_servers[${index}].host`}
+                                      label="Host"
+                                      variant="outlined"
+                                      error={getIn(touched, `backend_server_monitoring.backend_servers[${index}].host`) && Boolean(getIn(errors, `backend_server_monitoring.backend_servers[${index}].host`))}
+                                      helperText={(getIn(touched, `backend_server_monitoring.backend_servers[${index}].host`) && getIn(errors, `backend_server_monitoring.backend_servers[${index}].host`)) || "Hostname or IP address"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`backend_server_monitoring.backend_servers[${index}].port`}
+                                      label="Port"
+                                      variant="outlined"
+                                      type="number"
+                                      InputProps={{ inputProps: { min: 1, max: 65535 } }}
+                                      error={getIn(touched, `backend_server_monitoring.backend_servers[${index}].port`) && Boolean(getIn(errors, `backend_server_monitoring.backend_servers[${index}].port`))}
+                                      helperText={(getIn(touched, `backend_server_monitoring.backend_servers[${index}].port`) && getIn(errors, `backend_server_monitoring.backend_servers[${index}].port`)) || "Port number (1-65535)"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={values.backend_server_monitoring?.backend_servers[index]?.deep_check || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].deep_check`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`backend_server_monitoring.backend_servers[${index}].deep_check`}
+                                        />
+                                      }
+                                      label="Deep Check"
+                                    />
+                                  </Grid>
+                                  {values.backend_server_monitoring.backend_servers[index].protocol === 'http' && (
+                                    <Grid item xs={12} md={12}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`backend_server_monitoring.backend_servers[${index}].request_uri`}
+                                        label="Request URI"
+                                        variant="outlined"
+                                        error={getIn(touched, `backend_server_monitoring.backend_servers[${index}].request_uri`) && Boolean(getIn(errors, `backend_server_monitoring.backend_servers[${index}].request_uri`))}
+                                        helperText={(getIn(touched, `backend_server_monitoring.backend_servers[${index}].request_uri`) && getIn(errors, `backend_server_monitoring.backend_servers[${index}].request_uri`)) || "URI path for HTTP requests"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                  )}
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`backend_server_monitoring.backend_servers[${index}].test_username`}
+                                      label="Test Username"
+                                      variant="outlined"
+                                      error={getIn(touched, `backend_server_monitoring.backend_servers[${index}].test_username`) && Boolean(getIn(errors, `backend_server_monitoring.backend_servers[${index}].test_username`))}
+                                      helperText={(getIn(touched, `backend_server_monitoring.backend_servers[${index}].test_username`) && getIn(errors, `backend_server_monitoring.backend_servers[${index}].test_username`)) || "Username for testing connection"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <Field
+                                      as={TextField}
+                                      fullWidth
+                                      name={`backend_server_monitoring.backend_servers[${index}].test_password`}
+                                      label="Test Password"
+                                      variant="outlined"
+                                      type="password"
+                                      error={getIn(touched, `backend_server_monitoring.backend_servers[${index}].test_password`) && Boolean(getIn(errors, `backend_server_monitoring.backend_servers[${index}].test_password`))}
+                                      helperText={(getIn(touched, `backend_server_monitoring.backend_servers[${index}].test_password`) && getIn(errors, `backend_server_monitoring.backend_servers[${index}].test_password`)) || "Password for testing connection"}
+                                      onChange={(e: React.ChangeEvent<any>) => {
+                                        handleChange(e);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={4}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={values.backend_server_monitoring?.backend_servers[index]?.tls || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`backend_server_monitoring.backend_servers[${index}].tls`}
+                                        />
+                                      }
+                                      label="TLS"
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={4}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={values.backend_server_monitoring?.backend_servers[index]?.tls_skip_verify || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls_skip_verify`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`backend_server_monitoring.backend_servers[${index}].tls_skip_verify`}
+                                        />
+                                      }
+                                      label="Skip TLS Verify"
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={4}>
+                                    <FormControlLabel
+                                      control={
+                                        <Checkbox
+                                          checked={values.backend_server_monitoring?.backend_servers[index]?.haproxy_v2 || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].haproxy_v2`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`backend_server_monitoring.backend_servers[${index}].haproxy_v2`}
+                                        />
+                                      }
+                                      label="HAProxy v2"
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                    <IconButton 
+                                      onClick={() => {
+                                        remove(index);
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                      color="error"
+                                      aria-label="Remove server"
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </Grid>
+                                </Grid>
+                              </Paper>
+                            ))
+                          ) : (
+                            <Typography color="textSecondary" sx={{ mb: 2 }}>No backend servers added yet.</Typography>
+                          )}
+                          <Button
+                            startIcon={<AddIcon />}
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => {
+                              push({
+                                protocol: 'http',
+                                host: '',
+                                deep_check: false,
+                                request_uri: '',
+                                test_username: '',
+                                test_password: '',
+                                port: 80,
+                                tls: false,
+                                tls_skip_verify: false,
+                                haproxy_v2: false,
+                              });
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Add Backend Server
+                          </Button>
+                        </div>
+                      )}
+                    </FieldArray>
+                  </Grid>
+                </Grid>
+              </FormSection>
+            </TabPanel>
+
+            {/* Brute Force Tab */}
+            <TabPanel value={tabValue} index={5}>
+              <FormSection title="Brute Force Configuration">
+                <Grid container spacing={3}>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Whitelist</Typography>
+                    <FieldArray name="brute_force.ip_whitelist">
+                      {({ push, remove }) => (
+                        <div>
+                          {values.brute_force?.ip_whitelist && values.brute_force.ip_whitelist.length > 0 ? (
+                            values.brute_force.ip_whitelist.map((ip: string, index: number) => (
+                              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                <Field
+                                  as={TextField}
+                                  fullWidth
+                                  name={`brute_force.ip_whitelist[${index}]`}
+                                  label={`IP Address/CIDR ${index + 1}`}
+                                  variant="outlined"
+                                  error={getIn(touched, `brute_force.ip_whitelist[${index}]`) && Boolean(getIn(errors, `brute_force.ip_whitelist[${index}]`))}
+                                  helperText={(getIn(touched, `brute_force.ip_whitelist[${index}]`) && getIn(errors, `brute_force.ip_whitelist[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
+                                  onChange={(e: React.ChangeEvent<any>) => {
+                                    handleChange(e);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                />
+                                <IconButton 
+                                  onClick={() => {
+                                    remove(index);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                  sx={{ ml: 1 }}
+                                  color="error"
+                                  aria-label="Remove IP"
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Box>
+                            ))
+                          ) : (
+                            <Typography color="textSecondary" sx={{ mb: 2 }}>No IP addresses added yet.</Typography>
+                          )}
+                          <Button
+                            startIcon={<AddIcon />}
+                            variant="outlined"
+                            color="primary"
+                            onClick={() => {
+                              push('');
+                              setHasUnsavedChanges(true);
+                            }}
+                          >
+                            Add IP Address
+                          </Button>
+                        </div>
+                      )}
+                    </FieldArray>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Soft Whitelist</Typography>
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        The soft whitelist allows you to specify which usernames are allowed to bypass brute force checks from specific IP addresses or networks.
+                      </Typography>
+                      <FieldArray name="brute_force.soft_whitelist">
+                        {({ push, remove }) => (
+                          <div>
+                            {Object.keys(values.brute_force?.soft_whitelist || {}).length > 0 ? (
+                              Object.entries(values.brute_force?.soft_whitelist || {}).map(([username, networks], index) => (
+                                <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+                                  <Grid container spacing={2}>
+                                    <Grid item xs={12}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.soft_whitelist.${username}.username`}
+                                        label="Username"
+                                        variant="outlined"
+                                        value={username}
+                                        disabled
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2">Networks</Typography>
+                                      {Array.isArray(networks) && networks.map((network: string, netIndex: number) => (
+                                        <Box key={netIndex} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                          <Field
+                                            as={TextField}
+                                            fullWidth
+                                            name={`brute_force.soft_whitelist.${username}[${netIndex}]`}
+                                            label={`Network ${netIndex + 1}`}
+                                            variant="outlined"
+                                            value={network}
+                                            onChange={(e: React.ChangeEvent<any>) => {
+                                              // Create a new array with the updated value
+                                              const updatedNetworks = [...networks];
+                                              updatedNetworks[netIndex] = e.target.value;
+
+                                              // Update the soft_whitelist object
+                                              const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
+                                              updatedSoftWhitelist[username] = updatedNetworks;
+
+                                              setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
+                                              setHasUnsavedChanges(true);
+                                            }}
+                                          />
+                                          <IconButton
+                                            onClick={() => {
+                                              // Create a new array without the removed network
+                                              const updatedNetworks = networks.filter((_, i) => i !== netIndex);
+
+                                              // Update the soft_whitelist object
+                                              const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
+
+                                              if (updatedNetworks.length === 0) {
+                                                // Remove the username entry if no networks remain
+                                                delete updatedSoftWhitelist[username];
+                                              } else {
+                                                updatedSoftWhitelist[username] = updatedNetworks;
+                                              }
+
+                                              setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
+                                              setHasUnsavedChanges(true);
+                                            }}
+                                            sx={{ ml: 1 }}
+                                            color="error"
+                                          >
+                                            <DeleteIcon />
+                                          </IconButton>
+                                        </Box>
+                                      ))}
+                                      <Button
+                                        startIcon={<AddIcon />}
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={() => {
+                                          // Add a new network to the existing username
+                                          const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
+                                          updatedSoftWhitelist[username] = [...(networks as string[]), ''];
+
+                                          setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      >
+                                        Add Network
+                                      </Button>
+                                    </Grid>
+                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                      <Button
+                                        variant="outlined"
+                                        color="error"
+                                        startIcon={<DeleteIcon />}
+                                        onClick={() => {
+                                          // Remove the entire username entry
+                                          const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
+                                          delete updatedSoftWhitelist[username];
+
+                                          setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      >
+                                        Remove User
+                                      </Button>
+                                    </Grid>
+                                  </Grid>
+                                </Paper>
+                              ))
+                            ) : (
+                              <Typography color="textSecondary" sx={{ mb: 2 }}>No soft whitelist entries added yet.</Typography>
+                            )}
+                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                name="newBruteForceWhitelistUsername"
+                                label="New Username"
+                                variant="outlined"
+                                value={values.newBruteForceWhitelistUsername || ''}
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  setFieldValue('newBruteForceWhitelistUsername', e.target.value);
+                                }}
+                              />
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                sx={{ ml: 1, height: 56 }}
+                                onClick={() => {
+                                  if (values.newBruteForceWhitelistUsername) {
+                                    // Add a new username with an empty network array
+                                    const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
+                                    updatedSoftWhitelist[values.newBruteForceWhitelistUsername] = [''];
+
+                                    setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
+                                    setFieldValue('newBruteForceWhitelistUsername', '');
+                                    setHasUnsavedChanges(true);
+                                  }
+                                }}
+                              >
+                                Add User
+                              </Button>
+                            </Box>
+                          </div>
+                        )}
+                      </FieldArray>
+                    </Paper>
+                  </Grid>
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Tolerations</Typography>
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.tolerate_percent"
+                            label="Tolerate Percent"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 100 } }}
+                            error={getIn(touched, 'brute_force.tolerate_percent') && Boolean(getIn(errors, 'brute_force.tolerate_percent'))}
+                            helperText={(getIn(touched, 'brute_force.tolerate_percent') && getIn(errors, 'brute_force.tolerate_percent')) || "Percentage of failed requests to tolerate (0-100)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.tolerate_ttl"
+                            label="Tolerate TTL"
+                            variant="outlined"
+                            error={getIn(touched, 'brute_force.tolerate_ttl') && Boolean(getIn(errors, 'brute_force.tolerate_ttl'))}
+                            helperText={(getIn(touched, 'brute_force.tolerate_ttl') && getIn(errors, 'brute_force.tolerate_ttl')) || "Time-to-live for tolerations (e.g., 1h, 30m)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <FormControlLabel
+                            control={
+                              <Checkbox
+                                checked={values.brute_force?.adaptive_toleration || false}
+                                onChange={(e) => {
+                                  setFieldValue('brute_force.adaptive_toleration', e.target.checked);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                name="brute_force.adaptive_toleration"
+                              />
+                            }
+                            label="Adaptive Toleration"
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.min_tolerate_percent"
+                            label="Min Tolerate Percent"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 100 } }}
+                            error={getIn(touched, 'brute_force.min_tolerate_percent') && Boolean(getIn(errors, 'brute_force.min_tolerate_percent'))}
+                            helperText={(getIn(touched, 'brute_force.min_tolerate_percent') && getIn(errors, 'brute_force.min_tolerate_percent')) || "Minimum percentage for adaptive toleration (0-100)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.max_tolerate_percent"
+                            label="Max Tolerate Percent"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 100 } }}
+                            error={getIn(touched, 'brute_force.max_tolerate_percent') && Boolean(getIn(errors, 'brute_force.max_tolerate_percent'))}
+                            helperText={(getIn(touched, 'brute_force.max_tolerate_percent') && getIn(errors, 'brute_force.max_tolerate_percent')) || "Maximum percentage for adaptive toleration (0-100)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.scale_factor"
+                            label="Scale Factor"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0.1, max: 10, step: 0.1 } }}
+                            error={getIn(touched, 'brute_force.scale_factor') && Boolean(getIn(errors, 'brute_force.scale_factor'))}
+                            helperText={(getIn(touched, 'brute_force.scale_factor') && getIn(errors, 'brute_force.scale_factor')) || "Scale factor for adaptive toleration (0.1-10)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Custom Tolerations</Typography>
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        Custom tolerations allow you to specify different toleration settings for specific IP addresses or networks.
+                      </Typography>
+                      <FieldArray name="brute_force.custom_tolerations">
+                        {({ push, remove }) => (
+                          <div>
+                            {values.brute_force?.custom_tolerations && values.brute_force.custom_tolerations.length > 0 ? (
+                              values.brute_force.custom_tolerations.map((toleration: any, index: number) => (
+                                <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+                                  <Grid container spacing={2}>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.custom_tolerations[${index}].ip_address`}
+                                        label="IP Address/CIDR"
+                                        variant="outlined"
+                                        error={getIn(touched, `brute_force.custom_tolerations[${index}].ip_address`) && Boolean(getIn(errors, `brute_force.custom_tolerations[${index}].ip_address`))}
+                                        helperText={(getIn(touched, `brute_force.custom_tolerations[${index}].ip_address`) && getIn(errors, `brute_force.custom_tolerations[${index}].ip_address`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.custom_tolerations[${index}].tolerate_percent`}
+                                        label="Tolerate Percent"
+                                        variant="outlined"
+                                        type="number"
+                                        InputProps={{ inputProps: { min: 0, max: 100 } }}
+                                        error={getIn(touched, `brute_force.custom_tolerations[${index}].tolerate_percent`) && Boolean(getIn(errors, `brute_force.custom_tolerations[${index}].tolerate_percent`))}
+                                        helperText={(getIn(touched, `brute_force.custom_tolerations[${index}].tolerate_percent`) && getIn(errors, `brute_force.custom_tolerations[${index}].tolerate_percent`)) || "Percentage of failed requests to tolerate (0-100)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.custom_tolerations[${index}].tolerate_ttl`}
+                                        label="Tolerate TTL"
+                                        variant="outlined"
+                                        error={getIn(touched, `brute_force.custom_tolerations[${index}].tolerate_ttl`) && Boolean(getIn(errors, `brute_force.custom_tolerations[${index}].tolerate_ttl`))}
+                                        helperText={(getIn(touched, `brute_force.custom_tolerations[${index}].tolerate_ttl`) && getIn(errors, `brute_force.custom_tolerations[${index}].tolerate_ttl`)) || "Time-to-live for tolerations (e.g., 1h, 30m)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <FormControlLabel
+                                        control={
+                                          <Checkbox
+                                            checked={values.brute_force?.custom_tolerations[index]?.adaptive_toleration || false}
+                                            onChange={(e) => {
+                                              setFieldValue(`brute_force.custom_tolerations[${index}].adaptive_toleration`, e.target.checked);
+                                              setHasUnsavedChanges(true);
+                                            }}
+                                            name={`brute_force.custom_tolerations[${index}].adaptive_toleration`}
+                                          />
+                                        }
+                                        label="Adaptive Toleration"
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.custom_tolerations[${index}].min_tolerate_percent`}
+                                        label="Min Tolerate Percent"
+                                        variant="outlined"
+                                        type="number"
+                                        InputProps={{ inputProps: { min: 0, max: 100 } }}
+                                        error={getIn(touched, `brute_force.custom_tolerations[${index}].min_tolerate_percent`) && Boolean(getIn(errors, `brute_force.custom_tolerations[${index}].min_tolerate_percent`))}
+                                        helperText={(getIn(touched, `brute_force.custom_tolerations[${index}].min_tolerate_percent`) && getIn(errors, `brute_force.custom_tolerations[${index}].min_tolerate_percent`)) || "Minimum percentage for adaptive toleration (0-100)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.custom_tolerations[${index}].max_tolerate_percent`}
+                                        label="Max Tolerate Percent"
+                                        variant="outlined"
+                                        type="number"
+                                        InputProps={{ inputProps: { min: 0, max: 100 } }}
+                                        error={getIn(touched, `brute_force.custom_tolerations[${index}].max_tolerate_percent`) && Boolean(getIn(errors, `brute_force.custom_tolerations[${index}].max_tolerate_percent`))}
+                                        helperText={(getIn(touched, `brute_force.custom_tolerations[${index}].max_tolerate_percent`) && getIn(errors, `brute_force.custom_tolerations[${index}].max_tolerate_percent`)) || "Maximum percentage for adaptive toleration (0-100)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.custom_tolerations[${index}].scale_factor`}
+                                        label="Scale Factor"
+                                        variant="outlined"
+                                        type="number"
+                                        InputProps={{ inputProps: { min: 0.1, max: 10, step: 0.1 } }}
+                                        error={getIn(touched, `brute_force.custom_tolerations[${index}].scale_factor`) && Boolean(getIn(errors, `brute_force.custom_tolerations[${index}].scale_factor`))}
+                                        helperText={(getIn(touched, `brute_force.custom_tolerations[${index}].scale_factor`) && getIn(errors, `brute_force.custom_tolerations[${index}].scale_factor`)) || "Scale factor for adaptive toleration (0.1-10)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                      <IconButton 
+                                        onClick={() => {
+                                          remove(index);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                        color="error"
+                                        aria-label="Remove toleration"
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Grid>
+                                  </Grid>
+                                </Paper>
+                              ))
+                            ) : (
+                              <Typography color="textSecondary" sx={{ mb: 2 }}>No custom tolerations added yet.</Typography>
+                            )}
+                            <Button
+                              startIcon={<AddIcon />}
+                              variant="outlined"
+                              color="primary"
+                              onClick={() => {
+                                push({
+                                  ip_address: '',
+                                  tolerate_percent: 0,
+                                  tolerate_ttl: '1h',
+                                  adaptive_toleration: false,
+                                  min_tolerate_percent: 10,
+                                  max_tolerate_percent: 50,
+                                  scale_factor: 1.0,
+                                });
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              Add Custom Toleration
+                            </Button>
+                          </div>
+                        )}
+                      </FieldArray>
+                    </Paper>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Buckets</Typography>
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        Buckets define rules for detecting brute force attacks based on the number of failed requests within a specific time period.
+                      </Typography>
+                      <FieldArray name="brute_force.buckets">
+                        {({ push, remove }) => (
+                          <div>
+                            {values.brute_force?.buckets && values.brute_force.buckets.length > 0 ? (
+                              values.brute_force.buckets.map((bucket: any, index: number) => (
+                                <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+                                  <Grid container spacing={2}>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.buckets[${index}].name`}
+                                        label="Name"
+                                        variant="outlined"
+                                        error={getIn(touched, `brute_force.buckets[${index}].name`) && Boolean(getIn(errors, `brute_force.buckets[${index}].name`))}
+                                        helperText={(getIn(touched, `brute_force.buckets[${index}].name`) && getIn(errors, `brute_force.buckets[${index}].name`)) || "Name of the bucket"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.buckets[${index}].period`}
+                                        label="Period"
+                                        variant="outlined"
+                                        error={getIn(touched, `brute_force.buckets[${index}].period`) && Boolean(getIn(errors, `brute_force.buckets[${index}].period`))}
+                                        helperText={(getIn(touched, `brute_force.buckets[${index}].period`) && getIn(errors, `brute_force.buckets[${index}].period`)) || "Time period (e.g., 1h, 30m)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.buckets[${index}].cidr`}
+                                        label="CIDR"
+                                        variant="outlined"
+                                        type="number"
+                                        InputProps={{ inputProps: { min: 1, max: 128 } }}
+                                        error={getIn(touched, `brute_force.buckets[${index}].cidr`) && Boolean(getIn(errors, `brute_force.buckets[${index}].cidr`))}
+                                        helperText={(getIn(touched, `brute_force.buckets[${index}].cidr`) && getIn(errors, `brute_force.buckets[${index}].cidr`)) || "CIDR value (1-128)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Version</Typography>
+                                      <RadioGroup
+                                        row
+                                        name={`brute_force.buckets[${index}].ip_version`}
+                                        value={values.brute_force?.buckets[index]?.ipv4 ? 'ipv4' : 'ipv6'}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          // Set ipv4 to true and ipv6 to false if ipv4 is selected
+                                          // Set ipv4 to false and ipv6 to true if ipv6 is selected
+                                          const isIPv4 = e.target.value === 'ipv4';
+                                          setFieldValue(`brute_force.buckets[${index}].ipv4`, isIPv4);
+                                          setFieldValue(`brute_force.buckets[${index}].ipv6`, !isIPv4);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      >
+                                        <FormControlLabel value="ipv4" control={<Radio />} label="IPv4" />
+                                        <FormControlLabel value="ipv6" control={<Radio />} label="IPv6" />
+                                      </RadioGroup>
+                                    </Grid>
+                                    <Grid item xs={12} md={6}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`brute_force.buckets[${index}].failed_requests`}
+                                        label="Failed Requests"
+                                        variant="outlined"
+                                        type="number"
+                                        InputProps={{ inputProps: { min: 1 } }}
+                                        error={getIn(touched, `brute_force.buckets[${index}].failed_requests`) && Boolean(getIn(errors, `brute_force.buckets[${index}].failed_requests`))}
+                                        helperText={(getIn(touched, `brute_force.buckets[${index}].failed_requests`) && getIn(errors, `brute_force.buckets[${index}].failed_requests`)) || "Number of failed requests threshold"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Filter by Protocol</Typography>
+                                      <FieldArray name={`brute_force.buckets[${index}].filter_by_protocol`}>
+                                        {({ push: pushProtocol, remove: removeProtocol }) => (
+                                          <div>
+                                            {values.brute_force?.buckets[index]?.filter_by_protocol && Array.isArray(values.brute_force?.buckets[index]?.filter_by_protocol) && values.brute_force?.buckets[index]?.filter_by_protocol!.length > 0 ? (
+                                              values.brute_force?.buckets[index]?.filter_by_protocol!.map((protocol: string, protocolIndex: number) => (
+                                                <Box key={protocolIndex} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                                  <Field
+                                                    as={TextField}
+                                                    fullWidth
+                                                    name={`brute_force.buckets[${index}].filter_by_protocol[${protocolIndex}]`}
+                                                    label={`Protocol ${protocolIndex + 1}`}
+                                                    variant="outlined"
+                                                    onChange={(e: React.ChangeEvent<any>) => {
+                                                      handleChange(e);
+                                                      setHasUnsavedChanges(true);
+                                                    }}
+                                                  />
+                                                  <IconButton 
+                                                    onClick={() => {
+                                                      removeProtocol(protocolIndex);
+                                                      setHasUnsavedChanges(true);
+                                                    }}
+                                                    sx={{ ml: 1 }}
+                                                    color="error"
+                                                    aria-label="Remove protocol"
+                                                  >
+                                                    <DeleteIcon />
+                                                  </IconButton>
+                                                </Box>
+                                              ))
+                                            ) : (
+                                              <Typography color="textSecondary" sx={{ mb: 2 }}>No protocols added yet.</Typography>
+                                            )}
+                                            <Button
+                                              startIcon={<AddIcon />}
+                                              variant="outlined"
+                                              color="primary"
+                                              size="small"
+                                              onClick={() => {
+                                                pushProtocol('');
+                                                setHasUnsavedChanges(true);
+                                              }}
+                                            >
+                                              Add Protocol
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </FieldArray>
+                                    </Grid>
+                                    <Grid item xs={12}>
+                                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Filter by OIDC Client ID</Typography>
+                                      <FieldArray name={`brute_force.buckets[${index}].filter_by_oidc_cid`}>
+                                        {({ push: pushOIDC, remove: removeOIDC }) => (
+                                          <div>
+                                            {values.brute_force?.buckets[index]?.filter_by_oidc_cid && Array.isArray(values.brute_force?.buckets[index]?.filter_by_oidc_cid) && values.brute_force?.buckets[index]?.filter_by_oidc_cid!.length > 0 ? (
+                                              values.brute_force?.buckets[index]?.filter_by_oidc_cid!.map((oidc: string, oidcIndex: number) => (
+                                                <Box key={oidcIndex} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                                  <Field
+                                                    as={TextField}
+                                                    fullWidth
+                                                    name={`brute_force.buckets[${index}].filter_by_oidc_cid[${oidcIndex}]`}
+                                                    label={`OIDC Client ID ${oidcIndex + 1}`}
+                                                    variant="outlined"
+                                                    onChange={(e: React.ChangeEvent<any>) => {
+                                                      handleChange(e);
+                                                      setHasUnsavedChanges(true);
+                                                    }}
+                                                  />
+                                                  <IconButton 
+                                                    onClick={() => {
+                                                      removeOIDC(oidcIndex);
+                                                      setHasUnsavedChanges(true);
+                                                    }}
+                                                    sx={{ ml: 1 }}
+                                                    color="error"
+                                                    aria-label="Remove OIDC Client ID"
+                                                  >
+                                                    <DeleteIcon />
+                                                  </IconButton>
+                                                </Box>
+                                              ))
+                                            ) : (
+                                              <Typography color="textSecondary" sx={{ mb: 2 }}>No OIDC Client IDs added yet.</Typography>
+                                            )}
+                                            <Button
+                                              startIcon={<AddIcon />}
+                                              variant="outlined"
+                                              color="primary"
+                                              size="small"
+                                              onClick={() => {
+                                                pushOIDC('');
+                                                setHasUnsavedChanges(true);
+                                              }}
+                                            >
+                                              Add OIDC Client ID
+                                            </Button>
+                                          </div>
+                                        )}
+                                      </FieldArray>
+                                    </Grid>
+                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                      <IconButton 
+                                        onClick={() => {
+                                          remove(index);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                        color="error"
+                                        aria-label="Remove bucket"
+                                      >
+                                        <DeleteIcon />
+                                      </IconButton>
+                                    </Grid>
+                                  </Grid>
+                                </Paper>
+                              ))
+                            ) : (
+                              <Typography color="textSecondary" sx={{ mb: 2 }}>No buckets added yet.</Typography>
+                            )}
+                            <Button
+                              startIcon={<AddIcon />}
+                              variant="outlined"
+                              color="primary"
+                              onClick={() => {
+                                push({
+                                  name: '',
+                                  period: '1h',
+                                  cidr: 32,
+                                  failed_requests: 5,
+                                  filter_by_protocol: [],
+                                  filter_by_oidc_cid: [],
+                                });
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              Add Bucket
+                            </Button>
+                          </div>
+                        )}
+                      </FieldArray>
+                    </Paper>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Neural Network Configuration</Typography>
+                    <Paper sx={{ p: 2, mb: 2 }}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.neural_network.max_training_records"
+                            label="Max Training Records"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 1000, max: 100000 } }}
+                            error={getIn(touched, 'brute_force.neural_network.max_training_records') && Boolean(getIn(errors, 'brute_force.neural_network.max_training_records'))}
+                            helperText={(getIn(touched, 'brute_force.neural_network.max_training_records') && getIn(errors, 'brute_force.neural_network.max_training_records')) || "Maximum number of training records (1000-100000)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.neural_network.hidden_neurons"
+                            label="Hidden Neurons"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 8, max: 20 } }}
+                            error={getIn(touched, 'brute_force.neural_network.hidden_neurons') && Boolean(getIn(errors, 'brute_force.neural_network.hidden_neurons'))}
+                            helperText={(getIn(touched, 'brute_force.neural_network.hidden_neurons') && getIn(errors, 'brute_force.neural_network.hidden_neurons')) || "Number of hidden neurons (8-20)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <FormControl fullWidth>
+                            <InputLabel id="activation-function-select-label">Activation Function</InputLabel>
+                            <Select
+                              labelId="activation-function-select-label"
+                              id="activation-function-select"
+                              value={values.brute_force.neural_network.activation_function}
+                              name="brute_force.neural_network.activation_function"
+                              label="Activation Function"
+                              onChange={(e) => {
+                                handleChange(e);
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              <MenuItem value="sigmoid">Sigmoid</MenuItem>
+                              <MenuItem value="tanh">Tanh</MenuItem>
+                              <MenuItem value="relu">ReLU</MenuItem>
+                              <MenuItem value="leaky_relu">Leaky ReLU</MenuItem>
+                            </Select>
+                          </FormControl>
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.neural_network.static_weight"
+                            label="Static Weight"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 1, step: 0.1 } }}
+                            error={getIn(touched, 'brute_force.neural_network.static_weight') && Boolean(getIn(errors, 'brute_force.neural_network.static_weight'))}
+                            helperText={(getIn(touched, 'brute_force.neural_network.static_weight') && getIn(errors, 'brute_force.neural_network.static_weight')) || "Weight for static rules (0-1)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.neural_network.ml_weight"
+                            label="ML Weight"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 1, step: 0.1 } }}
+                            error={getIn(touched, 'brute_force.neural_network.ml_weight') && Boolean(getIn(errors, 'brute_force.neural_network.ml_weight'))}
+                            helperText={(getIn(touched, 'brute_force.neural_network.ml_weight') && getIn(errors, 'brute_force.neural_network.ml_weight')) || "Weight for ML (0-1)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.neural_network.threshold"
+                            label="Threshold"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 1, step: 0.1 } }}
+                            error={getIn(touched, 'brute_force.neural_network.threshold') && Boolean(getIn(errors, 'brute_force.neural_network.threshold'))}
+                            helperText={(getIn(touched, 'brute_force.neural_network.threshold') && getIn(errors, 'brute_force.neural_network.threshold')) || "Threshold for weighted decision (0-1)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.neural_network.learning_rate"
+                            label="Learning Rate"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0.001, max: 0.1, step: 0.001 } }}
+                            error={getIn(touched, 'brute_force.neural_network.learning_rate') && Boolean(getIn(errors, 'brute_force.neural_network.learning_rate'))}
+                            helperText={(getIn(touched, 'brute_force.neural_network.learning_rate') && getIn(errors, 'brute_force.neural_network.learning_rate')) || "Learning rate (0.001-0.1)"}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </Paper>
+                  </Grid>
+                </Grid>
+              </FormSection>
+            </TabPanel>
 
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
               <Button

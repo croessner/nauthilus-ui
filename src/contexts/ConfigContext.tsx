@@ -81,6 +81,9 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
       setConfig(newConfig);
+
+      // Reset unsaved changes flag since we've just saved
+      setHasUnsavedChanges(false);
     } catch (err) {
       setError('Failed to update configuration. Please try again.');
       console.error('Error updating configuration:', err);

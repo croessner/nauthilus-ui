@@ -316,7 +316,38 @@ export interface LuaScriptConfig {
 
 // Brute Force Configuration
 export interface BruteForceConfig {
+  soft_whitelist?: Record<string, string[]>;
+  ip_whitelist?: string[];
+  buckets?: BruteForceRuleConfig[];
+  tolerate_percent?: number;
+  custom_tolerations?: TolerateConfig[];
+  tolerate_ttl?: string;
+  adaptive_toleration?: boolean;
+  min_tolerate_percent?: number;
+  max_tolerate_percent?: number;
+  scale_factor?: number;
   neural_network?: NeuralNetworkConfig;
+}
+
+export interface BruteForceRuleConfig {
+  name: string;
+  period: string;
+  cidr: number;
+  ipv4?: boolean;
+  ipv6?: boolean;
+  failed_requests: number;
+  filter_by_protocol?: string[];
+  filter_by_oidc_cid?: string[];
+}
+
+export interface TolerateConfig {
+  ip_address: string;
+  tolerate_percent: number;
+  tolerate_ttl: string;
+  adaptive_toleration?: boolean;
+  min_tolerate_percent?: number;
+  max_tolerate_percent?: number;
+  scale_factor?: number;
 }
 
 export interface NeuralNetworkConfig {
@@ -331,9 +362,42 @@ export interface NeuralNetworkConfig {
 
 // RBL Configuration
 export interface RBLConfig {
-  servers?: string[];
-  timeout?: string;
-  cache_ttl?: string;
+  soft_whitelist?: Record<string, string[]>;
+  lists?: RBLListConfig[];
+  threshold?: number;
+  ip_whitelist?: string[];
+}
+
+export interface RBLListConfig {
+  name: string;
+  rbl: string;
+  return_code: string;
+  allow_failure?: boolean;
+  weight?: number;
+}
+
+// Relay Domains Configuration
+export interface RelayDomainsConfig {
+  soft_whitelist?: Record<string, string[]>;
+  static?: string[];
+}
+
+// Backend Server Monitoring Configuration
+export interface BackendServerMonitoringConfig {
+  backend_servers?: BackendServerConfig[];
+}
+
+export interface BackendServerConfig {
+  protocol: string;
+  host: string;
+  deep_check?: boolean;
+  request_uri?: string;
+  test_username?: string;
+  test_password?: string;
+  port?: number;
+  tls?: boolean;
+  tls_skip_verify?: boolean;
+  haproxy_v2?: boolean;
 }
 
 // Complete Configuration
@@ -343,4 +407,7 @@ export interface NauthilusConfig {
   lua?: LuaConfig;
   brute_force?: BruteForceConfig;
   rbl?: RBLConfig;
+  relay_domains?: RelayDomainsConfig;
+  backend_server_monitoring?: BackendServerMonitoringConfig;
+  cleartext_networks?: string[];
 }
