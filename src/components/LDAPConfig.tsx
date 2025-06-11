@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Formik, Form, Field, getIn } from 'formik';
+import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
 import {
   TextField,
@@ -18,15 +18,12 @@ import {
   Tabs,
   Tab,
   FormControlLabel,
-  Checkbox,
   Switch
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
-import { LDAPConfig as LDAPConfigType, LDAPConfConfig, LDAPSearchProtocolConfig, LDAPFilterConfig, LDAPAttributeMappingConfig, NauthilusConfig } from '../types/config';
+import { LDAPConfig as LDAPConfigType, LDAPSearchProtocolConfig, NauthilusConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
-import FormSection from './common/FormSection';
-import CollapsibleFormSection from './common/CollapsibleFormSection';
 
 // Validation schema
 const LDAPConfigSchema = Yup.object().shape({

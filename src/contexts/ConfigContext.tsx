@@ -28,6 +28,7 @@ const CONFIG_STORAGE_KEY = 'nauthilus-config';
 const DEFAULT_CONFIG: NauthilusConfig = {
   server: {
     address: '127.0.0.1:8080',
+    instance_name: 'nauthilus',
     max_concurrent_requests: 100,
     max_password_history_entries: 10,
     redis: {

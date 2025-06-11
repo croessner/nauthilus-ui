@@ -3,7 +3,6 @@ import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import { 
   TextField, 
-  Checkbox, 
   FormControlLabel, 
   Grid, 
   Button, 
@@ -14,7 +13,6 @@ import {
   RadioGroup,
   FormControl,
   FormLabel,
-  InputAdornment,
   IconButton,
   Switch
 } from '@mui/material';
@@ -132,7 +130,7 @@ const RedisConfigSchema = Yup.object().shape({
 });
 
 const RedisConfig: React.FC = () => {
-  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
   // Reset unsaved changes flag when component mounts
   React.useEffect(() => {
@@ -777,7 +775,7 @@ const RedisConfig: React.FC = () => {
           )}
 
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="submit" variant="contained" color="primary">
+            <Button type="submit" variant="contained" color="primary" disabled={!hasUnsavedChanges}>
               Save Changes
             </Button>
           </Box>

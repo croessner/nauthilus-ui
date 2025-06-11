@@ -1,22 +1,18 @@
 import React from 'react';
-import { Formik, Form, Field, getIn } from 'formik';
+import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
 import { 
-  TextField, 
-  Checkbox, 
   FormControlLabel, 
   Grid, 
   Button, 
   Box,
   FormHelperText,
   FormControl,
-  InputLabel,
   Select,
   MenuItem,
   Typography,
   Switch
 } from '@mui/material';
-import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
@@ -38,7 +34,7 @@ const MonitoringConfigSchema = Yup.object().shape({
 });
 
 const MonitoringConfig: React.FC = () => {
-  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
   // Reset unsaved changes flag when component mounts
   React.useEffect(() => {
@@ -200,7 +196,7 @@ const MonitoringConfig: React.FC = () => {
           </FormSection>
 
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="submit" variant="contained" color="primary">
+            <Button type="submit" variant="contained" color="primary" disabled={!hasUnsavedChanges}>
               Save Changes
             </Button>
           </Box>

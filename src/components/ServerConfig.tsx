@@ -3,7 +3,6 @@ import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
 import { 
   TextField, 
-  Checkbox, 
   FormControlLabel, 
   Grid, 
   Button, 
@@ -125,7 +124,7 @@ const ServerConfigSchema = Yup.object().shape({
 });
 
 const ServerConfig: React.FC = () => {
-  const { config, updateConfigSection, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
   const [customProtocol, setCustomProtocol] = React.useState<string>('');
 
   // Reset unsaved changes flag when component mounts
@@ -1420,7 +1419,7 @@ const ServerConfig: React.FC = () => {
           {/* Prometheus Timer Configuration moved to MonitoringConfig */}
 
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="submit" variant="contained" color="primary">
+            <Button type="submit" variant="contained" color="primary" disabled={!hasUnsavedChanges}>
               Save Changes
             </Button>
           </Box>

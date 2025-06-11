@@ -71,9 +71,8 @@ const MainContent: React.FC = () => {
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { config, loading, error, hasUnsavedChanges, uploadConfig, downloadConfig, resetConfig, setHasUnsavedChanges, setError } = useConfig();
+  const { loading, error, hasUnsavedChanges, uploadConfig, downloadConfig, resetConfig, setHasUnsavedChanges, setError } = useConfig();
   const { mode, toggleColorMode } = useTheme();
-  const muiTheme = useMuiTheme();
 
   // Define menu items
   const menuItems: MenuItem[] = [

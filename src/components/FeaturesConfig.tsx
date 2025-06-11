@@ -15,7 +15,6 @@ import {
   Tabs,
   Tab,
   TextField,
-  Checkbox,
   FormControlLabel,
   IconButton,
   Radio,
