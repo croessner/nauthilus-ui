@@ -52,6 +52,22 @@ const ServerConfigSchema = Yup.object().shape({
     .max(255, 'Must be at most 255 characters')
     .required('Instance name is required'),
 
+  // TLS configuration validation
+  tls: Yup.object().shape({
+    enabled: Yup.boolean(),
+    cert: Yup.string().when('enabled', (enabled, schema) => 
+      enabled 
+        ? schema.required('TLS certificate path is required when TLS is enabled')
+        : schema
+    ),
+    key: Yup.string().when('enabled', (enabled, schema) => 
+      enabled 
+        ? schema.required('TLS key path is required when TLS is enabled')
+        : schema
+    ),
+    http_client_skip_verify: Yup.boolean(),
+  }),
+
 
   // Brute force protocols validation
   brute_force_protocols: Yup.array().of(
@@ -144,6 +160,14 @@ const ServerConfig: React.FC = () => {
     haproxy_v2: config.server.haproxy_v2 || false,
     instance_name: config.server.instance_name || 'nauthilus',
     redis: config.server.redis,
+
+    // Initialize TLS configuration
+    tls: {
+      enabled: config.server.tls?.enabled || false,
+      cert: config.server.tls?.cert || '',
+      key: config.server.tls?.key || '',
+      http_client_skip_verify: config.server.tls?.http_client_skip_verify || false,
+    },
 
 
     // Insights configuration is now in MonitoringConfig

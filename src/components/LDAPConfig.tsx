@@ -24,6 +24,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LDAPConfig as LDAPConfigType, LDAPSearchProtocolConfig, NauthilusConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
+import ValidationErrors from './common/ValidationErrors';
 
 // Validation schema
 const LDAPConfigSchema = Yup.object().shape({
@@ -88,7 +89,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const LDAPConfig: React.FC = () => {
-  const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
 
   // Initial values
@@ -135,30 +136,6 @@ const LDAPConfig: React.FC = () => {
       search: values.search,
     };
 
-    // If there are any LDAP search protocols configured, ensure 'ldap' is in the server features list
-    if (values.search && values.search.length > 0) {
-      // Initialize server features array if it doesn't exist
-      if (!updatedConfig.server.features) {
-        updatedConfig.server.features = [];
-      }
-
-      // Check if 'ldap' is already in the features list
-      const ldapFeatureExists = updatedConfig.server.features.some(
-        (feature) => feature === 'ldap'
-      );
-
-      // Add 'ldap' to the features list if it doesn't exist
-      if (!ldapFeatureExists) {
-        updatedConfig.server.features.push('ldap');
-      }
-    } else {
-      // If there are no LDAP search protocols configured, remove 'ldap' from the server features list
-      if (updatedConfig.server.features) {
-        updatedConfig.server.features = updatedConfig.server.features.filter(
-          (feature) => feature !== 'ldap'
-        );
-      }
-    }
 
     updateConfig(updatedConfig);
 
@@ -168,9 +145,12 @@ const LDAPConfig: React.FC = () => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom>
+      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
         LDAP Configuration
       </Typography>
+
+      {/* Display validation errors at the top of the form */}
+      <ValidationErrors error={error} />
 
       <Formik
         initialValues={initialValues}
@@ -191,7 +171,7 @@ const LDAPConfig: React.FC = () => {
 
             {/* Main Configuration Tab */}
             <TabPanel value={tabValue} index={0}>
-              <Typography variant="body1" gutterBottom>
+              <Typography variant="body1" gutterBottom sx={{ mb: 2 }}>
                 Configure the main LDAP connection settings.
               </Typography>
 
@@ -439,12 +419,12 @@ const LDAPConfig: React.FC = () => {
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle1" gutterBottom>
+                    <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
                       Server URIs
                     </Typography>
                     <List>
-                      {(values.config.server_uri || []).map((uri: string, index: number) => (
-                        <ListItem key={index} divider={index < (values.config.server_uri || []).length - 1}>
+                      {(Array.isArray(values.config.server_uri) ? values.config.server_uri : [values.config.server_uri].filter(Boolean)).map((uri: string, index: number) => (
+                        <ListItem key={index} divider={index < (Array.isArray(values.config.server_uri) ? values.config.server_uri : [values.config.server_uri].filter(Boolean)).length - 1}>
                           <Grid container spacing={2} alignItems="center">
                             <Grid item xs={10}>
                               <TextField
@@ -467,12 +447,15 @@ const LDAPConfig: React.FC = () => {
                               <IconButton
                                 color="error"
                                 onClick={() => {
-                                  const newUris = [...(values.config.server_uri || [])];
+                                  const currentUris = Array.isArray(values.config.server_uri) 
+                                    ? values.config.server_uri 
+                                    : [values.config.server_uri].filter(Boolean);
+                                  const newUris = [...currentUris];
                                   newUris.splice(index, 1);
                                   setFieldValue('config.server_uri', newUris);
                                   setHasUnsavedChanges(true);
                                 }}
-                                disabled={(values.config.server_uri || []).length <= 1}
+                                disabled={(Array.isArray(values.config.server_uri) ? values.config.server_uri : [values.config.server_uri].filter(Boolean)).length <= 1}
                               >
                                 <DeleteIcon />
                               </IconButton>
@@ -486,8 +469,11 @@ const LDAPConfig: React.FC = () => {
                         variant="outlined"
                         startIcon={<AddIcon />}
                         onClick={() => {
+                          const currentUris = Array.isArray(values.config.server_uri) 
+                            ? values.config.server_uri 
+                            : [values.config.server_uri].filter(Boolean);
                           setFieldValue('config.server_uri', [
-                            ...(values.config.server_uri || []),
+                            ...currentUris,
                             '',
                           ]);
                           setHasUnsavedChanges(true);
@@ -503,14 +489,14 @@ const LDAPConfig: React.FC = () => {
 
             {/* Optional LDAP Pools Tab */}
             <TabPanel value={tabValue} index={1}>
-              <Typography variant="body1" gutterBottom>
+              <Typography variant="body1" gutterBottom sx={{ mb: 2 }}>
                 Configure optional LDAP pools. These allow you to define multiple LDAP backends with different configurations.
               </Typography>
 
               <Paper sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={2}>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle1" gutterBottom>
+                    <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
                       Optional LDAP Pools
                     </Typography>
 
@@ -695,12 +681,12 @@ const LDAPConfig: React.FC = () => {
                             />
                           </Grid>
                           <Grid item xs={12}>
-                            <Typography variant="subtitle2" gutterBottom>
+                            <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
                               Server URIs
                             </Typography>
                             <List>
-                              {(poolConfig.server_uri || []).map((uri: string, uriIndex: number) => (
-                                <ListItem key={uriIndex} divider={uriIndex < (poolConfig.server_uri || []).length - 1}>
+                              {(Array.isArray(poolConfig.server_uri) ? poolConfig.server_uri : [poolConfig.server_uri].filter(Boolean)).map((uri: string, uriIndex: number) => (
+                                <ListItem key={uriIndex} divider={uriIndex < (Array.isArray(poolConfig.server_uri) ? poolConfig.server_uri : [poolConfig.server_uri].filter(Boolean)).length - 1}>
                                   <Grid container spacing={2} alignItems="center">
                                     <Grid item xs={10}>
                                       <TextField
@@ -715,12 +701,15 @@ const LDAPConfig: React.FC = () => {
                                       <IconButton
                                         color="error"
                                         onClick={() => {
-                                          const newUris = [...(poolConfig.server_uri || [])];
+                                          const currentUris = Array.isArray(poolConfig.server_uri) 
+                                            ? poolConfig.server_uri 
+                                            : [poolConfig.server_uri].filter(Boolean);
+                                          const newUris = [...currentUris];
                                           newUris.splice(uriIndex, 1);
                                           setFieldValue(`optional_ldap_pools.${poolName}.server_uri`, newUris);
                                           setHasUnsavedChanges(true);
                                         }}
-                                        disabled={(poolConfig.server_uri || []).length <= 1}
+                                        disabled={(Array.isArray(poolConfig.server_uri) ? poolConfig.server_uri : [poolConfig.server_uri].filter(Boolean)).length <= 1}
                                       >
                                         <DeleteIcon />
                                       </IconButton>
@@ -734,8 +723,11 @@ const LDAPConfig: React.FC = () => {
                                 variant="outlined"
                                 startIcon={<AddIcon />}
                                 onClick={() => {
+                                  const currentUris = Array.isArray(poolConfig.server_uri) 
+                                    ? poolConfig.server_uri 
+                                    : [poolConfig.server_uri].filter(Boolean);
                                   setFieldValue(`optional_ldap_pools.${poolName}.server_uri`, [
-                                    ...(poolConfig.server_uri || []),
+                                    ...currentUris,
                                     '',
                                   ]);
                                   setHasUnsavedChanges(true);
@@ -793,7 +785,7 @@ const LDAPConfig: React.FC = () => {
 
             {/* Search Protocols Tab */}
             <TabPanel value={tabValue} index={2}>
-              <Typography variant="body1" gutterBottom>
+              <Typography variant="body1" gutterBottom sx={{ mb: 2 }}>
                 Configure LDAP search protocols. These define which protocols can be authenticated using LDAP.
               </Typography>
 
@@ -804,7 +796,7 @@ const LDAPConfig: React.FC = () => {
                       <Box sx={{ width: '100%', mb: 2 }}>
                         <Grid container spacing={2} alignItems="center">
                           <Grid item xs={10}>
-                            <Typography variant="subtitle1">Search Protocol {index + 1}</Typography>
+                            <Typography variant="subtitle1" sx={{ mb: 1 }}>Search Protocol {index + 1}</Typography>
                           </Grid>
                           <Grid item xs={2}>
                             <IconButton
@@ -827,7 +819,7 @@ const LDAPConfig: React.FC = () => {
                               fullWidth
                               label="Protocols (comma-separated)"
                               name={`search[${index}].protocol`}
-                              value={searchProtocol.protocol ? searchProtocol.protocol.join(',') : ''}
+                              value={searchProtocol.protocol ? (Array.isArray(searchProtocol.protocol) ? searchProtocol.protocol.join(',') : searchProtocol.protocol) : ''}
                               onChange={(e) => {
                                 const protocols = e.target.value.split(',').map(protocol => protocol.trim()).filter(protocol => protocol);
                                 setFieldValue(`search[${index}].protocol`, protocols);
@@ -918,7 +910,7 @@ const LDAPConfig: React.FC = () => {
                               fullWidth
                               label="Attributes (comma-separated)"
                               name={`search[${index}].attribute`}
-                              value={searchProtocol.attribute ? searchProtocol.attribute.join(',') : ''}
+                              value={searchProtocol.attribute ? (Array.isArray(searchProtocol.attribute) ? searchProtocol.attribute.join(',') : searchProtocol.attribute) : ''}
                               onChange={(e) => {
                                 const attributes = e.target.value.split(',').map(attr => attr.trim()).filter(attr => attr);
                                 setFieldValue(`search[${index}].attribute`, attributes);
@@ -936,7 +928,7 @@ const LDAPConfig: React.FC = () => {
                           </Grid>
                         </Grid>
 
-                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Filters</Typography>
+                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 2 }}>Filters</Typography>
                         <Grid container spacing={2}>
                           <Grid item xs={12} md={6}>
                             <TextField
@@ -950,9 +942,12 @@ const LDAPConfig: React.FC = () => {
                                 getIn(errors, `search[${index}].filter.user`)
                               )}
                               helperText={
-                                getIn(touched, `search[${index}].filter.user`) &&
-                                getIn(errors, `search[${index}].filter.user`)
+                                (getIn(touched, `search[${index}].filter.user`) &&
+                                getIn(errors, `search[${index}].filter.user`)) ||
+                                "Available macros: %s (username), %{user}, %{username}, %{domain}, %{service}, %{local_ip}, %{local_port}, %{remote_ip}, %{remote_port}, %{totp_secret}. Modifiers: %L{...} (lowercase), %U{...} (uppercase)"
                               }
+                              multiline
+                              rows={3}
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -967,9 +962,12 @@ const LDAPConfig: React.FC = () => {
                                 getIn(errors, `search[${index}].filter.list_accounts`)
                               )}
                               helperText={
-                                getIn(touched, `search[${index}].filter.list_accounts`) &&
-                                getIn(errors, `search[${index}].filter.list_accounts`)
+                                (getIn(touched, `search[${index}].filter.list_accounts`) &&
+                                getIn(errors, `search[${index}].filter.list_accounts`)) ||
+                                "Available macros: %s (username), %{user}, %{username}, %{domain}, %{service}, %{local_ip}, %{local_port}, %{remote_ip}, %{remote_port}, %{totp_secret}. Modifiers: %L{...} (lowercase), %U{...} (uppercase)"
                               }
+                              multiline
+                              rows={3}
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -979,19 +977,19 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].filter.webauthn_credentials`}
                               value={searchProtocol.filter?.webauthn_credentials || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].filter.webauthn_credentials`) &&
                                 getIn(errors, `search[${index}].filter.webauthn_credentials`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].filter.webauthn_credentials`) &&
-                                getIn(errors, `search[${index}].filter.webauthn_credentials`)
-                              }
+                              helperText="This feature is not implemented yet."
+                              multiline
+                              rows={3}
                             />
                           </Grid>
                         </Grid>
 
-                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Attribute Mapping</Typography>
+                        <Typography variant="subtitle2" sx={{ mt: 2, mb: 2 }}>Attribute Mapping</Typography>
                         <Grid container spacing={2}>
                           <Grid item xs={12} md={6}>
                             <TextField
@@ -1034,14 +1032,12 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].mapping.totp_recovery_field`}
                               value={searchProtocol.mapping?.totp_recovery_field || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.totp_recovery_field`) &&
                                 getIn(errors, `search[${index}].mapping.totp_recovery_field`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].mapping.totp_recovery_field`) &&
-                                getIn(errors, `search[${index}].mapping.totp_recovery_field`)
-                              }
+                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -1068,14 +1064,12 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].mapping.credential_object`}
                               value={searchProtocol.mapping?.credential_object || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.credential_object`) &&
                                 getIn(errors, `search[${index}].mapping.credential_object`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].mapping.credential_object`) &&
-                                getIn(errors, `search[${index}].mapping.credential_object`)
-                              }
+                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -1085,14 +1079,12 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].mapping.credential_id_field`}
                               value={searchProtocol.mapping?.credential_id_field || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.credential_id_field`) &&
                                 getIn(errors, `search[${index}].mapping.credential_id_field`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].mapping.credential_id_field`) &&
-                                getIn(errors, `search[${index}].mapping.credential_id_field`)
-                              }
+                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -1102,14 +1094,12 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].mapping.public_key_field`}
                               value={searchProtocol.mapping?.public_key_field || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.public_key_field`) &&
                                 getIn(errors, `search[${index}].mapping.public_key_field`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].mapping.public_key_field`) &&
-                                getIn(errors, `search[${index}].mapping.public_key_field`)
-                              }
+                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -1136,14 +1126,12 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].mapping.aaguid_field`}
                               value={searchProtocol.mapping?.aaguid_field || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.aaguid_field`) &&
                                 getIn(errors, `search[${index}].mapping.aaguid_field`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].mapping.aaguid_field`) &&
-                                getIn(errors, `search[${index}].mapping.aaguid_field`)
-                              }
+                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -1153,14 +1141,12 @@ const LDAPConfig: React.FC = () => {
                               name={`search[${index}].mapping.sign_count_field`}
                               value={searchProtocol.mapping?.sign_count_field || ''}
                               onChange={handleChange}
+                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.sign_count_field`) &&
                                 getIn(errors, `search[${index}].mapping.sign_count_field`)
                               )}
-                              helperText={
-                                getIn(touched, `search[${index}].mapping.sign_count_field`) &&
-                                getIn(errors, `search[${index}].mapping.sign_count_field`)
-                              }
+                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                         </Grid>

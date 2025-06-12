@@ -216,7 +216,7 @@ const FeaturesConfig: React.FC = () => {
     cleartext_networks: config?.cleartext_networks || [],
     rbl: {
       soft_whitelist: config?.rbl?.soft_whitelist || {},
-      lists: config?.rbl?.lists || [{ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0 }],
+      lists: config?.rbl?.lists || [{ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0, ipv4: true, ipv6: true }],
       threshold: config?.rbl?.threshold || 0,
       ip_whitelist: config?.rbl?.ip_whitelist || [],
     },
@@ -812,6 +812,36 @@ const FeaturesConfig: React.FC = () => {
                                       label="Allow Failure"
                                     />
                                   </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <FormControlLabel
+                                      control={
+                                        <Switch
+                                          checked={values.rbl?.lists[index]?.ipv4 || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`rbl.lists[${index}].ipv4`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`rbl.lists[${index}].ipv4`}
+                                        />
+                                      }
+                                      label="IPv4"
+                                    />
+                                  </Grid>
+                                  <Grid item xs={12} md={6}>
+                                    <FormControlLabel
+                                      control={
+                                        <Switch
+                                          checked={values.rbl?.lists[index]?.ipv6 || false}
+                                          onChange={(e) => {
+                                            setFieldValue(`rbl.lists[${index}].ipv6`, e.target.checked);
+                                            setHasUnsavedChanges(true);
+                                          }}
+                                          name={`rbl.lists[${index}].ipv6`}
+                                        />
+                                      }
+                                      label="IPv6"
+                                    />
+                                  </Grid>
                                   <Grid item xs={12} display="flex" justifyContent="flex-end">
                                     <IconButton 
                                       onClick={() => {
@@ -835,7 +865,7 @@ const FeaturesConfig: React.FC = () => {
                             variant="outlined"
                             color="primary"
                             onClick={() => {
-                              push({ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0 });
+                              push({ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0, ipv4: true, ipv6: true });
                               setHasUnsavedChanges(true);
                             }}
                           >

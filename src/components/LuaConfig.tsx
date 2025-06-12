@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Formik, Form, Field, getIn } from 'formik';
+import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
 import {
   TextField,
@@ -22,8 +22,7 @@ import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LuaFeatureConfig, LuaFilterConfig, LuaActionConfig, LuaCustomHookConfig, LuaSearchProtocolConfig, LuaConfig as LuaConfigType, NauthilusConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
-import FormSection from './common/FormSection';
-import CollapsibleFormSection from './common/CollapsibleFormSection';
+import ValidationErrors from './common/ValidationErrors';
 
 // Validation schema
 const LuaConfigSchema = Yup.object().shape({
@@ -117,7 +116,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const LuaConfig: React.FC = () => {
-  const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
 
   // Initial values
@@ -161,30 +160,6 @@ const LuaConfig: React.FC = () => {
       optional_lua_backends: values.optional_lua_backends,
     };
 
-    // If there are any Lua features configured, ensure 'lua' is in the server features list
-    if (values.features && values.features.length > 0) {
-      // Initialize server features array if it doesn't exist
-      if (!updatedConfig.server.features) {
-        updatedConfig.server.features = [];
-      }
-
-      // Check if 'lua' is already in the features list
-      const luaFeatureExists = updatedConfig.server.features.some(
-        (feature) => feature === 'lua'
-      );
-
-      // Add 'lua' to the features list if it doesn't exist
-      if (!luaFeatureExists) {
-        updatedConfig.server.features.push('lua');
-      }
-    } else {
-      // If there are no Lua features configured, remove 'lua' from the server features list
-      if (updatedConfig.server.features) {
-        updatedConfig.server.features = updatedConfig.server.features.filter(
-          (feature) => feature !== 'lua'
-        );
-      }
-    }
 
     updateConfig(updatedConfig);
 
@@ -197,6 +172,9 @@ const LuaConfig: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         Lua Configuration
       </Typography>
+
+      {/* Display validation errors at the top of the form */}
+      <ValidationErrors error={error} />
 
       <Formik
         initialValues={initialValues}
@@ -558,7 +536,7 @@ const LuaConfig: React.FC = () => {
                             fullWidth
                             label="Roles (comma-separated)"
                             name={`custom_hooks[${index}].roles`}
-                            value={hook.roles ? hook.roles.join(',') : ''}
+                            value={hook.roles ? (Array.isArray(hook.roles) ? hook.roles.join(',') : hook.roles) : ''}
                             onChange={(e) => {
                               const roles = e.target.value.split(',').map(role => role.trim()).filter(role => role);
                               setFieldValue(`custom_hooks[${index}].roles`, roles);
@@ -618,7 +596,7 @@ const LuaConfig: React.FC = () => {
                             fullWidth
                             label="Protocols (comma-separated)"
                             name={`search[${index}].protocol`}
-                            value={searchProtocol.protocol ? searchProtocol.protocol.join(',') : ''}
+                            value={searchProtocol.protocol ? (Array.isArray(searchProtocol.protocol) ? searchProtocol.protocol.join(',') : searchProtocol.protocol) : ''}
                             onChange={(e) => {
                               const protocols = e.target.value.split(',').map(protocol => protocol.trim()).filter(protocol => protocol);
                               setFieldValue(`search[${index}].protocol`, protocols);

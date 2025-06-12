@@ -7,7 +7,6 @@ import {
   Grid, 
   Button, 
   Box,
-  FormHelperText,
   Typography,
   Radio,
   RadioGroup,
@@ -22,6 +21,7 @@ import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
+import ValidationErrors from './common/ValidationErrors';
 
 // Validation schema
 const RedisConfigSchema = Yup.object().shape({
@@ -130,7 +130,7 @@ const RedisConfigSchema = Yup.object().shape({
 });
 
 const RedisConfig: React.FC = () => {
-  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
 
   // Reset unsaved changes flag when component mounts
   React.useEffect(() => {
@@ -236,6 +236,9 @@ const RedisConfig: React.FC = () => {
     >
       {({ errors, touched, values, handleChange, setFieldValue }) => (
         <Form>
+          {/* Display validation errors at the top of the form */}
+          <ValidationErrors error={error} />
+
           <FormSection
             title="Redis Configuration"
             description="Configure Redis settings for caching and session management."
@@ -644,9 +647,16 @@ const RedisConfig: React.FC = () => {
                                 placeholder="localhost:6379"
                                 error={getIn(touched, `redis.cluster.addresses[${index}]`) && Boolean(getIn(errors, `redis.cluster.addresses[${index}]`))}
                                 helperText={(getIn(touched, `redis.cluster.addresses[${index}]`) && getIn(errors, `redis.cluster.addresses[${index}]`)) || "Redis cluster address in the format hostname:port"}
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
                               />
                               <IconButton 
-                                onClick={() => remove(index)}
+                                onClick={() => {
+                                  remove(index);
+                                  setHasUnsavedChanges(true);
+                                }}
                                 sx={{ ml: 1 }}
                                 color="error"
                                 aria-label="Remove address"
@@ -662,7 +672,10 @@ const RedisConfig: React.FC = () => {
                           startIcon={<AddIcon />}
                           variant="outlined"
                           color="primary"
-                          onClick={() => push('')}
+                          onClick={() => {
+                            push('');
+                            setHasUnsavedChanges(true);
+                          }}
                         >
                           Add Cluster Address
                         </Button>
@@ -679,6 +692,10 @@ const RedisConfig: React.FC = () => {
                     variant="outlined"
                     error={getIn(touched, 'redis.cluster.username') && Boolean(getIn(errors, 'redis.cluster.username'))}
                     helperText={(getIn(touched, 'redis.cluster.username') && getIn(errors, 'redis.cluster.username')) || "Cluster username (optional)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -691,6 +708,10 @@ const RedisConfig: React.FC = () => {
                     type="password"
                     error={getIn(touched, 'redis.cluster.password') && Boolean(getIn(errors, 'redis.cluster.password'))}
                     helperText={(getIn(touched, 'redis.cluster.password') && getIn(errors, 'redis.cluster.password')) || "Cluster password (optional)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -700,6 +721,7 @@ const RedisConfig: React.FC = () => {
                         checked={values.redis.cluster?.route_by_latency || false}
                         onChange={(e) => {
                           setFieldValue('redis.cluster.route_by_latency', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="redis.cluster.route_by_latency"
                       />
@@ -714,6 +736,7 @@ const RedisConfig: React.FC = () => {
                         checked={values.redis.cluster?.route_randomly || false}
                         onChange={(e) => {
                           setFieldValue('redis.cluster.route_randomly', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="redis.cluster.route_randomly"
                       />
@@ -728,6 +751,7 @@ const RedisConfig: React.FC = () => {
                         checked={values.redis.cluster?.route_reads_to_replicas || false}
                         onChange={(e) => {
                           setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked);
+                          setHasUnsavedChanges(true);
                         }}
                         name="redis.cluster.route_reads_to_replicas"
                       />
@@ -746,6 +770,10 @@ const RedisConfig: React.FC = () => {
                     InputProps={{ inputProps: { min: 0 } }}
                     error={getIn(touched, 'redis.cluster.max_redirects') && Boolean(getIn(errors, 'redis.cluster.max_redirects'))}
                     helperText={(getIn(touched, 'redis.cluster.max_redirects') && getIn(errors, 'redis.cluster.max_redirects')) || "Maximum number of redirects"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -757,6 +785,10 @@ const RedisConfig: React.FC = () => {
                     variant="outlined"
                     error={getIn(touched, 'redis.cluster.read_timeout') && Boolean(getIn(errors, 'redis.cluster.read_timeout'))}
                     helperText={(getIn(touched, 'redis.cluster.read_timeout') && getIn(errors, 'redis.cluster.read_timeout')) || "Duration format (e.g., 3s, 1m)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -768,6 +800,10 @@ const RedisConfig: React.FC = () => {
                     variant="outlined"
                     error={getIn(touched, 'redis.cluster.write_timeout') && Boolean(getIn(errors, 'redis.cluster.write_timeout'))}
                     helperText={(getIn(touched, 'redis.cluster.write_timeout') && getIn(errors, 'redis.cluster.write_timeout')) || "Duration format (e.g., 3s, 1m)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
               </Grid>

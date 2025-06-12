@@ -75,7 +75,6 @@ export interface LogConfig {
 }
 
 export interface BackendConfig {
-  name: string;
   backend: string;
 }
 
@@ -374,6 +373,8 @@ export interface RBLListConfig {
   return_code: string;
   allow_failure?: boolean;
   weight?: number;
+  ipv4?: boolean;
+  ipv6?: boolean;
 }
 
 // Relay Domains Configuration
@@ -400,11 +401,60 @@ export interface BackendServerConfig {
   haproxy_v2?: boolean;
 }
 
+// OAuth2 Configuration
+export interface Oauth2Config {
+  custom_scopes?: Oauth2CustomScopeConfig[];
+  clients?: Oauth2ClientConfig[];
+}
+
+export interface Oauth2CustomScopeConfig {
+  name: string;
+  description: string;
+  claims: OIDCCustomClaimConfig[];
+}
+
+export interface OIDCCustomClaimConfig {
+  name: string;
+  type: string;
+}
+
+export interface Oauth2ClientConfig {
+  skip_consent?: boolean;
+  skip_totp?: boolean;
+  name: string;
+  client_id: string;
+  subject: string;
+  claims: IdTokenClaimsConfig;
+}
+
+export interface IdTokenClaimsConfig {
+  email?: string;
+  email_verified?: boolean;
+  name?: string;
+  given_name?: string;
+  family_name?: string;
+  middle_name?: string;
+  nickname?: string;
+  preferred_username?: string;
+  profile?: string;
+  picture?: string;
+  website?: string;
+  gender?: string;
+  birthdate?: string;
+  zoneinfo?: string;
+  locale?: string;
+  phone_number?: string;
+  phone_number_verified?: boolean;
+  address?: string;
+  updated_at?: string;
+}
+
 // Complete Configuration
 export interface NauthilusConfig {
   server: ServerConfig;
   ldap?: LDAPConfig;
   lua?: LuaConfig;
+  oauth2?: Oauth2Config;
   brute_force?: BruteForceConfig;
   rbl?: RBLConfig;
   relay_domains?: RelayDomainsConfig;

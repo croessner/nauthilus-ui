@@ -15,15 +15,14 @@ import {
   Toolbar, 
   Typography,
   CircularProgress,
-  Alert,
   Button,
   Tooltip,
   Dialog,
   DialogTitle,
   DialogContent,
   DialogActions,
-  useTheme as useMuiTheme,
-  Avatar
+  Avatar,
+  Container
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -39,21 +38,24 @@ import DownloadIcon from '@mui/icons-material/Download';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
+import DescriptionIcon from '@mui/icons-material/Description';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import ValidationErrors from './components/common/ValidationErrors';
 
 // Import configuration components
 import ServerConfig from './components/ServerConfig';
 import AuthConfig from './components/AuthConfig';
 
-// Import pages (to be created later)
-// import BackendsConfig from './components/BackendsConfig';
+// Import pages
+import BackendsConfig from './components/BackendsConfig';
 import FeaturesConfig from './components/FeaturesConfig';
 import RedisConfig from './components/RedisConfig';
-// import FrontendConfig from './components/FrontendConfig';
 import MonitoringConfig from './components/MonitoringConfig';
 import LuaConfig from './components/LuaConfig';
 import LDAPConfig from './components/LDAPConfig';
+import FrontendConfig from './components/FrontendConfig';
+import ConfigPreview from './components/ConfigPreview';
 
 const drawerWidth = 240;
 
@@ -85,6 +87,7 @@ const MainContent: React.FC = () => {
     { text: 'Monitoring', icon: <MonitorHeartIcon />, path: '/monitoring' },
     { text: 'LDAP', icon: <SecurityIcon />, path: '/ldap' },
     { text: 'Lua', icon: <CodeIcon />, path: '/lua' },
+    { text: 'Config Preview', icon: <DescriptionIcon />, path: '/config-preview' },
   ];
 
   const handleDrawerToggle = () => {
@@ -262,6 +265,23 @@ const MainContent: React.FC = () => {
           </Box>
         </Toolbar>
       </AppBar>
+
+      {/* Error message display at the top of the screen */}
+      {error && (
+        <Container 
+          sx={{ 
+            position: 'fixed', 
+            top: { xs: 56, sm: 64 }, // Position right below the AppBar
+            left: { sm: drawerWidth }, 
+            right: 0,
+            zIndex: 1100,
+            p: 2,
+            width: { sm: `calc(100% - ${drawerWidth}px)` }
+          }}
+        >
+          <ValidationErrors error={error} />
+        </Container>
+      )}
       <Box
         component="nav"
         sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
@@ -303,21 +323,17 @@ const MainContent: React.FC = () => {
           </Box>
         ) : (
           <>
-            {error && (
-              <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
-                {error}
-              </Alert>
-            )}
             <Routes>
               <Route path="/" element={<ServerConfig />} />
               <Route path="/auth" element={<AuthConfig />} />
-              <Route path="/backends" element={<div>Backends Configuration (Coming Soon)</div>} />
+              <Route path="/backends" element={<BackendsConfig />} />
               <Route path="/features" element={<FeaturesConfig />} />
               <Route path="/redis" element={<RedisConfig />} />
-              <Route path="/frontend" element={<div>Frontend Configuration (Coming Soon)</div>} />
+              <Route path="/frontend" element={<FrontendConfig />} />
               <Route path="/monitoring" element={<MonitoringConfig />} />
               <Route path="/lua" element={<LuaConfig />} />
               <Route path="/ldap" element={<LDAPConfig />} />
+              <Route path="/config-preview" element={<ConfigPreview />} />
             </Routes>
           </>
         )}
