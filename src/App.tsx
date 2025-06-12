@@ -48,6 +48,7 @@ import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import DescriptionIcon from '@mui/icons-material/Description';
 import GavelIcon from '@mui/icons-material/Gavel';
+import BuildIcon from '@mui/icons-material/Build';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import ValidationErrors from './components/common/ValidationErrors';
@@ -66,6 +67,7 @@ import LDAPConfig from './components/LDAPConfig';
 import FrontendConfig from './components/FrontendConfig';
 import ConfigPreview from './components/ConfigPreview';
 import LicensesPage from './components/LicensesPage';
+import ConfigWizard from './components/ConfigWizard';
 
 const drawerWidth = 240;
 
@@ -124,8 +126,11 @@ const MainContent: React.FC = () => {
     { text: 'LDAP', icon: <SecurityIcon />, path: '/ldap' },
     { text: 'Lua', icon: <CodeIcon />, path: '/lua' },
     { text: 'Config Preview', icon: <DescriptionIcon />, path: '/config-preview' },
-    { text: 'Licenses', icon: <GavelIcon />, path: '/licenses' },
+    { text: 'Wizard', icon: <BuildIcon />, path: '/config-wizard' },
   ];
+
+  // Define licenses menu item separately to place it at the bottom
+  const licensesMenuItem: MenuItem = { text: 'Licenses', icon: <GavelIcon />, path: '/licenses' };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -153,6 +158,7 @@ const MainContent: React.FC = () => {
   const handleResetConfirm = () => {
     resetConfig();
     setResetDialogOpen(false);
+    navigate('/'); // Navigate to Server Configuration page
   };
 
   const handleResetCancel = () => {
@@ -285,7 +291,7 @@ const MainContent: React.FC = () => {
       </Toolbar>
       <Divider />
       <List>
-        {menuItems.slice(0, -1).map((item) => (
+        {menuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton onClick={() => handleNavigation(item.path)}>
               <ListItemIcon>
@@ -297,14 +303,13 @@ const MainContent: React.FC = () => {
         ))}
       </List>
       <Box sx={{ flexGrow: 1 }} />
-      <Divider />
       <List>
         <ListItem disablePadding>
-          <ListItemButton onClick={() => handleNavigation(menuItems[menuItems.length - 1].path)}>
+          <ListItemButton onClick={() => handleNavigation(licensesMenuItem.path)}>
             <ListItemIcon>
-              {menuItems[menuItems.length - 1].icon}
+              {licensesMenuItem.icon}
             </ListItemIcon>
-            <ListItemText primary={menuItems[menuItems.length - 1].text} />
+            <ListItemText primary={licensesMenuItem.text} />
           </ListItemButton>
         </ListItem>
       </List>
@@ -374,6 +379,9 @@ const MainContent: React.FC = () => {
               <MenuItem onClick={handleRenameProfileClick}>Rename Current Profile</MenuItem>
               <MenuItem onClick={handleDeleteProfileClick}>Delete Current Profile</MenuItem>
               <MenuItem onClick={handleUploadWithProfileClick}>Upload to New Profile</MenuItem>
+              <MenuItem onClick={() => { handleProfileMenuClose(); }}>
+                <ConfigWizard autoOpen={true} />
+              </MenuItem>
             </Menu>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -501,6 +509,7 @@ const MainContent: React.FC = () => {
               <Route path="/ldap" element={<LDAPConfig />} />
               <Route path="/config-preview" element={<ConfigPreview />} />
               <Route path="/licenses" element={<LicensesPage />} />
+              <Route path="/config-wizard" element={<ConfigWizard autoOpen={true} />} />
             </Routes>
           </>
         )}
