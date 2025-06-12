@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -16,7 +16,12 @@ import {
   Select,
   MenuItem,
   Tabs,
-  Tab
+  Tab,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -118,6 +123,10 @@ function TabPanel(props: TabPanelProps) {
 const LuaConfig: React.FC = () => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
+  const [createBackendDialogOpen, setCreateBackendDialogOpen] = useState(false);
+  const [newBackendName, setNewBackendName] = useState('');
+  const [formikValues, setFormikValues] = useState<any>(null);
+  const formikSetFieldValueRef = useRef<any>(null);
 
   // Initial values
   const initialValues = {
@@ -818,20 +827,10 @@ const LuaConfig: React.FC = () => {
                         variant="outlined"
                         startIcon={<AddIcon />}
                         onClick={() => {
-                          // Prompt for backend name
-                          const backendName = prompt('Enter a name for the new backend:');
-                          if (backendName && backendName.trim() !== '') {
-                            const newBackends = { ...values.optional_lua_backends };
-                            newBackends[backendName] = {
-                              number_of_workers: 10,
-                              package_path: '',
-                              backend_script_path: '',
-                              init_script_path: '',
-                              init_script_paths: [],
-                            };
-                            setFieldValue('optional_lua_backends', newBackends);
-                            setHasUnsavedChanges(true);
-                          }
+                          setNewBackendName('');
+                          setFormikValues(values);
+                          formikSetFieldValueRef.current = setFieldValue;
+                          setCreateBackendDialogOpen(true);
                         }}
                       >
                         Add Optional Backend
@@ -986,6 +985,54 @@ const LuaConfig: React.FC = () => {
           </Form>
         )}
       </Formik>
+
+      {/* Create Backend Dialog */}
+      <Dialog
+        open={createBackendDialogOpen}
+        onClose={() => setCreateBackendDialogOpen(false)}
+      >
+        <DialogTitle>Create New Lua Backend</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Enter a name for the new Lua backend.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="backend-name"
+            label="Backend Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newBackendName}
+            onChange={(e) => setNewBackendName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateBackendDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              if (newBackendName && newBackendName.trim() !== '' && formikValues && formikSetFieldValueRef.current) {
+                const newBackends = { ...formikValues.optional_lua_backends };
+                newBackends[newBackendName] = {
+                  number_of_workers: 10,
+                  package_path: '',
+                  backend_script_path: '',
+                  init_script_path: '',
+                  init_script_paths: [],
+                };
+                formikSetFieldValueRef.current('optional_lua_backends', newBackends);
+                setHasUnsavedChanges(true);
+                setCreateBackendDialogOpen(false);
+              }
+            }}
+            color="primary"
+            disabled={!newBackendName || newBackendName.trim() === ''}
+          >
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };

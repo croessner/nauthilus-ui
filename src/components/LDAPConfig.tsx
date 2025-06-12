@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -18,7 +18,12 @@ import {
   Tabs,
   Tab,
   FormControlLabel,
-  Switch
+  Switch,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -91,6 +96,10 @@ function TabPanel(props: TabPanelProps) {
 const LDAPConfig: React.FC = () => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
+  const [createPoolDialogOpen, setCreatePoolDialogOpen] = useState(false);
+  const [newPoolName, setNewPoolName] = useState('');
+  const [formikValues, setFormikValues] = useState<any>(null);
+  const formikSetFieldValueRef = useRef<any>(null);
 
   // Initial values
   const initialValues = {
@@ -746,33 +755,10 @@ const LDAPConfig: React.FC = () => {
                         variant="outlined"
                         startIcon={<AddIcon />}
                         onClick={() => {
-                          // Prompt for pool name
-                          const poolName = prompt('Enter a name for the new LDAP pool:');
-                          if (poolName && poolName.trim() !== '' && poolName !== 'default') {
-                            const newPools = { ...values.optional_ldap_pools };
-                            newPools[poolName] = {
-                              pool_only: false,
-                              start_tls: false,
-                              tls_skip_verify: false,
-                              sasl_external: false,
-                              number_of_workers: 10,
-                              lookup_pool_size: 10,
-                              lookup_idle_pool_size: 5,
-                              auth_pool_size: 10,
-                              auth_idle_pool_size: 5,
-                              bind_dn: '',
-                              bind_pw: '',
-                              tls_ca_cert: '',
-                              tls_client_cert: '',
-                              tls_client_key: '',
-                              connect_abort_timeout: '10s',
-                              server_uri: ['ldap://localhost'],
-                            };
-                            setFieldValue('optional_ldap_pools', newPools);
-                            setHasUnsavedChanges(true);
-                          } else if (poolName === 'default') {
-                            alert('Pool name cannot be "default"');
-                          }
+                          setNewPoolName('');
+                          setFormikValues(values);
+                          formikSetFieldValueRef.current = setFieldValue;
+                          setCreatePoolDialogOpen(true);
                         }}
                       >
                         Add Optional Pool
@@ -1210,6 +1196,67 @@ const LDAPConfig: React.FC = () => {
           </Form>
         )}
       </Formik>
+
+      {/* Create Pool Dialog */}
+      <Dialog
+        open={createPoolDialogOpen}
+        onClose={() => setCreatePoolDialogOpen(false)}
+      >
+        <DialogTitle>Create New LDAP Pool</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Enter a name for the new LDAP pool.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="pool-name"
+            label="Pool Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newPoolName}
+            onChange={(e) => setNewPoolName(e.target.value)}
+            error={newPoolName === 'default'}
+            helperText={newPoolName === 'default' ? 'Pool name cannot be "default"' : ''}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreatePoolDialogOpen(false)}>Cancel</Button>
+          <Button 
+            onClick={() => {
+              if (newPoolName && newPoolName.trim() !== '' && newPoolName !== 'default' && formikValues && formikSetFieldValueRef.current) {
+                const newPools = { ...formikValues.optional_ldap_pools };
+                newPools[newPoolName] = {
+                  pool_only: false,
+                  start_tls: false,
+                  tls_skip_verify: false,
+                  sasl_external: false,
+                  number_of_workers: 10,
+                  lookup_pool_size: 10,
+                  lookup_idle_pool_size: 5,
+                  auth_pool_size: 10,
+                  auth_idle_pool_size: 5,
+                  bind_dn: '',
+                  bind_pw: '',
+                  tls_ca_cert: '',
+                  tls_client_cert: '',
+                  tls_client_key: '',
+                  connect_abort_timeout: '10s',
+                  server_uri: ['ldap://localhost'],
+                };
+                formikSetFieldValueRef.current('optional_ldap_pools', newPools);
+                setHasUnsavedChanges(true);
+                setCreatePoolDialogOpen(false);
+              }
+            }}
+            color="primary"
+            disabled={!newPoolName || newPoolName.trim() === '' || newPoolName === 'default'}
+          >
+            Create
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Box>
   );
 };
