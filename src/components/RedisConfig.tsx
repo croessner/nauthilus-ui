@@ -21,15 +21,14 @@ import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
-import ValidationErrors from './common/ValidationErrors';
 
 // Validation schema
 const RedisConfigSchema = Yup.object().shape({
   redis: Yup.object().shape({
     database_number: Yup.number()
+      .required('Database number is required')
       .min(0, 'Must be at least 0')
-      .max(15, 'Must be at most 15')
-      .nullable(),
+      .max(15, 'Must be at most 15'),
     prefix: Yup.string()
       .matches(/^[a-zA-Z0-9_-]*$/, 'Prefix must contain only alphanumeric characters, underscores, and hyphens')
       .nullable(),
@@ -38,93 +37,170 @@ const RedisConfigSchema = Yup.object().shape({
       .matches(/^\S*$/, 'Password nonce cannot contain spaces')
       .nullable(),
     pool_size: Yup.number()
-      .min(1, 'Must be at least 1')
-      .nullable(),
+      .required('Pool size is required')
+      .min(1, 'Must be at least 1'),
     idle_pool_size: Yup.number()
-      .min(0, 'Must be at least 0')
-      .nullable(),
+      .required('Idle pool size is required')
+      .min(0, 'Must be at least 0'),
     positive_cache_ttl: Yup.string()
-      .nullable(),
+      .required('Positive cache TTL is required')
+      .matches(/^\d+[smhd]$/, 'Must be in format like 5m, 1h, 30s, 1d'),
     negative_cache_ttl: Yup.string()
-      .nullable(),
+      .required('Negative cache TTL is required')
+      .matches(/^\d+[smhd]$/, 'Must be in format like 1m, 30s, 1h, 1d'),
 
     // TLS configuration
     tls: Yup.object().shape({
       enabled: Yup.boolean(),
-      cert: Yup.string().when('enabled', (enabled, schema) => 
-        enabled 
-          ? schema.required('Certificate is required when TLS is enabled')
-          : schema.nullable()
-      ),
-      key: Yup.string().when('enabled', (enabled, schema) => 
-        enabled 
-          ? schema.required('Key is required when TLS is enabled')
-          : schema.nullable()
-      ),
+      cert: Yup.string().when(['enabled'], {
+        is: (enabled: any) => Boolean(enabled),
+        then: (schema) => schema.required('Certificate is required when TLS is enabled'),
+        otherwise: (schema) => schema.nullable(),
+      }),
+      key: Yup.string().when(['enabled'], {
+        is: (enabled: any) => Boolean(enabled),
+        then: (schema) => schema.required('Key is required when TLS is enabled'),
+        otherwise: (schema) => schema.nullable(),
+      }),
       http_client_skip_verify: Yup.boolean(),
     }),
 
     // Master configuration
-    master: Yup.object().shape({
-      address: Yup.string()
-        .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
-        .nullable(),
-      username: Yup.string()
-        .matches(/^\S*$/, 'Username cannot contain spaces')
-        .nullable(),
-      password: Yup.string()
-        .matches(/^\S*$/, 'Password cannot contain spaces')
-        .nullable(),
+    master: Yup.object().when(['$redisSetupType'], {
+      is: (redisSetupType: any) => redisSetupType === 'master',
+      then: (schema) => schema.shape({
+        address: Yup.string()
+          .required('Master address is required')
+          .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port'),
+        username: Yup.string()
+          .matches(/^\S*$/, 'Username cannot contain spaces')
+          .nullable(),
+        password: Yup.string()
+          .matches(/^\S*$/, 'Password cannot contain spaces')
+          .nullable(),
+      }),
+      otherwise: (schema) => schema.shape({
+        address: Yup.string()
+          .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+          .nullable(),
+        username: Yup.string()
+          .matches(/^\S*$/, 'Username cannot contain spaces')
+          .nullable(),
+        password: Yup.string()
+          .matches(/^\S*$/, 'Password cannot contain spaces')
+          .nullable(),
+      }),
     }),
 
     // Replica configuration
-    replica: Yup.object().shape({
-      address: Yup.string()
-        .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
-        .nullable(),
-      addresses: Yup.array().of(
-        Yup.string().matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
-      ),
+    replica: Yup.object().when(['$redisSetupType'], {
+      is: (redisSetupType: any) => redisSetupType === 'replica',
+      then: (schema) => schema.shape({
+        address: Yup.string()
+          .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+          .nullable(),
+        addresses: Yup.array().of(
+          Yup.string()
+            .required('Replica address is required')
+            .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+        ).min(1, 'At least one replica address is required'),
+      }),
+      otherwise: (schema) => schema.shape({
+        address: Yup.string()
+          .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+          .nullable(),
+        addresses: Yup.array().of(
+          Yup.string().matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+        ),
+      }),
     }),
 
     // Sentinels configuration
-    sentinels: Yup.object().shape({
-      master: Yup.string()
-        .matches(/^\S+$/, 'Master name cannot contain spaces')
-        .nullable(),
-      addresses: Yup.array().of(
-        Yup.string().matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
-      ),
-      username: Yup.string()
-        .matches(/^\S*$/, 'Username cannot contain spaces')
-        .nullable(),
-      password: Yup.string()
-        .matches(/^\S*$/, 'Password cannot contain spaces')
-        .nullable(),
+    sentinels: Yup.object().when(['$redisSetupType'], {
+      is: (redisSetupType: any) => redisSetupType === 'sentinels',
+      then: (schema) => schema.shape({
+        master: Yup.string()
+          .required('Redis Sentinel master name is required')
+          .matches(/^\S+$/, 'Master name cannot contain spaces'),
+        addresses: Yup.array().of(
+          Yup.string()
+            .required('Sentinel address is required')
+            .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+        ).min(1, 'At least one sentinel address is required'),
+        username: Yup.string()
+          .matches(/^\S*$/, 'Username cannot contain spaces')
+          .nullable(),
+        password: Yup.string()
+          .matches(/^\S*$/, 'Password cannot contain spaces')
+          .nullable(),
+      }),
+      otherwise: (schema) => schema.shape({
+        master: Yup.string()
+          .matches(/^\S+$/, 'Master name cannot contain spaces')
+          .nullable(),
+        addresses: Yup.array().of(
+          Yup.string().matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+        ),
+        username: Yup.string()
+          .matches(/^\S*$/, 'Username cannot contain spaces')
+          .nullable(),
+        password: Yup.string()
+          .matches(/^\S*$/, 'Password cannot contain spaces')
+          .nullable(),
+      }),
     }),
 
     // Cluster configuration
-    cluster: Yup.object().shape({
-      addresses: Yup.array().of(
-        Yup.string().matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
-      ),
-      username: Yup.string()
-        .matches(/^\S*$/, 'Username cannot contain spaces')
-        .nullable(),
-      password: Yup.string()
-        .matches(/^\S*$/, 'Password cannot contain spaces')
-        .nullable(),
-      route_by_latency: Yup.boolean(),
-      route_randomly: Yup.boolean(),
-      read_only: Yup.boolean(), // Deprecated
-      route_reads_to_replicas: Yup.boolean(),
-      max_redirects: Yup.number()
-        .min(0, 'Must be at least 0')
-        .nullable(),
-      read_timeout: Yup.string()
-        .nullable(),
-      write_timeout: Yup.string()
-        .nullable(),
+    cluster: Yup.object().when(['$redisSetupType'], {
+      is: (redisSetupType: any) => redisSetupType === 'cluster',
+      then: (schema) => schema.shape({
+        addresses: Yup.array().of(
+          Yup.string()
+            .required('Cluster address is required')
+            .matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+        ).min(1, 'At least one cluster address is required'),
+        username: Yup.string()
+          .matches(/^\S*$/, 'Username cannot contain spaces')
+          .nullable(),
+        password: Yup.string()
+          .matches(/^\S*$/, 'Password cannot contain spaces')
+          .nullable(),
+        route_by_latency: Yup.boolean(),
+        route_randomly: Yup.boolean(),
+        read_only: Yup.boolean(), // Deprecated
+        route_reads_to_replicas: Yup.boolean(),
+        max_redirects: Yup.number()
+          .required('Max redirects is required')
+          .min(0, 'Must be at least 0'),
+        read_timeout: Yup.string()
+          .required('Read timeout is required')
+          .matches(/^\d+[smh]$/, 'Must be in format like 3s, 1m, 1h'),
+        write_timeout: Yup.string()
+          .required('Write timeout is required')
+          .matches(/^\d+[smh]$/, 'Must be in format like 3s, 1m, 1h'),
+      }),
+      otherwise: (schema) => schema.shape({
+        addresses: Yup.array().of(
+          Yup.string().matches(/^[a-zA-Z0-9.-]+:\d+$/, 'Address must be in the format hostname:port')
+        ),
+        username: Yup.string()
+          .matches(/^\S*$/, 'Username cannot contain spaces')
+          .nullable(),
+        password: Yup.string()
+          .matches(/^\S*$/, 'Password cannot contain spaces')
+          .nullable(),
+        route_by_latency: Yup.boolean(),
+        route_randomly: Yup.boolean(),
+        read_only: Yup.boolean(), // Deprecated
+        route_reads_to_replicas: Yup.boolean(),
+        max_redirects: Yup.number()
+          .min(0, 'Must be at least 0')
+          .nullable(),
+        read_timeout: Yup.string()
+          .nullable(),
+        write_timeout: Yup.string()
+          .nullable(),
+      }),
     }),
   }),
 });
@@ -231,8 +307,48 @@ const RedisConfig: React.FC = () => {
 
   const handleSubmit = async (values: { redis: ServerConfigType['redis'] }) => {
     try {
-      // Update the server configuration with the new Redis configuration
-      await updateConfigSection('server', { redis: values.redis });
+      // Create a filtered Redis configuration based on the selected setup type
+      const filteredRedis: ServerConfigType['redis'] = {
+        // Common configuration
+        database_number: values.redis.database_number,
+        prefix: values.redis.prefix,
+        password_nonce: values.redis.password_nonce,
+        pool_size: values.redis.pool_size,
+        idle_pool_size: values.redis.idle_pool_size,
+        positive_cache_ttl: values.redis.positive_cache_ttl,
+        negative_cache_ttl: values.redis.negative_cache_ttl,
+        tls: values.redis.tls,
+      };
+
+      // Add configuration specific to the selected setup type
+      if (redisSetupType === 'master') {
+        filteredRedis.master = values.redis.master;
+        // Ensure other setup types are not included
+        filteredRedis.replica = undefined;
+        filteredRedis.sentinels = undefined;
+        filteredRedis.cluster = undefined;
+      } else if (redisSetupType === 'replica') {
+        filteredRedis.replica = values.redis.replica;
+        // Ensure other setup types are not included
+        filteredRedis.master = undefined;
+        filteredRedis.sentinels = undefined;
+        filteredRedis.cluster = undefined;
+      } else if (redisSetupType === 'sentinels') {
+        filteredRedis.sentinels = values.redis.sentinels;
+        // Ensure other setup types are not included
+        filteredRedis.master = undefined;
+        filteredRedis.replica = undefined;
+        filteredRedis.cluster = undefined;
+      } else if (redisSetupType === 'cluster') {
+        filteredRedis.cluster = values.redis.cluster;
+        // Ensure other setup types are not included
+        filteredRedis.master = undefined;
+        filteredRedis.replica = undefined;
+        filteredRedis.sentinels = undefined;
+      }
+
+      // Update the server configuration with the filtered Redis configuration
+      await updateConfigSection('server', { redis: filteredRedis });
     } catch (error) {
       console.error('Error updating Redis configuration:', error);
     }
@@ -242,13 +358,14 @@ const RedisConfig: React.FC = () => {
     <Formik
       initialValues={initialValues}
       validationSchema={RedisConfigSchema}
+      validationContext={{ redisSetupType }}
       onSubmit={handleSubmit}
       enableReinitialize={true}
+      validateOnChange={true}
+      validateOnBlur={true}
     >
       {({ errors, touched, values, handleChange, setFieldValue }) => (
         <Form>
-          {/* Display validation errors at the top of the form */}
-          <ValidationErrors error={error} />
 
           <FormSection
             title="Redis Configuration"
@@ -362,6 +479,10 @@ const RedisConfig: React.FC = () => {
                   variant="outlined"
                   error={getIn(touched, 'redis.positive_cache_ttl') && Boolean(getIn(errors, 'redis.positive_cache_ttl'))}
                   helperText={(getIn(touched, 'redis.positive_cache_ttl') && getIn(errors, 'redis.positive_cache_ttl')) || "Duration format (e.g., 5m, 1h)"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -373,6 +494,10 @@ const RedisConfig: React.FC = () => {
                   variant="outlined"
                   error={getIn(touched, 'redis.negative_cache_ttl') && Boolean(getIn(errors, 'redis.negative_cache_ttl'))}
                   helperText={(getIn(touched, 'redis.negative_cache_ttl') && getIn(errors, 'redis.negative_cache_ttl')) || "Duration format (e.g., 1m, 30s)"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
             </Grid>
@@ -410,6 +535,10 @@ const RedisConfig: React.FC = () => {
                       variant="outlined"
                       error={getIn(touched, 'redis.tls.cert') && Boolean(getIn(errors, 'redis.tls.cert'))}
                       helperText={getIn(touched, 'redis.tls.cert') && getIn(errors, 'redis.tls.cert')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={12}>
@@ -421,6 +550,10 @@ const RedisConfig: React.FC = () => {
                       variant="outlined"
                       error={getIn(touched, 'redis.tls.key') && Boolean(getIn(errors, 'redis.tls.key'))}
                       helperText={getIn(touched, 'redis.tls.key') && getIn(errors, 'redis.tls.key')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -460,6 +593,10 @@ const RedisConfig: React.FC = () => {
                     placeholder="localhost:6379"
                     error={getIn(touched, 'redis.master.address') && Boolean(getIn(errors, 'redis.master.address'))}
                     helperText={(getIn(touched, 'redis.master.address') && getIn(errors, 'redis.master.address')) || "Redis master address in the format hostname:port"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -471,6 +608,10 @@ const RedisConfig: React.FC = () => {
                     variant="outlined"
                     error={getIn(touched, 'redis.master.username') && Boolean(getIn(errors, 'redis.master.username'))}
                     helperText={(getIn(touched, 'redis.master.username') && getIn(errors, 'redis.master.username')) || "Redis username (optional)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -483,6 +624,10 @@ const RedisConfig: React.FC = () => {
                     type="password"
                     error={getIn(touched, 'redis.master.password') && Boolean(getIn(errors, 'redis.master.password'))}
                     helperText={(getIn(touched, 'redis.master.password') && getIn(errors, 'redis.master.password')) || "Redis password (optional)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
               </Grid>
@@ -514,9 +659,16 @@ const RedisConfig: React.FC = () => {
                                 placeholder="localhost:6379"
                                 error={getIn(touched, `redis.replica.addresses[${index}]`) && Boolean(getIn(errors, `redis.replica.addresses[${index}]`))}
                                 helperText={(getIn(touched, `redis.replica.addresses[${index}]`) && getIn(errors, `redis.replica.addresses[${index}]`)) || "Redis replica address in the format hostname:port"}
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
                               />
                               <IconButton 
-                                onClick={() => remove(index)}
+                                onClick={() => {
+                                  remove(index);
+                                  setHasUnsavedChanges(true);
+                                }}
                                 sx={{ ml: 1 }}
                                 color="error"
                                 aria-label="Remove address"
@@ -532,7 +684,10 @@ const RedisConfig: React.FC = () => {
                           startIcon={<AddIcon />}
                           variant="outlined"
                           color="primary"
-                          onClick={() => push('')}
+                          onClick={() => {
+                            push('');
+                            setHasUnsavedChanges(true);
+                          }}
                         >
                           Add Replica Address
                         </Button>
@@ -561,6 +716,10 @@ const RedisConfig: React.FC = () => {
                     variant="outlined"
                     error={getIn(touched, 'redis.sentinels.master') && Boolean(getIn(errors, 'redis.sentinels.master'))}
                     helperText={(getIn(touched, 'redis.sentinels.master') && getIn(errors, 'redis.sentinels.master')) || "Name of the master instance in Sentinel"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12}>
@@ -580,9 +739,16 @@ const RedisConfig: React.FC = () => {
                                 placeholder="localhost:26379"
                                 error={getIn(touched, `redis.sentinels.addresses[${index}]`) && Boolean(getIn(errors, `redis.sentinels.addresses[${index}]`))}
                                 helperText={(getIn(touched, `redis.sentinels.addresses[${index}]`) && getIn(errors, `redis.sentinels.addresses[${index}]`)) || "Redis sentinel address in the format hostname:port"}
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
                               />
                               <IconButton 
-                                onClick={() => remove(index)}
+                                onClick={() => {
+                                  remove(index);
+                                  setHasUnsavedChanges(true);
+                                }}
                                 sx={{ ml: 1 }}
                                 color="error"
                                 aria-label="Remove address"
@@ -598,7 +764,10 @@ const RedisConfig: React.FC = () => {
                           startIcon={<AddIcon />}
                           variant="outlined"
                           color="primary"
-                          onClick={() => push('')}
+                          onClick={() => {
+                            push('');
+                            setHasUnsavedChanges(true);
+                          }}
                         >
                           Add Sentinel Address
                         </Button>
@@ -615,6 +784,10 @@ const RedisConfig: React.FC = () => {
                     variant="outlined"
                     error={getIn(touched, 'redis.sentinels.username') && Boolean(getIn(errors, 'redis.sentinels.username'))}
                     helperText={(getIn(touched, 'redis.sentinels.username') && getIn(errors, 'redis.sentinels.username')) || "Sentinel username (optional)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -627,6 +800,10 @@ const RedisConfig: React.FC = () => {
                     type="password"
                     error={getIn(touched, 'redis.sentinels.password') && Boolean(getIn(errors, 'redis.sentinels.password'))}
                     helperText={(getIn(touched, 'redis.sentinels.password') && getIn(errors, 'redis.sentinels.password')) || "Sentinel password (optional)"}
+                    onChange={(e: React.ChangeEvent<any>) => {
+                      handleChange(e);
+                      setHasUnsavedChanges(true);
+                    }}
                   />
                 </Grid>
               </Grid>
