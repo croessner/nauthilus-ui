@@ -158,7 +158,7 @@ const MainContent: React.FC = () => {
   const handleResetConfirm = () => {
     resetConfig();
     setResetDialogOpen(false);
-    navigate('/'); // Navigate to Server Configuration page
+    navigate('/config-wizard'); // Navigate to Config Wizard page
   };
 
   const handleResetCancel = () => {

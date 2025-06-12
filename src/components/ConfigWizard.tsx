@@ -6,7 +6,6 @@ import {
   Dialog,
   DialogActions,
   DialogContent,
-  DialogContentText,
   DialogTitle,
   FormControl,
   FormControlLabel,
@@ -34,11 +33,10 @@ interface ConfigWizardProps {
 }
 
 const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
-  const { config, updateConfig, setHasUnsavedChanges, resetConfig } = useConfig();
+  const { config, updateConfig, setHasUnsavedChanges } = useConfig();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
   const [open, setOpen] = useState(autoOpen);
-  const [resetDialogOpen, setResetDialogOpen] = useState(false);
 
   // Server configuration state - using default values instead of existing config
   const [serverAddress, setServerAddress] = useState('127.0.0.1:8080');
@@ -95,23 +93,6 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
     setOpen(false);
     setActiveStep(0);
     navigate('/'); // Navigate to Server Configuration page
-  };
-
-  // Handle reset button click
-  const handleResetClick = () => {
-    setResetDialogOpen(true);
-  };
-
-  // Handle reset confirmation
-  const handleResetConfirm = () => {
-    resetConfig(); // Reset to default configuration
-    setActiveStep(0); // Jump to first step (Server Configuration)
-    setResetDialogOpen(false);
-  };
-
-  // Handle reset cancellation
-  const handleResetCancel = () => {
-    setResetDialogOpen(false);
   };
 
   // Handle moving to the next step
@@ -650,7 +631,6 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
         </DialogContent>
         <DialogActions>
           <Button onClick={handleClose}>Cancel</Button>
-          <Button onClick={handleResetClick} color="warning">Reset</Button>
           <Box sx={{ flex: '1 1 auto' }} />
           <Button
             disabled={activeStep === 0}
@@ -673,23 +653,6 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
               Next
             </Button>
           )}
-        </DialogActions>
-      </Dialog>
-
-      {/* Reset Confirmation Dialog */}
-      <Dialog
-        open={resetDialogOpen}
-        onClose={handleResetCancel}
-      >
-        <DialogTitle>Reset Configuration</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to reset the configuration to default values? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleResetCancel}>Cancel</Button>
-          <Button onClick={handleResetConfirm} color="error">Reset</Button>
         </DialogActions>
       </Dialog>
     </>
