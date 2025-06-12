@@ -119,6 +119,7 @@ const AuthConfig: React.FC = () => {
       initialValues={initialValues}
       validationSchema={AuthConfigSchema}
       onSubmit={handleSubmit}
+      enableReinitialize={true}
     >
       {({ errors, touched, values, handleChange, setFieldValue }) => (
         <Form>

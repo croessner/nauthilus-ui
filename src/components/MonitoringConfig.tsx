@@ -79,6 +79,7 @@ const MonitoringConfig: React.FC = () => {
       initialValues={initialValues}
       validationSchema={MonitoringConfigSchema}
       onSubmit={handleSubmit}
+      enableReinitialize={true}
     >
       {({ errors, touched, values, handleChange, setFieldValue }) => (
         <Form>

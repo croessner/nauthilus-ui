@@ -2,28 +2,42 @@ import React, { createContext, useContext, useState, useEffect, ReactNode } from
 import { NauthilusConfig } from '../types/config';
 import yaml from 'js-yaml';
 
+// Interface for configuration profiles
+interface ConfigProfile {
+  name: string;
+  config: NauthilusConfig;
+}
+
 // Define the context type
 interface ConfigContextType {
   config: NauthilusConfig | null;
   loading: boolean;
   error: string | null;
   hasUnsavedChanges: boolean;
+  profiles: ConfigProfile[];
+  currentProfileName: string;
   refreshConfig: () => Promise<void>;
   updateConfig: (config: NauthilusConfig) => Promise<void>;
   updateConfigSection: (section: string, data: any) => Promise<void>;
-  uploadConfig: (file: File) => Promise<void>;
+  uploadConfig: (file: File, profileName?: string) => Promise<void>;
   downloadConfig: () => void;
   resetConfig: () => void;
   setHasUnsavedChanges: (value: boolean) => void;
   setError: (error: string | null) => void;
   validateConfigSection: (section: string, config: NauthilusConfig) => string[];
+  createProfile: (name: string, config?: NauthilusConfig) => void;
+  switchProfile: (name: string) => void;
+  renameProfile: (oldName: string, newName: string) => void;
+  deleteProfile: (name: string) => void;
 }
 
 // Create the context with a default value
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
-// Storage key for the configuration
-const CONFIG_STORAGE_KEY = 'nauthilus-config';
+// Storage keys for the configuration
+const PROFILES_STORAGE_KEY = 'nauthilus-profiles';
+const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
+const DEFAULT_PROFILE_NAME = 'Default';
 
 // Default empty configuration
 const DEFAULT_CONFIG: NauthilusConfig = {
@@ -49,27 +63,49 @@ interface ConfigProviderProps {
 
 export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   const [config, setConfig] = useState<NauthilusConfig | null>(null);
+  const [profiles, setProfiles] = useState<ConfigProfile[]>([]);
+  const [currentProfileName, setCurrentProfileName] = useState<string>(DEFAULT_PROFILE_NAME);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
-  // Function to load the configuration from local storage
+  // Function to load the configuration profiles from local storage
   const refreshConfig = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const storedConfig = localStorage.getItem(CONFIG_STORAGE_KEY);
-      if (storedConfig) {
-        setConfig(JSON.parse(storedConfig));
+      // Load profiles from localStorage
+      const storedProfiles = localStorage.getItem(PROFILES_STORAGE_KEY);
+      let profilesArray: ConfigProfile[] = [];
+
+      if (storedProfiles) {
+        profilesArray = JSON.parse(storedProfiles);
       } else {
-        // Use default config if none exists
-        setConfig(DEFAULT_CONFIG);
-        localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(DEFAULT_CONFIG));
+        // Create default profile if none exists
+        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profilesArray));
       }
+
+      setProfiles(profilesArray);
+
+      // Load current profile name
+      const storedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
+      let currentProfile = storedCurrentProfile || DEFAULT_PROFILE_NAME;
+
+      // Make sure the current profile exists in the profiles array
+      if (!profilesArray.some(profile => profile.name === currentProfile)) {
+        currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
+      }
+
+      setCurrentProfileName(currentProfile);
+
+      // Set the current config
+      const profileConfig = profilesArray.find(profile => profile.name === currentProfile)?.config;
+      setConfig(profileConfig || null);
     } catch (err) {
-      setError('Failed to load configuration. Please try again.');
-      console.error('Error loading configuration:', err);
+      setError('Failed to load configuration profiles. Please try again.');
+      console.error('Error loading configuration profiles:', err);
     } finally {
       setLoading(false);
     }
@@ -81,7 +117,15 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       setLoading(true);
       setError(null);
 
-      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
+      // Update the current profile with the new config
+      const updatedProfiles = profiles.map(profile => 
+        profile.name === currentProfileName 
+          ? { ...profile, config: newConfig } 
+          : profile
+      );
+
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
       setConfig(newConfig);
 
       // Reset unsaved changes flag since we've just saved
@@ -119,7 +163,15 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
       }
 
-      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
+      // Update the current profile with the new config
+      const updatedProfiles = profiles.map(profile => 
+        profile.name === currentProfileName 
+          ? { ...profile, config: newConfig } 
+          : profile
+      );
+
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
       setConfig(newConfig);
 
       // Reset unsaved changes flag since we've just saved
@@ -137,7 +189,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   };
 
   // Function to upload a configuration file
-  const uploadConfig = async (file: File) => {
+  const uploadConfig = async (file: File, profileName?: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -292,8 +344,43 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         throw new Error('Unsupported file format. Please upload a JSON or YAML file.');
       }
 
-      localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(newConfig));
-      setConfig(newConfig);
+      // Determine which profile to update
+      const targetProfileName = profileName || currentProfileName;
+
+      // Check if the profile exists
+      let updatedProfiles = [...profiles];
+      const profileIndex = updatedProfiles.findIndex(p => p.name === targetProfileName);
+
+      if (profileIndex >= 0) {
+        // Update existing profile
+        updatedProfiles[profileIndex] = {
+          ...updatedProfiles[profileIndex],
+          config: newConfig
+        };
+      } else {
+        // Create new profile if it doesn't exist
+        updatedProfiles.push({
+          name: targetProfileName,
+          config: newConfig
+        });
+      }
+
+      // Save profiles to localStorage
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
+
+      // If updating the current profile, update the current config
+      if (targetProfileName === currentProfileName) {
+        setConfig(newConfig);
+      } else {
+        // Switch to the new/updated profile
+        setCurrentProfileName(targetProfileName);
+        setConfig(newConfig);
+        localStorage.setItem(CURRENT_PROFILE_KEY, targetProfileName);
+      }
+
+      // Reset unsaved changes flag since we've just saved
+      setHasUnsavedChanges(false);
     } catch (err) {
       setError('Failed to upload configuration. Please check the file format.');
       console.error('Error uploading configuration:', err);
@@ -325,6 +412,9 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       // Create a deep copy of the configuration to ensure all nested objects are included
       const configToDownload = JSON.parse(JSON.stringify(config));
 
+      // Add profile name as a comment in the YAML
+      const profileComment = `# Profile: ${currentProfileName}`;
+
       // Ensure brute_force_protocols are lowercase
       if (configToDownload.server?.brute_force_protocols) {
         configToDownload.server.brute_force_protocols = configToDownload.server.brute_force_protocols.map((protocol: string) => 
@@ -335,13 +425,14 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       // Convert the configuration to YAML
       const yamlContent = yaml.dump(configToDownload);
 
-      // Create a blob and download link
-      const blob = new Blob([yamlContent], { type: 'text/yaml' });
+      // Create a blob and download link with the profile comment at the top
+      const contentWithComment = `${profileComment}\n\n${yamlContent}`;
+      const blob = new Blob([contentWithComment], { type: 'text/yaml' });
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'nauthilus.yml';
+      a.download = `nauthilus-${currentProfileName.toLowerCase().replace(/\s+/g, '-')}.yml`;
       document.body.appendChild(a);
       a.click();
 
@@ -597,8 +688,129 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
   // Function to reset the configuration to default
   const resetConfig = () => {
-    localStorage.setItem(CONFIG_STORAGE_KEY, JSON.stringify(DEFAULT_CONFIG));
+    // Reset only the current profile to default
+    const updatedProfiles = profiles.map(profile => 
+      profile.name === currentProfileName 
+        ? { ...profile, config: DEFAULT_CONFIG } 
+        : profile
+    );
+
+    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+    setProfiles(updatedProfiles);
     setConfig(DEFAULT_CONFIG);
+    setHasUnsavedChanges(false);
+  };
+
+  // Function to create a new profile
+  const createProfile = (name: string, configData?: NauthilusConfig) => {
+    try {
+      // Check if profile with this name already exists
+      if (profiles.some(profile => profile.name === name)) {
+        setError(`A profile with the name "${name}" already exists.`);
+        return;
+      }
+
+      // Create new profile with provided config or default
+      const newProfile: ConfigProfile = {
+        name,
+        config: configData || DEFAULT_CONFIG
+      };
+
+      // Add new profile to the list
+      const updatedProfiles = [...profiles, newProfile];
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
+
+      // Switch to the new profile
+      switchProfile(name);
+    } catch (err) {
+      setError('Failed to create profile. Please try again.');
+      console.error('Error creating profile:', err);
+    }
+  };
+
+  // Function to switch to a different profile
+  const switchProfile = (name: string) => {
+    try {
+      // Find the profile
+      const profile = profiles.find(p => p.name === name);
+      if (!profile) {
+        setError(`Profile "${name}" not found.`);
+        return;
+      }
+
+      // Check for unsaved changes
+      if (hasUnsavedChanges) {
+        setError('Please save your changes before switching profiles.');
+        return;
+      }
+
+      // Switch to the profile
+      setCurrentProfileName(name);
+      setConfig(profile.config);
+      localStorage.setItem(CURRENT_PROFILE_KEY, name);
+      setHasUnsavedChanges(false);
+    } catch (err) {
+      setError('Failed to switch profile. Please try again.');
+      console.error('Error switching profile:', err);
+    }
+  };
+
+  // Function to rename a profile
+  const renameProfile = (oldName: string, newName: string) => {
+    try {
+      // Check if new name already exists
+      if (profiles.some(profile => profile.name === newName)) {
+        setError(`A profile with the name "${newName}" already exists.`);
+        return;
+      }
+
+      // Find and rename the profile
+      const updatedProfiles = profiles.map(profile => 
+        profile.name === oldName 
+          ? { ...profile, name: newName } 
+          : profile
+      );
+
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
+
+      // If the renamed profile is the current one, update currentProfileName
+      if (currentProfileName === oldName) {
+        setCurrentProfileName(newName);
+        localStorage.setItem(CURRENT_PROFILE_KEY, newName);
+      }
+    } catch (err) {
+      setError('Failed to rename profile. Please try again.');
+      console.error('Error renaming profile:', err);
+    }
+  };
+
+  // Function to delete a profile
+  const deleteProfile = (name: string) => {
+    try {
+      // Prevent deleting the last profile
+      if (profiles.length <= 1) {
+        setError('Cannot delete the only profile. At least one profile must exist.');
+        return;
+      }
+
+      // Remove the profile
+      const updatedProfiles = profiles.filter(profile => profile.name !== name);
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
+
+      // If the deleted profile is the current one, switch to another profile
+      if (currentProfileName === name) {
+        const newCurrentProfile = updatedProfiles[0];
+        setCurrentProfileName(newCurrentProfile.name);
+        setConfig(newCurrentProfile.config);
+        localStorage.setItem(CURRENT_PROFILE_KEY, newCurrentProfile.name);
+      }
+    } catch (err) {
+      setError('Failed to delete profile. Please try again.');
+      console.error('Error deleting profile:', err);
+    }
   };
 
   // Load the configuration when the component mounts
@@ -612,6 +824,8 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     loading,
     error,
     hasUnsavedChanges,
+    profiles,
+    currentProfileName,
     refreshConfig,
     updateConfig,
     updateConfigSection,
@@ -621,6 +835,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     setHasUnsavedChanges,
     setError,
     validateConfigSection,
+    createProfile,
+    switchProfile,
+    renameProfile,
+    deleteProfile,
   };
 
   return (

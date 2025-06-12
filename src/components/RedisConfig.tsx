@@ -136,10 +136,11 @@ const RedisConfig: React.FC = () => {
   React.useEffect(() => {
     setHasUnsavedChanges(false);
   }, [setHasUnsavedChanges]);
-  const [redisSetupType, setRedisSetupType] = useState<string>(() => {
+
+  // Determine the Redis setup type based on the configuration
+  const determineRedisSetupType = (config: any): string => {
     if (!config) return 'master';
 
-    // Determine the initial Redis setup type based on the configuration
     if (config.server.redis.cluster?.addresses?.length) {
       return 'cluster';
     } else if (config.server.redis.sentinels?.addresses?.length) {
@@ -149,7 +150,16 @@ const RedisConfig: React.FC = () => {
     } else {
       return 'master';
     }
-  });
+  };
+
+  const [redisSetupType, setRedisSetupType] = useState<string>(() => determineRedisSetupType(config));
+
+  // Update redisSetupType when config changes (e.g., when switching profiles)
+  React.useEffect(() => {
+    if (config) {
+      setRedisSetupType(determineRedisSetupType(config));
+    }
+  }, [config]);
 
   // Handle Redis setup type change
   const handleRedisSetupTypeChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -233,6 +243,7 @@ const RedisConfig: React.FC = () => {
       initialValues={initialValues}
       validationSchema={RedisConfigSchema}
       onSubmit={handleSubmit}
+      enableReinitialize={true}
     >
       {({ errors, touched, values, handleChange, setFieldValue }) => (
         <Form>

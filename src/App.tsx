@@ -20,9 +20,17 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
+  DialogContentText,
   DialogActions,
   Avatar,
-  Container
+  Container,
+  Menu,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  TextField,
+  SelectChangeEvent
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -71,9 +79,35 @@ const MainContent: React.FC = () => {
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [navigationDialogOpen, setNavigationDialogOpen] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
+  const [profileMenuAnchorEl, setProfileMenuAnchorEl] = useState<null | HTMLElement>(null);
+  const [createProfileDialogOpen, setCreateProfileDialogOpen] = useState(false);
+  const [renameProfileDialogOpen, setRenameProfileDialogOpen] = useState(false);
+  const [deleteProfileDialogOpen, setDeleteProfileDialogOpen] = useState(false);
+  const [newProfileName, setNewProfileName] = useState('');
+  const [profileToRename, setProfileToRename] = useState('');
+  const [newProfileNameForRename, setNewProfileNameForRename] = useState('');
+  const [profileToDelete, setProfileToDelete] = useState('');
+  const [uploadProfileDialogOpen, setUploadProfileDialogOpen] = useState(false);
+  const [uploadProfileName, setUploadProfileName] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadWithProfileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
-  const { loading, error, hasUnsavedChanges, uploadConfig, downloadConfig, resetConfig, setHasUnsavedChanges, setError } = useConfig();
+  const { 
+    loading, 
+    error, 
+    hasUnsavedChanges, 
+    profiles, 
+    currentProfileName, 
+    uploadConfig, 
+    downloadConfig, 
+    resetConfig, 
+    setHasUnsavedChanges, 
+    setError,
+    createProfile,
+    switchProfile,
+    renameProfile,
+    deleteProfile
+  } = useConfig();
   const { mode, toggleColorMode } = useTheme();
 
   // Define menu items
@@ -155,6 +189,77 @@ const MainContent: React.FC = () => {
     setPendingNavigation(null);
   };
 
+  // Profile management handlers
+  const handleProfileMenuOpen = (event: React.MouseEvent<HTMLElement>) => {
+    setProfileMenuAnchorEl(event.currentTarget);
+  };
+
+  const handleProfileMenuClose = () => {
+    setProfileMenuAnchorEl(null);
+  };
+
+  const handleProfileChange = (event: SelectChangeEvent<string>) => {
+    const profileName = event.target.value;
+    switchProfile(profileName);
+  };
+
+  const handleCreateProfileClick = () => {
+    setNewProfileName('');
+    setCreateProfileDialogOpen(true);
+    handleProfileMenuClose();
+  };
+
+  const handleCreateProfileConfirm = () => {
+    if (newProfileName.trim()) {
+      createProfile(newProfileName.trim());
+      setCreateProfileDialogOpen(false);
+    }
+  };
+
+  const handleRenameProfileClick = () => {
+    setProfileToRename(currentProfileName);
+    setNewProfileNameForRename(currentProfileName);
+    setRenameProfileDialogOpen(true);
+    handleProfileMenuClose();
+  };
+
+  const handleRenameProfileConfirm = () => {
+    if (newProfileNameForRename.trim() && profileToRename) {
+      renameProfile(profileToRename, newProfileNameForRename.trim());
+      setRenameProfileDialogOpen(false);
+    }
+  };
+
+  const handleDeleteProfileClick = () => {
+    setProfileToDelete(currentProfileName);
+    setDeleteProfileDialogOpen(true);
+    handleProfileMenuClose();
+  };
+
+  const handleDeleteProfileConfirm = () => {
+    if (profileToDelete) {
+      deleteProfile(profileToDelete);
+      setDeleteProfileDialogOpen(false);
+    }
+  };
+
+  const handleUploadWithProfileClick = () => {
+    setUploadProfileName('');
+    setUploadProfileDialogOpen(true);
+    handleProfileMenuClose();
+  };
+
+  const handleUploadWithProfileConfirm = () => {
+    if (uploadWithProfileRef.current?.files?.[0]) {
+      uploadConfig(uploadWithProfileRef.current.files[0], uploadProfileName.trim() || undefined);
+      setUploadProfileDialogOpen(false);
+      // Reset the input value so the same file can be uploaded again if needed
+      if (uploadWithProfileRef.current) {
+        uploadWithProfileRef.current.value = '';
+      }
+    }
+  };
+
   const drawer = (
     <div>
       <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -212,9 +317,49 @@ const MainContent: React.FC = () => {
             <MenuIcon />
           </IconButton>
           <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            <Typography variant="h6" noWrap component="div">
+            <Typography variant="h6" noWrap component="div" sx={{ mr: 2 }}>
               Configuration
             </Typography>
+
+            {/* Profile selector */}
+            <FormControl variant="outlined" size="small" sx={{ minWidth: 200, mr: 2 }}>
+              <InputLabel id="profile-select-label">Profile</InputLabel>
+              <Select
+                labelId="profile-select-label"
+                id="profile-select"
+                value={currentProfileName}
+                onChange={handleProfileChange}
+                label="Profile"
+                sx={{ color: 'inherit' }}
+              >
+                {profiles.map((profile) => (
+                  <MenuItem key={profile.name} value={profile.name}>
+                    {profile.name}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+
+            {/* Profile management button */}
+            <Button 
+              color="inherit"
+              onClick={handleProfileMenuOpen}
+              sx={{ mr: 2 }}
+            >
+              Manage Profiles
+            </Button>
+
+            {/* Profile management menu */}
+            <Menu
+              anchorEl={profileMenuAnchorEl}
+              open={Boolean(profileMenuAnchorEl)}
+              onClose={handleProfileMenuClose}
+            >
+              <MenuItem onClick={handleCreateProfileClick}>Create New Profile</MenuItem>
+              <MenuItem onClick={handleRenameProfileClick}>Rename Current Profile</MenuItem>
+              <MenuItem onClick={handleDeleteProfileClick}>Delete Current Profile</MenuItem>
+              <MenuItem onClick={handleUploadWithProfileClick}>Upload to New Profile</MenuItem>
+            </Menu>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
             <input
@@ -223,6 +368,12 @@ const MainContent: React.FC = () => {
               style={{ display: 'none' }}
               accept=".json,.yml,.yaml"
               onChange={handleFileUpload}
+            />
+            <input
+              type="file"
+              ref={uploadWithProfileRef}
+              style={{ display: 'none' }}
+              accept=".json,.yml,.yaml"
             />
             <Tooltip title="Upload Configuration">
               <Button 
@@ -361,11 +512,127 @@ const MainContent: React.FC = () => {
       >
         <DialogTitle>Unsaved Changes</DialogTitle>
         <DialogContent>
-          You have unsaved changes. Do you want to continue without saving? Your changes will be lost.
+          <DialogContentText>
+            You have unsaved changes. Do you want to continue without saving? Your changes will be lost.
+          </DialogContentText>
         </DialogContent>
         <DialogActions>
           <Button onClick={handleNavigationCancel}>Cancel</Button>
           <Button onClick={handleNavigationConfirm} color="primary">Continue Without Saving</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Create Profile Dialog */}
+      <Dialog
+        open={createProfileDialogOpen}
+        onClose={() => setCreateProfileDialogOpen(false)}
+      >
+        <DialogTitle>Create New Profile</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Enter a name for the new configuration profile.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="profile-name"
+            label="Profile Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newProfileName}
+            onChange={(e) => setNewProfileName(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setCreateProfileDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleCreateProfileConfirm} color="primary">Create</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Rename Profile Dialog */}
+      <Dialog
+        open={renameProfileDialogOpen}
+        onClose={() => setRenameProfileDialogOpen(false)}
+      >
+        <DialogTitle>Rename Profile</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Enter a new name for the profile "{profileToRename}".
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            id="new-profile-name"
+            label="New Profile Name"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={newProfileNameForRename}
+            onChange={(e) => setNewProfileNameForRename(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setRenameProfileDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleRenameProfileConfirm} color="primary">Rename</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Delete Profile Dialog */}
+      <Dialog
+        open={deleteProfileDialogOpen}
+        onClose={() => setDeleteProfileDialogOpen(false)}
+      >
+        <DialogTitle>Delete Profile</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to delete the profile "{profileToDelete}"? This action cannot be undone.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDeleteProfileDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleDeleteProfileConfirm} color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Upload to New Profile Dialog */}
+      <Dialog
+        open={uploadProfileDialogOpen}
+        onClose={() => setUploadProfileDialogOpen(false)}
+      >
+        <DialogTitle>Upload to New Profile</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Select a configuration file to upload and enter a name for the new profile. If you leave the profile name empty, the configuration will be uploaded to the current profile.
+          </DialogContentText>
+          <TextField
+            margin="dense"
+            id="upload-profile-name"
+            label="Profile Name (optional)"
+            type="text"
+            fullWidth
+            variant="outlined"
+            value={uploadProfileName}
+            onChange={(e) => setUploadProfileName(e.target.value)}
+            sx={{ mb: 2 }}
+          />
+          <Button
+            variant="outlined"
+            component="label"
+            fullWidth
+          >
+            Select File
+            <input
+              type="file"
+              hidden
+              ref={uploadWithProfileRef}
+              accept=".json,.yml,.yaml"
+            />
+          </Button>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setUploadProfileDialogOpen(false)}>Cancel</Button>
+          <Button onClick={handleUploadWithProfileConfirm} color="primary">Upload</Button>
         </DialogActions>
       </Dialog>
     </Box>

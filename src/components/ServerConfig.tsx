@@ -298,6 +298,7 @@ const ServerConfig: React.FC = () => {
       initialValues={initialValues}
       validationSchema={ServerConfigSchema}
       onSubmit={handleSubmit}
+      enableReinitialize={true}
     >
       {({ errors, touched, values, handleChange, setFieldValue }) => (
         <Form>
