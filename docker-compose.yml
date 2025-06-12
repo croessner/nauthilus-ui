@@ -1,0 +1,43 @@
+services:
+  # UI service
+  nauthilus-ui:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nauthilus-ui:latest
+    container_name: nauthilus-ui
+    ports:
+      - "80:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    networks:
+      - nauthilus-network
+
+  # Uncomment the following section if you want to run the backend service as well
+  # nauthilus-backend:
+  #   image: nauthilus:latest
+  #   container_name: nauthilus-backend
+  #   ports:
+  #     - "8180:8180"
+  #   volumes:
+  #     - ./config:/usr/app/config
+  #   environment:
+  #     - TZ=UTC
+  #   restart: unless-stopped
+  #   healthcheck:
+  #     test: ["CMD", "/usr/app/healthcheck"]
+  #     interval: 30s
+  #     timeout: 3s
+  #     retries: 3
+  #     start_period: 5s
+  #   networks:
+  #     - nauthilus-network
+
+networks:
+  nauthilus-network:
+    driver: bridge
