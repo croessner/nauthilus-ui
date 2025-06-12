@@ -47,6 +47,7 @@ import RestartAltIcon from '@mui/icons-material/RestartAlt';
 import Brightness4Icon from '@mui/icons-material/Brightness4';
 import Brightness7Icon from '@mui/icons-material/Brightness7';
 import DescriptionIcon from '@mui/icons-material/Description';
+import GavelIcon from '@mui/icons-material/Gavel';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import ValidationErrors from './components/common/ValidationErrors';
@@ -64,6 +65,7 @@ import LuaConfig from './components/LuaConfig';
 import LDAPConfig from './components/LDAPConfig';
 import FrontendConfig from './components/FrontendConfig';
 import ConfigPreview from './components/ConfigPreview';
+import LicensesPage from './components/LicensesPage';
 
 const drawerWidth = 240;
 
@@ -122,6 +124,7 @@ const MainContent: React.FC = () => {
     { text: 'LDAP', icon: <SecurityIcon />, path: '/ldap' },
     { text: 'Lua', icon: <CodeIcon />, path: '/lua' },
     { text: 'Config Preview', icon: <DescriptionIcon />, path: '/config-preview' },
+    { text: 'Licenses', icon: <GavelIcon />, path: '/licenses' },
   ];
 
   const handleDrawerToggle = () => {
@@ -261,7 +264,7 @@ const MainContent: React.FC = () => {
   };
 
   const drawer = (
-    <div>
+    <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
         <Avatar 
           src="/img/logo.png" 
@@ -282,7 +285,7 @@ const MainContent: React.FC = () => {
       </Toolbar>
       <Divider />
       <List>
-        {menuItems.map((item) => (
+        {menuItems.slice(0, -1).map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton onClick={() => handleNavigation(item.path)}>
               <ListItemIcon>
@@ -293,7 +296,19 @@ const MainContent: React.FC = () => {
           </ListItem>
         ))}
       </List>
-    </div>
+      <Box sx={{ flexGrow: 1 }} />
+      <Divider />
+      <List>
+        <ListItem disablePadding>
+          <ListItemButton onClick={() => handleNavigation(menuItems[menuItems.length - 1].path)}>
+            <ListItemIcon>
+              {menuItems[menuItems.length - 1].icon}
+            </ListItemIcon>
+            <ListItemText primary={menuItems[menuItems.length - 1].text} />
+          </ListItemButton>
+        </ListItem>
+      </List>
+    </Box>
   );
 
   return (
@@ -485,6 +500,7 @@ const MainContent: React.FC = () => {
               <Route path="/lua" element={<LuaConfig />} />
               <Route path="/ldap" element={<LDAPConfig />} />
               <Route path="/config-preview" element={<ConfigPreview />} />
+              <Route path="/licenses" element={<LicensesPage />} />
             </Routes>
           </>
         )}
