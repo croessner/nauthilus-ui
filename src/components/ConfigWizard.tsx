@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import * as React from 'react';
+import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -22,8 +23,9 @@ import {
   TextField,
   Typography,
 } from '@mui/material';
-import { useConfig } from '../contexts/ConfigContext';
+import * as ConfigContext from '../contexts/ConfigContext';
 import { NauthilusConfig, BackendConfig } from '../types/config';
+const { useConfig } = ConfigContext;
 
 // Define the steps for the wizard
 const steps = ['Server Configuration', 'Redis Setup', 'Backend Selection'];
@@ -226,9 +228,14 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
 
         if (ldapBaseDn && newConfig.ldap.search) {
           // Check if a search configuration already exists
-          let searchConfig = newConfig.ldap.search.find(s => 
-            Array.isArray(s.protocol) && s.protocol.includes('imap')
-          );
+          let searchConfig = null;
+          for (let i = 0; i < newConfig.ldap.search.length; i++) {
+            const s = newConfig.ldap.search[i];
+            if (Array.isArray(s.protocol) && s.protocol.includes('imap')) {
+              searchConfig = s;
+              break;
+            }
+          }
 
           if (!searchConfig) {
             // Create a new search configuration
