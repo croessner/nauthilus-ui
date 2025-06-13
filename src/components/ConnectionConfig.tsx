@@ -13,11 +13,30 @@ import {
   Alert,
   Tooltip,
   IconButton,
-  Snackbar
+  Snackbar,
+  Tabs,
+  Tab,
+  Paper,
+  Divider,
+  List,
+  ListItem,
+  ListItemText,
+  ListItemSecondaryAction,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  FormHelperText
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import RefreshIcon from '@mui/icons-material/Refresh';
+import DeleteIcon from '@mui/icons-material/Delete';
+import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
@@ -68,6 +87,26 @@ const ConnectionConfigSchema = Yup.object().shape({
 // Connection status type
 type ConnectionStatus = 'unknown' | 'connected' | 'disconnected' | 'checking';
 
+// Brute force protection types
+interface BruteForceListItem {
+  ip_address: string;
+  rule_name: string;
+  protocol?: string;
+  oidc_cid?: string;
+  ttl: number;
+  attempts: number;
+}
+
+interface AffectedAccount {
+  username: string;
+  ip_addresses: string[];
+}
+
+interface BruteForceListResponse {
+  blocked_ips: BruteForceListItem[];
+  affected_accounts: AffectedAccount[];
+}
+
 const ConnectionConfig: React.FC = () => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
@@ -77,6 +116,19 @@ const ConnectionConfig: React.FC = () => {
     message: '',
     severity: 'info'
   });
+
+  // Brute force protection state
+  const [tabValue, setTabValue] = useState<number>(0);
+  const [bruteForceList, setBruteForceList] = useState<BruteForceListResponse | null>(null);
+  const [isLoadingBruteForceList, setIsLoadingBruteForceList] = useState<boolean>(false);
+  const [openUserDialog, setOpenUserDialog] = useState<boolean>(false);
+  const [openIpDialog, setOpenIpDialog] = useState<boolean>(false);
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [selectedIp, setSelectedIp] = useState<string>('');
+  const [selectedRule, setSelectedRule] = useState<string>('*');
+  const [selectedProtocol, setSelectedProtocol] = useState<string>('');
+  const [selectedOidcCid, setSelectedOidcCid] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
 
   // Reset unsaved changes flag when component mounts
   useEffect(() => {
@@ -282,6 +334,300 @@ const ConnectionConfig: React.FC = () => {
     }
   };
 
+  // Function to fetch brute force list
+  const fetchBruteForceList = async (connectionConfig: any) => {
+    if (!connectionConfig.backend_url) {
+      setNotification({
+        open: true,
+        message: 'No backend URL configured',
+        severity: 'error'
+      });
+      return;
+    }
+
+    setIsLoadingBruteForceList(true);
+
+    try {
+      // Prepare authentication parameters for the proxy
+      let authType = '';
+      let authValue = '';
+
+      // Add Basic Auth if enabled
+      if (connectionConfig.basic_auth?.enabled && 
+          connectionConfig.basic_auth.username && 
+          connectionConfig.basic_auth.password) {
+        authType = 'basic';
+        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
+      }
+
+      // For JWT Auth, use existing token if available
+      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
+        authType = 'bearer';
+        authValue = connectionConfig.jwt_auth.token;
+      }
+
+      // Use the proxy endpoint to make the request server-side
+      const proxyUrl = new URL('/proxy/bruteforce/list', window.location.origin);
+      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+
+      if (authType && authValue) {
+        proxyUrl.searchParams.append('authType', authType);
+        proxyUrl.searchParams.append('authValue', authValue);
+      }
+
+      const response = await fetch(proxyUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || response.statusText);
+      }
+
+      const data = await response.json();
+      setBruteForceList(data.result);
+
+      setNotification({
+        open: true,
+        message: 'Brute force list fetched successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error fetching brute force list:', error);
+      setNotification({
+        open: true,
+        message: `Failed to fetch brute force list: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error'
+      });
+      setBruteForceList(null);
+    } finally {
+      setIsLoadingBruteForceList(false);
+    }
+  };
+
+  // Function to free user by account
+  const freeUserByAccount = async (connectionConfig: any, username: string) => {
+    if (!connectionConfig.backend_url) {
+      setNotification({
+        open: true,
+        message: 'No backend URL configured',
+        severity: 'error'
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Prepare authentication parameters for the proxy
+      let authType = '';
+      let authValue = '';
+
+      // Add Basic Auth if enabled
+      if (connectionConfig.basic_auth?.enabled && 
+          connectionConfig.basic_auth.username && 
+          connectionConfig.basic_auth.password) {
+        authType = 'basic';
+        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
+      }
+
+      // For JWT Auth, use existing token if available
+      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
+        authType = 'bearer';
+        authValue = connectionConfig.jwt_auth.token;
+      }
+
+      // Use the proxy endpoint to make the request server-side
+      const proxyUrl = new URL('/proxy/cache/flush', window.location.origin);
+      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+
+      if (authType && authValue) {
+        proxyUrl.searchParams.append('authType', authType);
+        proxyUrl.searchParams.append('authValue', authValue);
+      }
+
+      const response = await fetch(proxyUrl.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ user: username }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || response.statusText);
+      }
+
+      const data = await response.json();
+
+      setNotification({
+        open: true,
+        message: `User ${username} freed from brute force protection successfully`,
+        severity: 'success'
+      });
+
+      // Refresh the brute force list
+      fetchBruteForceList(connectionConfig);
+    } catch (error) {
+      console.error('Error freeing user by account:', error);
+      setNotification({
+        open: true,
+        message: `Failed to free user ${username}: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error'
+      });
+    } finally {
+      setIsProcessing(false);
+      setOpenUserDialog(false);
+    }
+  };
+
+  // Function to free user by IP address
+  const freeUserByIp = async (connectionConfig: any, ipAddress: string, ruleName: string, protocol?: string, oidcCid?: string) => {
+    if (!connectionConfig.backend_url) {
+      setNotification({
+        open: true,
+        message: 'No backend URL configured',
+        severity: 'error'
+      });
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      // Prepare authentication parameters for the proxy
+      let authType = '';
+      let authValue = '';
+
+      // Add Basic Auth if enabled
+      if (connectionConfig.basic_auth?.enabled && 
+          connectionConfig.basic_auth.username && 
+          connectionConfig.basic_auth.password) {
+        authType = 'basic';
+        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
+      }
+
+      // For JWT Auth, use existing token if available
+      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
+        authType = 'bearer';
+        authValue = connectionConfig.jwt_auth.token;
+      }
+
+      // Use the proxy endpoint to make the request server-side
+      const proxyUrl = new URL('/proxy/bruteforce/flush', window.location.origin);
+      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+
+      if (authType && authValue) {
+        proxyUrl.searchParams.append('authType', authType);
+        proxyUrl.searchParams.append('authValue', authValue);
+      }
+
+      // Prepare request body
+      const requestBody: any = {
+        ip_address: ipAddress,
+        rule_name: ruleName
+      };
+
+      // Add optional parameters if provided
+      if (protocol) {
+        requestBody.protocol = protocol;
+      }
+
+      if (oidcCid) {
+        requestBody.oidc_cid = oidcCid;
+      }
+
+      const response = await fetch(proxyUrl.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+        throw new Error(errorData.error || response.statusText);
+      }
+
+      const data = await response.json();
+
+      setNotification({
+        open: true,
+        message: `IP address ${ipAddress} freed from brute force protection successfully`,
+        severity: 'success'
+      });
+
+      // Refresh the brute force list
+      fetchBruteForceList(connectionConfig);
+    } catch (error) {
+      console.error('Error freeing user by IP address:', error);
+      setNotification({
+        open: true,
+        message: `Failed to free IP ${ipAddress}: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error'
+      });
+    } finally {
+      setIsProcessing(false);
+      setOpenIpDialog(false);
+    }
+  };
+
+  // Function to handle tab change
+  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+    setTabValue(newValue);
+  };
+
+  // Function to open user dialog
+  const handleOpenUserDialog = (username: string) => {
+    setSelectedUser(username);
+    setOpenUserDialog(true);
+  };
+
+  // Function to open IP dialog
+  const handleOpenIpDialog = (ipAddress: string, ruleName: string = '*', protocol: string = '', oidcCid: string = '') => {
+    setSelectedIp(ipAddress);
+    setSelectedRule(ruleName);
+    setSelectedProtocol(protocol);
+    setSelectedOidcCid(oidcCid);
+    setOpenIpDialog(true);
+  };
+
+  // Function to reset JWT token
+  const resetJwtToken = async () => {
+    try {
+      // Update the connection configuration with empty token
+      await updateConfigSection('connection', {
+        ...config.connection,
+        jwt_auth: {
+          ...config.connection?.jwt_auth,
+          token: '',
+          refresh_token: '',
+          expires_at: 0
+        }
+      });
+
+      setNotification({
+        open: true,
+        message: 'JWT token has been reset. A new token will be fetched on the next request.',
+        severity: 'success'
+      });
+
+      setHasUnsavedChanges(false);
+    } catch (error) {
+      console.error('Error resetting JWT token:', error);
+      setNotification({
+        open: true,
+        message: `Failed to reset JWT token: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error'
+      });
+    }
+  };
+
   // Function to close the notification
   const handleCloseNotification = () => {
     setNotification(prev => ({ ...prev, open: false }));
@@ -328,6 +674,136 @@ const ConnectionConfig: React.FC = () => {
                     </Tooltip>
                   </Box>
                 </Grid>
+
+                {/* Brute Force Protection Section - Only show when connected */}
+                {connectionStatus === 'connected' && (
+                  <Grid item xs={12}>
+                    <Paper sx={{ mt: 3, p: 2 }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                        <SecurityIcon sx={{ mr: 1, color: 'primary.main' }} />
+                        <Typography variant="h6">Brute Force Protection Management</Typography>
+                      </Box>
+
+                      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+                        <Typography variant="body1">
+                          Manage brute force protection for users and IP addresses.
+                        </Typography>
+                        <Button 
+                          variant="outlined" 
+                          color="primary"
+                          onClick={() => fetchBruteForceList(values)}
+                          disabled={isLoadingBruteForceList}
+                          startIcon={isLoadingBruteForceList ? <CircularProgress size={20} /> : <RefreshIcon />}
+                        >
+                          {isLoadingBruteForceList ? 'Loading...' : 'Refresh List'}
+                        </Button>
+                      </Box>
+
+                      <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+                        <Tab label="Blocked IP Addresses" />
+                        <Tab label="Affected Accounts" />
+                      </Tabs>
+
+                      {/* Blocked IP Addresses Tab */}
+                      {tabValue === 0 && (
+                        <Box sx={{ mt: 2 }}>
+                          {isLoadingBruteForceList ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                              <CircularProgress />
+                            </Box>
+                          ) : bruteForceList && bruteForceList.blocked_ips && bruteForceList.blocked_ips.length > 0 ? (
+                            <List>
+                              {bruteForceList.blocked_ips.map((item, index) => (
+                                <ListItem key={index} divider>
+                                  <ListItemText
+                                    primary={item.ip_address}
+                                    secondary={
+                                      <>
+                                        <Typography component="span" variant="body2">
+                                          Rule: {item.rule_name}
+                                          {item.protocol && ` | Protocol: ${item.protocol}`}
+                                          {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
+                                        </Typography>
+                                        <br />
+                                        <Typography component="span" variant="body2">
+                                          TTL: {item.ttl} seconds | Attempts: {item.attempts}
+                                        </Typography>
+                                      </>
+                                    }
+                                  />
+                                  <ListItemSecondaryAction>
+                                    <Button
+                                      variant="outlined"
+                                      color="secondary"
+                                      onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
+                                      startIcon={<DeleteIcon />}
+                                    >
+                                      Free
+                                    </Button>
+                                  </ListItemSecondaryAction>
+                                </ListItem>
+                              ))}
+                            </List>
+                          ) : (
+                            <Box sx={{ p: 3, textAlign: 'center' }}>
+                              <Typography variant="body1" color="text.secondary">
+                                {bruteForceList === null 
+                                  ? 'Click "Refresh List" to load blocked IP addresses' 
+                                  : 'No blocked IP addresses found'}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+
+                      {/* Affected Accounts Tab */}
+                      {tabValue === 1 && (
+                        <Box sx={{ mt: 2 }}>
+                          {isLoadingBruteForceList ? (
+                            <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+                              <CircularProgress />
+                            </Box>
+                          ) : bruteForceList && bruteForceList.affected_accounts && bruteForceList.affected_accounts.length > 0 ? (
+                            <List>
+                              {bruteForceList.affected_accounts.map((account, index) => (
+                                <ListItem key={index} divider>
+                                  <ListItemText
+                                    primary={account.username}
+                                    secondary={
+                                      <>
+                                        <Typography component="span" variant="body2">
+                                          Associated IP Addresses: {account.ip_addresses.join(', ')}
+                                        </Typography>
+                                      </>
+                                    }
+                                  />
+                                  <ListItemSecondaryAction>
+                                    <Button
+                                      variant="outlined"
+                                      color="secondary"
+                                      onClick={() => handleOpenUserDialog(account.username)}
+                                      startIcon={<DeleteIcon />}
+                                    >
+                                      Free
+                                    </Button>
+                                  </ListItemSecondaryAction>
+                                </ListItem>
+                              ))}
+                            </List>
+                          ) : (
+                            <Box sx={{ p: 3, textAlign: 'center' }}>
+                              <Typography variant="body1" color="text.secondary">
+                                {bruteForceList === null 
+                                  ? 'Click "Refresh List" to load affected accounts' 
+                                  : 'No affected accounts found'}
+                              </Typography>
+                            </Box>
+                          )}
+                        </Box>
+                      )}
+                    </Paper>
+                  </Grid>
+                )}
 
                 {/* Backend URL */}
                 <Grid item xs={12}>
@@ -483,6 +959,32 @@ const ConnectionConfig: React.FC = () => {
                         </Grid>
                       </Grid>
                     </Grid>
+
+                    {/* Token Status and Reset Button */}
+                    {values.jwt_auth?.token && (
+                      <Grid item xs={12} sx={{ mt: 2 }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                          <Box>
+                            <Typography variant="subtitle2" color="primary">
+                              JWT Token Status
+                            </Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              {values.jwt_auth.expires_at > Date.now() / 1000 
+                                ? `Valid until: ${new Date(values.jwt_auth.expires_at * 1000).toLocaleString()}`
+                                : 'Token has expired'}
+                            </Typography>
+                          </Box>
+                          <Button
+                            variant="outlined"
+                            color="secondary"
+                            onClick={resetJwtToken}
+                            startIcon={<RefreshIcon />}
+                          >
+                            Reset Token
+                          </Button>
+                        </Box>
+                      </Grid>
+                    )}
                   </>
                 )}
               </Grid>
@@ -522,6 +1024,109 @@ const ConnectionConfig: React.FC = () => {
           {notification.message}
         </Alert>
       </Snackbar>
+
+      {/* User Free Dialog */}
+      <Dialog
+        open={openUserDialog}
+        onClose={() => !isProcessing && setOpenUserDialog(false)}
+        aria-labelledby="user-dialog-title"
+      >
+        <DialogTitle id="user-dialog-title">Free User from Brute Force Protection</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to free the user <strong>{selectedUser}</strong> from brute force protection?
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            This will remove all brute force protection for this user, including all IP addresses associated with the user.
+          </Typography>
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => !isProcessing && setOpenUserDialog(false)} 
+            color="primary"
+            disabled={isProcessing}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => freeUserByAccount(config.connection, selectedUser)} 
+            color="secondary" 
+            variant="contained"
+            disabled={isProcessing}
+            startIcon={isProcessing ? <CircularProgress size={20} /> : null}
+          >
+            {isProcessing ? 'Processing...' : 'Free User'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* IP Free Dialog */}
+      <Dialog
+        open={openIpDialog}
+        onClose={() => !isProcessing && setOpenIpDialog(false)}
+        aria-labelledby="ip-dialog-title"
+      >
+        <DialogTitle id="ip-dialog-title">Free IP Address from Brute Force Protection</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Are you sure you want to free the IP address <strong>{selectedIp}</strong> from brute force protection?
+          </Typography>
+
+          <FormControl fullWidth sx={{ mt: 2, mb: 1 }}>
+            <InputLabel id="rule-name-label">Rule Name</InputLabel>
+            <Select
+              labelId="rule-name-label"
+              value={selectedRule}
+              onChange={(e) => setSelectedRule(e.target.value)}
+              label="Rule Name"
+              disabled={isProcessing}
+            >
+              <MenuItem value="*">All Rules (*)</MenuItem>
+              <MenuItem value="default">Default Rule</MenuItem>
+              {/* Add other rule names if needed */}
+            </Select>
+            <FormHelperText>Select "*" to free the IP from all rules</FormHelperText>
+          </FormControl>
+
+          <TextField
+            fullWidth
+            label="Protocol (Optional)"
+            value={selectedProtocol}
+            onChange={(e) => setSelectedProtocol(e.target.value)}
+            margin="normal"
+            disabled={isProcessing}
+            helperText="Leave empty to free the IP regardless of protocol"
+          />
+
+          <TextField
+            fullWidth
+            label="OIDC Client ID (Optional)"
+            value={selectedOidcCid}
+            onChange={(e) => setSelectedOidcCid(e.target.value)}
+            margin="normal"
+            disabled={isProcessing}
+            helperText="Leave empty to free the IP regardless of OIDC Client ID"
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => !isProcessing && setOpenIpDialog(false)} 
+            color="primary"
+            disabled={isProcessing}
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => freeUserByIp(config.connection, selectedIp, selectedRule, selectedProtocol || undefined, selectedOidcCid || undefined)} 
+            color="secondary" 
+            variant="contained"
+            disabled={isProcessing}
+            startIcon={isProcessing ? <CircularProgress size={20} /> : null}
+          >
+            {isProcessing ? 'Processing...' : 'Free IP Address'}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };
