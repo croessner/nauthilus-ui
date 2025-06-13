@@ -30,6 +30,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import AddIcon from '@mui/icons-material/Add';
 import * as userManager from '../utils/userManager';
+import PasswordField from './common/PasswordField';
 
 const UserManagement: React.FC = () => {
   const [users, setUsers] = useState<Array<{ username: string; roles: string[] }>>([]);
@@ -246,10 +247,10 @@ const UserManagement: React.FC = () => {
             error={!!usernameError}
             helperText={usernameError}
           />
-          <TextField
+          <PasswordField
             margin="dense"
+            name="password"
             label="Password"
-            type="password"
             fullWidth
             value={password}
             onChange={(e) => setPassword(e.target.value)}
@@ -306,10 +307,10 @@ const UserManagement: React.FC = () => {
             helperText={usernameError}
             disabled // Username cannot be changed
           />
-          <TextField
+          <PasswordField
             margin="dense"
+            name="newPassword"
             label="New Password (leave empty to keep current)"
-            type="password"
             fullWidth
             value={password}
             onChange={(e) => setPassword(e.target.value)}

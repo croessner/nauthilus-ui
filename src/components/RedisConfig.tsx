@@ -21,6 +21,7 @@ import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
+import PasswordField from './common/PasswordField';
 
 // Validation schema
 const RedisConfigSchema = Yup.object().shape({
@@ -206,7 +207,7 @@ const RedisConfigSchema = Yup.object().shape({
 });
 
 const RedisConfig: React.FC = () => {
-  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
+  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
   // Reset unsaved changes flag when component mounts
   React.useEffect(() => {
@@ -423,7 +424,7 @@ const RedisConfig: React.FC = () => {
               </Grid>
               <Grid item xs={12} md={6}>
                 <Field
-                  as={TextField}
+                  as={PasswordField}
                   fullWidth
                   name="redis.password_nonce"
                   label="Password Nonce"
@@ -616,12 +617,11 @@ const RedisConfig: React.FC = () => {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Field
-                    as={TextField}
+                    as={PasswordField}
                     fullWidth
                     name="redis.master.password"
                     label="Password"
                     variant="outlined"
-                    type="password"
                     error={getIn(touched, 'redis.master.password') && Boolean(getIn(errors, 'redis.master.password'))}
                     helperText={(getIn(touched, 'redis.master.password') && getIn(errors, 'redis.master.password')) || "Redis password (optional)"}
                     onChange={(e: React.ChangeEvent<any>) => {
@@ -792,12 +792,11 @@ const RedisConfig: React.FC = () => {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Field
-                    as={TextField}
+                    as={PasswordField}
                     fullWidth
                     name="redis.sentinels.password"
                     label="Password"
                     variant="outlined"
-                    type="password"
                     error={getIn(touched, 'redis.sentinels.password') && Boolean(getIn(errors, 'redis.sentinels.password'))}
                     helperText={(getIn(touched, 'redis.sentinels.password') && getIn(errors, 'redis.sentinels.password')) || "Sentinel password (optional)"}
                     onChange={(e: React.ChangeEvent<any>) => {
@@ -888,12 +887,11 @@ const RedisConfig: React.FC = () => {
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <Field
-                    as={TextField}
+                    as={PasswordField}
                     fullWidth
                     name="redis.cluster.password"
                     label="Password"
                     variant="outlined"
-                    type="password"
                     error={getIn(touched, 'redis.cluster.password') && Boolean(getIn(errors, 'redis.cluster.password'))}
                     helperText={(getIn(touched, 'redis.cluster.password') && getIn(errors, 'redis.cluster.password')) || "Cluster password (optional)"}
                     onChange={(e: React.ChangeEvent<any>) => {

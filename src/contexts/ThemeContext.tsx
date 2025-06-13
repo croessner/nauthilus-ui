@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { ThemeProvider as MuiThemeProvider, createTheme, Theme, PaletteMode } from '@mui/material';
+import React, { createContext, useContext, useState, ReactNode } from 'react';
+import { ThemeProvider as MuiThemeProvider, createTheme, PaletteMode } from '@mui/material';
 
 // Define the theme context type
 interface ThemeContextType {

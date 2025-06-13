@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { NauthilusConfig } from '../types/config';
 import yaml from 'js-yaml';
 
@@ -39,7 +39,7 @@ const PROFILES_STORAGE_KEY = 'nauthilus-profiles';
 const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
 const DEFAULT_PROFILE_NAME = 'Default';
 
-// Default empty configuration
+  // Default empty configuration
 const DEFAULT_CONFIG: NauthilusConfig = {
   server: {
     address: '127.0.0.1:8080',
@@ -52,6 +52,18 @@ const DEFAULT_CONFIG: NauthilusConfig = {
       master: {
         address: '127.0.0.1:6379'
       }
+    }
+  },
+  connection: {
+    backend_url: '',
+    basic_auth: {
+      enabled: false,
+      username: '',
+      password: ''
+    },
+    jwt_auth: {
+      enabled: false,
+      token: ''
     }
   }
 };
@@ -69,62 +81,8 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   const [error, setError] = useState<string | null>(null);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState<boolean>(false);
 
-  // Function to load the configuration profiles from local storage
-  const refreshConfig = async () => {
-    await withErrorHandling(async () => {
-      // Load profiles from localStorage
-      const storedProfiles = localStorage.getItem(PROFILES_STORAGE_KEY);
-      let profilesArray: ConfigProfile[];
-
-      if (storedProfiles) {
-        profilesArray = JSON.parse(storedProfiles);
-      } else {
-        // Create default profile if none exists
-        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profilesArray));
-      }
-
-      setProfiles(profilesArray);
-
-      // Load current profile name
-      const storedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
-      let currentProfile = storedCurrentProfile || DEFAULT_PROFILE_NAME;
-
-      // Make sure the current profile exists in the profiles array
-      if (!profilesArray.some(profile => profile.name === currentProfile)) {
-        currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
-      }
-
-      setCurrentProfileName(currentProfile);
-
-      // Set the current config
-      const profileConfig = profilesArray.find(profile => profile.name === currentProfile)?.config;
-      setConfig(profileConfig || null);
-
-      return profilesArray;
-    }, 'Failed to load configuration profiles. Please try again.');
-  };
-
-  // Helper function to update profiles with a new config
-  const updateProfilesWithConfig = (newConfig: NauthilusConfig) => {
-    const updatedProfiles = profiles.map(profile => 
-      profile.name === currentProfileName 
-        ? { ...profile, config: newConfig } 
-        : profile
-    );
-
-    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
-    setProfiles(updatedProfiles);
-    setConfig(newConfig);
-
-    // Reset unsaved changes flag since we've just saved
-    setHasUnsavedChanges(false);
-
-    return updatedProfiles;
-  };
-
   // Helper function to wrap operations with error handling
-  const withErrorHandling = async <T,>(
+  const withErrorHandling = useCallback(async <T,>(
     operation: () => Promise<T> | T,
     errorMessage: string
   ): Promise<T | undefined> => {
@@ -139,311 +97,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  // Function to update the entire configuration
-  const updateConfig = async (newConfig: NauthilusConfig) => {
-    await withErrorHandling(
-      () => updateProfilesWithConfig(newConfig),
-      'Failed to update configuration. Please try again.'
-    );
-  };
-
-  // Function to update a specific section of the configuration
-  const updateConfigSection = async (section: string, data: any) => {
-    await withErrorHandling(async () => {
-      if (!config) {
-        throw new Error('No configuration loaded');
-      }
-
-      // Create a new config object with the updated section
-      const newConfig = { ...config };
-
-      // Merge the new data with the existing data instead of replacing it entirely
-      (newConfig as any)[section] = {
-        ...(newConfig as any)[section],
-        ...data
-      };
-
-      // Validate the configuration before saving
-      const validationErrors = validateConfigSection(section, newConfig);
-      if (validationErrors.length > 0) {
-        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
-      }
-
-      return updateProfilesWithConfig(newConfig);
-    }, `Failed to update ${section} configuration. Please try again.`);
-  };
-
-  // Helper function to initialize feature configurations
-  const initializeFeatureConfigurations = (config: NauthilusConfig): NauthilusConfig => {
-    const newConfig = { ...config };
-
-    if (newConfig.server?.features) {
-      // Handle RBL configuration
-      if (newConfig.server.features.includes('rbl')) {
-        // Initialize RBL configuration if it doesn't exist
-        if (!newConfig.rbl) {
-          newConfig.rbl = {
-            lists: [],
-            threshold: 0,
-            ip_whitelist: [],
-            soft_whitelist: {}
-          };
-        }
-
-        // Ensure lists array is properly initialized
-        if (!newConfig.rbl.lists) {
-          newConfig.rbl.lists = [];
-        }
-
-        // Ensure ip_whitelist array is properly initialized
-        if (!newConfig.rbl.ip_whitelist) {
-          newConfig.rbl.ip_whitelist = [];
-        }
-
-        // Ensure soft_whitelist object is properly initialized
-        if (!newConfig.rbl.soft_whitelist) {
-          newConfig.rbl.soft_whitelist = {};
-        }
-      }
-
-      // Handle Relay Domains configuration
-      if (newConfig.server.features.includes('relay_domains')) {
-        // Initialize Relay Domains configuration if it doesn't exist
-        if (!newConfig.relay_domains) {
-          newConfig.relay_domains = {
-            static: [],
-            soft_whitelist: {}
-          };
-        }
-
-        // Ensure static array is properly initialized
-        if (!newConfig.relay_domains.static) {
-          newConfig.relay_domains.static = [];
-        }
-
-        // Ensure soft_whitelist object is properly initialized
-        if (!newConfig.relay_domains.soft_whitelist) {
-          newConfig.relay_domains.soft_whitelist = {};
-        }
-      }
-
-      // Handle Backend Server Monitoring configuration
-      if (newConfig.server.features.includes('backend_server_monitoring')) {
-        // Initialize Backend Server Monitoring configuration if it doesn't exist
-        if (!newConfig.backend_server_monitoring) {
-          newConfig.backend_server_monitoring = {
-            backend_servers: []
-          };
-        }
-
-        // Ensure backend_servers array is properly initialized
-        if (!newConfig.backend_server_monitoring.backend_servers) {
-          newConfig.backend_server_monitoring.backend_servers = [];
-        }
-      }
-
-      // Handle Brute Force configuration
-      if (newConfig.server.features.includes('brute_force')) {
-        // Initialize Brute Force configuration if it doesn't exist
-        if (!newConfig.brute_force) {
-          newConfig.brute_force = {
-            buckets: [],
-            ip_whitelist: [],
-            soft_whitelist: {},
-            custom_tolerations: []
-          };
-        }
-
-        // Ensure buckets array is properly initialized
-        if (!newConfig.brute_force.buckets) {
-          newConfig.brute_force.buckets = [];
-        }
-
-        // Ensure ip_whitelist array is properly initialized
-        if (!newConfig.brute_force.ip_whitelist) {
-          newConfig.brute_force.ip_whitelist = [];
-        }
-
-        // Ensure soft_whitelist object is properly initialized
-        if (!newConfig.brute_force.soft_whitelist) {
-          newConfig.brute_force.soft_whitelist = {};
-        }
-
-        // Ensure custom_tolerations array is properly initialized
-        if (!newConfig.brute_force.custom_tolerations) {
-          newConfig.brute_force.custom_tolerations = [];
-        }
-      }
-
-      // Handle TLS Encryption configuration
-      if (newConfig.server.features.includes('tls_encryption')) {
-        // Ensure cleartext_networks array is properly initialized
-        if (!newConfig.cleartext_networks) {
-          newConfig.cleartext_networks = [];
-        }
-      }
-    }
-
-    return newConfig;
-  };
-
-  // Function to upload a configuration file
-  const uploadConfig = async (file: File, profileName?: string) => {
-    await withErrorHandling(async () => {
-      const fileContent = await file.text();
-      let newConfig: NauthilusConfig;
-
-      // Parse the file content based on the file extension
-      if (file.name.endsWith('.json')) {
-        newConfig = JSON.parse(fileContent);
-      } else if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
-        newConfig = yaml.load(fileContent) as NauthilusConfig;
-
-        // Handle realtime_blackhole_lists (map to rbl)
-        if ((newConfig as any).realtime_blackhole_lists) {
-          newConfig.rbl = (newConfig as any).realtime_blackhole_lists;
-          delete (newConfig as any).realtime_blackhole_lists;
-
-          // Ensure server.features includes 'rbl'
-          if (!newConfig.server) {
-            newConfig.server = { redis: { database_number: 0, prefix: 'nt_', master: { address: '127.0.0.1:6379' } } };
-          }
-          if (!newConfig.server.features) {
-            newConfig.server.features = [];
-          }
-          if (!newConfig.server.features.includes('rbl')) {
-            newConfig.server.features.push('rbl');
-          }
-        }
-
-        // Fix backend configuration format if it's an array of strings
-        if (newConfig.server?.backends && Array.isArray(newConfig.server.backends)) {
-          // Check if the backends are strings instead of objects
-          const firstBackend = newConfig.server.backends[0];
-          if (firstBackend && typeof (firstBackend as any) === 'string') {
-            // Convert string backends to objects with 'backend' property
-            // Use type assertion to tell TypeScript that the array contains strings
-            newConfig.server.backends = (newConfig.server.backends as unknown as string[]).map(backend => ({
-              backend: backend
-            }));
-          }
-        }
-
-        // Initialize feature configurations
-        newConfig = initializeFeatureConfigurations(newConfig);
-      } else {
-        throw new Error('Unsupported file format. Please upload a JSON or YAML file.');
-      }
-
-      // Determine which profile to update
-      const targetProfileName = profileName || currentProfileName;
-
-      // Check if the profile exists
-      let updatedProfiles = [...profiles];
-      const profileIndex = updatedProfiles.findIndex(p => p.name === targetProfileName);
-
-      if (profileIndex >= 0) {
-        // Update existing profile
-        updatedProfiles[profileIndex] = {
-          ...updatedProfiles[profileIndex],
-          config: newConfig
-        };
-      } else {
-        // Create new profile if it doesn't exist
-        updatedProfiles.push({
-          name: targetProfileName,
-          config: newConfig
-        });
-      }
-
-      // Save profiles to localStorage
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
-      setProfiles(updatedProfiles);
-
-      // If updating the current profile, update the current config
-      if (targetProfileName === currentProfileName) {
-        setConfig(newConfig);
-      } else {
-        // Switch to the new/updated profile
-        setCurrentProfileName(targetProfileName);
-        setConfig(newConfig);
-        localStorage.setItem(CURRENT_PROFILE_KEY, targetProfileName);
-      }
-
-      // Reset unsaved changes flag since we've just saved
-      setHasUnsavedChanges(false);
-
-      return updatedProfiles;
-    }, 'Failed to upload configuration. Please check the file format.');
-  };
-
-  // Function to download the current configuration
-  const downloadConfig = () => {
-    // This function doesn't use async/await, so we'll handle errors manually
-    try {
-      if (!config) {
-        setError('No configuration to download');
-        return;
-      }
-
-      // Check if there are unsaved changes
-      if (hasUnsavedChanges) {
-        setError('Please save your changes before downloading the configuration.');
-        return;
-      }
-
-      // Validate required fields before allowing download
-      const validationErrors = validateConfig(config);
-      if (validationErrors.length > 0) {
-        setError(`Cannot download configuration: ${validationErrors.join(', ')}`);
-        return;
-      }
-
-      // Create a deep copy of the configuration to ensure all nested objects are included
-      const configToDownload = JSON.parse(JSON.stringify(config));
-
-      // Add profile name as a comment in the YAML
-      const profileComment = `# Profile: ${currentProfileName}`;
-
-      // Ensure brute_force_protocols are lowercase
-      if (configToDownload.server?.brute_force_protocols) {
-        configToDownload.server.brute_force_protocols = configToDownload.server.brute_force_protocols.map((protocol: string) => 
-          protocol.toLowerCase()
-        );
-      }
-
-      // Ensure refresh_token_expiry is set if refresh_token is enabled
-      if (configToDownload.server?.jwt_auth?.refresh_token && !configToDownload.server.jwt_auth.refresh_token_expiry) {
-        if (!configToDownload.server.jwt_auth) {
-          configToDownload.server.jwt_auth = {};
-        }
-        configToDownload.server.jwt_auth.refresh_token_expiry = '24h'; // Default value
-      }
-
-      // Convert the configuration to YAML
-      const yamlContent = yaml.dump(configToDownload);
-
-      // Create a blob and download link with the profile comment at the top
-      const contentWithComment = `${profileComment}\n\n${yamlContent}`;
-      const blob = new Blob([contentWithComment], { type: 'text/yaml' });
-      const url = URL.createObjectURL(blob);
-
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `nauthilus-${currentProfileName.toLowerCase().replace(/\s+/g, '-')}.yml`;
-      document.body.appendChild(a);
-      a.click();
-
-      // Clean up
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      setError('Failed to download configuration.');
-      console.error('Error downloading configuration:', err);
-    }
-  };
+  }, [setLoading, setError]);
 
   // Helper functions for validation
   const validateServerBasics = (config: NauthilusConfig, errors: string[]): void => {
@@ -605,7 +259,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   };
 
   // Function to validate the configuration
-  const validateConfig = (config: NauthilusConfig): string[] => {
+  const validateConfig = useCallback((config: NauthilusConfig): string[] => {
     const errors: string[] = [];
 
     // Validate server configuration
@@ -623,10 +277,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     validateAuthConfigurations(config, errors);
 
     return errors;
-  };
+  }, []);
 
   // Function to validate a specific section of the configuration
-  const validateConfigSection = (section: string, config: NauthilusConfig): string[] => {
+  const validateConfigSection = useCallback((section: string, config: NauthilusConfig): string[] => {
     const errors: string[] = [];
 
     switch (section) {
@@ -645,6 +299,25 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         validateLuaConfiguration(config, errors);
         break;
 
+      case 'connection':
+        // No specific validation for connection section
+        // Just ensure it exists to avoid errors
+        if (!config.connection) {
+          config.connection = {
+            backend_url: '',
+            basic_auth: {
+              enabled: false,
+              username: '',
+              password: ''
+            },
+            jwt_auth: {
+              enabled: false,
+              token: ''
+            }
+          };
+        }
+        break;
+
       default:
         // For other sections, use the general validation
         errors.push(...validateConfig(config));
@@ -652,19 +325,377 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     }
 
     return errors;
+  }, [validateConfig]);
+
+  // Function to load the configuration profiles from local storage
+  const refreshConfig = useCallback(async () => {
+    await withErrorHandling(async () => {
+      // Load profiles from localStorage
+      const storedProfiles = localStorage.getItem(PROFILES_STORAGE_KEY);
+      let profilesArray: ConfigProfile[];
+
+      if (storedProfiles) {
+        profilesArray = JSON.parse(storedProfiles);
+      } else {
+        // Create default profile if none exists
+        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profilesArray));
+      }
+
+      setProfiles(profilesArray);
+
+      // Load current profile name
+      const storedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
+      let currentProfile = storedCurrentProfile || DEFAULT_PROFILE_NAME;
+
+      // Make sure the current profile exists in the profiles array
+      if (!profilesArray.some(profile => profile.name === currentProfile)) {
+        currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
+      }
+
+      setCurrentProfileName(currentProfile);
+
+      // Set the current config
+      const profileConfig = profilesArray.find(profile => profile.name === currentProfile)?.config;
+      setConfig(profileConfig || null);
+
+      return profilesArray;
+    }, 'Failed to load configuration profiles. Please try again.');
+  }, [withErrorHandling, setProfiles, setCurrentProfileName, setConfig]);
+
+  // Helper function to update profiles with a new config
+  const updateProfilesWithConfig = useCallback((newConfig: NauthilusConfig) => {
+    const updatedProfiles = profiles.map(profile => 
+      profile.name === currentProfileName 
+        ? { ...profile, config: newConfig } 
+        : profile
+    );
+
+    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+    setProfiles(updatedProfiles);
+    setConfig(newConfig);
+
+    // Reset unsaved changes flag since we've just saved
+    setHasUnsavedChanges(false);
+
+    return updatedProfiles;
+  }, [profiles, currentProfileName, setProfiles, setConfig, setHasUnsavedChanges]);
+
+  // Function to update the entire configuration
+  const updateConfig = useCallback(async (newConfig: NauthilusConfig) => {
+    await withErrorHandling(
+      () => updateProfilesWithConfig(newConfig),
+      'Failed to update configuration. Please try again.'
+    );
+  }, [withErrorHandling, updateProfilesWithConfig]);
+
+  // Function to update a specific section of the configuration
+  const updateConfigSection = useCallback(async (section: string, data: any) => {
+    await withErrorHandling(async () => {
+      if (!config) {
+        throw new Error('No configuration loaded');
+      }
+
+      // Create a new config object with the updated section
+      const newConfig = { ...config };
+
+      // Merge the new data with the existing data instead of replacing it entirely
+      (newConfig as any)[section] = {
+        ...(newConfig as any)[section],
+        ...data
+      };
+
+      // Validate the configuration before saving
+      const validationErrors = validateConfigSection(section, newConfig);
+      if (validationErrors.length > 0) {
+        throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
+      }
+
+      return updateProfilesWithConfig(newConfig);
+    }, `Failed to update ${section} configuration. Please try again.`);
+  }, [withErrorHandling, config, updateProfilesWithConfig, validateConfigSection]);
+
+  // Helper function to initialize feature configurations
+  const initializeFeatureConfigurations = (config: NauthilusConfig): NauthilusConfig => {
+    const newConfig = { ...config };
+
+    if (newConfig.server?.features) {
+      // Handle RBL configuration
+      if (newConfig.server.features.includes('rbl')) {
+        // Initialize RBL configuration if it doesn't exist
+        if (!newConfig.rbl) {
+          newConfig.rbl = {
+            lists: [],
+            threshold: 0,
+            ip_whitelist: [],
+            soft_whitelist: {}
+          };
+        }
+
+        // Ensure lists array is properly initialized
+        if (!newConfig.rbl.lists) {
+          newConfig.rbl.lists = [];
+        }
+
+        // Ensure ip_whitelist array is properly initialized
+        if (!newConfig.rbl.ip_whitelist) {
+          newConfig.rbl.ip_whitelist = [];
+        }
+
+        // Ensure soft_whitelist object is properly initialized
+        if (!newConfig.rbl.soft_whitelist) {
+          newConfig.rbl.soft_whitelist = {};
+        }
+      }
+
+      // Handle Relay Domains configuration
+      if (newConfig.server.features.includes('relay_domains')) {
+        // Initialize Relay Domains configuration if it doesn't exist
+        if (!newConfig.relay_domains) {
+          newConfig.relay_domains = {
+            static: [],
+            soft_whitelist: {}
+          };
+        }
+
+        // Ensure static array is properly initialized
+        if (!newConfig.relay_domains.static) {
+          newConfig.relay_domains.static = [];
+        }
+
+        // Ensure soft_whitelist object is properly initialized
+        if (!newConfig.relay_domains.soft_whitelist) {
+          newConfig.relay_domains.soft_whitelist = {};
+        }
+      }
+
+      // Handle Backend Server Monitoring configuration
+      if (newConfig.server.features.includes('backend_server_monitoring')) {
+        // Initialize Backend Server Monitoring configuration if it doesn't exist
+        if (!newConfig.backend_server_monitoring) {
+          newConfig.backend_server_monitoring = {
+            backend_servers: []
+          };
+        }
+
+        // Ensure backend_servers array is properly initialized
+        if (!newConfig.backend_server_monitoring.backend_servers) {
+          newConfig.backend_server_monitoring.backend_servers = [];
+        }
+      }
+
+      // Handle Brute Force configuration
+      if (newConfig.server.features.includes('brute_force')) {
+        // Initialize Brute Force configuration if it doesn't exist
+        if (!newConfig.brute_force) {
+          newConfig.brute_force = {
+            buckets: [],
+            ip_whitelist: [],
+            soft_whitelist: {},
+            custom_tolerations: []
+          };
+        }
+
+        // Ensure buckets array is properly initialized
+        if (!newConfig.brute_force.buckets) {
+          newConfig.brute_force.buckets = [];
+        }
+
+        // Ensure ip_whitelist array is properly initialized
+        if (!newConfig.brute_force.ip_whitelist) {
+          newConfig.brute_force.ip_whitelist = [];
+        }
+
+        // Ensure soft_whitelist object is properly initialized
+        if (!newConfig.brute_force.soft_whitelist) {
+          newConfig.brute_force.soft_whitelist = {};
+        }
+
+        // Ensure custom_tolerations array is properly initialized
+        if (!newConfig.brute_force.custom_tolerations) {
+          newConfig.brute_force.custom_tolerations = [];
+        }
+      }
+
+      // Handle TLS Encryption configuration
+      if (newConfig.server.features.includes('tls_encryption')) {
+        // Ensure cleartext_networks array is properly initialized
+        if (!newConfig.cleartext_networks) {
+          newConfig.cleartext_networks = [];
+        }
+      }
+    }
+
+    return newConfig;
   };
 
+  // Function to upload a configuration file
+  const uploadConfig = useCallback(async (file: File, profileName?: string) => {
+    await withErrorHandling(async () => {
+      const fileContent = await file.text();
+      let newConfig: NauthilusConfig;
+
+      // Parse the file content based on the file extension
+      if (file.name.endsWith('.json')) {
+        newConfig = JSON.parse(fileContent);
+      } else if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
+        newConfig = yaml.load(fileContent) as NauthilusConfig;
+
+        // Handle realtime_blackhole_lists (map to rbl)
+        if ((newConfig as any).realtime_blackhole_lists) {
+          newConfig.rbl = (newConfig as any).realtime_blackhole_lists;
+          delete (newConfig as any).realtime_blackhole_lists;
+
+          // Ensure server.features includes 'rbl'
+          if (!newConfig.server) {
+            newConfig.server = { redis: { database_number: 0, prefix: 'nt_', master: { address: '127.0.0.1:6379' } } };
+          }
+          if (!newConfig.server.features) {
+            newConfig.server.features = [];
+          }
+          if (!newConfig.server.features.includes('rbl')) {
+            newConfig.server.features.push('rbl');
+          }
+        }
+
+        // Fix backend configuration format if it's an array of strings
+        if (newConfig.server?.backends && Array.isArray(newConfig.server.backends)) {
+          // Check if the backends are strings instead of objects
+          const firstBackend = newConfig.server.backends[0];
+          if (firstBackend && typeof (firstBackend as any) === 'string') {
+            // Convert string backends to objects with 'backend' property
+            // Use type assertion to tell TypeScript that the array contains strings
+            newConfig.server.backends = (newConfig.server.backends as unknown as string[]).map(backend => ({
+              backend: backend
+            }));
+          }
+        }
+
+        // Initialize feature configurations
+        newConfig = initializeFeatureConfigurations(newConfig);
+      } else {
+        throw new Error('Unsupported file format. Please upload a JSON or YAML file.');
+      }
+
+      // Determine which profile to update
+      const targetProfileName = profileName || currentProfileName;
+
+      // Check if the profile exists
+      let updatedProfiles = [...profiles];
+      const profileIndex = updatedProfiles.findIndex(p => p.name === targetProfileName);
+
+      if (profileIndex >= 0) {
+        // Update existing profile
+        updatedProfiles[profileIndex] = {
+          ...updatedProfiles[profileIndex],
+          config: newConfig
+        };
+      } else {
+        // Create new profile if it doesn't exist
+        updatedProfiles.push({
+          name: targetProfileName,
+          config: newConfig
+        });
+      }
+
+      // Save profiles to localStorage
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      setProfiles(updatedProfiles);
+
+      // If updating the current profile, update the current config
+      if (targetProfileName === currentProfileName) {
+        setConfig(newConfig);
+      } else {
+        // Switch to the new/updated profile
+        setCurrentProfileName(targetProfileName);
+        setConfig(newConfig);
+        localStorage.setItem(CURRENT_PROFILE_KEY, targetProfileName);
+      }
+
+      // Reset unsaved changes flag since we've just saved
+      setHasUnsavedChanges(false);
+
+      return updatedProfiles;
+    }, 'Failed to upload configuration. Please check the file format.');
+  }, [withErrorHandling, profiles, currentProfileName, setProfiles, setCurrentProfileName, setConfig, setHasUnsavedChanges]);
+
+  // Function to download the current configuration
+  const downloadConfig = useCallback(() => {
+    // This function doesn't use async/await, so we'll handle errors manually
+    try {
+      if (!config) {
+        setError('No configuration to download');
+        return;
+      }
+
+      // Check if there are unsaved changes
+      if (hasUnsavedChanges) {
+        setError('Please save your changes before downloading the configuration.');
+        return;
+      }
+
+      // Validate required fields before allowing download
+      const validationErrors = validateConfig(config);
+      if (validationErrors.length > 0) {
+        setError(`Cannot download configuration: ${validationErrors.join(', ')}`);
+        return;
+      }
+
+      // Create a deep copy of the configuration to ensure all nested objects are included
+      const configToDownload = JSON.parse(JSON.stringify(config));
+
+      // Add profile name as a comment in the YAML
+      const profileComment = `# Profile: ${currentProfileName}`;
+
+      // Ensure brute_force_protocols are lowercase
+      if (configToDownload.server?.brute_force_protocols) {
+        configToDownload.server.brute_force_protocols = configToDownload.server.brute_force_protocols.map((protocol: string) => 
+          protocol.toLowerCase()
+        );
+      }
+
+      // Ensure refresh_token_expiry is set if refresh_token is enabled
+      if (configToDownload.server?.jwt_auth?.refresh_token && !configToDownload.server.jwt_auth.refresh_token_expiry) {
+        if (!configToDownload.server.jwt_auth) {
+          configToDownload.server.jwt_auth = {};
+        }
+        configToDownload.server.jwt_auth.refresh_token_expiry = '24h'; // Default value
+      }
+
+      // Convert the configuration to YAML
+      const yamlContent = yaml.dump(configToDownload);
+
+      // Create a blob and download link with the profile comment at the top
+      const contentWithComment = `${profileComment}\n\n${yamlContent}`;
+      const blob = new Blob([contentWithComment], { type: 'text/yaml' });
+      const url = URL.createObjectURL(blob);
+
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `nauthilus-${currentProfileName.toLowerCase().replace(/\s+/g, '-')}.yml`;
+      document.body.appendChild(a);
+      a.click();
+
+      // Clean up
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError('Failed to download configuration.');
+      console.error('Error downloading configuration:', err);
+    }
+  }, [config, hasUnsavedChanges, validateConfig, currentProfileName, setError]);
+
   // Function to reset the configuration to default
-  const resetConfig = async () => {
+  const resetConfig = useCallback(async () => {
     // Reset only the current profile to default
     await withErrorHandling(
       () => updateProfilesWithConfig(DEFAULT_CONFIG),
       'Failed to reset configuration. Please try again.'
     );
-  };
+  }, [withErrorHandling, updateProfilesWithConfig]);
 
   // Function to create a new profile
-  const createProfile = async (name: string, configData?: NauthilusConfig) => {
+  const createProfile = useCallback(async (name: string, configData?: NauthilusConfig) => {
     await withErrorHandling(async () => {
       // Check if profile with this name already exists
       if (profiles.some(profile => profile.name === name)) {
@@ -683,14 +714,17 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       setProfiles(updatedProfiles);
 
       // Switch to the new profile
-      await switchProfile(name);
+      setCurrentProfileName(name);
+      setConfig(newProfile.config);
+      localStorage.setItem(CURRENT_PROFILE_KEY, name);
+      setHasUnsavedChanges(false);
 
       return updatedProfiles;
     }, 'Failed to create profile. Please try again.');
-  };
+  }, [withErrorHandling, profiles, setProfiles, setCurrentProfileName, setConfig, setHasUnsavedChanges]);
 
   // Function to switch to a different profile
-  const switchProfile = async (name: string) => {
+  const switchProfile = useCallback(async (name: string) => {
     await withErrorHandling(async () => {
       // Find the profile
       const profile = profiles.find(p => p.name === name);
@@ -711,10 +745,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       return profile;
     }, 'Failed to switch profile. Please try again.');
-  };
+  }, [withErrorHandling, profiles, hasUnsavedChanges, setCurrentProfileName, setConfig, setHasUnsavedChanges]);
 
   // Function to rename a profile
-  const renameProfile = async (oldName: string, newName: string) => {
+  const renameProfile = useCallback(async (oldName: string, newName: string) => {
     await withErrorHandling(async () => {
       // Check if new name already exists
       if (profiles.some(profile => profile.name === newName)) {
@@ -739,10 +773,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       return updatedProfiles;
     }, 'Failed to rename profile. Please try again.');
-  };
+  }, [withErrorHandling, profiles, currentProfileName, setProfiles, setCurrentProfileName]);
 
   // Function to delete a profile
-  const deleteProfile = async (name: string) => {
+  const deleteProfile = useCallback(async (name: string) => {
     await withErrorHandling(async () => {
       // Prevent deleting the last profile
       if (profiles.length <= 1) {
@@ -764,7 +798,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       return updatedProfiles;
     }, 'Failed to delete profile. Please try again.');
-  };
+  }, [withErrorHandling, profiles, currentProfileName, setProfiles, setCurrentProfileName, setConfig]);
 
   // Load the configuration when the component mounts
   useEffect(() => {
@@ -788,7 +822,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     return () => {
       isMounted = false;
     };
-  }, []);
+  }, [refreshConfig]);
 
   // Provide the context value
   const contextValue: ConfigContextType = {

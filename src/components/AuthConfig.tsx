@@ -13,6 +13,7 @@ import {
 } from '@mui/material';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
+import PasswordField from './common/PasswordField';
 
 // Validation schema
 const AuthConfigSchema = Yup.object().shape({
@@ -166,11 +167,10 @@ const AuthConfig: React.FC = () => {
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <Field
-                      as={TextField}
+                      as={PasswordField}
                       fullWidth
                       name="basic_auth.password"
                       label="Password"
-                      type="password"
                       variant="outlined"
                       error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
                       helperText={
@@ -209,7 +209,7 @@ const AuthConfig: React.FC = () => {
                 <>
                   <Grid item xs={12} md={6}>
                     <Field
-                      as={TextField}
+                      as={PasswordField}
                       fullWidth
                       name="jwt_auth.secret_key"
                       label="Secret Key"
@@ -327,11 +327,10 @@ const AuthConfig: React.FC = () => {
                             </Grid>
                             <Grid item xs={12} md={6}>
                               <Field
-                                as={TextField}
+                                as={PasswordField}
                                 fullWidth
                                 name={`jwt_auth.users[${index}].password`}
                                 label="Password"
-                                type="password"
                                 variant="outlined"
                                 error={
                                   getIn(touched, `jwt_auth.users[${index}].password`) && 

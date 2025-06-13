@@ -20,14 +20,12 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem,
-  Checkbox,
-  ListItemText
+  MenuItem
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import { FrontendConfig as FrontendConfigType, Oauth2Config, Oauth2ClientConfig, Oauth2CustomScopeConfig } from '../types/config';
+import { FrontendConfig as FrontendConfigType, Oauth2Config } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import ValidationErrors from './common/ValidationErrors';
@@ -137,7 +135,6 @@ const FrontendConfigSchema = Yup.object().shape({
 const FrontendConfig: React.FC = () => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
   const [isFormChanged, setIsFormChanged] = useState(false);
-  const [initialFormValues, setInitialFormValues] = useState<any>(null);
 
   const initialValues: { 
     frontend?: FrontendConfigType, 
@@ -157,9 +154,6 @@ const FrontendConfig: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    setInitialFormValues(initialValues);
-  }, [config]);
 
   const handleSubmit = (values: { 
     frontend?: FrontendConfigType, 
@@ -181,7 +175,6 @@ const FrontendConfig: React.FC = () => {
     updateConfig(newConfig);
     setHasUnsavedChanges(false);
     setIsFormChanged(false);
-    setInitialFormValues(values);
   };
 
   // Function to check if form values have changed from initial values
@@ -545,8 +538,8 @@ const FrontendConfig: React.FC = () => {
                                             getIn(errors, `oauth2.clients.${clientIndex}.subject`)
                                           )}
                                           helperText={
-                                            getIn(touched, `oauth2.clients.${clientIndex}.subject`) &&
-                                            getIn(errors, `oauth2.clients.${clientIndex}.subject`) ||
+                                            (getIn(touched, `oauth2.clients.${clientIndex}.subject`) &&
+                                            getIn(errors, `oauth2.clients.${clientIndex}.subject`)) ||
                                             "Alphanumeric identifier for the subject"
                                           }
                                         />

@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import * as ConfigContext from '../contexts/ConfigContext';
 import { NauthilusConfig, BackendConfig } from '../types/config';
+import PasswordField from './common/PasswordField';
 const { useConfig } = ConfigContext;
 
 // Define the steps for the wizard
@@ -380,10 +381,10 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisUsername(e.target.value)}
                   margin="normal"
                 />
-                <TextField
+                <PasswordField
                   fullWidth
+                  name="redisPassword"
                   label="Password (optional)"
-                  type="password"
                   value={redisPassword}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisPassword(e.target.value)}
                   margin="normal"
@@ -409,10 +410,10 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisUsername(e.target.value)}
                   margin="normal"
                 />
-                <TextField
+                <PasswordField
                   fullWidth
+                  name="redisPassword"
                   label="Password (optional)"
-                  type="password"
                   value={redisPassword}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisPassword(e.target.value)}
                   margin="normal"
@@ -459,10 +460,10 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisSentinelUsername(e.target.value)}
                   margin="normal"
                 />
-                <TextField
+                <PasswordField
                   fullWidth
+                  name="redisSentinelPassword"
                   label="Password (optional)"
-                  type="password"
                   value={redisSentinelPassword}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisSentinelPassword(e.target.value)}
                   margin="normal"
@@ -490,10 +491,10 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisUsername(e.target.value)}
                   margin="normal"
                 />
-                <TextField
+                <PasswordField
                   fullWidth
+                  name="redisPassword"
                   label="Password (optional)"
-                  type="password"
                   value={redisPassword}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRedisPassword(e.target.value)}
                   margin="normal"
@@ -544,10 +545,10 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
                   margin="normal"
                   helperText="DN to bind with for LDAP operations (e.g., cn=admin,dc=example,dc=com)"
                 />
-                <TextField
+                <PasswordField
                   fullWidth
+                  name="ldapBindPw"
                   label="Bind Password"
-                  type="password"
                   value={ldapBindPw}
                   onChange={(e: React.ChangeEvent<HTMLInputElement>) => setLdapBindPw(e.target.value)}
                   margin="normal"

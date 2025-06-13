@@ -49,6 +49,7 @@ import Brightness7Icon from '@mui/icons-material/Brightness7';
 import DescriptionIcon from '@mui/icons-material/Description';
 import GavelIcon from '@mui/icons-material/Gavel';
 import BuildIcon from '@mui/icons-material/Build';
+import LinkIcon from '@mui/icons-material/Link';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import ValidationErrors from './components/common/ValidationErrors';
@@ -65,13 +66,14 @@ import MonitoringConfig from './components/MonitoringConfig';
 import LuaConfig from './components/LuaConfig';
 import LDAPConfig from './components/LDAPConfig';
 import FrontendConfig from './components/FrontendConfig';
+import ConnectionConfig from './components/ConnectionConfig';
 import ConfigPreview from './components/ConfigPreview';
 import LicensesPage from './components/LicensesPage';
 import ConfigWizard from './components/ConfigWizard';
 
 const drawerWidth = 240;
 
-interface MenuItem {
+interface NavigationMenuItem {
   text: string;
   icon: React.ReactNode;
   path: string;
@@ -115,9 +117,10 @@ const MainContent: React.FC = () => {
   const { mode, toggleColorMode } = useTheme();
 
   // Define menu items
-  const menuItems: MenuItem[] = [
+  const menuItems: NavigationMenuItem[] = [
     { text: 'Server', icon: <SettingsIcon />, path: '/' },
     { text: 'Authentication', icon: <SecurityIcon />, path: '/auth' },
+    { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
     { text: 'Backends', icon: <StorageIcon />, path: '/backends' },
     { text: 'Features', icon: <FeaturedPlayListIcon />, path: '/features' },
     { text: 'Redis', icon: <DnsIcon />, path: '/redis' },
@@ -130,7 +133,7 @@ const MainContent: React.FC = () => {
   ];
 
   // Define licenses menu item separately to place it at the bottom
-  const licensesMenuItem: MenuItem = { text: 'Licenses', icon: <GavelIcon />, path: '/licenses' };
+  const licensesMenuItem: NavigationMenuItem = { text: 'Licenses', icon: <GavelIcon />, path: '/licenses' };
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -379,9 +382,6 @@ const MainContent: React.FC = () => {
               <MenuItem onClick={handleRenameProfileClick}>Rename Current Profile</MenuItem>
               <MenuItem onClick={handleDeleteProfileClick}>Delete Current Profile</MenuItem>
               <MenuItem onClick={handleUploadWithProfileClick}>Upload to New Profile</MenuItem>
-              <MenuItem onClick={() => { handleProfileMenuClose(); }}>
-                <ConfigWizard autoOpen={true} />
-              </MenuItem>
             </Menu>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -500,6 +500,7 @@ const MainContent: React.FC = () => {
             <Routes>
               <Route path="/" element={<ServerConfig />} />
               <Route path="/auth" element={<AuthConfig />} />
+              <Route path="/connection" element={<ConnectionConfig />} />
               <Route path="/backends" element={<BackendsConfig />} />
               <Route path="/features" element={<FeaturesConfig />} />
               <Route path="/redis" element={<RedisConfig />} />

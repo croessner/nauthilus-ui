@@ -30,6 +30,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { LDAPConfig as LDAPConfigType, LDAPSearchProtocolConfig, NauthilusConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import ValidationErrors from './common/ValidationErrors';
+import PasswordField from './common/PasswordField';
 
 // Validation schema
 const LDAPConfigSchema = Yup.object().shape({
@@ -342,11 +343,10 @@ const LDAPConfig: React.FC = () => {
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
-                    <TextField
+                    <PasswordField
                       fullWidth
-                      label="Bind Password"
                       name="config.bind_pw"
-                      type="password"
+                      label="Bind Password"
                       value={values.config.bind_pw || ''}
                       onChange={handleChange}
                       error={Boolean(
@@ -644,11 +644,10 @@ const LDAPConfig: React.FC = () => {
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
-                            <TextField
+                            <PasswordField
                               fullWidth
-                              label="Bind Password"
                               name={`optional_ldap_pools.${poolName}.bind_pw`}
-                              type="password"
+                              label="Bind Password"
                               value={poolConfig.bind_pw || ''}
                               onChange={handleChange}
                             />

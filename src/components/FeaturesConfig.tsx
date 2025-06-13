@@ -30,6 +30,7 @@ import {
 } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
+import PasswordField from './common/PasswordField';
 
 // Interface for tab panel props
 interface TabPanelProps {
@@ -1056,12 +1057,11 @@ const FeaturesConfig: React.FC = () => {
                                   </Grid>
                                   <Grid item xs={12} md={6}>
                                     <Field
-                                      as={TextField}
+                                      as={PasswordField}
                                       fullWidth
                                       name={`backend_server_monitoring.backend_servers[${index}].test_password`}
                                       label="Test Password"
                                       variant="outlined"
-                                      type="password"
                                       error={getIn(touched, `backend_server_monitoring.backend_servers[${index}].test_password`) && Boolean(getIn(errors, `backend_server_monitoring.backend_servers[${index}].test_password`))}
                                       helperText={(getIn(touched, `backend_server_monitoring.backend_servers[${index}].test_password`) && getIn(errors, `backend_server_monitoring.backend_servers[${index}].test_password`)) || "Password for testing connection"}
                                       onChange={(e: React.ChangeEvent<any>) => {

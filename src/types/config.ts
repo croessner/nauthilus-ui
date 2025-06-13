@@ -449,6 +449,22 @@ export interface IdTokenClaimsConfig {
   updated_at?: string;
 }
 
+// Connection Configuration
+export interface ConnectionJWTAuthConfig {
+  enabled?: boolean;
+  username?: string;
+  password?: string;
+  token?: string;
+  refresh_token?: string;
+  expires_at?: number;
+}
+
+export interface ConnectionConfig {
+  backend_url?: string;
+  basic_auth?: BasicAuthConfig;
+  jwt_auth?: ConnectionJWTAuthConfig;
+}
+
 // Complete Configuration
 export interface NauthilusConfig {
   server: ServerConfig;
@@ -460,4 +476,5 @@ export interface NauthilusConfig {
   relay_domains?: RelayDomainsConfig;
   backend_server_monitoring?: BackendServerMonitoringConfig;
   cleartext_networks?: string[];
+  connection?: ConnectionConfig;
 }
