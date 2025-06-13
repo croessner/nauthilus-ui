@@ -30,7 +30,8 @@ import {
   Select,
   FormControl,
   InputLabel,
-  FormHelperText
+  FormHelperText,
+  Radio
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -129,6 +130,10 @@ const ConnectionConfig: React.FC = () => {
   const [selectedProtocol, setSelectedProtocol] = useState<string>('');
   const [selectedOidcCid, setSelectedOidcCid] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [openSearchDialog, setOpenSearchDialog] = useState<boolean>(false);
+  const [searchType, setSearchType] = useState<'ip' | 'user'>('ip');
+  const [ruleNames, setRuleNames] = useState<string[]>([]);
 
   // Reset unsaved changes flag when component mounts
   useEffect(() => {
@@ -137,6 +142,17 @@ const ConnectionConfig: React.FC = () => {
     // Check connection status when component mounts
     if (config?.connection?.backend_url) {
       checkConnection(config.connection);
+    }
+
+    // Extract rule names from brute force buckets in the configuration
+    if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+      const configRuleNames = config.brute_force.buckets
+        .map(bucket => bucket.name)
+        .filter(name => name && name.trim() !== '');
+
+      if (configRuleNames.length > 0) {
+        setRuleNames(configRuleNames);
+      }
     }
   }, [setHasUnsavedChanges, config]);
 
@@ -389,6 +405,40 @@ const ConnectionConfig: React.FC = () => {
 
       const data = await response.json();
       setBruteForceList(data.result);
+
+      // Extract unique rule names from the blocked IPs
+      if (data.result && data.result.blocked_ips && data.result.blocked_ips.length > 0) {
+        const apiRuleNames = Array.from(
+          new Set(
+            data.result.blocked_ips
+              .map((item: BruteForceListItem) => item.rule_name)
+              .filter((ruleName: string) => ruleName && ruleName !== '*')
+          )
+        ) as string[];
+
+        // Get rule names from configuration
+        const configRuleNames: string[] = [];
+        if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+          config.brute_force.buckets.forEach(bucket => {
+            if (bucket.name && bucket.name.trim() !== '') {
+              configRuleNames.push(bucket.name);
+            }
+          });
+        }
+
+        // Merge rule names from API and configuration, removing duplicates
+        const mergedRuleNames = Array.from(new Set([...apiRuleNames, ...configRuleNames]));
+        setRuleNames(mergedRuleNames);
+      } else if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+        // If no API data, still use configuration rule names
+        const configRuleNames = config.brute_force.buckets
+          .map(bucket => bucket.name)
+          .filter(name => name && name.trim() !== '');
+
+        if (configRuleNames.length > 0) {
+          setRuleNames(configRuleNames);
+        }
+      }
 
       setNotification({
         open: true,
@@ -688,15 +738,44 @@ const ConnectionConfig: React.FC = () => {
                         <Typography variant="body1">
                           Manage brute force protection for users and IP addresses.
                         </Typography>
-                        <Button 
-                          variant="outlined" 
-                          color="primary"
-                          onClick={() => fetchBruteForceList(values)}
-                          disabled={isLoadingBruteForceList}
-                          startIcon={isLoadingBruteForceList ? <CircularProgress size={20} /> : <RefreshIcon />}
-                        >
-                          {isLoadingBruteForceList ? 'Loading...' : 'Refresh List'}
-                        </Button>
+                        <Box>
+                          <Button 
+                            variant="outlined" 
+                            color="secondary"
+                            onClick={() => setOpenSearchDialog(true)}
+                            sx={{ mr: 1 }}
+                          >
+                            Search & Free
+                          </Button>
+                          <Button 
+                            variant="outlined" 
+                            color="primary"
+                            onClick={() => fetchBruteForceList(values)}
+                            disabled={isLoadingBruteForceList}
+                            startIcon={isLoadingBruteForceList ? <CircularProgress size={20} /> : <RefreshIcon />}
+                          >
+                            {isLoadingBruteForceList ? 'Loading...' : 'Refresh List'}
+                          </Button>
+                        </Box>
+                      </Box>
+
+                      {/* Search Box */}
+                      <Box sx={{ mb: 2 }}>
+                        <TextField
+                          fullWidth
+                          variant="outlined"
+                          size="small"
+                          placeholder="Search by IP address or username..."
+                          value={searchTerm}
+                          onChange={(e) => setSearchTerm(e.target.value)}
+                          InputProps={{
+                            endAdornment: searchTerm && (
+                              <IconButton size="small" onClick={() => setSearchTerm('')}>
+                                <DeleteIcon fontSize="small" />
+                              </IconButton>
+                            ),
+                          }}
+                        />
                       </Box>
 
                       <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -713,7 +792,15 @@ const ConnectionConfig: React.FC = () => {
                             </Box>
                           ) : bruteForceList && bruteForceList.blocked_ips && bruteForceList.blocked_ips.length > 0 ? (
                             <List>
-                              {bruteForceList.blocked_ips.map((item, index) => (
+                              {bruteForceList.blocked_ips
+                                .filter(item => 
+                                  !searchTerm || 
+                                  item.ip_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  item.rule_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  (item.protocol && item.protocol.toLowerCase().includes(searchTerm.toLowerCase())) ||
+                                  (item.oidc_cid && item.oidc_cid.toLowerCase().includes(searchTerm.toLowerCase()))
+                                )
+                                .map((item, index) => (
                                 <ListItem key={index} divider>
                                   <ListItemText
                                     primary={item.ip_address}
@@ -765,7 +852,13 @@ const ConnectionConfig: React.FC = () => {
                             </Box>
                           ) : bruteForceList && bruteForceList.affected_accounts && bruteForceList.affected_accounts.length > 0 ? (
                             <List>
-                              {bruteForceList.affected_accounts.map((account, index) => (
+                              {bruteForceList.affected_accounts
+                                .filter(account => 
+                                  !searchTerm || 
+                                  account.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+                                  account.ip_addresses.some(ip => ip.toLowerCase().includes(searchTerm.toLowerCase()))
+                                )
+                                .map((account, index) => (
                                 <ListItem key={index} divider>
                                   <ListItemText
                                     primary={account.username}
@@ -1060,6 +1153,129 @@ const ConnectionConfig: React.FC = () => {
         </DialogActions>
       </Dialog>
 
+      {/* Search and Free Dialog */}
+      <Dialog
+        open={openSearchDialog}
+        onClose={() => setOpenSearchDialog(false)}
+        aria-labelledby="search-dialog-title"
+        maxWidth="sm"
+        fullWidth
+      >
+        <DialogTitle id="search-dialog-title">Search and Free from Brute Force Protection</DialogTitle>
+        <DialogContent>
+          <Typography variant="body1" sx={{ mb: 2 }}>
+            Search for a specific user or IP address and free them from brute force protection.
+          </Typography>
+
+          <FormControl component="fieldset" sx={{ mb: 2 }}>
+            <Typography variant="subtitle2">Search Type</Typography>
+            <Box sx={{ display: 'flex', mt: 1 }}>
+              <FormControlLabel
+                control={
+                  <Radio
+                    checked={searchType === 'user'}
+                    onChange={() => setSearchType('user')}
+                    value="user"
+                  />
+                }
+                label="User Account"
+              />
+              <FormControlLabel
+                control={
+                  <Radio
+                    checked={searchType === 'ip'}
+                    onChange={() => setSearchType('ip')}
+                    value="ip"
+                  />
+                }
+                label="IP Address"
+              />
+            </Box>
+          </FormControl>
+
+          {searchType === 'user' ? (
+            <TextField
+              fullWidth
+              label="Username"
+              value={selectedUser}
+              onChange={(e) => setSelectedUser(e.target.value)}
+              margin="normal"
+              helperText="Enter the username to free from brute force protection"
+            />
+          ) : (
+            <>
+              <TextField
+                fullWidth
+                label="IP Address"
+                value={selectedIp}
+                onChange={(e) => setSelectedIp(e.target.value)}
+                margin="normal"
+                helperText="Enter the IP address to free from brute force protection"
+              />
+
+              <FormControl fullWidth sx={{ mt: 2, mb: 1 }}>
+                <InputLabel id="rule-name-label">Rule Name</InputLabel>
+                <Select
+                  labelId="rule-name-label"
+                  value={selectedRule}
+                  onChange={(e) => setSelectedRule(e.target.value)}
+                  label="Rule Name"
+                >
+                  <MenuItem value="*">All Rules (*)</MenuItem>
+                  {ruleNames.map((ruleName) => (
+                    <MenuItem key={ruleName} value={ruleName}>
+                      {ruleName}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>Select "*" to free the IP from all rules</FormHelperText>
+              </FormControl>
+
+              <TextField
+                fullWidth
+                label="Protocol (Optional)"
+                value={selectedProtocol}
+                onChange={(e) => setSelectedProtocol(e.target.value)}
+                margin="normal"
+                helperText="Leave empty to free the IP regardless of protocol"
+              />
+
+              <TextField
+                fullWidth
+                label="OIDC Client ID (Optional)"
+                value={selectedOidcCid}
+                onChange={(e) => setSelectedOidcCid(e.target.value)}
+                margin="normal"
+                helperText="Leave empty to free the IP regardless of OIDC Client ID"
+              />
+            </>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button 
+            onClick={() => setOpenSearchDialog(false)} 
+            color="primary"
+          >
+            Cancel
+          </Button>
+          <Button 
+            onClick={() => {
+              setOpenSearchDialog(false);
+              if (searchType === 'user' && selectedUser) {
+                setOpenUserDialog(true);
+              } else if (searchType === 'ip' && selectedIp) {
+                setOpenIpDialog(true);
+              }
+            }} 
+            color="secondary" 
+            variant="contained"
+            disabled={searchType === 'user' ? !selectedUser : !selectedIp}
+          >
+            Continue
+          </Button>
+        </DialogActions>
+      </Dialog>
+
       {/* IP Free Dialog */}
       <Dialog
         open={openIpDialog}
@@ -1082,8 +1298,11 @@ const ConnectionConfig: React.FC = () => {
               disabled={isProcessing}
             >
               <MenuItem value="*">All Rules (*)</MenuItem>
-              <MenuItem value="default">Default Rule</MenuItem>
-              {/* Add other rule names if needed */}
+              {ruleNames.map((ruleName) => (
+                <MenuItem key={ruleName} value={ruleName}>
+                  {ruleName}
+                </MenuItem>
+              ))}
             </Select>
             <FormHelperText>Select "*" to free the IP from all rules</FormHelperText>
           </FormControl>
