@@ -113,7 +113,12 @@ const ConnectionConfig: React.FC = () => {
   // Function to fetch JWT token
   const fetchJWTToken = async (backendUrl: string, username: string, password: string): Promise<{ token: string, refresh_token: string, expires_at: number } | null> => {
     try {
-      const response = await fetch(`${backendUrl}/api/v1/jwt/token`, {
+      // Use the proxy endpoint to make the request server-side
+      // This avoids CORS issues by making the request through Node.js
+      const proxyUrl = new URL('/proxy/jwt-token', window.location.origin);
+      proxyUrl.searchParams.append('url', backendUrl);
+
+      const response = await fetch(proxyUrl.toString(), {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -154,17 +159,16 @@ const ConnectionConfig: React.FC = () => {
     setStatusMessage('Checking connection...');
 
     try {
-      // Prepare headers for authentication
-      const headers: HeadersInit = {
-        'Content-Type': 'application/json',
-      };
+      // Prepare authentication parameters for the proxy
+      let authType = '';
+      let authValue = '';
 
       // Add Basic Auth if enabled
       if (connectionConfig.basic_auth?.enabled && 
           connectionConfig.basic_auth.username && 
           connectionConfig.basic_auth.password) {
-        const base64Credentials = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-        headers['Authorization'] = `Basic ${base64Credentials}`;
+        authType = 'basic';
+        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
       }
 
       // For JWT Auth, try to fetch a token if username/password are provided but no token exists
@@ -191,7 +195,8 @@ const ConnectionConfig: React.FC = () => {
             });
 
             // Use the new token for the current request
-            headers['Authorization'] = `Bearer ${tokenData.token}`;
+            authType = 'bearer';
+            authValue = tokenData.token;
 
             setNotification({
               open: true,
@@ -201,22 +206,35 @@ const ConnectionConfig: React.FC = () => {
           }
         } else if (connectionConfig.jwt_auth.token) {
           // Use existing token if available
-          headers['Authorization'] = `Bearer ${connectionConfig.jwt_auth.token}`;
+          authType = 'bearer';
+          authValue = connectionConfig.jwt_auth.token;
         }
       }
 
-      // Make request to health check endpoint
-      const response = await fetch(`${connectionConfig.backend_url}/health`, {
+      // Use the proxy endpoint to make the request server-side
+      // This avoids CORS issues by making the request through Node.js
+      const proxyUrl = new URL('/proxy/ping', window.location.origin);
+      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+
+      if (authType && authValue) {
+        proxyUrl.searchParams.append('authType', authType);
+        proxyUrl.searchParams.append('authValue', authValue);
+      }
+
+      const response = await fetch(proxyUrl.toString(), {
         method: 'GET',
-        headers,
+        headers: {
+          'Content-Type': 'application/json',
+        },
       });
 
       if (response.ok) {
         setConnectionStatus('connected');
-        setStatusMessage('Connected to Nauthilus backend');
+        setStatusMessage('Connected to Nauthilus backend (ping successful)');
       } else {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
         setConnectionStatus('disconnected');
-        setStatusMessage(`Failed to connect: ${response.statusText}`);
+        setStatusMessage(`Failed to connect: ${errorData.error || response.statusText}`);
       }
     } catch (error) {
       setConnectionStatus('disconnected');
@@ -298,13 +316,15 @@ const ConnectionConfig: React.FC = () => {
                       </Typography>
                     )}
                     <Tooltip title="Check connection">
-                      <IconButton 
-                        onClick={() => checkConnection(values)} 
-                        disabled={connectionStatus === 'checking' || !values.backend_url}
-                        sx={{ ml: 1 }}
-                      >
-                        <RefreshIcon />
-                      </IconButton>
+                      <span>
+                        <IconButton 
+                          onClick={() => checkConnection(values)} 
+                          disabled={connectionStatus === 'checking' || !values.backend_url}
+                          sx={{ ml: 1 }}
+                        >
+                          <RefreshIcon />
+                        </IconButton>
+                      </span>
                     </Tooltip>
                   </Box>
                 </Grid>
@@ -358,38 +378,42 @@ const ConnectionConfig: React.FC = () => {
                 </Grid>
                 {values.basic_auth?.enabled && (
                   <>
-                    <Grid item xs={12} md={6}>
-                      <Field
-                        as={TextField}
-                        fullWidth
-                        name="basic_auth.username"
-                        label="Username"
-                        variant="outlined"
-                        error={getIn(touched, 'basic_auth.username') && Boolean(getIn(errors, 'basic_auth.username'))}
-                        helperText={getIn(touched, 'basic_auth.username') && getIn(errors, 'basic_auth.username')}
-                        onChange={(e: React.ChangeEvent<any>) => {
-                          handleChange(e);
-                          setHasUnsavedChanges(true);
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Field
-                        as={PasswordField}
-                        fullWidth
-                        name="basic_auth.password"
-                        label="Password"
-                        variant="outlined"
-                        error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
-                        helperText={
-                          (getIn(touched, 'basic_auth.password') && getIn(errors, 'basic_auth.password')) ||
-                          "Password for Basic Authentication"
-                        }
-                        onChange={(e: React.ChangeEvent<any>) => {
-                          handleChange(e);
-                          setHasUnsavedChanges(true);
-                        }}
-                      />
+                    <Grid item xs={12}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="basic_auth.username"
+                            label="Username"
+                            variant="outlined"
+                            error={getIn(touched, 'basic_auth.username') && Boolean(getIn(errors, 'basic_auth.username'))}
+                            helperText={getIn(touched, 'basic_auth.username') && getIn(errors, 'basic_auth.username')}
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Field
+                            as={PasswordField}
+                            fullWidth
+                            name="basic_auth.password"
+                            label="Password"
+                            variant="outlined"
+                            error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
+                            helperText={
+                              (getIn(touched, 'basic_auth.password') && getIn(errors, 'basic_auth.password')) ||
+                              "Password for Basic Authentication"
+                            }
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
                     </Grid>
                   </>
                 )}
@@ -419,41 +443,45 @@ const ConnectionConfig: React.FC = () => {
                 </Grid>
                 {values.jwt_auth?.enabled && (
                   <>
-                    <Grid item xs={12} md={6}>
-                      <Field
-                        as={TextField}
-                        fullWidth
-                        name="jwt_auth.username"
-                        label="Username"
-                        variant="outlined"
-                        error={getIn(touched, 'jwt_auth.username') && Boolean(getIn(errors, 'jwt_auth.username'))}
-                        helperText={
-                          (getIn(touched, 'jwt_auth.username') && getIn(errors, 'jwt_auth.username')) ||
-                          "Username for JWT authentication"
-                        }
-                        onChange={(e: React.ChangeEvent<any>) => {
-                          handleChange(e);
-                          setHasUnsavedChanges(true);
-                        }}
-                      />
-                    </Grid>
-                    <Grid item xs={12} md={6}>
-                      <Field
-                        as={PasswordField}
-                        fullWidth
-                        name="jwt_auth.password"
-                        label="Password"
-                        variant="outlined"
-                        error={getIn(touched, 'jwt_auth.password') && Boolean(getIn(errors, 'jwt_auth.password'))}
-                        helperText={
-                          (getIn(touched, 'jwt_auth.password') && getIn(errors, 'jwt_auth.password')) ||
-                          "Password for JWT authentication"
-                        }
-                        onChange={(e: React.ChangeEvent<any>) => {
-                          handleChange(e);
-                          setHasUnsavedChanges(true);
-                        }}
-                      />
+                    <Grid item xs={12}>
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} sm={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="jwt_auth.username"
+                            label="Username"
+                            variant="outlined"
+                            error={getIn(touched, 'jwt_auth.username') && Boolean(getIn(errors, 'jwt_auth.username'))}
+                            helperText={
+                              (getIn(touched, 'jwt_auth.username') && getIn(errors, 'jwt_auth.username')) ||
+                              "Username for JWT authentication"
+                            }
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} sm={6}>
+                          <Field
+                            as={PasswordField}
+                            fullWidth
+                            name="jwt_auth.password"
+                            label="Password"
+                            variant="outlined"
+                            error={getIn(touched, 'jwt_auth.password') && Boolean(getIn(errors, 'jwt_auth.password'))}
+                            helperText={
+                              (getIn(touched, 'jwt_auth.password') && getIn(errors, 'jwt_auth.password')) ||
+                              "Password for JWT authentication"
+                            }
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
                     </Grid>
                   </>
                 )}

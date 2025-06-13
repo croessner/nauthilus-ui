@@ -90,6 +90,25 @@ The UI provides buttons in the top bar for:
 - No server-side storage or API is required
 - Configuration persists between browser sessions
 
+### Backend Health Check
+
+- The UI includes a proxy middleware to handle backend health checks
+- Health checks are performed server-side through Node.js to avoid CORS issues
+- The proxy is implemented in `src/setupProxy.js` using http-proxy-middleware
+- This allows the UI to check connectivity to the Nauthilus backend without CORS restrictions
+
+### Node.js Server Requirement
+
+- The UI now requires a Node.js server to handle proxy requests to the backend
+- In development mode, this is handled by the Create React App development server
+- In production, a custom Express server (`server.js`) is used to:
+  - Serve the static files from the build directory
+  - Handle proxy requests for backend health checks and JWT token requests
+- The Docker setup has been updated to:
+  - Use node:18-alpine instead of nginx:alpine
+  - Run the Express server on port 3000
+  - Map container port 3000 to host port 80
+
 ### Supported File Formats
 
 The UI supports uploading configuration files in the following formats:

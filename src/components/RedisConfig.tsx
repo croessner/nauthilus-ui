@@ -600,35 +600,39 @@ const RedisConfig: React.FC = () => {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Field
-                    as={TextField}
-                    fullWidth
-                    name="redis.master.username"
-                    label="Username"
-                    variant="outlined"
-                    error={getIn(touched, 'redis.master.username') && Boolean(getIn(errors, 'redis.master.username'))}
-                    helperText={(getIn(touched, 'redis.master.username') && getIn(errors, 'redis.master.username')) || "Redis username (optional)"}
-                    onChange={(e: React.ChangeEvent<any>) => {
-                      handleChange(e);
-                      setHasUnsavedChanges(true);
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Field
-                    as={PasswordField}
-                    fullWidth
-                    name="redis.master.password"
-                    label="Password"
-                    variant="outlined"
-                    error={getIn(touched, 'redis.master.password') && Boolean(getIn(errors, 'redis.master.password'))}
-                    helperText={(getIn(touched, 'redis.master.password') && getIn(errors, 'redis.master.password')) || "Redis password (optional)"}
-                    onChange={(e: React.ChangeEvent<any>) => {
-                      handleChange(e);
-                      setHasUnsavedChanges(true);
-                    }}
-                  />
+                <Grid item xs={12}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Field
+                        as={TextField}
+                        fullWidth
+                        name="redis.master.username"
+                        label="Username"
+                        variant="outlined"
+                        error={getIn(touched, 'redis.master.username') && Boolean(getIn(errors, 'redis.master.username'))}
+                        helperText={(getIn(touched, 'redis.master.username') && getIn(errors, 'redis.master.username')) || "Redis username (optional)"}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Field
+                        as={PasswordField}
+                        fullWidth
+                        name="redis.master.password"
+                        label="Password"
+                        variant="outlined"
+                        error={getIn(touched, 'redis.master.password') && Boolean(getIn(errors, 'redis.master.password'))}
+                        helperText={(getIn(touched, 'redis.master.password') && getIn(errors, 'redis.master.password')) || "Redis password (optional)"}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
                 </Grid>
               </Grid>
             </CollapsibleFormSection>
@@ -775,35 +779,39 @@ const RedisConfig: React.FC = () => {
                     )}
                   </FieldArray>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Field
-                    as={TextField}
-                    fullWidth
-                    name="redis.sentinels.username"
-                    label="Username"
-                    variant="outlined"
-                    error={getIn(touched, 'redis.sentinels.username') && Boolean(getIn(errors, 'redis.sentinels.username'))}
-                    helperText={(getIn(touched, 'redis.sentinels.username') && getIn(errors, 'redis.sentinels.username')) || "Sentinel username (optional)"}
-                    onChange={(e: React.ChangeEvent<any>) => {
-                      handleChange(e);
-                      setHasUnsavedChanges(true);
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Field
-                    as={PasswordField}
-                    fullWidth
-                    name="redis.sentinels.password"
-                    label="Password"
-                    variant="outlined"
-                    error={getIn(touched, 'redis.sentinels.password') && Boolean(getIn(errors, 'redis.sentinels.password'))}
-                    helperText={(getIn(touched, 'redis.sentinels.password') && getIn(errors, 'redis.sentinels.password')) || "Sentinel password (optional)"}
-                    onChange={(e: React.ChangeEvent<any>) => {
-                      handleChange(e);
-                      setHasUnsavedChanges(true);
-                    }}
-                  />
+                <Grid item xs={12}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Field
+                        as={TextField}
+                        fullWidth
+                        name="redis.sentinels.username"
+                        label="Username"
+                        variant="outlined"
+                        error={getIn(touched, 'redis.sentinels.username') && Boolean(getIn(errors, 'redis.sentinels.username'))}
+                        helperText={(getIn(touched, 'redis.sentinels.username') && getIn(errors, 'redis.sentinels.username')) || "Sentinel username (optional)"}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Field
+                        as={PasswordField}
+                        fullWidth
+                        name="redis.sentinels.password"
+                        label="Password"
+                        variant="outlined"
+                        error={getIn(touched, 'redis.sentinels.password') && Boolean(getIn(errors, 'redis.sentinels.password'))}
+                        helperText={(getIn(touched, 'redis.sentinels.password') && getIn(errors, 'redis.sentinels.password')) || "Sentinel password (optional)"}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
                 </Grid>
               </Grid>
             </CollapsibleFormSection>
@@ -870,35 +878,39 @@ const RedisConfig: React.FC = () => {
                     )}
                   </FieldArray>
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <Field
-                    as={TextField}
-                    fullWidth
-                    name="redis.cluster.username"
-                    label="Username"
-                    variant="outlined"
-                    error={getIn(touched, 'redis.cluster.username') && Boolean(getIn(errors, 'redis.cluster.username'))}
-                    helperText={(getIn(touched, 'redis.cluster.username') && getIn(errors, 'redis.cluster.username')) || "Cluster username (optional)"}
-                    onChange={(e: React.ChangeEvent<any>) => {
-                      handleChange(e);
-                      setHasUnsavedChanges(true);
-                    }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={6}>
-                  <Field
-                    as={PasswordField}
-                    fullWidth
-                    name="redis.cluster.password"
-                    label="Password"
-                    variant="outlined"
-                    error={getIn(touched, 'redis.cluster.password') && Boolean(getIn(errors, 'redis.cluster.password'))}
-                    helperText={(getIn(touched, 'redis.cluster.password') && getIn(errors, 'redis.cluster.password')) || "Cluster password (optional)"}
-                    onChange={(e: React.ChangeEvent<any>) => {
-                      handleChange(e);
-                      setHasUnsavedChanges(true);
-                    }}
-                  />
+                <Grid item xs={12}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} sm={6}>
+                      <Field
+                        as={TextField}
+                        fullWidth
+                        name="redis.cluster.username"
+                        label="Username"
+                        variant="outlined"
+                        error={getIn(touched, 'redis.cluster.username') && Boolean(getIn(errors, 'redis.cluster.username'))}
+                        helperText={(getIn(touched, 'redis.cluster.username') && getIn(errors, 'redis.cluster.username')) || "Cluster username (optional)"}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                    <Grid item xs={12} sm={6}>
+                      <Field
+                        as={PasswordField}
+                        fullWidth
+                        name="redis.cluster.password"
+                        label="Password"
+                        variant="outlined"
+                        error={getIn(touched, 'redis.cluster.password') && Boolean(getIn(errors, 'redis.cluster.password'))}
+                        helperText={(getIn(touched, 'redis.cluster.password') && getIn(errors, 'redis.cluster.password')) || "Cluster password (optional)"}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                  </Grid>
                 </Grid>
                 <Grid item xs={12} md={6}>
                   <FormControlLabel

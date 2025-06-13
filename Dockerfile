@@ -16,20 +16,28 @@ COPY . .
 RUN npm run build
 
 # Production stage
-FROM nginx:alpine
+FROM node:18-alpine
 
-# Copy the build output to replace the default nginx contents
-COPY --from=build /app/build /usr/share/nginx/html
+WORKDIR /app
 
-# Copy custom nginx config if needed
-# COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Copy package.json and package-lock.json
+COPY package*.json ./
 
-# Expose port 80
-EXPOSE 80
+# Install production dependencies only
+RUN npm ci --only=production
+
+# Copy the build output from the build stage
+COPY --from=build /app/build ./build
+
+# Copy the server.js file
+COPY --from=build /app/server.js ./
+
+# Expose port 3000
+EXPOSE 3000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget -qO- http://localhost/ || exit 1
+  CMD wget -qO- http://localhost:3000/ || exit 1
 
-# Start Nginx server
-CMD ["nginx", "-g", "daemon off;"]
+# Start Node.js server
+CMD ["npm", "run", "serve"]

@@ -7,10 +7,10 @@ services:
     image: nauthilus-ui:latest
     container_name: nauthilus-ui
     ports:
-      - "80:80"
+      - "80:3000"  # Map host port 80 to container port 3000
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost/"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
       interval: 30s
       timeout: 3s
       retries: 3

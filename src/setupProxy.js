@@ -1,0 +1,61 @@
+const { createProxyMiddleware } = require('http-proxy-middleware');
+
+module.exports = function(app) {
+  // Proxy for backend health check
+  app.use(
+    '/proxy/ping',
+    createProxyMiddleware({
+      router: (req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+        return targetUrl;
+      },
+      pathRewrite: {
+        '^/proxy/ping': '/ping', // Rewrite path to /ping
+      },
+      changeOrigin: true,
+      secure: false, // Allow insecure connections for testing
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        if (req.query.authType === 'basic' && req.query.authValue) {
+          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
+        } else if (req.query.authType === 'bearer' && req.query.authValue) {
+          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
+        }
+      },
+      onError: (err, req, res) => {
+        res.status(500).json({ error: err.message });
+      },
+    })
+  );
+
+  // Proxy for JWT token endpoint
+  app.use(
+    '/proxy/jwt-token',
+    createProxyMiddleware({
+      router: (req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+        return targetUrl;
+      },
+      pathRewrite: {
+        '^/proxy/jwt-token': '/api/v1/jwt/token', // Rewrite path to /api/v1/jwt/token
+      },
+      changeOrigin: true,
+      secure: false, // Allow insecure connections for testing
+      onProxyReq: (proxyReq, req, res) => {
+        // Set content type for POST requests
+        proxyReq.setHeader('Content-Type', 'application/json');
+      },
+      onError: (err, req, res) => {
+        res.status(500).json({ error: err.message });
+      },
+    })
+  );
+};
