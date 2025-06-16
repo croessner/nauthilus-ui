@@ -30,7 +30,9 @@ import {
   FormControl,
   InputLabel,
   TextField,
-  SelectChangeEvent
+  SelectChangeEvent,
+  Switch,
+  FormControlLabel
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -50,6 +52,10 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import GavelIcon from '@mui/icons-material/Gavel';
 import BuildIcon from '@mui/icons-material/Build';
 import LinkIcon from '@mui/icons-material/Link';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
+import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import ValidationErrors from './components/common/ValidationErrors';
@@ -71,7 +77,9 @@ import ConfigPreview from './components/ConfigPreview';
 import LicensesPage from './components/LicensesPage';
 import ConfigWizard from './components/ConfigWizard';
 
-const drawerWidth = 240;
+// Define drawer widths for different modes
+const fullDrawerWidth = 240;
+const iconOnlyDrawerWidth = 72;
 
 interface NavigationMenuItem {
   text: string;
@@ -95,6 +103,11 @@ const MainContent: React.FC = () => {
   const [profileToDelete, setProfileToDelete] = useState('');
   const [uploadProfileDialogOpen, setUploadProfileDialogOpen] = useState(false);
   const [uploadProfileName, setUploadProfileName] = useState('');
+
+  // Menu display states
+  const [configMenuExpanded, setConfigMenuExpanded] = useState(true);
+  const [runtimeMenuExpanded, setRuntimeMenuExpanded] = useState(true);
+  const [iconOnly, setIconOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadWithProfileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
@@ -115,6 +128,9 @@ const MainContent: React.FC = () => {
     deleteProfile
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
+
+  // Compute current drawer width based on display mode
+  const drawerWidth = iconOnly ? iconOnlyDrawerWidth : fullDrawerWidth;
 
   // Define menu items by category
   const configMenuItems: NavigationMenuItem[] = [
@@ -141,6 +157,18 @@ const MainContent: React.FC = () => {
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
+  };
+
+  const toggleConfigMenu = () => {
+    setConfigMenuExpanded(!configMenuExpanded);
+  };
+
+  const toggleRuntimeMenu = () => {
+    setRuntimeMenuExpanded(!runtimeMenuExpanded);
+  };
+
+  const toggleIconOnly = () => {
+    setIconOnly(!iconOnly);
   };
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -297,55 +325,150 @@ const MainContent: React.FC = () => {
         </Typography>
       </Toolbar>
       <Divider />
+
+      {/* Menu Display Options */}
+      <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={iconOnly}
+              onChange={toggleIconOnly}
+              size="small"
+            />
+          }
+          label={
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+              <MenuIcon fontSize="small" />
+              <KeyboardDoubleArrowLeftIcon fontSize="small" />
+            </Box>
+          }
+          sx={{ mr: 0 }}
+        />
+      </Box>
+      <Divider />
+
       {/* Configuration Section */}
       <List
         subheader={
-          <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2, py: 1, fontWeight: 'bold' }}>
-            Configuration
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+            {!iconOnly && (
+              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                Configuration
+              </Typography>
+            )}
+            <IconButton size="small" onClick={toggleConfigMenu} sx={{ ml: iconOnly ? 'auto' : 0, mr: iconOnly ? 'auto' : 0 }}>
+              {configMenuExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            </IconButton>
+          </Box>
         }
       >
-        {configMenuItems.map((item) => (
+        {configMenuExpanded && configMenuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
-            <ListItemButton onClick={() => handleNavigation(item.path)}>
-              <ListItemIcon>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
+            {iconOnly ? (
+              <Tooltip title={item.text} placement="right">
+                <ListItemButton 
+                  onClick={() => handleNavigation(item.path)}
+                  sx={{ 
+                    justifyContent: 'center',
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                      borderRadius: 1
+                    }
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 0, mr: 0 }}>
+                    {item.icon}
+                  </ListItemIcon>
+                </ListItemButton>
+              </Tooltip>
+            ) : (
+              <ListItemButton onClick={() => handleNavigation(item.path)}>
+                <ListItemIcon>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            )}
           </ListItem>
         ))}
       </List>
       <Divider />
+
       {/* Runtime Section */}
       <List
         subheader={
-          <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2, py: 1, fontWeight: 'bold' }}>
-            Runtime
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+            {!iconOnly && (
+              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                Runtime
+              </Typography>
+            )}
+            <IconButton size="small" onClick={toggleRuntimeMenu} sx={{ ml: iconOnly ? 'auto' : 0, mr: iconOnly ? 'auto' : 0 }}>
+              {runtimeMenuExpanded ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+            </IconButton>
+          </Box>
         }
       >
-        {runtimeMenuItems.map((item) => (
+        {runtimeMenuExpanded && runtimeMenuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
-            <ListItemButton onClick={() => handleNavigation(item.path)}>
-              <ListItemIcon>
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText primary={item.text} />
-            </ListItemButton>
+            {iconOnly ? (
+              <Tooltip title={item.text} placement="right">
+                <ListItemButton 
+                  onClick={() => handleNavigation(item.path)}
+                  sx={{ 
+                    justifyContent: 'center',
+                    '&:hover': {
+                      backgroundColor: 'action.hover',
+                      borderRadius: 1
+                    }
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 0, mr: 0 }}>
+                    {item.icon}
+                  </ListItemIcon>
+                </ListItemButton>
+              </Tooltip>
+            ) : (
+              <ListItemButton onClick={() => handleNavigation(item.path)}>
+                <ListItemIcon>
+                  {item.icon}
+                </ListItemIcon>
+                <ListItemText primary={item.text} />
+              </ListItemButton>
+            )}
           </ListItem>
         ))}
       </List>
+
       <Box sx={{ flexGrow: 1 }} />
       <Divider />
       <List>
         <ListItem disablePadding>
-          <ListItemButton onClick={() => handleNavigation(licensesMenuItem.path)}>
-            <ListItemIcon>
-              {licensesMenuItem.icon}
-            </ListItemIcon>
-            <ListItemText primary={licensesMenuItem.text} />
-          </ListItemButton>
+          {iconOnly ? (
+            <Tooltip title={licensesMenuItem.text} placement="right">
+              <ListItemButton 
+                onClick={() => handleNavigation(licensesMenuItem.path)}
+                sx={{ 
+                  justifyContent: 'center',
+                  '&:hover': {
+                    backgroundColor: 'action.hover',
+                    borderRadius: 1
+                  }
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 0, mr: 0 }}>
+                  {licensesMenuItem.icon}
+                </ListItemIcon>
+              </ListItemButton>
+            </Tooltip>
+          ) : (
+            <ListItemButton onClick={() => handleNavigation(licensesMenuItem.path)}>
+              <ListItemIcon>
+                {licensesMenuItem.icon}
+              </ListItemIcon>
+              <ListItemText primary={licensesMenuItem.text} />
+            </ListItemButton>
+          )}
         </ListItem>
       </List>
     </Box>
