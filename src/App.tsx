@@ -116,11 +116,10 @@ const MainContent: React.FC = () => {
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
 
-  // Define menu items
-  const menuItems: NavigationMenuItem[] = [
+  // Define menu items by category
+  const configMenuItems: NavigationMenuItem[] = [
     { text: 'Server', icon: <SettingsIcon />, path: '/' },
     { text: 'Authentication', icon: <SecurityIcon />, path: '/auth' },
-    { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
     { text: 'Backends', icon: <StorageIcon />, path: '/backends' },
     { text: 'Features', icon: <FeaturedPlayListIcon />, path: '/features' },
     { text: 'Redis', icon: <DnsIcon />, path: '/redis' },
@@ -130,6 +129,11 @@ const MainContent: React.FC = () => {
     { text: 'Lua', icon: <CodeIcon />, path: '/lua' },
     { text: 'Config Preview', icon: <DescriptionIcon />, path: '/config-preview' },
     { text: 'Wizard', icon: <BuildIcon />, path: '/config-wizard' },
+  ];
+
+  // Define other menu items
+  const runtimeMenuItems: NavigationMenuItem[] = [
+    { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
   ];
 
   // Define licenses menu item separately to place it at the bottom
@@ -293,8 +297,35 @@ const MainContent: React.FC = () => {
         </Typography>
       </Toolbar>
       <Divider />
-      <List>
-        {menuItems.map((item) => (
+      {/* Configuration Section */}
+      <List
+        subheader={
+          <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2, py: 1, fontWeight: 'bold' }}>
+            Configuration
+          </Typography>
+        }
+      >
+        {configMenuItems.map((item) => (
+          <ListItem key={item.text} disablePadding>
+            <ListItemButton onClick={() => handleNavigation(item.path)}>
+              <ListItemIcon>
+                {item.icon}
+              </ListItemIcon>
+              <ListItemText primary={item.text} />
+            </ListItemButton>
+          </ListItem>
+        ))}
+      </List>
+      <Divider />
+      {/* Runtime Section */}
+      <List
+        subheader={
+          <Typography variant="subtitle2" color="text.secondary" sx={{ px: 2, py: 1, fontWeight: 'bold' }}>
+            Runtime
+          </Typography>
+        }
+      >
+        {runtimeMenuItems.map((item) => (
           <ListItem key={item.text} disablePadding>
             <ListItemButton onClick={() => handleNavigation(item.path)}>
               <ListItemIcon>
@@ -306,6 +337,7 @@ const MainContent: React.FC = () => {
         ))}
       </List>
       <Box sx={{ flexGrow: 1 }} />
+      <Divider />
       <List>
         <ListItem disablePadding>
           <ListItemButton onClick={() => handleNavigation(licensesMenuItem.path)}>

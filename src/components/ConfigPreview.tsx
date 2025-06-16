@@ -273,7 +273,12 @@ const ConfigPreview: React.FC = () => {
             fontSize: '0.875rem',
             color: theme.palette.mode === 'dark' ? '#d4d4d4' : '#333333',
             whiteSpace: 'pre-wrap',
-            wordBreak: 'break-word'
+            wordBreak: 'break-word',
+            userSelect: 'none',
+            WebkitUserSelect: 'none',
+            MozUserSelect: 'none',
+            msUserSelect: 'none',
+            pointerEvents: 'none'
           }}
         >
           {yamlContent}
