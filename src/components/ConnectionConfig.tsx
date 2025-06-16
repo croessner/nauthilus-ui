@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
 import { 
@@ -17,7 +17,6 @@ import {
   Tabs,
   Tab,
   Paper,
-  Divider,
   List,
   ListItem,
   ListItemText,
@@ -41,6 +40,49 @@ import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
+
+// Utility function to extract error message from response
+const extractErrorMessage = async (response: Response): Promise<string> => {
+  const errorData = await response.json().catch(() => ({ error: response.statusText }));
+
+  // Extract more detailed error information if available
+  let errorMessage = errorData.error || response.statusText;
+
+  // Check if there's a more detailed error message in the result field
+  if (errorData.result && typeof errorData.result === 'object') {
+    if (errorData.result.error) {
+      errorMessage = `${errorMessage}: ${errorData.result.error}`;
+    } else if (typeof errorData.result === 'string') {
+      errorMessage = `${errorMessage}: ${errorData.result}`;
+    } else if (JSON.stringify(errorData.result) !== '{}') {
+      errorMessage = `${errorMessage}: ${JSON.stringify(errorData.result)}`;
+    }
+  }
+
+  return errorMessage;
+};
+
+// Utility function to prepare authentication parameters for API requests
+const prepareAuthParams = (connectionConfig: any): { authType: string, authValue: string } => {
+  let authType = '';
+  let authValue = '';
+
+  // Add Basic Auth if enabled
+  if (connectionConfig.basic_auth?.enabled && 
+      connectionConfig.basic_auth.username && 
+      connectionConfig.basic_auth.password) {
+    authType = 'basic';
+    authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
+  }
+
+  // For JWT Auth, use existing token if available
+  if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
+    authType = 'bearer';
+    authValue = connectionConfig.jwt_auth.token;
+  }
+
+  return { authType, authValue };
+};
 
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
@@ -135,88 +177,108 @@ const ConnectionConfig: React.FC = () => {
   const [searchType, setSearchType] = useState<'ip' | 'user'>('ip');
   const [ruleNames, setRuleNames] = useState<string[]>([]);
 
-  // Reset unsaved changes flag when component mounts
-  useEffect(() => {
-    setHasUnsavedChanges(false);
-
-    // Check connection status when component mounts
-    if (config?.connection?.backend_url) {
-      checkConnection(config.connection);
+  // Function to fetch brute force list
+  const fetchBruteForceList = useCallback(async (connectionConfig: any) => {
+    if (!connectionConfig.backend_url) {
+      setNotification({
+        open: true,
+        message: 'No backend URL configured',
+        severity: 'error'
+      });
+      return;
     }
 
-    // Extract rule names from brute force buckets in the configuration
-    if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
-      const configRuleNames = config.brute_force.buckets
-        .map(bucket => bucket.name)
-        .filter(name => name && name.trim() !== '');
+    setIsLoadingBruteForceList(true);
 
-      if (configRuleNames.length > 0) {
-        setRuleNames(configRuleNames);
-      }
-    }
-  }, [setHasUnsavedChanges, config]);
-
-  if (!config) {
-    return null;
-  }
-
-  // Initialize connection configuration
-  const initialValues = {
-    backend_url: config.connection?.backend_url || '',
-    basic_auth: {
-      enabled: config.connection?.basic_auth?.enabled || false,
-      username: config.connection?.basic_auth?.username || '',
-      password: config.connection?.basic_auth?.password || '',
-    },
-    jwt_auth: {
-      enabled: config.connection?.jwt_auth?.enabled || false,
-      username: config.connection?.jwt_auth?.username || '',
-      password: config.connection?.jwt_auth?.password || '',
-      token: config.connection?.jwt_auth?.token || '',
-      refresh_token: config.connection?.jwt_auth?.refresh_token || '',
-      expires_at: config.connection?.jwt_auth?.expires_at || 0,
-    },
-  };
-
-  // Function to fetch JWT token
-  const fetchJWTToken = async (backendUrl: string, username: string, password: string): Promise<{ token: string, refresh_token: string, expires_at: number } | null> => {
     try {
+      // Prepare authentication parameters for the proxy
+      const { authType, authValue } = prepareAuthParams(connectionConfig);
+
       // Use the proxy endpoint to make the request server-side
-      // This avoids CORS issues by making the request through Node.js
-      const proxyUrl = new URL('/proxy/jwt-token', window.location.origin);
-      proxyUrl.searchParams.append('url', backendUrl);
+      const proxyUrl = new URL('/proxy/bruteforce/list', window.location.origin);
+      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+
+      if (authType && authValue) {
+        proxyUrl.searchParams.append('authType', authType);
+        proxyUrl.searchParams.append('authValue', authValue);
+      }
 
       const response = await fetch(proxyUrl.toString(), {
-        method: 'POST',
+        method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ username, password }),
       });
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch token: ${response.statusText}`);
+        const errorMessage = await extractErrorMessage(response);
+        console.error('Error fetching brute force list:', errorMessage);
+        setNotification({
+          open: true,
+          message: `Failed to fetch brute force list: ${errorMessage}`,
+          severity: 'error'
+        });
+        setBruteForceList(null);
+        return;
       }
 
       const data = await response.json();
-      return {
-        token: data.token,
-        refresh_token: data.refresh_token,
-        expires_at: data.expires_at
-      };
-    } catch (error) {
-      console.error('Error fetching JWT token:', error);
+      setBruteForceList(data.result);
+
+      // Extract unique rule names from the blocked IPs
+      if (data.result && data.result.blocked_ips && data.result.blocked_ips.length > 0) {
+        const apiRuleNames = Array.from(
+          new Set(
+            data.result.blocked_ips
+              .map((item: BruteForceListItem) => item.rule_name)
+              .filter((ruleName: string) => ruleName && ruleName !== '*')
+          )
+        ) as string[];
+
+        // Get rule names from configuration
+        const configRuleNames: string[] = [];
+        if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+          config.brute_force.buckets.forEach(bucket => {
+            if (bucket.name && bucket.name.trim() !== '') {
+              configRuleNames.push(bucket.name);
+            }
+          });
+        }
+
+        // Merge rule names from API and configuration, removing duplicates
+        const mergedRuleNames = Array.from(new Set([...apiRuleNames, ...configRuleNames]));
+        setRuleNames(mergedRuleNames);
+      } else if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+        // If no API data, still use configuration rule names
+        const configRuleNames = config.brute_force.buckets
+          .map(bucket => bucket.name)
+          .filter(name => name && name.trim() !== '');
+
+        if (configRuleNames.length > 0) {
+          setRuleNames(configRuleNames);
+        }
+      }
+
       setNotification({
         open: true,
-        message: `Failed to fetch JWT token: ${error instanceof Error ? error.message : String(error)}`,
+        message: 'Brute force list fetched successfully',
+        severity: 'success'
+      });
+    } catch (error) {
+      console.error('Error fetching brute force list:', error);
+      setNotification({
+        open: true,
+        message: `Failed to fetch brute force list: ${error instanceof Error ? error.message : String(error)}`,
         severity: 'error'
       });
-      return null;
+      setBruteForceList(null);
+    } finally {
+      setIsLoadingBruteForceList(false);
     }
-  };
+  }, [config, setNotification, setBruteForceList, setRuleNames, setIsLoadingBruteForceList]);
 
   // Function to check connection to the backend
-  const checkConnection = async (connectionConfig: any) => {
+  const checkConnection = useCallback(async (connectionConfig: any) => {
     if (!connectionConfig.backend_url) {
       setConnectionStatus('unknown');
       setStatusMessage('No backend URL configured');
@@ -299,16 +361,107 @@ const ConnectionConfig: React.FC = () => {
       if (response.ok) {
         setConnectionStatus('connected');
         setStatusMessage('Connected to Nauthilus backend (ping successful)');
+
+        // Fetch brute force list if connection is successful
+        fetchBruteForceList(connectionConfig);
       } else {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
         setConnectionStatus('disconnected');
-        setStatusMessage(`Failed to connect: ${errorData.error || response.statusText}`);
+        const errorMessage = await extractErrorMessage(response);
+        setStatusMessage(`Failed to connect: ${errorMessage}`);
       }
     } catch (error) {
+      console.error('Error checking connection:', error);
       setConnectionStatus('disconnected');
       setStatusMessage(`Connection error: ${error instanceof Error ? error.message : String(error)}`);
     }
+  }, [setConnectionStatus, setStatusMessage, updateConfigSection, setNotification, fetchBruteForceList]);
+
+  // Reset unsaved changes flag when component mounts
+  useEffect(() => {
+    setHasUnsavedChanges(false);
+
+    // Check connection status when component mounts
+    if (config?.connection?.backend_url) {
+      checkConnection(config.connection);
+    }
+
+    // Extract rule names from brute force buckets in the configuration
+    if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+      const configRuleNames = config.brute_force.buckets
+        .map(bucket => bucket.name)
+        .filter(name => name && name.trim() !== '');
+
+      if (configRuleNames.length > 0) {
+        setRuleNames(configRuleNames);
+      }
+    }
+  }, [setHasUnsavedChanges, config, checkConnection]);
+
+  if (!config) {
+    return null;
+  }
+
+  // Initialize connection configuration
+  const initialValues = {
+    backend_url: config.connection?.backend_url || '',
+    basic_auth: {
+      enabled: config.connection?.basic_auth?.enabled || false,
+      username: config.connection?.basic_auth?.username || '',
+      password: config.connection?.basic_auth?.password || '',
+    },
+    jwt_auth: {
+      enabled: config.connection?.jwt_auth?.enabled || false,
+      username: config.connection?.jwt_auth?.username || '',
+      password: config.connection?.jwt_auth?.password || '',
+      token: config.connection?.jwt_auth?.token || '',
+      refresh_token: config.connection?.jwt_auth?.refresh_token || '',
+      expires_at: config.connection?.jwt_auth?.expires_at || 0,
+    },
   };
+
+  // Function to fetch JWT token
+  const fetchJWTToken = async (backendUrl: string, username: string, password: string): Promise<{ token: string, refresh_token: string, expires_at: number } | null> => {
+    try {
+      // Use the proxy endpoint to make the request server-side
+      // This avoids CORS issues by making the request through Node.js
+      const proxyUrl = new URL('/proxy/jwt-token', window.location.origin);
+      proxyUrl.searchParams.append('url', backendUrl);
+
+      const response = await fetch(proxyUrl.toString(), {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ username, password }),
+      });
+
+      if (!response.ok) {
+        console.error('Error fetching JWT token:', response.statusText);
+        setNotification({
+          open: true,
+          message: `Failed to fetch JWT token: ${response.statusText}`,
+          severity: 'error'
+        });
+        return null;
+      }
+
+      const data = await response.json();
+      return {
+        token: data.token,
+        refresh_token: data.refresh_token,
+        expires_at: data.expires_at
+      };
+    } catch (error) {
+      console.error('Error fetching JWT token:', error);
+      setNotification({
+        open: true,
+        message: `Failed to fetch JWT token: ${error instanceof Error ? error.message : String(error)}`,
+        severity: 'error'
+      });
+      return null;
+    }
+  };
+
 
   const handleSubmit = async (values: any) => {
     try {
@@ -350,114 +503,6 @@ const ConnectionConfig: React.FC = () => {
     }
   };
 
-  // Function to fetch brute force list
-  const fetchBruteForceList = async (connectionConfig: any) => {
-    if (!connectionConfig.backend_url) {
-      setNotification({
-        open: true,
-        message: 'No backend URL configured',
-        severity: 'error'
-      });
-      return;
-    }
-
-    setIsLoadingBruteForceList(true);
-
-    try {
-      // Prepare authentication parameters for the proxy
-      let authType = '';
-      let authValue = '';
-
-      // Add Basic Auth if enabled
-      if (connectionConfig.basic_auth?.enabled && 
-          connectionConfig.basic_auth.username && 
-          connectionConfig.basic_auth.password) {
-        authType = 'basic';
-        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-      }
-
-      // For JWT Auth, use existing token if available
-      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
-        authType = 'bearer';
-        authValue = connectionConfig.jwt_auth.token;
-      }
-
-      // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/bruteforce/list', window.location.origin);
-      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
-
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-
-      const response = await fetch(proxyUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || response.statusText);
-      }
-
-      const data = await response.json();
-      setBruteForceList(data.result);
-
-      // Extract unique rule names from the blocked IPs
-      if (data.result && data.result.blocked_ips && data.result.blocked_ips.length > 0) {
-        const apiRuleNames = Array.from(
-          new Set(
-            data.result.blocked_ips
-              .map((item: BruteForceListItem) => item.rule_name)
-              .filter((ruleName: string) => ruleName && ruleName !== '*')
-          )
-        ) as string[];
-
-        // Get rule names from configuration
-        const configRuleNames: string[] = [];
-        if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
-          config.brute_force.buckets.forEach(bucket => {
-            if (bucket.name && bucket.name.trim() !== '') {
-              configRuleNames.push(bucket.name);
-            }
-          });
-        }
-
-        // Merge rule names from API and configuration, removing duplicates
-        const mergedRuleNames = Array.from(new Set([...apiRuleNames, ...configRuleNames]));
-        setRuleNames(mergedRuleNames);
-      } else if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
-        // If no API data, still use configuration rule names
-        const configRuleNames = config.brute_force.buckets
-          .map(bucket => bucket.name)
-          .filter(name => name && name.trim() !== '');
-
-        if (configRuleNames.length > 0) {
-          setRuleNames(configRuleNames);
-        }
-      }
-
-      setNotification({
-        open: true,
-        message: 'Brute force list fetched successfully',
-        severity: 'success'
-      });
-    } catch (error) {
-      console.error('Error fetching brute force list:', error);
-      setNotification({
-        open: true,
-        message: `Failed to fetch brute force list: ${error instanceof Error ? error.message : String(error)}`,
-        severity: 'error'
-      });
-      setBruteForceList(null);
-    } finally {
-      setIsLoadingBruteForceList(false);
-    }
-  };
-
   // Function to free user by account
   const freeUserByAccount = async (connectionConfig: any, username: string) => {
     if (!connectionConfig.backend_url) {
@@ -473,22 +518,7 @@ const ConnectionConfig: React.FC = () => {
 
     try {
       // Prepare authentication parameters for the proxy
-      let authType = '';
-      let authValue = '';
-
-      // Add Basic Auth if enabled
-      if (connectionConfig.basic_auth?.enabled && 
-          connectionConfig.basic_auth.username && 
-          connectionConfig.basic_auth.password) {
-        authType = 'basic';
-        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-      }
-
-      // For JWT Auth, use existing token if available
-      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
-        authType = 'bearer';
-        authValue = connectionConfig.jwt_auth.token;
-      }
+      const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
       const proxyUrl = new URL('/proxy/cache/flush', window.location.origin);
@@ -508,11 +538,17 @@ const ConnectionConfig: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || response.statusText);
+        const errorMessage = await extractErrorMessage(response);
+        console.error('Error freeing user by account:', errorMessage);
+        setNotification({
+          open: true,
+          message: `Failed to free user ${username}: ${errorMessage}`,
+          severity: 'error'
+        });
+        return;
       }
 
-      const data = await response.json();
+      await response.json(); // Response processed but not needed
 
       setNotification({
         open: true,
@@ -550,22 +586,7 @@ const ConnectionConfig: React.FC = () => {
 
     try {
       // Prepare authentication parameters for the proxy
-      let authType = '';
-      let authValue = '';
-
-      // Add Basic Auth if enabled
-      if (connectionConfig.basic_auth?.enabled && 
-          connectionConfig.basic_auth.username && 
-          connectionConfig.basic_auth.password) {
-        authType = 'basic';
-        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-      }
-
-      // For JWT Auth, use existing token if available
-      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
-        authType = 'bearer';
-        authValue = connectionConfig.jwt_auth.token;
-      }
+      const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
       const proxyUrl = new URL('/proxy/bruteforce/flush', window.location.origin);
@@ -600,11 +621,17 @@ const ConnectionConfig: React.FC = () => {
       });
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: response.statusText }));
-        throw new Error(errorData.error || response.statusText);
+        const errorMessage = await extractErrorMessage(response);
+        console.error('Error freeing user by IP address:', errorMessage);
+        setNotification({
+          open: true,
+          message: `Failed to free IP ${ipAddress}: ${errorMessage}`,
+          severity: 'error'
+        });
+        return;
       }
 
-      const data = await response.json();
+      await response.json(); // Response processed but not needed
 
       setNotification({
         open: true,
