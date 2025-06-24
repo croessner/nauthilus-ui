@@ -63,7 +63,7 @@ const RedisConfigSchema = Yup.object().shape({
         then: (schema) => schema.required('Key is required when TLS is enabled'),
         otherwise: (schema) => schema.nullable(),
       }),
-      http_client_skip_verify: Yup.boolean(),
+      skip_verify: Yup.boolean(),
     }),
 
     // Master configuration
@@ -263,7 +263,7 @@ const RedisConfig: React.FC = () => {
         enabled: config.server.redis.tls?.enabled || false,
         cert: config.server.redis.tls?.cert || '',
         key: config.server.redis.tls?.key || '',
-        http_client_skip_verify: config.server.redis.tls?.http_client_skip_verify || false,
+        skip_verify: config.server.redis.tls?.skip_verify || false,
       },
 
       // Master configuration
@@ -561,11 +561,11 @@ const RedisConfig: React.FC = () => {
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={values.redis.tls?.http_client_skip_verify || false}
+                          checked={values.redis.tls?.skip_verify || false}
                           onChange={(e) => {
-                            setFieldValue('redis.tls.http_client_skip_verify', e.target.checked);
+                            setFieldValue('redis.tls.skip_verify', e.target.checked);
                           }}
-                          name="redis.tls.http_client_skip_verify"
+                          name="redis.tls.skip_verify"
                         />
                       }
                       label="Skip TLS Verification"

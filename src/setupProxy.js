@@ -155,4 +155,45 @@ module.exports = function(app) {
       },
     })
   );
+
+  // Proxy for config load endpoint
+  app.use(
+    '/proxy/config/load',
+    createProxyMiddleware({
+      router: (req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+        return targetUrl;
+      },
+      pathRewrite: {
+        '^/proxy/config/load': '/api/v1/config/load', // Rewrite path to /api/v1/config/load
+      },
+      changeOrigin: true,
+      secure: false, // Allow insecure connections for testing
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        if (req.query.authType === 'basic' && req.query.authValue) {
+          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
+        } else if (req.query.authType === 'bearer' && req.query.authValue) {
+          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
+        }
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for config/load:', err);
+
+        // Provide more detailed error information
+        const errorDetails = {
+          error: 'Failed to connect to backend server',
+          details: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          target: req.query.url
+        };
+
+        res.status(502).json(errorDetails);
+      },
+    })
+  );
 };

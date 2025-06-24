@@ -95,7 +95,9 @@ const FeaturesConfigSchema = Yup.object().shape({
             Yup.object().shape({
               name: Yup.string().required('Name is required'),
               rbl: Yup.string().required('RBL server is required'),
-              return_code: Yup.string().required('Return code is required'),
+              return_codes: Yup.array().of(
+                  Yup.string().required('Return code is required'),
+              )
             })
           ),
           threshold: Yup.number().min(0).max(100),
@@ -132,6 +134,7 @@ const FeaturesConfigSchema = Yup.object().shape({
     return selectedFeatures && selectedFeatures.includes('brute_force')
       ? schema.shape({
           neural_network: Yup.object().shape({
+            dry_run: Yup.boolean(),
             max_training_records: Yup.number().min(1000).max(100000),
             hidden_neurons: Yup.number().min(8).max(20),
             threshold: Yup.number().min(0).max(1),
@@ -215,11 +218,11 @@ const FeaturesConfig: React.FC = () => {
   const initialValues = {
     selectedFeatures: existingFeatureNames,
     cleartext_networks: config?.cleartext_networks || [],
-    rbl: {
-      soft_whitelist: config?.rbl?.soft_whitelist || {},
-      lists: config?.rbl?.lists || [{ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0, ipv4: true, ipv6: true }],
-      threshold: config?.rbl?.threshold || 0,
-      ip_whitelist: config?.rbl?.ip_whitelist || [],
+    realtime_blackhole_lists: {
+      soft_whitelist: config?.realtime_blackhole_lists?.soft_whitelist || {},
+      lists: config?.realtime_blackhole_lists?.lists || [{ name: '', rbl: '', return_codes: [''], allow_failure: false, weight: 0, ipv4: true, ipv6: true }],
+      threshold: config?.realtime_blackhole_lists?.threshold || 0,
+      ip_whitelist: config?.realtime_blackhole_lists?.ip_whitelist || [],
     },
     relay_domains: {
       soft_whitelist: config?.relay_domains?.soft_whitelist || {},
@@ -260,6 +263,7 @@ const FeaturesConfig: React.FC = () => {
       max_tolerate_percent: config?.brute_force?.max_tolerate_percent || 50,
       scale_factor: config?.brute_force?.scale_factor || 1.0,
       neural_network: {
+        dry_run: config?.brute_force?.neural_network?.dry_run || false,
         max_training_records: config?.brute_force?.neural_network?.max_training_records || 10000,
         hidden_neurons: config?.brute_force?.neural_network?.hidden_neurons || 10,
         activation_function: config?.brute_force?.neural_network?.activation_function || 'sigmoid',
@@ -295,10 +299,10 @@ const FeaturesConfig: React.FC = () => {
       // Add feature-specific configurations
       if (values.selectedFeatures.includes('rbl')) {
         // Ensure rbl is properly structured
-        updatedConfig.rbl = {
-          ...values.rbl,
+        updatedConfig.realtime_blackhole_lists = {
+          ...values.realtime_blackhole_lists,
           // Ensure soft_whitelist is properly structured as a direct property
-          soft_whitelist: values.rbl.soft_whitelist || {},
+          soft_whitelist: values.realtime_blackhole_lists.soft_whitelist || {},
         };
       }
 
@@ -514,13 +518,13 @@ const FeaturesConfig: React.FC = () => {
                     <Field
                       as={TextField}
                       fullWidth
-                      name="rbl.threshold"
+                      name="realtime_blackhole_lists.threshold"
                       label="Threshold"
                       variant="outlined"
                       type="number"
                       InputProps={{ inputProps: { min: 0, max: 100 } }}
-                      error={getIn(touched, 'rbl.threshold') && Boolean(getIn(errors, 'rbl.threshold'))}
-                      helperText={(getIn(touched, 'rbl.threshold') && getIn(errors, 'rbl.threshold')) || "Threshold value (0-100)"}
+                      error={getIn(touched, 'realtime_blackhole_lists.threshold') && Boolean(getIn(errors, 'realtime_blackhole_lists.threshold'))}
+                      helperText={(getIn(touched, 'realtime_blackhole_lists.threshold') && getIn(errors, 'realtime_blackhole_lists.threshold')) || "Threshold value (0-100)"}
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);
                         setHasUnsavedChanges(true);
@@ -529,20 +533,20 @@ const FeaturesConfig: React.FC = () => {
                   </Grid>
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Whitelist</Typography>
-                    <FieldArray name="rbl.ip_whitelist">
+                    <FieldArray name="realtime_blackhole_lists.ip_whitelist">
                       {({ push, remove }) => (
                         <div>
-                          {values.rbl?.ip_whitelist && values.rbl.ip_whitelist.length > 0 ? (
-                            values.rbl.ip_whitelist.map((ip: string, index: number) => (
+                          {values.realtime_blackhole_lists?.ip_whitelist && values.realtime_blackhole_lists.ip_whitelist.length > 0 ? (
+                            values.realtime_blackhole_lists.ip_whitelist.map((ip: string, index: number) => (
                               <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                 <Field
                                   as={TextField}
                                   fullWidth
-                                  name={`rbl.ip_whitelist[${index}]`}
+                                  name={`realtime_blackhole_lists.ip_whitelist[${index}]`}
                                   label={`IP Address/CIDR ${index + 1}`}
                                   variant="outlined"
-                                  error={getIn(touched, `rbl.ip_whitelist[${index}]`) && Boolean(getIn(errors, `rbl.ip_whitelist[${index}]`))}
-                                  helperText={(getIn(touched, `rbl.ip_whitelist[${index}]`) && getIn(errors, `rbl.ip_whitelist[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
+                                  error={getIn(touched, `realtime_blackhole_lists.ip_whitelist[${index}]`) && Boolean(getIn(errors, `realtime_blackhole_lists.ip_whitelist[${index}]`))}
+                                  helperText={(getIn(touched, `realtime_blackhole_lists.ip_whitelist[${index}]`) && getIn(errors, `realtime_blackhole_lists.ip_whitelist[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
                                   onChange={(e: React.ChangeEvent<any>) => {
                                     handleChange(e);
                                     setHasUnsavedChanges(true);
@@ -585,18 +589,18 @@ const FeaturesConfig: React.FC = () => {
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         The soft whitelist allows you to specify which usernames are allowed to bypass RBL checks from specific IP addresses or networks.
                       </Typography>
-                      <FieldArray name="rbl.soft_whitelist">
+                      <FieldArray name="realtime_blackhole_lists.soft_whitelist">
                         {({ push, remove }) => (
                           <div>
-                            {Object.keys(values.rbl?.soft_whitelist || {}).length > 0 ? (
-                              Object.entries(values.rbl?.soft_whitelist || {}).map(([username, networks], index) => (
+                            {Object.keys(values.realtime_blackhole_lists?.soft_whitelist || {}).length > 0 ? (
+                              Object.entries(values.realtime_blackhole_lists?.soft_whitelist || {}).map(([username, networks], index) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
                                     <Grid item xs={12}>
                                       <Field
                                         as={TextField}
                                         fullWidth
-                                        name={`rbl.soft_whitelist.${username}.username`}
+                                        name={`realtime_blackhole_lists.soft_whitelist.${username}.username`}
                                         label="Username"
                                         variant="outlined"
                                         value={username}
@@ -610,7 +614,7 @@ const FeaturesConfig: React.FC = () => {
                                           <Field
                                             as={TextField}
                                             fullWidth
-                                            name={`rbl.soft_whitelist.${username}[${netIndex}]`}
+                                            name={`realtime_blackhole_lists.soft_whitelist.${username}[${netIndex}]`}
                                             label={`Network ${netIndex + 1}`}
                                             variant="outlined"
                                             value={network}
@@ -620,10 +624,10 @@ const FeaturesConfig: React.FC = () => {
                                               updatedNetworks[netIndex] = e.target.value;
 
                                               // Update the soft_whitelist object
-                                              const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                              const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                               updatedSoftWhitelist[username] = updatedNetworks;
 
-                                              setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                              setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
                                               setHasUnsavedChanges(true);
                                             }}
                                           />
@@ -633,7 +637,7 @@ const FeaturesConfig: React.FC = () => {
                                               const updatedNetworks = networks.filter((_, i) => i !== netIndex);
 
                                               // Update the soft_whitelist object
-                                              const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                              const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
 
                                               if (updatedNetworks.length === 0) {
                                                 // Remove the username entry if no networks remain
@@ -642,7 +646,7 @@ const FeaturesConfig: React.FC = () => {
                                                 updatedSoftWhitelist[username] = updatedNetworks;
                                               }
 
-                                              setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                              setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
                                               setHasUnsavedChanges(true);
                                             }}
                                             sx={{ ml: 1 }}
@@ -658,10 +662,10 @@ const FeaturesConfig: React.FC = () => {
                                         size="small"
                                         onClick={() => {
                                           // Add a new network to the existing username
-                                          const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                          const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                           updatedSoftWhitelist[username] = [...(networks as string[]), ''];
 
-                                          setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                          setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
                                           setHasUnsavedChanges(true);
                                         }}
                                       >
@@ -675,10 +679,10 @@ const FeaturesConfig: React.FC = () => {
                                         startIcon={<DeleteIcon />}
                                         onClick={() => {
                                           // Remove the entire username entry
-                                          const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                          const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                           delete updatedSoftWhitelist[username];
 
-                                          setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                          setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
                                           setHasUnsavedChanges(true);
                                         }}
                                       >
@@ -710,10 +714,10 @@ const FeaturesConfig: React.FC = () => {
                                 onClick={() => {
                                   if (values.newSoftWhitelistUsername) {
                                     // Add a new username with an empty network array
-                                    const updatedSoftWhitelist = { ...values.rbl?.soft_whitelist };
+                                    const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                     updatedSoftWhitelist[values.newSoftWhitelistUsername] = [''];
 
-                                    setFieldValue('rbl.soft_whitelist', updatedSoftWhitelist);
+                                    setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
                                     setFieldValue('newSoftWhitelistUsername', '');
                                     setHasUnsavedChanges(true);
                                   }
@@ -729,22 +733,22 @@ const FeaturesConfig: React.FC = () => {
                   </Grid>
                   <Grid item xs={12}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>RBL Lists</Typography>
-                    <FieldArray name="rbl.lists">
+                    <FieldArray name="realtime_blackhole_lists.lists">
                       {({ push, remove }) => (
                         <div>
-                          {values.rbl?.lists && values.rbl.lists.length > 0 ? (
-                            values.rbl.lists.map((list, index) => (
+                          {values.realtime_blackhole_lists?.lists && values.realtime_blackhole_lists.lists.length > 0 ? (
+                            values.realtime_blackhole_lists.lists.map((list, index) => (
                               <Paper key={index} sx={{ p: 2, mb: 2 }}>
                                 <Grid container spacing={2}>
                                   <Grid item xs={12} md={6}>
                                     <Field
                                       as={TextField}
                                       fullWidth
-                                      name={`rbl.lists[${index}].name`}
+                                      name={`realtime_blackhole_lists.lists[${index}].name`}
                                       label="Name"
                                       variant="outlined"
-                                      error={getIn(touched, `rbl.lists[${index}].name`) && Boolean(getIn(errors, `rbl.lists[${index}].name`))}
-                                      helperText={(getIn(touched, `rbl.lists[${index}].name`) && getIn(errors, `rbl.lists[${index}].name`)) || "Name of the RBL"}
+                                      error={getIn(touched, `realtime_blackhole_lists.lists[${index}].name`) && Boolean(getIn(errors, `realtime_blackhole_lists.lists[${index}].name`))}
+                                      helperText={(getIn(touched, `realtime_blackhole_lists.lists[${index}].name`) && getIn(errors, `realtime_blackhole_lists.lists[${index}].name`)) || "Name of the RBL"}
                                       onChange={(e: React.ChangeEvent<any>) => {
                                         handleChange(e);
                                         setHasUnsavedChanges(true);
@@ -755,11 +759,11 @@ const FeaturesConfig: React.FC = () => {
                                     <Field
                                       as={TextField}
                                       fullWidth
-                                      name={`rbl.lists[${index}].rbl`}
+                                      name={`realtime_blackhole_lists.lists[${index}].rbl`}
                                       label="RBL Server"
                                       variant="outlined"
-                                      error={getIn(touched, `rbl.lists[${index}].rbl`) && Boolean(getIn(errors, `rbl.lists[${index}].rbl`))}
-                                      helperText={(getIn(touched, `rbl.lists[${index}].rbl`) && getIn(errors, `rbl.lists[${index}].rbl`)) || "RBL server hostname"}
+                                      error={getIn(touched, `realtime_blackhole_lists.lists[${index}].rbl`) && Boolean(getIn(errors, `realtime_blackhole_lists.lists[${index}].rbl`))}
+                                      helperText={(getIn(touched, `realtime_blackhole_lists.lists[${index}].rbl`) && getIn(errors, `realtime_blackhole_lists.lists[${index}].rbl`)) || "RBL server hostname"}
                                       onChange={(e: React.ChangeEvent<any>) => {
                                         handleChange(e);
                                         setHasUnsavedChanges(true);
@@ -767,31 +771,68 @@ const FeaturesConfig: React.FC = () => {
                                     />
                                   </Grid>
                                   <Grid item xs={12} md={6}>
-                                    <Field
-                                      as={TextField}
-                                      fullWidth
-                                      name={`rbl.lists[${index}].return_code`}
-                                      label="Return Code"
-                                      variant="outlined"
-                                      error={getIn(touched, `rbl.lists[${index}].return_code`) && Boolean(getIn(errors, `rbl.lists[${index}].return_code`))}
-                                      helperText={(getIn(touched, `rbl.lists[${index}].return_code`) && getIn(errors, `rbl.lists[${index}].return_code`)) || "Return code (e.g., 127.0.0.2)"}
-                                      onChange={(e: React.ChangeEvent<any>) => {
-                                        handleChange(e);
-                                        setHasUnsavedChanges(true);
-                                      }}
-                                    />
+                                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Return codes</Typography>
+                                    <FieldArray name={`realtime_blackhole_lists.lists[${index}].return_codes`}>
+                                      {({ push, remove}) => (
+                                        <div>
+                                          {values.realtime_blackhole_lists?.lists[index]?.return_codes && values.realtime_blackhole_lists.lists[index].return_codes.length > 0 ? (
+                                            values.realtime_blackhole_lists.lists[index].return_codes.map((code, codeIndex) => (
+                                              <Box key={codeIndex} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                                <Field
+                                                  as={TextField}
+                                                  fullWidth
+                                                  name={`realtime_blackhole_lists.lists[${index}].return_codes[${codeIndex}]`}
+                                                  label={`Return code ${codeIndex + 1}`}
+                                                  variant="outlined"
+                                                  error={getIn(touched, `realtime_blackhole_lists.lists[${index}].return_codes[${codeIndex}]`) && Boolean(getIn(errors, `realtime_blackhole_lists.lists[${index}].return_codes[${codeIndex}]`))}
+                                                  helperText={(getIn(touched, `realtime_blackhole_lists.lists[${index}].return_codes[${codeIndex}]`) && getIn(errors, `realtime_blackhole_lists.lists[${index}].return_codes[${codeIndex}]`)) || "Return code"}
+                                                  onChange={(e: React.ChangeEvent<any>) => {
+                                                    handleChange(e);
+                                                    setHasUnsavedChanges(true);
+                                                  }}
+                                                />
+                                                <IconButton
+                                                  onClick={() => {
+                                                    remove(index);
+                                                    setHasUnsavedChanges(true);
+                                                  }}
+                                                  sx={{ ml: 1 }}
+                                                  color="error"
+                                                  aria-label="Remove domain"
+                                                >
+                                                <DeleteIcon />
+                                                </IconButton>
+                                              </Box>
+                                            ))
+                                          ) : (
+                                            <Typography color="textSecondary" sx={{ mb: 2 }}>No return codes added yet.</Typography>
+                                          )}
+                                          <Button
+                                            startIcon={<AddIcon />}
+                                            variant="outlined"
+                                            color="primary"
+                                            onClick={() => {
+                                              push('');
+                                              setHasUnsavedChanges(true);
+                                            }}
+                                          >
+                                            Add Return Code
+                                          </Button>
+                                        </div>
+                                      )}
+                                    </FieldArray>
                                   </Grid>
                                   <Grid item xs={12} md={6}>
                                     <Field
                                       as={TextField}
                                       fullWidth
-                                      name={`rbl.lists[${index}].weight`}
+                                      name={`realtime_blackhole_lists.lists[${index}].weight`}
                                       label="Weight"
                                       variant="outlined"
                                       type="number"
                                       InputProps={{ inputProps: { min: -100, max: 100 } }}
-                                      error={getIn(touched, `rbl.lists[${index}].weight`) && Boolean(getIn(errors, `rbl.lists[${index}].weight`))}
-                                      helperText={(getIn(touched, `rbl.lists[${index}].weight`) && getIn(errors, `rbl.lists[${index}].weight`)) || "Weight (-100 to 100)"}
+                                      error={getIn(touched, `realtime_blackhole_lists.lists[${index}].weight`) && Boolean(getIn(errors, `realtime_blackhole_lists.lists[${index}].weight`))}
+                                      helperText={(getIn(touched, `realtime_blackhole_lists.lists[${index}].weight`) && getIn(errors, `realtime_blackhole_lists.lists[${index}].weight`)) || "Weight (-100 to 100)"}
                                       onChange={(e: React.ChangeEvent<any>) => {
                                         handleChange(e);
                                         setHasUnsavedChanges(true);
@@ -802,12 +843,12 @@ const FeaturesConfig: React.FC = () => {
                                     <FormControlLabel
                                       control={
                                         <Switch
-                                          checked={values.rbl?.lists[index]?.allow_failure || false}
+                                          checked={values.realtime_blackhole_lists?.lists[index]?.allow_failure || false}
                                           onChange={(e) => {
-                                            setFieldValue(`rbl.lists[${index}].allow_failure`, e.target.checked);
+                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].allow_failure`, e.target.checked);
                                             setHasUnsavedChanges(true);
                                           }}
-                                          name={`rbl.lists[${index}].allow_failure`}
+                                          name={`realtime_blackhole_lists.lists[${index}].allow_failure`}
                                         />
                                       }
                                       label="Allow Failure"
@@ -817,12 +858,12 @@ const FeaturesConfig: React.FC = () => {
                                     <FormControlLabel
                                       control={
                                         <Switch
-                                          checked={values.rbl?.lists[index]?.ipv4 || false}
+                                          checked={values.realtime_blackhole_lists?.lists[index]?.ipv4 || false}
                                           onChange={(e) => {
-                                            setFieldValue(`rbl.lists[${index}].ipv4`, e.target.checked);
+                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].ipv4`, e.target.checked);
                                             setHasUnsavedChanges(true);
                                           }}
-                                          name={`rbl.lists[${index}].ipv4`}
+                                          name={`realtime_blackhole_lists.lists[${index}].ipv4`}
                                         />
                                       }
                                       label="IPv4"
@@ -832,12 +873,12 @@ const FeaturesConfig: React.FC = () => {
                                     <FormControlLabel
                                       control={
                                         <Switch
-                                          checked={values.rbl?.lists[index]?.ipv6 || false}
+                                          checked={values.realtime_blackhole_lists?.lists[index]?.ipv6 || false}
                                           onChange={(e) => {
-                                            setFieldValue(`rbl.lists[${index}].ipv6`, e.target.checked);
+                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].ipv6`, e.target.checked);
                                             setHasUnsavedChanges(true);
                                           }}
-                                          name={`rbl.lists[${index}].ipv6`}
+                                          name={`realtime_blackhole_lists.lists[${index}].ipv6`}
                                         />
                                       }
                                       label="IPv6"
@@ -866,7 +907,7 @@ const FeaturesConfig: React.FC = () => {
                             variant="outlined"
                             color="primary"
                             onClick={() => {
-                              push({ name: '', rbl: '', return_code: '', allow_failure: false, weight: 0, ipv4: true, ipv6: true });
+                              push({ name: '', rbl: '', return_codes: [''], allow_failure: false, weight: 0, ipv4: true, ipv6: true });
                               setHasUnsavedChanges(true);
                             }}
                           >
@@ -1886,6 +1927,22 @@ const FeaturesConfig: React.FC = () => {
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>Neural Network Configuration</Typography>
                     <Paper sx={{ p: 2, mb: 2 }}>
                       <Grid container spacing={2}>
+                        <Grid item xs={12}>
+                          <FormControlLabel
+                            control={
+                              <Switch
+                                name="brute_force.neural_network.dry_run"
+                                checked={values.brute_force.neural_network.dry_run}
+                                onChange={(e) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                                color="primary"
+                              />
+                            }
+                            label="Dry Run Mode (predictions are made but not enforced)"
+                          />
+                        </Grid>
                         <Grid item xs={12} md={6}>
                           <Field
                             as={TextField}

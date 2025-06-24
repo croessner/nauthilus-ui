@@ -65,7 +65,10 @@ const ServerConfigSchema = Yup.object().shape({
         ? schema.required('TLS key path is required when TLS is enabled')
         : schema
     ),
-    http_client_skip_verify: Yup.boolean(),
+    skip_verify: Yup.boolean(),
+    ca: Yup.string(),
+    min_tls_version: Yup.string().oneOf(['TLS1.2', 'TLS1.3'], 'Must be either TLS1.2 or TLS1.3'),
+    cipher_suites: Yup.array().of(Yup.string()),
   }),
 
 
@@ -137,6 +140,18 @@ const ServerConfigSchema = Yup.object().shape({
     max_idle_connections: Yup.number().min(1, 'Must be at least 1'),
     max_idle_connections_per_host: Yup.number().min(0, 'Must be at least 0'),
   }),
+
+  // HTTP Client validation
+  http_client: Yup.object().shape({
+    max_connections_per_host: Yup.number().min(1, 'Must be at least 1'),
+    max_idle_connections: Yup.number().min(1, 'Must be at least 1'),
+    max_idle_connections_per_host: Yup.number().min(0, 'Must be at least 0'),
+    idle_connection_timeout: Yup.string(),
+    proxy: Yup.string(),
+    tls: Yup.object().shape({
+      skip_verify: Yup.boolean(),
+    }),
+  }),
 });
 
 const ServerConfig: React.FC = () => {
@@ -166,7 +181,10 @@ const ServerConfig: React.FC = () => {
       enabled: config.server.tls?.enabled || false,
       cert: config.server.tls?.cert || '',
       key: config.server.tls?.key || '',
-      http_client_skip_verify: config.server.tls?.http_client_skip_verify || false,
+      skip_verify: config.server.tls?.skip_verify || false,
+      ca: config.server.tls?.ca || '',
+      min_tls_version: config.server.tls?.min_tls_version || 'TLS1.2',
+      cipher_suites: config.server.tls?.cipher_suites || [],
     },
 
 
@@ -239,6 +257,9 @@ const ServerConfig: React.FC = () => {
       max_idle_connections_per_host: config.server.http_client?.max_idle_connections_per_host || 10,
       idle_connection_timeout: config.server.http_client?.idle_connection_timeout || '90s',
       proxy: config.server.http_client?.proxy || '',
+      tls: {
+        skip_verify: config.server.http_client?.tls?.skip_verify || false,
+      },
     },
 
     // Initialize log configuration
@@ -459,20 +480,99 @@ const ServerConfig: React.FC = () => {
                       }}
                     />
                   </Grid>
+                  <Grid item xs={12} md={12}>
+                    <Field
+                      as={TextField}
+                      fullWidth
+                      name="tls.ca"
+                      label="TLS CA Certificate Path"
+                      variant="outlined"
+                      error={getIn(touched, 'tls.ca') && Boolean(getIn(errors, 'tls.ca'))}
+                      helperText={getIn(touched, 'tls.ca') && getIn(errors, 'tls.ca')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </Grid>
                   <Grid item xs={12} md={6}>
                     <FormControlLabel
                       control={
                         <Switch
-                          checked={values.tls?.http_client_skip_verify || false}
+                          checked={values.tls?.skip_verify || false}
                           onChange={(e) => {
-                            setFieldValue('tls.http_client_skip_verify', e.target.checked);
+                            setFieldValue('tls.skip_verify', e.target.checked);
                             setHasUnsavedChanges(true);
                           }}
-                          name="tls.http_client_skip_verify"
+                          name="tls.skip_verify"
                         />
                       }
-                      label="Skip TLS Verification for HTTP Client"
+                      label="Skip TLS Verification"
                     />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth variant="outlined">
+                      <InputLabel id="min-tls-version-label">Minimum TLS Version</InputLabel>
+                      <Field
+                        as={Select}
+                        labelId="min-tls-version-label"
+                        name="tls.min_tls_version"
+                        label="Minimum TLS Version"
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      >
+                        <MenuItem value="TLS1.2">TLS 1.2</MenuItem>
+                        <MenuItem value="TLS1.3">TLS 1.3</MenuItem>
+                      </Field>
+                      <FormHelperText>
+                        Select the minimum TLS protocol version to use.
+                      </FormHelperText>
+                      {getIn(touched, 'tls.min_tls_version') && getIn(errors, 'tls.min_tls_version') && (
+                        <FormHelperText error>{getIn(errors, 'tls.min_tls_version')}</FormHelperText>
+                      )}
+                    </FormControl>
+                  </Grid>
+                  <Grid item xs={12} md={12}>
+                    <FormControl fullWidth variant="outlined">
+                      <InputLabel id="cipher-suites-label">Cipher Suites</InputLabel>
+                      <Field
+                        as={Select}
+                        labelId="cipher-suites-label"
+                        name="tls.cipher_suites"
+                        label="Cipher Suites"
+                        multiple
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      >
+                        <MenuItem value="TLS_RSA_WITH_AES_128_CBC_SHA">TLS_RSA_WITH_AES_128_CBC_SHA</MenuItem>
+                        <MenuItem value="TLS_RSA_WITH_AES_256_CBC_SHA">TLS_RSA_WITH_AES_256_CBC_SHA</MenuItem>
+                        <MenuItem value="TLS_RSA_WITH_AES_128_GCM_SHA256">TLS_RSA_WITH_AES_128_GCM_SHA256</MenuItem>
+                        <MenuItem value="TLS_RSA_WITH_AES_256_GCM_SHA384">TLS_RSA_WITH_AES_256_GCM_SHA384</MenuItem>
+                        <MenuItem value="TLS_AES_128_GCM_SHA256">TLS_AES_128_GCM_SHA256</MenuItem>
+                        <MenuItem value="TLS_AES_256_GCM_SHA384">TLS_AES_256_GCM_SHA384</MenuItem>
+                        <MenuItem value="TLS_CHACHA20_POLY1305_SHA256">TLS_CHACHA20_POLY1305_SHA256</MenuItem>
+                        <MenuItem value="TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA">TLS_ECDHE_ECDSA_WITH_AES_128_CBC_SHA</MenuItem>
+                        <MenuItem value="TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA">TLS_ECDHE_ECDSA_WITH_AES_256_CBC_SHA</MenuItem>
+                        <MenuItem value="TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA">TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA</MenuItem>
+                        <MenuItem value="TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA">TLS_ECDHE_RSA_WITH_AES_256_CBC_SHA</MenuItem>
+                        <MenuItem value="TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256">TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256</MenuItem>
+                        <MenuItem value="TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384">TLS_ECDHE_ECDSA_WITH_AES_256_GCM_SHA384</MenuItem>
+                        <MenuItem value="TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256">TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256</MenuItem>
+                        <MenuItem value="TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384">TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384</MenuItem>
+                        <MenuItem value="TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256">TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256</MenuItem>
+                        <MenuItem value="TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256">TLS_ECDHE_ECDSA_WITH_CHACHA20_POLY1305_SHA256</MenuItem>
+                      </Field>
+                      <FormHelperText>
+                        Select one or more cipher suites. If none selected, the server will use the default ciphers.
+                      </FormHelperText>
+                      {getIn(touched, 'tls.cipher_suites') && getIn(errors, 'tls.cipher_suites') && (
+                        <FormHelperText error>{getIn(errors, 'tls.cipher_suites')}</FormHelperText>
+                      )}
+                    </FormControl>
                   </Grid>
                 </>
               )}
@@ -1175,6 +1275,21 @@ const ServerConfig: React.FC = () => {
                   variant="outlined"
                   error={getIn(touched, 'http_client.proxy') && Boolean(getIn(errors, 'http_client.proxy'))}
                   helperText={(getIn(touched, 'http_client.proxy') && getIn(errors, 'http_client.proxy')) || "Proxy URL (e.g., http://proxy.example.com:8080)"}
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.http_client?.tls?.skip_verify || false}
+                      onChange={(e) => {
+                        setFieldValue('http_client.tls.skip_verify', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                      name="http_client.tls.skip_verify"
+                    />
+                  }
+                  label="Skip TLS Verification for HTTP Client"
                 />
               </Grid>
             </Grid>

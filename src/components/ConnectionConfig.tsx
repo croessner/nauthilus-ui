@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
 import { 
@@ -37,6 +37,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
+import InfoIcon from '@mui/icons-material/Info';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
@@ -151,10 +152,10 @@ interface BruteForceListResponse {
 }
 
 const ConnectionConfig: React.FC = () => {
-  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
+  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges, loadConfigFromBackend } = useConfig();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [notification, setNotification] = useState<{ open: boolean, message: string, severity: 'success' | 'error' | 'info' | 'warning' }>({
+  const [notification, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'info'
@@ -213,11 +214,7 @@ const ConnectionConfig: React.FC = () => {
       if (!response.ok) {
         const errorMessage = await extractErrorMessage(response);
         console.error('Error fetching brute force list:', errorMessage);
-        setNotification({
-          open: true,
-          message: `Failed to fetch brute force list: ${errorMessage}`,
-          severity: 'error'
-        });
+        // Don't show error notification at the bottom - errors should only be displayed at the top
         setBruteForceList(null);
         return;
       }
@@ -266,11 +263,7 @@ const ConnectionConfig: React.FC = () => {
       });
     } catch (error) {
       console.error('Error fetching brute force list:', error);
-      setNotification({
-        open: true,
-        message: `Failed to fetch brute force list: ${error instanceof Error ? error.message : String(error)}`,
-        severity: 'error'
-      });
+      // Don't show error notification at the bottom - errors should only be displayed at the top
       setBruteForceList(null);
     } finally {
       setIsLoadingBruteForceList(false);
@@ -750,6 +743,7 @@ const ConnectionConfig: React.FC = () => {
                       </span>
                     </Tooltip>
                   </Box>
+
                 </Grid>
 
                 {/* Brute Force Protection Section - Only show when connected */}
@@ -1120,6 +1114,42 @@ const ConnectionConfig: React.FC = () => {
               >
                 Test Connection
               </Button>
+              {connectionStatus === 'connected' && (
+                <Button 
+                  variant="contained" 
+                  color="secondary" 
+                  sx={{ 
+                    mr: 2,
+                    fontWeight: 'bold',
+                    boxShadow: 3,
+                    '&:hover': {
+                      boxShadow: 5,
+                    }
+                  }}
+                  onClick={() => {
+                    setNotification({
+                      open: true,
+                      message: 'Loading configuration from backend...',
+                      severity: 'info'
+                    });
+                    loadConfigFromBackend(values)
+                      .then(() => {
+                        setNotification({
+                          open: true,
+                          message: 'Configuration loaded successfully from backend',
+                          severity: 'success'
+                        });
+                      })
+                      .catch((error) => {
+                        // Error is already handled by ConfigContext, no need to show another notification
+                        console.error('Configuration loading failed:', error.message);
+                      });
+                  }}
+                  startIcon={<RefreshIcon />}
+                >
+                  Load Configuration
+                </Button>
+              )}
               <Button 
                 type="submit" 
                 variant="contained" 
@@ -1133,17 +1163,6 @@ const ConnectionConfig: React.FC = () => {
         )}
       </Formik>
 
-      {/* Notification Snackbar */}
-      <Snackbar
-        open={notification.open}
-        autoHideDuration={6000}
-        onClose={handleCloseNotification}
-        message={notification.message}
-      >
-        <Alert onClose={handleCloseNotification} severity={notification.severity} sx={{ width: '100%' }}>
-          {notification.message}
-        </Alert>
-      </Snackbar>
 
       {/* User Free Dialog */}
       <Dialog

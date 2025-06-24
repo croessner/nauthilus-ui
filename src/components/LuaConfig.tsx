@@ -87,6 +87,7 @@ const actionTypes = [
 
 // HTTP methods
 const httpMethods = [
+  'HEAD',
   'GET',
   'POST',
   'PUT',

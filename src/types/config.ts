@@ -42,7 +42,10 @@ export interface TLSConfig {
   enabled?: boolean;
   cert?: string;
   key?: string;
-  http_client_skip_verify?: boolean;
+  skip_verify?: boolean;
+  ca?: string;
+  min_tls_version?: string;
+  cipher_suites?: string[];
 }
 
 export interface BasicAuthConfig {
@@ -193,6 +196,7 @@ export interface HTTPClientConfig {
   max_idle_connections_per_host?: number;
   idle_connection_timeout?: string;
   proxy?: string;
+  tls?: TLSConfig;
 }
 
 export interface CompressionConfig {
@@ -350,6 +354,7 @@ export interface TolerateConfig {
 }
 
 export interface NeuralNetworkConfig {
+  dry_run?: boolean;
   max_training_records?: number;
   hidden_neurons?: number;
   activation_function?: string;
@@ -370,7 +375,7 @@ export interface RBLConfig {
 export interface RBLListConfig {
   name: string;
   rbl: string;
-  return_code: string;
+  return_codes: string[];
   allow_failure?: boolean;
   weight?: number;
   ipv4?: boolean;
@@ -472,7 +477,7 @@ export interface NauthilusConfig {
   lua?: LuaConfig;
   oauth2?: Oauth2Config;
   brute_force?: BruteForceConfig;
-  rbl?: RBLConfig;
+  realtime_blackhole_lists?: RBLConfig;
   relay_domains?: RelayDomainsConfig;
   backend_server_monitoring?: BackendServerMonitoringConfig;
   cleartext_networks?: string[];

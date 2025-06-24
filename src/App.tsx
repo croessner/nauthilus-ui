@@ -505,11 +505,14 @@ const MainContent: React.FC = () => {
               <Select
                 labelId="profile-select-label"
                 id="profile-select"
-                value={currentProfileName}
+                value={profiles.some(p => p.name === currentProfileName) ? currentProfileName : ''}
                 onChange={handleProfileChange}
                 label="Profile"
                 sx={{ color: 'inherit' }}
               >
+                <MenuItem value="">
+                  <em>Select a profile</em>
+                </MenuItem>
                 {profiles.map((profile) => (
                   <MenuItem key={profile.name} value={profile.name}>
                     {profile.name}

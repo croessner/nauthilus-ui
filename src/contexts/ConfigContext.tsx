@@ -22,6 +22,7 @@ interface ConfigContextType {
   uploadConfig: (file: File, profileName?: string) => Promise<void>;
   downloadConfig: () => void;
   resetConfig: () => Promise<void>;
+  loadConfigFromBackend: (connectionConfig: any) => Promise<void>;
   setHasUnsavedChanges: (value: boolean) => void;
   setError: (error: string | null) => void;
   validateConfigSection: (section: string, config: NauthilusConfig) => string[];
@@ -48,14 +49,14 @@ const DEFAULT_CONFIG: NauthilusConfig = {
     max_password_history_entries: 10,
     redis: {
       database_number: 0,
-      prefix: 'nt_',
+      prefix: 'nt:',
       master: {
         address: '127.0.0.1:6379'
       }
     }
   },
   connection: {
-    backend_url: '',
+    backend_url: 'http://127.0.0.1:8080',
     basic_auth: {
       enabled: false,
       username: '',
@@ -423,8 +424,8 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       // Handle RBL configuration
       if (newConfig.server.features.includes('rbl')) {
         // Initialize RBL configuration if it doesn't exist
-        if (!newConfig.rbl) {
-          newConfig.rbl = {
+        if (!newConfig.realtime_blackhole_lists) {
+          newConfig.realtime_blackhole_lists = {
             lists: [],
             threshold: 0,
             ip_whitelist: [],
@@ -433,18 +434,18 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         }
 
         // Ensure lists array is properly initialized
-        if (!newConfig.rbl.lists) {
-          newConfig.rbl.lists = [];
+        if (!newConfig.realtime_blackhole_lists.lists) {
+          newConfig.realtime_blackhole_lists.lists = [];
         }
 
         // Ensure ip_whitelist array is properly initialized
-        if (!newConfig.rbl.ip_whitelist) {
-          newConfig.rbl.ip_whitelist = [];
+        if (!newConfig.realtime_blackhole_lists.ip_whitelist) {
+          newConfig.realtime_blackhole_lists.ip_whitelist = [];
         }
 
         // Ensure soft_whitelist object is properly initialized
-        if (!newConfig.rbl.soft_whitelist) {
-          newConfig.rbl.soft_whitelist = {};
+        if (!newConfig.realtime_blackhole_lists.soft_whitelist) {
+          newConfig.realtime_blackhole_lists.soft_whitelist = {};
         }
       }
 
@@ -543,7 +544,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
         // Handle realtime_blackhole_lists (map to rbl)
         if ((newConfig as any).realtime_blackhole_lists) {
-          newConfig.rbl = (newConfig as any).realtime_blackhole_lists;
+          newConfig.realtime_blackhole_lists = (newConfig as any).realtime_blackhole_lists;
           delete (newConfig as any).realtime_blackhole_lists;
 
           // Ensure server.features includes 'rbl'
@@ -824,6 +825,120 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     };
   }, [refreshConfig]);
 
+  // Function to load configuration from the backend
+  const loadConfigFromBackend = useCallback(async (connectionConfig: any) => {
+    await withErrorHandling(async () => {
+      if (!connectionConfig.backend_url) {
+        throw new Error('No backend URL configured');
+      }
+
+      // Prepare authentication parameters for the proxy
+      let authType = '';
+      let authValue = '';
+
+      // Add Basic Auth if enabled
+      if (connectionConfig.basic_auth?.enabled && 
+          connectionConfig.basic_auth.username && 
+          connectionConfig.basic_auth.password) {
+        authType = 'basic';
+        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
+      }
+
+      // For JWT Auth, use existing token if available
+      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
+        authType = 'bearer';
+        authValue = connectionConfig.jwt_auth.token;
+      }
+
+      // Use the proxy endpoint to make the request server-side
+      const proxyUrl = new URL('/proxy/config/load', window.location.origin);
+      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+
+      if (authType && authValue) {
+        proxyUrl.searchParams.append('authType', authType);
+        proxyUrl.searchParams.append('authValue', authValue);
+      }
+
+      const response = await fetch(proxyUrl.toString(), {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ error: response.statusText }));
+
+        // Extract detailed error information
+        let errorMessage = errorData.error || response.statusText;
+        let errorDetails = '';
+
+        // Check for detailed error information from our enhanced proxy
+        if (errorData.details) {
+          errorDetails = errorData.details;
+        } else if (errorData.code) {
+          errorDetails = `Error code: ${errorData.code}`;
+        }
+
+        // Check for error information in the result field
+        if (errorData.result && typeof errorData.result === 'object') {
+          if (errorData.result.error) {
+            errorDetails += errorDetails ? `, ${errorData.result.error}` : errorData.result.error;
+          } else if (typeof errorData.result === 'string') {
+            errorDetails += errorDetails ? `, ${errorData.result}` : errorData.result;
+          } else if (JSON.stringify(errorData.result) !== '{}') {
+            errorDetails += errorDetails ? `, ${JSON.stringify(errorData.result)}` : JSON.stringify(errorData.result);
+          }
+        }
+
+        // Construct a comprehensive error message
+        const fullErrorMessage = errorDetails 
+          ? `Failed to load configuration from backend: ${errorMessage} (${errorDetails})`
+          : `Failed to load configuration from backend: ${errorMessage}`;
+
+        console.error('Configuration loading error:', errorData);
+        throw new Error(fullErrorMessage);
+      }
+
+      const data = await response.json();
+
+      if (!data.result) {
+        throw new Error('Invalid response from backend');
+      }
+
+      // Parse the configuration
+      let newConfig: NauthilusConfig;
+
+      try {
+        // If the result is a string (YAML), parse it
+        if (typeof data.result === 'string') {
+          newConfig = yaml.load(data.result) as NauthilusConfig;
+        } 
+        // If the result is already an object, use it directly
+        else if (typeof data.result === 'object') {
+          newConfig = data.result as NauthilusConfig;
+        }
+        else {
+          throw new Error('Unexpected response format');
+        }
+
+        // Initialize feature configurations
+        newConfig = initializeFeatureConfigurations(newConfig);
+
+        // Ensure connection configuration is preserved
+        if (!newConfig.connection) {
+          newConfig.connection = connectionConfig;
+        }
+
+        // Update the current profile with the new configuration
+        return updateProfilesWithConfig(newConfig);
+      } catch (error) {
+        console.error('Error parsing configuration:', error);
+        throw new Error(`Failed to parse configuration: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }, 'Failed to load configuration from backend. Please try again.');
+  }, [withErrorHandling, updateProfilesWithConfig]);
+
   // Provide the context value
   const contextValue: ConfigContextType = {
     config,
@@ -838,6 +953,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     uploadConfig,
     downloadConfig,
     resetConfig,
+    loadConfigFromBackend,
     setHasUnsavedChanges,
     setError,
     validateConfigSection,
