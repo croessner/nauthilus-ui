@@ -484,7 +484,7 @@ const MainContent: React.FC = () => {
           ml: { sm: `${drawerWidth}px` },
         }}
       >
-        <Toolbar>
+        <Toolbar sx={{ flexWrap: 'wrap', py: { xs: 1 } }}>
           <IconButton
             color="inherit"
             aria-label="open drawer"
@@ -494,13 +494,27 @@ const MainContent: React.FC = () => {
           >
             <MenuIcon />
           </IconButton>
-          <Box sx={{ display: 'flex', alignItems: 'center', flexGrow: 1 }}>
-            <Typography variant="h6" noWrap component="div" sx={{ mr: 2 }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center', 
+            flexGrow: 1,
+            flexWrap: 'wrap',
+            gap: 1
+          }}>
+            <Typography variant="h6" noWrap component="div" sx={{ mr: { xs: 1, sm: 2 } }}>
               Configuration
             </Typography>
 
             {/* Profile selector */}
-            <FormControl variant="outlined" size="small" sx={{ minWidth: 200, mr: 2 }}>
+            <FormControl 
+              variant="outlined" 
+              size="small" 
+              sx={{ 
+                minWidth: { xs: 150, sm: 200 }, 
+                mr: { xs: 1, sm: 2 },
+                flexGrow: { xs: 1, sm: 0 }
+              }}
+            >
               <InputLabel id="profile-select-label">Profile</InputLabel>
               <Select
                 labelId="profile-select-label"
@@ -525,10 +539,27 @@ const MainContent: React.FC = () => {
             <Button 
               color="inherit"
               onClick={handleProfileMenuOpen}
-              sx={{ mr: 2 }}
+              sx={{ 
+                mr: { xs: 1, sm: 2 },
+                display: { xs: 'none', md: 'block' }
+              }}
             >
               Manage Profiles
             </Button>
+
+            {/* Small screen profile management icon button */}
+            <Tooltip title="Manage Profiles">
+              <IconButton
+                color="inherit"
+                onClick={handleProfileMenuOpen}
+                sx={{ 
+                  display: { xs: 'flex', md: 'none' },
+                  mr: { xs: 1, sm: 2 }
+                }}
+              >
+                <ViewHeadlineIcon />
+              </IconButton>
+            </Tooltip>
 
             {/* Profile management menu */}
             <Menu
@@ -542,7 +573,12 @@ const MainContent: React.FC = () => {
               <MenuItem onClick={handleUploadWithProfileClick}>Upload to New Profile</MenuItem>
             </Menu>
           </Box>
-          <Box sx={{ display: 'flex', alignItems: 'center' }}>
+          <Box sx={{ 
+            display: 'flex', 
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: 1
+          }}>
             <input
               type="file"
               ref={fileInputRef}
@@ -561,35 +597,69 @@ const MainContent: React.FC = () => {
                 color="inherit" 
                 onClick={() => fileInputRef.current?.click()}
                 startIcon={<UploadFileIcon />}
-                sx={{ mr: 1 }}
+                sx={{ 
+                  mr: { xs: 0.5, sm: 1 },
+                  display: { xs: 'none', sm: 'flex' }
+                }}
               >
                 Upload
               </Button>
+            </Tooltip>
+            <Tooltip title="Upload Configuration">
+              <IconButton
+                color="inherit"
+                onClick={() => fileInputRef.current?.click()}
+                sx={{ display: { xs: 'flex', sm: 'none' } }}
+              >
+                <UploadFileIcon />
+              </IconButton>
             </Tooltip>
             <Tooltip title="Download Configuration">
               <Button 
                 color="inherit" 
                 onClick={handleDownload}
                 startIcon={<DownloadIcon />}
-                sx={{ mr: 1 }}
+                sx={{ 
+                  mr: { xs: 0.5, sm: 1 },
+                  display: { xs: 'none', sm: 'flex' }
+                }}
               >
                 Download
               </Button>
+            </Tooltip>
+            <Tooltip title="Download Configuration">
+              <IconButton
+                color="inherit"
+                onClick={handleDownload}
+                sx={{ display: { xs: 'flex', sm: 'none' } }}
+              >
+                <DownloadIcon />
+              </IconButton>
             </Tooltip>
             <Tooltip title="Reset to Default">
               <Button 
                 color="inherit" 
                 onClick={handleResetClick}
                 startIcon={<RestartAltIcon />}
+                sx={{ display: { xs: 'none', sm: 'flex' } }}
               >
                 Reset
               </Button>
+            </Tooltip>
+            <Tooltip title="Reset to Default">
+              <IconButton
+                color="inherit"
+                onClick={handleResetClick}
+                sx={{ display: { xs: 'flex', sm: 'none' } }}
+              >
+                <RestartAltIcon />
+              </IconButton>
             </Tooltip>
             <Tooltip title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
               <IconButton 
                 color="inherit" 
                 onClick={toggleColorMode}
-                sx={{ ml: 1 }}
+                sx={{ ml: { xs: 0, sm: 1 } }}
               >
                 {mode === 'light' ? <Brightness4Icon /> : <Brightness7Icon />}
               </IconButton>
