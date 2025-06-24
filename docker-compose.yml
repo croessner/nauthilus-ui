@@ -8,6 +8,8 @@ services:
     container_name: nauthilus-ui
     ports:
       - "80:3000"  # Map host port 80 to container port 3000
+    environment:
+      - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongodb:27017/nauthilus-ui?authSource=admin
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
@@ -17,6 +19,8 @@ services:
       start_period: 5s
     networks:
       - nauthilus-network
+    depends_on:
+      - mongodb
 
   # Uncomment the following section if you want to run the backend service as well
   # nauthilus-backend:
@@ -38,6 +42,25 @@ services:
   #   networks:
   #     - nauthilus-network
 
+  # MongoDB service
+  mongodb:
+    image: mongo:latest
+    container_name: nauthilus-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    environment:
+      - MONGO_INITDB_DATABASE=nauthilus-ui
+      - MONGO_INITDB_ROOT_USERNAME=${MONGODB_ROOT_USER:-nauthilus}
+      - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_ROOT_PASSWORD:-nauthilus_password}
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - nauthilus-network
+
 networks:
   nauthilus-network:
     driver: bridge
+
+volumes:
+  mongodb_data:

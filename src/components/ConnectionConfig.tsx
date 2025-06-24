@@ -10,10 +10,8 @@ import {
   Typography,
   Switch,
   CircularProgress,
-  Alert,
   Tooltip,
   IconButton,
-  Snackbar,
   Tabs,
   Tab,
   Paper,
@@ -37,7 +35,6 @@ import ErrorIcon from '@mui/icons-material/Error';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
-import InfoIcon from '@mui/icons-material/Info';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
@@ -155,7 +152,7 @@ const ConnectionConfig: React.FC = () => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges, loadConfigFromBackend } = useConfig();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
-  const [notification, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
+  const [, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
     severity: 'info'
@@ -698,10 +695,6 @@ const ConnectionConfig: React.FC = () => {
     }
   };
 
-  // Function to close the notification
-  const handleCloseNotification = () => {
-    setNotification(prev => ({ ...prev, open: false }));
-  };
 
   return (
     <>

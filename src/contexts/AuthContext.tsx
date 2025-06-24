@@ -15,7 +15,7 @@ interface AuthContextType {
   auth: AuthState;
   login: (username: string, password: string) => Promise<void>;
   loginWithOIDC: () => Promise<void>;
-  logout: () => void;
+  logout: () => Promise<void>;
 }
 
 // Create the context with a default value
@@ -36,22 +36,36 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   // Check if the user is already authenticated on mount
   useEffect(() => {
-    const currentUser = userManager.getCurrentUser();
-    if (currentUser) {
-      setAuth({
-        isAuthenticated: true,
-        username: currentUser.username,
-        loading: false,
-        error: null,
-      });
-    } else {
-      setAuth({
-        isAuthenticated: false,
-        username: null,
-        loading: false,
-        error: null,
-      });
-    }
+    const checkAuth = async () => {
+      try {
+        const currentUser = await userManager.getCurrentUser();
+        if (currentUser) {
+          setAuth({
+            isAuthenticated: true,
+            username: currentUser.username,
+            loading: false,
+            error: null,
+          });
+        } else {
+          setAuth({
+            isAuthenticated: false,
+            username: null,
+            loading: false,
+            error: null,
+          });
+        }
+      } catch (error) {
+        console.error('Error checking authentication:', error);
+        setAuth({
+          isAuthenticated: false,
+          username: null,
+          loading: false,
+          error: 'Failed to check authentication status',
+        });
+      }
+    };
+
+    checkAuth();
   }, []);
 
   // Login with username and password
@@ -60,7 +74,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuth(prev => ({ ...prev, loading: true, error: null }));
 
       // Use the local user manager for authentication
-      const result = userManager.authenticate(username, password);
+      const result = await userManager.authenticate(username, password);
 
       if (result) {
         setAuth({
@@ -104,14 +118,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   // Logout
-  const logout = () => {
-    userManager.logout();
-    setAuth({
-      isAuthenticated: false,
-      username: null,
-      loading: false,
-      error: null,
-    });
+  const logout = async () => {
+    try {
+      await userManager.logout();
+      setAuth({
+        isAuthenticated: false,
+        username: null,
+        loading: false,
+        error: null,
+      });
+    } catch (error) {
+      console.error('Error during logout:', error);
+      setAuth(prev => ({
+        ...prev,
+        error: 'Failed to logout properly',
+      }));
+    }
   };
 
   // Provide the context value

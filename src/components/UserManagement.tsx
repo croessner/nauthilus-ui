@@ -55,35 +55,54 @@ const UserManagement: React.FC = () => {
     loadUsers();
   }, []);
 
-  const loadUsers = () => {
-    const loadedUsers = userManager.getUsers();
-    setUsers(loadedUsers);
+  const loadUsers = async () => {
+    try {
+      const loadedUsers = await userManager.getUsers();
+      setUsers(loadedUsers);
+    } catch (error) {
+      console.error('Error loading users:', error);
+    }
   };
 
-  const handleAddUser = () => {
+  const handleAddUser = async () => {
     if (validateForm()) {
-      userManager.addUser(username, password, roles);
-      loadUsers();
-      handleCloseAddDialog();
-      showSnackbar('User added successfully', 'success');
+      try {
+        await userManager.addUser(username, password, roles);
+        await loadUsers();
+        handleCloseAddDialog();
+        showSnackbar('User added successfully', 'success');
+      } catch (error) {
+        console.error('Error adding user:', error);
+        showSnackbar('Failed to add user', 'error');
+      }
     }
   };
 
-  const handleEditUser = () => {
+  const handleEditUser = async () => {
     if (validateForm(true)) {
-      userManager.addUser(username, password, roles); // This will update the user if it exists
-      loadUsers();
-      handleCloseEditDialog();
-      showSnackbar('User updated successfully', 'success');
+      try {
+        await userManager.addUser(username, password, roles); // This will update the user if it exists
+        await loadUsers();
+        handleCloseEditDialog();
+        showSnackbar('User updated successfully', 'success');
+      } catch (error) {
+        console.error('Error updating user:', error);
+        showSnackbar('Failed to update user', 'error');
+      }
     }
   };
 
-  const handleDeleteUser = () => {
+  const handleDeleteUser = async () => {
     if (selectedUser) {
-      userManager.removeUser(selectedUser);
-      loadUsers();
-      handleCloseDeleteDialog();
-      showSnackbar('User deleted successfully', 'success');
+      try {
+        await userManager.removeUser(selectedUser);
+        await loadUsers();
+        handleCloseDeleteDialog();
+        showSnackbar('User deleted successfully', 'success');
+      } catch (error) {
+        console.error('Error deleting user:', error);
+        showSnackbar('Failed to delete user', 'error');
+      }
     }
   };
 

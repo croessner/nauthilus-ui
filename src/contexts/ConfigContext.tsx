@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { NauthilusConfig } from '../types/config';
 import yaml from 'js-yaml';
+import axios from 'axios';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -35,10 +36,18 @@ interface ConfigContextType {
 // Create the context with a default value
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
-// Storage keys for the configuration
+// Storage keys for the configuration (kept for backward compatibility)
 const PROFILES_STORAGE_KEY = 'nauthilus-profiles';
 const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
 const DEFAULT_PROFILE_NAME = 'Default';
+
+// Helper function to get the current user ID
+// In a real application, this would come from an authentication system
+const getCurrentUserId = (): string => {
+  // For simplicity, we'll use a fixed user ID
+  // In a real application, this would be the authenticated user's ID
+  return 'default-user';
+};
 
   // Default empty configuration
 const DEFAULT_CONFIG: NauthilusConfig = {
@@ -328,32 +337,51 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     return errors;
   }, [validateConfig]);
 
-  // Function to load the configuration profiles from local storage
+  // Function to load the configuration profiles from MongoDB (with localStorage fallback)
   const refreshConfig = useCallback(async () => {
     await withErrorHandling(async () => {
-      // Load profiles from localStorage
-      const storedProfiles = localStorage.getItem(PROFILES_STORAGE_KEY);
+      const userId = getCurrentUserId();
       let profilesArray: ConfigProfile[];
+      let currentProfile: string;
 
-      if (storedProfiles) {
-        profilesArray = JSON.parse(storedProfiles);
-      } else {
-        // Create default profile if none exists
-        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(profilesArray));
+      try {
+        // Try to load from API first
+        const response = await axios.get(`/api/profiles/${userId}`);
+        profilesArray = response.data.profiles;
+        currentProfile = response.data.currentProfileName;
+      } catch (error) {
+        console.log('Failed to load from API, falling back to localStorage:', error);
+
+        // Fallback to localStorage if API fails
+        const storedProfiles = localStorage.getItem(PROFILES_STORAGE_KEY);
+        const storedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
+
+        if (storedProfiles) {
+          profilesArray = JSON.parse(storedProfiles);
+        } else {
+          // Create default profile if none exists
+          profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
+        }
+
+        currentProfile = storedCurrentProfile || DEFAULT_PROFILE_NAME;
+
+        // Save to API for future use
+        try {
+          await axios.post(`/api/profiles/${userId}`, {
+            profiles: profilesArray,
+            currentProfileName: currentProfile
+          });
+        } catch (saveError) {
+          console.error('Failed to save profiles to API:', saveError);
+        }
       }
-
-      setProfiles(profilesArray);
-
-      // Load current profile name
-      const storedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
-      let currentProfile = storedCurrentProfile || DEFAULT_PROFILE_NAME;
 
       // Make sure the current profile exists in the profiles array
       if (!profilesArray.some(profile => profile.name === currentProfile)) {
         currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
       }
 
+      setProfiles(profilesArray);
       setCurrentProfileName(currentProfile);
 
       // Set the current config
@@ -365,14 +393,26 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   }, [withErrorHandling, setProfiles, setCurrentProfileName, setConfig]);
 
   // Helper function to update profiles with a new config
-  const updateProfilesWithConfig = useCallback((newConfig: NauthilusConfig) => {
+  const updateProfilesWithConfig = useCallback(async (newConfig: NauthilusConfig) => {
     const updatedProfiles = profiles.map(profile => 
       profile.name === currentProfileName 
         ? { ...profile, config: newConfig } 
         : profile
     );
 
-    localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+    // Update in MongoDB
+    const userId = getCurrentUserId();
+    try {
+      await axios.post(`/api/profiles/${userId}`, {
+        profiles: updatedProfiles,
+        currentProfileName: currentProfileName
+      });
+    } catch (error) {
+      console.error('Failed to save profiles to API:', error);
+      // Fallback to localStorage if API fails
+      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+    }
+
     setProfiles(updatedProfiles);
     setConfig(newConfig);
 
@@ -385,7 +425,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
   // Function to update the entire configuration
   const updateConfig = useCallback(async (newConfig: NauthilusConfig) => {
     await withErrorHandling(
-      () => updateProfilesWithConfig(newConfig),
+      async () => await updateProfilesWithConfig(newConfig),
       'Failed to update configuration. Please try again.'
     );
   }, [withErrorHandling, updateProfilesWithConfig]);
@@ -412,7 +452,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         throw new Error(`Validation failed: ${validationErrors.join(', ')}`);
       }
 
-      return updateProfilesWithConfig(newConfig);
+      return await updateProfilesWithConfig(newConfig);
     }, `Failed to update ${section} configuration. Please try again.`);
   }, [withErrorHandling, config, updateProfilesWithConfig, validateConfigSection]);
 
@@ -596,8 +636,22 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         });
       }
 
-      // Save profiles to localStorage
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      // Save profiles to MongoDB
+      const userId = getCurrentUserId();
+      try {
+        await axios.post(`/api/profiles/${userId}`, {
+          profiles: updatedProfiles,
+          currentProfileName: targetProfileName === currentProfileName ? currentProfileName : targetProfileName
+        });
+      } catch (error) {
+        console.error('Failed to save profiles to API:', error);
+        // Fallback to localStorage if API fails
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+        if (targetProfileName !== currentProfileName) {
+          localStorage.setItem(CURRENT_PROFILE_KEY, targetProfileName);
+        }
+      }
+
       setProfiles(updatedProfiles);
 
       // If updating the current profile, update the current config
@@ -607,7 +661,6 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         // Switch to the new/updated profile
         setCurrentProfileName(targetProfileName);
         setConfig(newConfig);
-        localStorage.setItem(CURRENT_PROFILE_KEY, targetProfileName);
       }
 
       // Reset unsaved changes flag since we've just saved
@@ -708,13 +761,26 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       // Add new profile to the list
       const updatedProfiles = [...profiles, newProfile];
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+
+      // Save to MongoDB
+      const userId = getCurrentUserId();
+      try {
+        await axios.post(`/api/profiles/${userId}`, {
+          profiles: updatedProfiles,
+          currentProfileName: name
+        });
+      } catch (error) {
+        console.error('Failed to save profiles to API:', error);
+        // Fallback to localStorage if API fails
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+        localStorage.setItem(CURRENT_PROFILE_KEY, name);
+      }
+
       setProfiles(updatedProfiles);
 
       // Switch to the new profile
       setCurrentProfileName(name);
       setConfig(newProfile.config);
-      localStorage.setItem(CURRENT_PROFILE_KEY, name);
       setHasUnsavedChanges(false);
 
       return updatedProfiles;
@@ -738,7 +804,20 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       // Switch to the profile
       setCurrentProfileName(name);
       setConfig(profile.config);
-      localStorage.setItem(CURRENT_PROFILE_KEY, name);
+
+      // Save to MongoDB
+      const userId = getCurrentUserId();
+      try {
+        await axios.post(`/api/profiles/${userId}`, {
+          profiles,
+          currentProfileName: name
+        });
+      } catch (error) {
+        console.error('Failed to save current profile to API:', error);
+        // Fallback to localStorage if API fails
+        localStorage.setItem(CURRENT_PROFILE_KEY, name);
+      }
+
       setHasUnsavedChanges(false);
 
       return profile;
@@ -760,13 +839,27 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           : profile
       );
 
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      // Save to MongoDB
+      const userId = getCurrentUserId();
+      try {
+        await axios.post(`/api/profiles/${userId}`, {
+          profiles: updatedProfiles,
+          currentProfileName: currentProfileName === oldName ? newName : currentProfileName
+        });
+      } catch (error) {
+        console.error('Failed to save profiles to API:', error);
+        // Fallback to localStorage if API fails
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+        if (currentProfileName === oldName) {
+          localStorage.setItem(CURRENT_PROFILE_KEY, newName);
+        }
+      }
+
       setProfiles(updatedProfiles);
 
       // If the renamed profile is the current one, update currentProfileName
       if (currentProfileName === oldName) {
         setCurrentProfileName(newName);
-        localStorage.setItem(CURRENT_PROFILE_KEY, newName);
       }
 
       return updatedProfiles;
@@ -783,20 +876,38 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
 
       // Remove the profile
       const updatedProfiles = profiles.filter(profile => profile.name !== name);
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+
+      // If the deleted profile is the current one, prepare to switch to another profile
+      const newCurrentProfileName = currentProfileName === name ? updatedProfiles[0].name : currentProfileName;
+      const newCurrentProfileConfig = currentProfileName === name ? updatedProfiles[0].config : config;
+
+      // Save to MongoDB
+      const userId = getCurrentUserId();
+      try {
+        await axios.post(`/api/profiles/${userId}`, {
+          profiles: updatedProfiles,
+          currentProfileName: newCurrentProfileName
+        });
+      } catch (error) {
+        console.error('Failed to save profiles to API:', error);
+        // Fallback to localStorage if API fails
+        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+        if (currentProfileName === name) {
+          localStorage.setItem(CURRENT_PROFILE_KEY, newCurrentProfileName);
+        }
+      }
+
       setProfiles(updatedProfiles);
 
       // If the deleted profile is the current one, switch to another profile
       if (currentProfileName === name) {
-        const newCurrentProfile = updatedProfiles[0];
-        setCurrentProfileName(newCurrentProfile.name);
-        setConfig(newCurrentProfile.config);
-        localStorage.setItem(CURRENT_PROFILE_KEY, newCurrentProfile.name);
+        setCurrentProfileName(newCurrentProfileName);
+        setConfig(newCurrentProfileConfig);
       }
 
       return updatedProfiles;
     }, 'Failed to delete profile. Please try again.');
-  }, [withErrorHandling, profiles, currentProfileName, setProfiles, setCurrentProfileName, setConfig]);
+  }, [withErrorHandling, profiles, currentProfileName, config, setProfiles, setCurrentProfileName, setConfig]);
 
   // Load the configuration when the component mounts
   useEffect(() => {
