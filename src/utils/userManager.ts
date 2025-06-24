@@ -5,11 +5,25 @@ import { jwtDecode } from 'jwt-decode';
 import CryptoJS from 'crypto-js';
 import axios from 'axios';
 
+// Storage keys
+const CONFIG_STORAGE_KEY = 'nauthilus-ui-user-config';
+const TOKEN_STORAGE_KEY = 'token';
+const REFRESH_TOKEN_STORAGE_KEY = 'refresh_token';
+
 // Helper function to get the current user ID
-// In a real application, this would come from an authentication system
 const getCurrentUserId = (): string => {
-  // For simplicity, we'll use a fixed user ID
-  // In a real application, this would be the authenticated user's ID
+  // Try to get the current user from the token
+  const token = localStorage.getItem(TOKEN_STORAGE_KEY);
+  if (token) {
+    try {
+      const decoded = jwtDecode<{ sub: string }>(token);
+      return decoded.sub; // Use the username as the user ID
+    } catch (error) {
+      console.error('Error decoding token:', error);
+    }
+  }
+
+  // Fallback to default user if no token or error decoding
   return 'default-user';
 };
 
@@ -28,25 +42,30 @@ export interface UserManagerConfig {
   refreshTokenExpiry: number; // in seconds
 }
 
+// Get environment variables or use defaults
+const getEnvVar = (name: string, defaultValue: string): string => {
+  // In a browser environment, environment variables must be exposed via process.env.REACT_APP_*
+  // or via window._env_
+  if (typeof window !== 'undefined' && window._env_ && window._env_[name]) {
+    return window._env_[name];
+  }
+  return (process.env[`REACT_APP_${name}`] || defaultValue);
+};
+
 // Default configuration
 const DEFAULT_CONFIG: UserManagerConfig = {
   users: [
     {
       username: 'admin',
-      // Default password: 'admin' (hashed)
+      // Default password hash
       passwordHash: CryptoJS.SHA256('admin').toString(),
       roles: ['admin']
     }
   ],
-  jwtSecret: 'nauthilus-ui-default-secret-key-change-in-production',
-  tokenExpiry: 3600, // 1 hour
-  refreshTokenExpiry: 86400 // 24 hours
+  jwtSecret: getEnvVar('JWT_SECRET', 'nauthilus-ui-default-secret-key-change-in-production'),
+  tokenExpiry: parseInt(getEnvVar('TOKEN_EXPIRY', '3600')), // 1 hour
+  refreshTokenExpiry: parseInt(getEnvVar('REFRESH_TOKEN_EXPIRY', '86400')) // 24 hours
 };
-
-// Storage keys
-const CONFIG_STORAGE_KEY = 'nauthilus-ui-user-config';
-const TOKEN_STORAGE_KEY = 'token';
-const REFRESH_TOKEN_STORAGE_KEY = 'refresh_token';
 
 // Load configuration from MongoDB (with localStorage fallback)
 export const loadConfig = async (): Promise<UserManagerConfig> => {

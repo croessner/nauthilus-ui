@@ -9,6 +9,7 @@ This UI provides a user-friendly way to create and edit Nauthilus configuration 
 ## Features
 
 - **Standalone Operation**: Works independently without requiring the Nauthilus service
+- **User Authentication**: Secure login system with user management capabilities
 - **File Upload/Download**: Upload existing nauthilus.yml files for editing and download the resulting configuration
 - **Dark Mode Support**: Toggle between light and dark themes for comfortable viewing in any environment
 - **Responsive Design**: Works on desktop and mobile devices
@@ -75,6 +76,48 @@ ui/
 ## Configuration
 
 The UI works completely independently from the Nauthilus service. All configuration is stored in the browser's localStorage, and you can upload and download configuration files as needed.
+
+### User Authentication
+
+The UI includes a user authentication system that is completely independent from the Nauthilus service:
+
+- **Login Required**: Users must log in to access the application
+- **Default Admin**: A default admin user is created on first run
+- **User Management**: Admins can add, edit, and delete users
+- **Role-Based Access**: Users can have different roles (admin, user)
+- **JWT Authentication**: Secure token-based authentication
+
+#### Default Admin Credentials
+
+The application uses a default admin user with the following credentials:
+- Username: `admin`
+- Password: `admin`
+
+After logging in for the first time, it's recommended to change the password using the User Management section.
+
+#### JWT Configuration
+
+You can configure JWT settings using environment variables:
+
+```
+REACT_APP_JWT_SECRET=your_secure_jwt_secret_key_here
+REACT_APP_TOKEN_EXPIRY=3600
+REACT_APP_REFRESH_TOKEN_EXPIRY=86400
+```
+
+For production deployments, make sure to set a secure JWT secret.
+
+#### User Management
+
+The User Management section in the application allows administrators to:
+
+- View all users
+- Add new users
+- Change user passwords
+- Delete users
+- Assign roles to users
+
+This user management system is completely separate from the Nauthilus authentication service and is only used for accessing the UI itself.
 
 ### File Upload/Download
 

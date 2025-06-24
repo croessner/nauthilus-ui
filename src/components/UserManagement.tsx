@@ -1,8 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
-  Button,
-  TextField,
   Typography,
   Paper,
   Table,
@@ -11,393 +9,392 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  IconButton,
+  Button,
   Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
   DialogTitle,
+  DialogContent,
+  DialogActions,
+  TextField,
   FormControl,
   InputLabel,
   Select,
   MenuItem,
-  Chip,
   SelectChangeEvent,
+  CircularProgress,
   Alert,
-  Snackbar
+  IconButton,
+  Chip
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
-import AddIcon from '@mui/icons-material/Add';
-import * as userManager from '../utils/userManager';
-import PasswordField from './common/PasswordField';
+import PersonAddIcon from '@mui/icons-material/PersonAdd';
+import { useUser } from '../contexts/UserContext';
 
 const UserManagement: React.FC = () => {
-  const [users, setUsers] = useState<Array<{ username: string; roles: string[] }>>([]);
+  const { getUsers, addUser, removeUser, updatePassword, loading, error, clearError, user } = useUser();
+  const [users, setUsers] = useState<{ username: string; roles: string[] }[]>([]);
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
   const [openDeleteDialog, setOpenDeleteDialog] = useState(false);
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [roles, setRoles] = useState<string[]>(['user']);
-  const [selectedUser, setSelectedUser] = useState<string | null>(null);
-  const [usernameError, setUsernameError] = useState('');
-  const [passwordError, setPasswordError] = useState('');
-  const [snackbarOpen, setSnackbarOpen] = useState(false);
-  const [snackbarMessage, setSnackbarMessage] = useState('');
-  const [snackbarSeverity, setSnackbarSeverity] = useState<'success' | 'error'>('success');
+  const [selectedUser, setSelectedUser] = useState<string>('');
+  const [localError, setLocalError] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Available roles
-  const availableRoles = ['admin', 'user'];
+  // Check if user has admin role
+  const isAdmin = user?.roles.includes('admin');
+
+  // Define loadUsers function with useCallback to memoize it
+  const loadUsers = useCallback(async () => {
+    const usersList = await getUsers();
+    setUsers(usersList);
+  }, [getUsers, setUsers]);
 
   // Load users on component mount
   useEffect(() => {
     loadUsers();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadUsers = async () => {
-    try {
-      const loadedUsers = await userManager.getUsers();
-      setUsers(loadedUsers);
-    } catch (error) {
-      console.error('Error loading users:', error);
-    }
-  };
-
   const handleAddUser = async () => {
-    if (validateForm()) {
-      try {
-        await userManager.addUser(username, password, roles);
-        await loadUsers();
-        handleCloseAddDialog();
-        showSnackbar('User added successfully', 'success');
-      } catch (error) {
-        console.error('Error adding user:', error);
-        showSnackbar('Failed to add user', 'error');
-      }
+    setLocalError(null);
+
+    // Validate input
+    if (password !== confirmPassword) {
+      setLocalError("Passwords don't match");
+      return;
+    }
+
+    try {
+      await addUser(username, password, roles);
+      setOpenAddDialog(false);
+      setUsername('');
+      setPassword('');
+      setConfirmPassword('');
+      setRoles(['user']);
+      setSuccessMessage('User added successfully');
+      loadUsers();
+    } catch (err) {
+      console.error('Error adding user:', err);
     }
   };
 
   const handleEditUser = async () => {
-    if (validateForm(true)) {
-      try {
-        await userManager.addUser(username, password, roles); // This will update the user if it exists
-        await loadUsers();
-        handleCloseEditDialog();
-        showSnackbar('User updated successfully', 'success');
-      } catch (error) {
-        console.error('Error updating user:', error);
-        showSnackbar('Failed to update user', 'error');
-      }
+    setLocalError(null);
+
+    // Validate input
+    if (password !== confirmPassword) {
+      setLocalError("Passwords don't match");
+      return;
+    }
+
+    try {
+      await updatePassword(selectedUser, password);
+      setOpenEditDialog(false);
+      setPassword('');
+      setConfirmPassword('');
+      setSuccessMessage('Password updated successfully');
+    } catch (err) {
+      console.error('Error updating password:', err);
     }
   };
 
   const handleDeleteUser = async () => {
-    if (selectedUser) {
-      try {
-        await userManager.removeUser(selectedUser);
-        await loadUsers();
-        handleCloseDeleteDialog();
-        showSnackbar('User deleted successfully', 'success');
-      } catch (error) {
-        console.error('Error deleting user:', error);
-        showSnackbar('Failed to delete user', 'error');
-      }
+    try {
+      await removeUser(selectedUser);
+      setOpenDeleteDialog(false);
+      setSuccessMessage('User deleted successfully');
+      loadUsers();
+    } catch (err) {
+      console.error('Error deleting user:', err);
     }
   };
 
-  const handleOpenAddDialog = () => {
-    setUsername('');
-    setPassword('');
-    setRoles(['user']);
-    setUsernameError('');
-    setPasswordError('');
-    setOpenAddDialog(true);
-  };
-
-  const handleCloseAddDialog = () => {
-    setOpenAddDialog(false);
-  };
-
-  const handleOpenEditDialog = (user: { username: string; roles: string[] }) => {
-    setUsername(user.username);
-    setPassword(''); // Don't show the password
-    setRoles(user.roles);
-    setSelectedUser(user.username);
-    setUsernameError('');
-    setPasswordError('');
-    setOpenEditDialog(true);
-  };
-
-  const handleCloseEditDialog = () => {
-    setOpenEditDialog(false);
-  };
-
-  const handleOpenDeleteDialog = (username: string) => {
-    setSelectedUser(username);
-    setOpenDeleteDialog(true);
-  };
-
-  const handleCloseDeleteDialog = () => {
-    setOpenDeleteDialog(false);
-  };
-
-  const handleRolesChange = (event: SelectChangeEvent<string[]>) => {
+  const handleRoleChange = (event: SelectChangeEvent<string[]>) => {
     const value = event.target.value;
     setRoles(typeof value === 'string' ? value.split(',') : value);
   };
 
-  const validateForm = (isEdit = false) => {
-    let isValid = true;
-
-    if (!username) {
-      setUsernameError('Username is required');
-      isValid = false;
-    } else {
-      setUsernameError('');
-    }
-
-    if (!password && !isEdit) {
-      setPasswordError('Password is required');
-      isValid = false;
-    } else {
-      setPasswordError('');
-    }
-
-    return isValid;
+  const openEdit = (username: string) => {
+    setSelectedUser(username);
+    setPassword('');
+    setConfirmPassword('');
+    setOpenEditDialog(true);
   };
 
-  const showSnackbar = (message: string, severity: 'success' | 'error') => {
-    setSnackbarMessage(message);
-    setSnackbarSeverity(severity);
-    setSnackbarOpen(true);
+  const openDelete = (username: string) => {
+    setSelectedUser(username);
+    setOpenDeleteDialog(true);
   };
 
-  const handleCloseSnackbar = () => {
-    setSnackbarOpen(false);
+  const clearMessages = () => {
+    setLocalError(null);
+    clearError();
+    setSuccessMessage(null);
   };
 
   return (
     <Box sx={{ p: 3 }}>
-      <Typography variant="h4" component="h1" gutterBottom>
-        User Management
-      </Typography>
-      <Typography variant="body1" paragraph>
-        Manage users for the Nauthilus Configuration UI. These users are stored locally and are independent of the Nauthilus service.
-      </Typography>
-
-      <Box sx={{ mb: 3, display: 'flex', justifyContent: 'flex-end' }}>
-        <Button
-          variant="contained"
-          color="primary"
-          startIcon={<AddIcon />}
-          onClick={handleOpenAddDialog}
-        >
-          Add User
-        </Button>
-      </Box>
-
-      <TableContainer component={Paper}>
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Username</TableCell>
-              <TableCell>Roles</TableCell>
-              <TableCell align="right">Actions</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {users.map((user) => (
-              <TableRow key={user.username}>
-                <TableCell>{user.username}</TableCell>
-                <TableCell>
-                  {user.roles.map((role) => (
-                    <Chip
-                      key={role}
-                      label={role}
-                      color={role === 'admin' ? 'primary' : 'default'}
-                      size="small"
-                      sx={{ mr: 0.5 }}
-                    />
-                  ))}
-                </TableCell>
-                <TableCell align="right">
-                  <IconButton
-                    color="primary"
-                    onClick={() => handleOpenEditDialog(user)}
-                  >
-                    <EditIcon />
-                  </IconButton>
-                  <IconButton
-                    color="error"
-                    onClick={() => handleOpenDeleteDialog(user.username)}
-                  >
-                    <DeleteIcon />
-                  </IconButton>
-                </TableCell>
-              </TableRow>
-            ))}
-            {users.length === 0 && (
-              <TableRow>
-                <TableCell colSpan={3} align="center">
-                  No users found. Add a user to get started.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </TableContainer>
-
-      {/* Add User Dialog */}
-      <Dialog open={openAddDialog} onClose={handleCloseAddDialog}>
-        <DialogTitle>Add User</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Add a new user to the Nauthilus Configuration UI.
-          </DialogContentText>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Username"
-            type="text"
-            fullWidth
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            error={!!usernameError}
-            helperText={usernameError}
-          />
-          <PasswordField
-            margin="dense"
-            name="password"
-            label="Password"
-            fullWidth
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            error={!!passwordError}
-            helperText={passwordError}
-          />
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="roles-label">Roles</InputLabel>
-            <Select
-              labelId="roles-label"
-              multiple
-              value={roles}
-              onChange={handleRolesChange}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {selected.map((value) => (
-                    <Chip key={value} label={value} />
-                  ))}
-                </Box>
-              )}
-            >
-              {availableRoles.map((role) => (
-                <MenuItem key={role} value={role}>
-                  {role}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseAddDialog}>Cancel</Button>
-          <Button onClick={handleAddUser} color="primary">
-            Add
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Edit User Dialog */}
-      <Dialog open={openEditDialog} onClose={handleCloseEditDialog}>
-        <DialogTitle>Edit User</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Edit user details. Leave the password field empty to keep the current password.
-          </DialogContentText>
-          <TextField
-            autoFocus
-            margin="dense"
-            label="Username"
-            type="text"
-            fullWidth
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            error={!!usernameError}
-            helperText={usernameError}
-            disabled // Username cannot be changed
-          />
-          <PasswordField
-            margin="dense"
-            name="newPassword"
-            label="New Password (leave empty to keep current)"
-            fullWidth
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            error={!!passwordError}
-            helperText={passwordError}
-          />
-          <FormControl fullWidth margin="dense">
-            <InputLabel id="roles-edit-label">Roles</InputLabel>
-            <Select
-              labelId="roles-edit-label"
-              multiple
-              value={roles}
-              onChange={handleRolesChange}
-              renderValue={(selected) => (
-                <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                  {selected.map((value) => (
-                    <Chip key={value} label={value} />
-                  ))}
-                </Box>
-              )}
-            >
-              {availableRoles.map((role) => (
-                <MenuItem key={role} value={role}>
-                  {role}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseEditDialog}>Cancel</Button>
-          <Button onClick={handleEditUser} color="primary">
-            Save
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Delete User Dialog */}
-      <Dialog open={openDeleteDialog} onClose={handleCloseDeleteDialog}>
-        <DialogTitle>Delete User</DialogTitle>
-        <DialogContent>
-          <DialogContentText>
-            Are you sure you want to delete the user "{selectedUser}"? This action cannot be undone.
-          </DialogContentText>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={handleCloseDeleteDialog}>Cancel</Button>
-          <Button onClick={handleDeleteUser} color="error">
-            Delete
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Snackbar for notifications */}
-      <Snackbar
-        open={snackbarOpen}
-        autoHideDuration={6000}
-        onClose={handleCloseSnackbar}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert
-          onClose={handleCloseSnackbar}
-          severity={snackbarSeverity}
-          sx={{ width: '100%' }}
-        >
-          {snackbarMessage}
+      {!isAdmin ? (
+        // Access denied message for non-admin users
+        <Alert severity="error" sx={{ mb: 2 }}>
+          Access Denied: You need administrator privileges to access this page.
         </Alert>
-      </Snackbar>
+      ) : (
+        // Content only visible to admin users
+        <>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h5" component="h1">
+              User Management
+            </Typography>
+            <Button 
+              variant="contained" 
+              color="primary" 
+              startIcon={<PersonAddIcon />}
+              onClick={() => setOpenAddDialog(true)}
+            >
+              Add User
+            </Button>
+          </Box>
+
+          {error && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={clearError}>
+              {error}
+            </Alert>
+          )}
+
+          {localError && (
+            <Alert severity="error" sx={{ mb: 2 }} onClose={() => setLocalError(null)}>
+              {localError}
+            </Alert>
+          )}
+
+          {successMessage && (
+            <Alert severity="success" sx={{ mb: 2 }} onClose={() => setSuccessMessage(null)}>
+              {successMessage}
+            </Alert>
+          )}
+
+          {loading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+              <CircularProgress />
+            </Box>
+          ) : (
+            <TableContainer component={Paper}>
+              <Table>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Username</TableCell>
+                    <TableCell>Roles</TableCell>
+                    <TableCell align="right">Actions</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {users.map((user) => (
+                    <TableRow key={user.username}>
+                      <TableCell>{user.username}</TableCell>
+                      <TableCell>
+                        {user.roles.map(role => (
+                          <Chip 
+                            key={role} 
+                            label={role} 
+                            color={role === 'admin' ? 'primary' : 'default'} 
+                            size="small" 
+                            sx={{ mr: 0.5 }} 
+                          />
+                        ))}
+                      </TableCell>
+                      <TableCell align="right">
+                        <IconButton 
+                          color="primary" 
+                          onClick={() => openEdit(user.username)}
+                          size="small"
+                        >
+                          <EditIcon />
+                        </IconButton>
+                        <IconButton 
+                          color="error" 
+                          onClick={() => openDelete(user.username)}
+                          size="small"
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </>
+      )}
+
+      {/* Only render dialogs if user is admin */}
+      {isAdmin && (
+        <>
+          {/* Add User Dialog */}
+          <Dialog 
+            open={openAddDialog} 
+            onClose={() => setOpenAddDialog(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Add New User</DialogTitle>
+            <DialogContent>
+              <TextField
+                autoFocus
+                margin="dense"
+                id="username"
+                label="Username"
+                type="text"
+                fullWidth
+                variant="outlined"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                sx={{ mb: 2, mt: 1 }}
+              />
+
+              <TextField
+                margin="dense"
+                id="password"
+                label="Password"
+                type="password"
+                fullWidth
+                variant="outlined"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                sx={{ mb: 2 }}
+              />
+
+              <TextField
+                margin="dense"
+                id="confirmPassword"
+                label="Confirm Password"
+                type="password"
+                fullWidth
+                variant="outlined"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+                sx={{ mb: 2 }}
+              />
+
+              <FormControl fullWidth>
+                <InputLabel id="roles-label">Roles</InputLabel>
+                <Select
+                  labelId="roles-label"
+                  id="roles"
+                  multiple
+                  value={roles}
+                  onChange={handleRoleChange}
+                  label="Roles"
+                >
+                  <MenuItem value="admin">Admin</MenuItem>
+                  <MenuItem value="user">User</MenuItem>
+                </Select>
+              </FormControl>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => {
+                setOpenAddDialog(false);
+                clearMessages();
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleAddUser} 
+                variant="contained" 
+                color="primary"
+                disabled={!username || !password || !confirmPassword || roles.length === 0}
+              >
+                Add User
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Edit User Dialog */}
+          <Dialog 
+            open={openEditDialog} 
+            onClose={() => setOpenEditDialog(false)}
+            maxWidth="sm"
+            fullWidth
+          >
+            <DialogTitle>Change Password for {selectedUser}</DialogTitle>
+            <DialogContent>
+              <TextField
+                margin="dense"
+                id="newPassword"
+                label="New Password"
+                type="password"
+                fullWidth
+                variant="outlined"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                sx={{ mb: 2, mt: 1 }}
+              />
+
+              <TextField
+                margin="dense"
+                id="confirmNewPassword"
+                label="Confirm New Password"
+                type="password"
+                fullWidth
+                variant="outlined"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                required
+              />
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => {
+                setOpenEditDialog(false);
+                clearMessages();
+              }}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleEditUser} 
+                variant="contained" 
+                color="primary"
+                disabled={!password || !confirmPassword}
+              >
+                Update Password
+              </Button>
+            </DialogActions>
+          </Dialog>
+
+          {/* Delete User Dialog */}
+          <Dialog 
+            open={openDeleteDialog} 
+            onClose={() => setOpenDeleteDialog(false)}
+          >
+            <DialogTitle>Delete User</DialogTitle>
+            <DialogContent>
+              <Typography>
+                Are you sure you want to delete the user "{selectedUser}"? This action cannot be undone.
+              </Typography>
+            </DialogContent>
+            <DialogActions>
+              <Button onClick={() => setOpenDeleteDialog(false)}>
+                Cancel
+              </Button>
+              <Button 
+                onClick={handleDeleteUser} 
+                variant="contained" 
+                color="error"
+              >
+                Delete
+              </Button>
+            </DialogActions>
+          </Dialog>
+        </>
+      )}
     </Box>
   );
 };

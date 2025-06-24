@@ -56,9 +56,13 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
+import PeopleIcon from '@mui/icons-material/People';
+import LogoutIcon from '@mui/icons-material/Logout';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
+import { UserProvider, useUser } from './contexts/UserContext';
 import ValidationErrors from './components/common/ValidationErrors';
+import LoginDialog from './components/LoginDialog';
 
 // Import configuration components
 import ServerConfig from './components/ServerConfig';
@@ -76,6 +80,7 @@ import ConnectionConfig from './components/ConnectionConfig';
 import ConfigPreview from './components/ConfigPreview';
 import LicensesPage from './components/LicensesPage';
 import ConfigWizard from './components/ConfigWizard';
+import UserManagement from './components/UserManagement';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 240;
@@ -128,6 +133,7 @@ const MainContent: React.FC = () => {
     deleteProfile
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
+  const { isAuthenticated, user, logout } = useUser();
 
   // Compute current drawer width based on display mode
   const drawerWidth = iconOnly ? iconOnlyDrawerWidth : fullDrawerWidth;
@@ -150,6 +156,11 @@ const MainContent: React.FC = () => {
   // Define other menu items
   const runtimeMenuItems: NavigationMenuItem[] = [
     { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
+  ];
+
+  // Define application menu items
+  const applicationMenuItems: NavigationMenuItem[] = [
+    { text: 'User Management', icon: <PeopleIcon />, path: '/users' },
   ];
 
   // Define licenses menu item separately to place it at the bottom
@@ -440,6 +451,53 @@ const MainContent: React.FC = () => {
         ))}
       </List>
 
+      <Divider />
+
+      {/* Application Section - Only visible to admin users */}
+      {user && user.roles.includes('admin') && (
+        <List
+          subheader={
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+              {!iconOnly && (
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                  Application
+                </Typography>
+              )}
+            </Box>
+          }
+        >
+          {applicationMenuItems.map((item) => (
+            <ListItem key={item.text} disablePadding>
+              {iconOnly ? (
+                <Tooltip title={item.text} placement="right">
+                  <ListItemButton 
+                    onClick={() => handleNavigation(item.path)}
+                    sx={{ 
+                      justifyContent: 'center',
+                      '&:hover': {
+                        backgroundColor: 'action.hover',
+                        borderRadius: 1
+                      }
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 0, mr: 0 }}>
+                      {item.icon}
+                    </ListItemIcon>
+                  </ListItemButton>
+                </Tooltip>
+              ) : (
+                <ListItemButton onClick={() => handleNavigation(item.path)}>
+                  <ListItemIcon>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </ListItemButton>
+              )}
+            </ListItem>
+          ))}
+        </List>
+      )}
+
       <Box sx={{ flexGrow: 1 }} />
       <Divider />
       <List>
@@ -655,6 +713,32 @@ const MainContent: React.FC = () => {
                 <RestartAltIcon />
               </IconButton>
             </Tooltip>
+            {user && (
+              <Tooltip title="Logout">
+                <Button
+                  color="inherit"
+                  onClick={logout}
+                  startIcon={<LogoutIcon />}
+                  sx={{ 
+                    mr: { xs: 0.5, sm: 1 },
+                    display: { xs: 'none', sm: 'flex' }
+                  }}
+                >
+                  Logout
+                </Button>
+              </Tooltip>
+            )}
+            {user && (
+              <Tooltip title="Logout">
+                <IconButton
+                  color="inherit"
+                  onClick={logout}
+                  sx={{ display: { xs: 'flex', sm: 'none' } }}
+                >
+                  <LogoutIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title={mode === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}>
               <IconButton 
                 color="inherit" 
@@ -739,9 +823,13 @@ const MainContent: React.FC = () => {
               <Route path="/config-preview" element={<ConfigPreview />} />
               <Route path="/licenses" element={<LicensesPage />} />
               <Route path="/config-wizard" element={<ConfigWizard autoOpen={true} />} />
+              <Route path="/users" element={<UserManagement />} />
             </Routes>
           </>
         )}
+
+        {/* Login Dialog */}
+        <LoginDialog open={!isAuthenticated} />
       </Box>
 
       {/* Reset Confirmation Dialog */}
@@ -893,12 +981,14 @@ const MainContent: React.FC = () => {
   );
 };
 
-// Wrap the main content with the ConfigProvider and ThemeProvider
+// Wrap the main content with the ConfigProvider, ThemeProvider, and UserProvider
 const App: React.FC = () => {
   return (
     <ThemeProvider>
       <ConfigProvider>
-        <MainContent />
+        <UserProvider>
+          <MainContent />
+        </UserProvider>
       </ConfigProvider>
     </ThemeProvider>
   );

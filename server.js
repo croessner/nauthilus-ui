@@ -14,7 +14,10 @@ const ADDRESS = process.env.ADDRESS || '0.0.0.0';
 // Connect to MongoDB
 mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+  .catch(err => {
+    console.log('MongoDB connection error:', err);
+    console.error('MongoDB connection error:', err);
+  });
 
 // Define schemas
 const ProfileSchema = new mongoose.Schema({
@@ -68,6 +71,7 @@ app.get('/api/profiles/:userId', async (req, res) => {
       currentProfileName: profileData.currentProfileName
     });
   } catch (error) {
+    console.log('Error fetching profiles:', error);
     console.error('Error fetching profiles:', error);
     res.status(500).json({ error: 'Failed to fetch profiles' });
   }
@@ -90,6 +94,7 @@ app.post('/api/profiles/:userId', async (req, res) => {
       currentProfileName: result.currentProfileName
     });
   } catch (error) {
+    console.log('Error saving profiles:', error);
     console.error('Error saving profiles:', error);
     res.status(500).json({ error: 'Failed to save profiles' });
   }
@@ -107,6 +112,7 @@ app.get('/api/userconfig/:userId', async (req, res) => {
 
     res.json({ config: userConfig.config });
   } catch (error) {
+    console.log('Error fetching user config:', error);
     console.error('Error fetching user config:', error);
     res.status(500).json({ error: 'Failed to fetch user configuration' });
   }
@@ -126,6 +132,7 @@ app.post('/api/userconfig/:userId', async (req, res) => {
 
     res.json({ config: result.config });
   } catch (error) {
+    console.log('Error saving user config:', error);
     console.error('Error saving user config:', error);
     res.status(500).json({ error: 'Failed to save user configuration' });
   }
@@ -146,6 +153,7 @@ app.get('/api/tokens/:userId', async (req, res) => {
       refreshToken: tokenData.refreshToken
     });
   } catch (error) {
+    console.log('Error fetching tokens:', error);
     console.error('Error fetching tokens:', error);
     res.status(500).json({ error: 'Failed to fetch tokens' });
   }
@@ -168,6 +176,7 @@ app.post('/api/tokens/:userId', async (req, res) => {
       refreshToken: result.refreshToken
     });
   } catch (error) {
+    console.log('Error saving tokens:', error);
     console.error('Error saving tokens:', error);
     res.status(500).json({ error: 'Failed to save tokens' });
   }
@@ -179,6 +188,7 @@ app.delete('/api/tokens/:userId', async (req, res) => {
     await Token.findOneAndDelete({ userId });
     res.json({ message: 'Tokens deleted successfully' });
   } catch (error) {
+    console.log('Error deleting tokens:', error);
     console.error('Error deleting tokens:', error);
     res.status(500).json({ error: 'Failed to delete tokens' });
   }
@@ -196,6 +206,7 @@ app.get('/api/theme/:userId', async (req, res) => {
 
     res.json({ theme: themeData.theme });
   } catch (error) {
+    console.log('Error fetching theme:', error);
     console.error('Error fetching theme:', error);
     res.status(500).json({ error: 'Failed to fetch theme' });
   }
@@ -215,8 +226,26 @@ app.post('/api/theme/:userId', async (req, res) => {
 
     res.json({ theme: result.theme });
   } catch (error) {
+    console.log('Error saving theme:', error);
     console.error('Error saving theme:', error);
     res.status(500).json({ error: 'Failed to save theme' });
+  }
+});
+
+// Create a middleware to inject environment variables into window._env_
+app.use((req, res, next) => {
+  if (req.path === '/env-config.js') {
+    // Create a JavaScript file that sets window._env_
+    const envConfig = {
+      JWT_SECRET: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+      TOKEN_EXPIRY: process.env.REACT_APP_TOKEN_EXPIRY || '3600',
+      REFRESH_TOKEN_EXPIRY: process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'
+    };
+
+    res.setHeader('Content-Type', 'application/javascript');
+    res.send(`window._env_ = ${JSON.stringify(envConfig)};`);
+  } else {
+    next();
   }
 });
 
@@ -249,6 +278,8 @@ app.use(
       }
     },
     onError: (err, req, res) => {
+      console.log('Proxy error:', err.message);
+      console.error('Proxy error:', err.message);
       res.status(500).json({ error: err.message });
     },
   })
@@ -276,6 +307,8 @@ app.use(
         proxyReq.setHeader('Content-Type', 'application/json');
       },
       onError: (err, req, res) => {
+        console.log('Proxy error:', err.message);
+        console.error('Proxy error:', err.message);
         res.status(500).json({ error: err.message });
       },
     })
@@ -307,6 +340,8 @@ app.use(
         }
       },
       onError: (err, req, res) => {
+        console.log('Proxy error:', err.message);
+        console.error('Proxy error:', err.message);
         res.status(500).json({ error: err.message });
       },
     })
@@ -340,6 +375,8 @@ app.use(
         proxyReq.setHeader('Content-Type', 'application/json');
       },
       onError: (err, req, res) => {
+        console.log('Proxy error:', err.message);
+        console.error('Proxy error:', err.message);
         res.status(500).json({ error: err.message });
       },
     })
@@ -373,6 +410,8 @@ app.use(
         proxyReq.setHeader('Content-Type', 'application/json');
       },
       onError: (err, req, res) => {
+        console.log('Proxy error:', err.message);
+        console.error('Proxy error:', err.message);
         res.status(500).json({ error: err.message });
       },
     })
@@ -380,7 +419,25 @@ app.use(
 
 // All other requests go to the React app
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'build', 'index.html'));
+  // Read the HTML file
+  const indexPath = path.join(__dirname, 'build', 'index.html');
+  const fs = require('fs');
+
+  fs.readFile(indexPath, 'utf8', (err, data) => {
+    if (err) {
+      console.log('Error reading index.html:', err);
+      console.error('Error reading index.html:', err);
+      return res.status(500).send('Error loading application');
+    }
+
+    // Inject the env-config.js script before the closing head tag
+    const modifiedHtml = data.replace(
+      '</head>',
+      '<script src="/env-config.js"></script></head>'
+    );
+
+    res.send(modifiedHtml);
+  });
 });
 
 app.listen(PORT, ADDRESS, () => {

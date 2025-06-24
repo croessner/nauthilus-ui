@@ -42,10 +42,19 @@ const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
 const DEFAULT_PROFILE_NAME = 'Default';
 
 // Helper function to get the current user ID
-// In a real application, this would come from an authentication system
 const getCurrentUserId = (): string => {
-  // For simplicity, we'll use a fixed user ID
-  // In a real application, this would be the authenticated user's ID
+  // Try to get the current user from the token in localStorage
+  const token = localStorage.getItem('token');
+  if (token) {
+    try {
+      const decoded = JSON.parse(atob(token.split('.')[1]));
+      return decoded.sub; // Use the username as the user ID
+    } catch (error) {
+      console.error('Error decoding token:', error);
+    }
+  }
+
+  // Fallback to default user if no token or error decoding
   return 'default-user';
 };
 
