@@ -30,9 +30,7 @@ import ValidationErrors from './common/ValidationErrors';
 // Validation schema
 const BackendsConfigSchema = Yup.object().shape({
   backends: Yup.array().of(
-    Yup.object().shape({
-      backend: Yup.string().required('Backend type is required'),
-    })
+    Yup.string().required('Backend type is required')
   ),
 });
 
@@ -151,14 +149,17 @@ const BackendsConfig: React.FC = () => {
                                 <Select
                                   labelId={`backend-type-label-${index}`}
                                   id={`backend-type-${index}`}
-                                  value={backend.backend}
+                                  value={backend}
                                   label="Backend Type"
                                   onChange={(e) => {
                                     const newBackends = [...values.backends];
-                                    newBackends[index].backend = e.target.value;
+                                    newBackends[index] = e.target.value;
                                     setFieldValue('backends', newBackends);
                                   }}
-                                  error={Boolean(touched.backends?.[index] && errors.backends?.[index] && typeof errors.backends[index] !== 'string' && typeof touched.backends[index] !== 'string' && touched.backends[index] && errors.backends[index] && 'backend' in (touched.backends[index] as object) && 'backend' in (errors.backends[index] as object) && (touched.backends[index] as any).backend && (errors.backends[index] as any).backend)}
+                                  error={touched.backends !== undefined && errors.backends !== undefined && 
+                                    Array.isArray(touched.backends) && Array.isArray(errors.backends) &&
+                                    index < touched.backends.length && index < errors.backends.length && 
+                                    Boolean(touched.backends[index]) && Boolean(errors.backends[index])}
                                 >
                                   {availableBackendTypes.map((type) => (
                                     <MenuItem key={type} value={type}>
@@ -227,7 +228,7 @@ const BackendsConfig: React.FC = () => {
                         onClick={() => {
                           setFieldValue('backends', [
                             ...values.backends,
-                            { backend: 'cache' },
+                            'cache',
                           ]);
                           setHasUnsavedChanges(true);
                         }}

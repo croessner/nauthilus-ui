@@ -559,16 +559,13 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
           }
         }
 
-        // Fix backend configuration format if it's an array of strings
+        // Fix backend configuration format if it's an array of objects with 'backend' property
         if (newConfig.server?.backends && Array.isArray(newConfig.server.backends)) {
-          // Check if the backends are strings instead of objects
+          // Check if the backends are objects with 'backend' property instead of strings
           const firstBackend = newConfig.server.backends[0];
-          if (firstBackend && typeof (firstBackend as any) === 'string') {
-            // Convert string backends to objects with 'backend' property
-            // Use type assertion to tell TypeScript that the array contains strings
-            newConfig.server.backends = (newConfig.server.backends as unknown as string[]).map(backend => ({
-              backend: backend
-            }));
+          if (firstBackend && typeof firstBackend === 'object' && 'backend' in firstBackend) {
+            // Convert objects with 'backend' property to strings
+            newConfig.server.backends = newConfig.server.backends.map((backend: any) => backend.backend);
           }
         }
 

@@ -78,9 +78,7 @@ export interface LogConfig {
   debug_modules?: string[];
 }
 
-export interface BackendConfig {
-  backend: string;
-}
+export type BackendConfig = string;
 
 
 

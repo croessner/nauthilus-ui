@@ -323,6 +323,10 @@ const AuthConfig: React.FC = () => {
                                   getIn(touched, `jwt_auth.users[${index}].username`) && 
                                   getIn(errors, `jwt_auth.users[${index}].username`)
                                 }
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
                               />
                             </Grid>
                             <Grid item xs={12} md={6}>
@@ -341,6 +345,10 @@ const AuthConfig: React.FC = () => {
                                   getIn(errors, `jwt_auth.users[${index}].password`)) ||
                                   "Password must be at least 8 characters and without spaces"
                                 }
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
                               />
                             </Grid>
                             <Grid item xs={12}>
@@ -352,6 +360,10 @@ const AuthConfig: React.FC = () => {
                                 variant="outlined"
                                 // Initialize with the current roles joined by commas
                                 defaultValue={(values.jwt_auth?.users?.[index]?.roles || []).join(', ')}
+                                // Set hasUnsavedChanges to true when the field changes
+                                onChange={() => {
+                                  setHasUnsavedChanges(true);
+                                }}
                                 // Process the roles when the field loses focus
                                 onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
                                   const rolesArray = e.target.value.split(',').map((role: string) => role.trim()).filter(Boolean);
@@ -370,6 +382,7 @@ const AuthConfig: React.FC = () => {
                                   const newUsers = [...(values.jwt_auth?.users || [])];
                                   newUsers.splice(index, 1);
                                   setFieldValue('jwt_auth.users', newUsers);
+                                  setHasUnsavedChanges(true);
                                 }}
                               >
                                 Remove User
@@ -389,6 +402,7 @@ const AuthConfig: React.FC = () => {
                         const newUser = { username: '', password: '', roles: ['authenticate'] };
                         const newUsers = [...(values.jwt_auth?.users || []), newUser];
                         setFieldValue('jwt_auth.users', newUsers);
+                        setHasUnsavedChanges(true);
                       }}
                       sx={{ mt: 1 }}
                     >

@@ -190,9 +190,7 @@ const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
 
     // If no backends exist, create one based on the selected type
     if (newConfig.server.backends.length === 0 && backendType) {
-      const backendConfig: BackendConfig = {
-        backend: backendType
-      };
+      const backendConfig: BackendConfig = backendType;
       newConfig.server.backends.push(backendConfig);
 
       // If LDAP is selected, configure LDAP settings

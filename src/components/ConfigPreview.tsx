@@ -52,13 +52,13 @@ const ConfigPreview: React.FC = () => {
     if (!configCopy.server?.backends || configCopy.server.backends.length === 0) {
       essentialErrors.push('No backends configured. At least one backend is required for operation.');
     } else {
-      // Check if all backends have a valid backend property
+      // Check if all backends are valid strings
       const invalidBackends = configCopy.server.backends.filter((backend: BackendConfig) => 
-        !backend || typeof backend !== 'object' || !backend.backend || backend.backend.trim() === ''
+        !backend || typeof backend !== 'string' || backend.trim() === ''
       );
 
       if (invalidBackends.length > 0) {
-        essentialErrors.push('Some backends are not properly configured. Each backend must have a valid backend property.');
+        essentialErrors.push('Some backends are not properly configured. Each backend must be a valid string.');
       }
     }
 
@@ -66,8 +66,8 @@ const ConfigPreview: React.FC = () => {
 
     // Check if LDAP is configured when LDAP backend is used
     const hasLdapBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-      if (typeof backend === 'object' && backend !== null) {
-        return backend.backend === 'ldap' || backend.backend.startsWith('ldap(');
+      if (typeof backend === 'string') {
+        return backend === 'ldap' || backend.startsWith('ldap(');
       }
       return false;
     });
@@ -75,8 +75,8 @@ const ConfigPreview: React.FC = () => {
     if (hasLdapBackend) {
       // Check if standard LDAP is configured
       const hasStandardLdapBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-        if (typeof backend === 'object' && backend !== null) {
-          return backend.backend === 'ldap';
+        if (typeof backend === 'string') {
+          return backend === 'ldap';
         }
         return false;
       });
@@ -88,8 +88,8 @@ const ConfigPreview: React.FC = () => {
       // Check if LDAP pool is configured
       const ldapPoolRegex = /^ldap\((.+)\)$/;
       configCopy.server?.backends?.forEach((backend: BackendConfig) => {
-        if (typeof backend === 'object' && backend !== null) {
-          const match = backend.backend.match(ldapPoolRegex);
+        if (typeof backend === 'string') {
+          const match = backend.match(ldapPoolRegex);
           if (match) {
             const poolName = match[1];
             if (!configCopy.ldap || !configCopy.ldap.optional_ldap_pools || !configCopy.ldap.optional_ldap_pools[poolName]) {
@@ -102,8 +102,8 @@ const ConfigPreview: React.FC = () => {
 
     // Check if Lua is configured when Lua backend is used
     const hasLuaBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-      if (typeof backend === 'object' && backend !== null) {
-        return backend.backend === 'lua' || backend.backend.startsWith('lua(');
+      if (typeof backend === 'string') {
+        return backend === 'lua' || backend.startsWith('lua(');
       }
       return false;
     });
@@ -111,8 +111,8 @@ const ConfigPreview: React.FC = () => {
     if (hasLuaBackend) {
       // Check if standard Lua backend is configured
       const hasStandardLuaBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-        if (typeof backend === 'object' && backend !== null) {
-          return backend.backend === 'lua';
+        if (typeof backend === 'string') {
+          return backend === 'lua';
         }
         return false;
       });
@@ -124,8 +124,8 @@ const ConfigPreview: React.FC = () => {
       // Check if optional Lua backends are configured
       const luaBackendRegex = /^lua\((.+)\)$/;
       configCopy.server?.backends?.forEach((backend: BackendConfig) => {
-        if (typeof backend === 'object' && backend !== null) {
-          const match = backend.backend.match(luaBackendRegex);
+        if (typeof backend === 'string') {
+          const match = backend.match(luaBackendRegex);
           if (match) {
             const backendName = match[1];
             if (!configCopy.lua || !configCopy.lua.optional_lua_backends || !configCopy.lua.optional_lua_backends[backendName]) {
