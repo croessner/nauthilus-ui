@@ -36,6 +36,7 @@ export interface EndpointConfig {
   auth_saslauthd?: boolean;
   auth_jwt?: boolean;
   custom_hooks?: boolean;
+  configuration: boolean;
 }
 
 export interface TLSConfig {
@@ -43,7 +44,7 @@ export interface TLSConfig {
   cert?: string;
   key?: string;
   skip_verify?: boolean;
-  ca?: string;
+  ca_file?: string;
   min_tls_version?: string;
   cipher_suites?: string[];
 }

@@ -66,7 +66,7 @@ const ServerConfigSchema = Yup.object().shape({
         : schema
     ),
     skip_verify: Yup.boolean(),
-    ca: Yup.string(),
+    ca_file: Yup.string(),
     min_tls_version: Yup.string().oneOf(['TLS1.2', 'TLS1.3'], 'Must be either TLS1.2 or TLS1.3'),
     cipher_suites: Yup.array().of(Yup.string()),
   }),
@@ -90,6 +90,7 @@ const ServerConfigSchema = Yup.object().shape({
     auth_saslauthd: Yup.boolean(),
     auth_jwt: Yup.boolean(),
     custom_hooks: Yup.boolean(),
+    configuration: Yup.boolean(),
   }),
 
   // Default HTTP request header validation
@@ -182,7 +183,7 @@ const ServerConfig: React.FC = () => {
       cert: config.server.tls?.cert || '',
       key: config.server.tls?.key || '',
       skip_verify: config.server.tls?.skip_verify || false,
-      ca: config.server.tls?.ca || '',
+      ca_file: config.server.tls?.ca_file || '',
       min_tls_version: config.server.tls?.min_tls_version || 'TLS1.2',
       cipher_suites: config.server.tls?.cipher_suites || [],
     },
@@ -199,6 +200,7 @@ const ServerConfig: React.FC = () => {
       auth_saslauthd: config.server.disabled_endpoints?.auth_saslauthd || false,
       auth_jwt: config.server.disabled_endpoints?.auth_jwt || false,
       custom_hooks: config.server.disabled_endpoints?.custom_hooks || false,
+      configuration: config.server.disabled_endpoints?.configuration || false,
     },
 
     // Initialize default HTTP request header configuration
@@ -308,6 +310,8 @@ const ServerConfig: React.FC = () => {
         // prometheus_timer is now in MonitoringConfig
       };
       await updateConfigSection('server', updatedValues);
+      // Reset the unsaved changes flag after successful save
+      setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Error updating server configuration:', error);
     }
@@ -484,11 +488,11 @@ const ServerConfig: React.FC = () => {
                     <Field
                       as={TextField}
                       fullWidth
-                      name="tls.ca"
+                      name="tls.ca_file"
                       label="TLS CA Certificate Path"
                       variant="outlined"
-                      error={getIn(touched, 'tls.ca') && Boolean(getIn(errors, 'tls.ca'))}
-                      helperText={getIn(touched, 'tls.ca') && getIn(errors, 'tls.ca')}
+                      error={getIn(touched, 'tls.ca_file') && Boolean(getIn(errors, 'tls.ca_file'))}
+                      helperText={getIn(touched, 'tls.ca_file') && getIn(errors, 'tls.ca_file')}
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);
                         setHasUnsavedChanges(true);
@@ -691,6 +695,21 @@ const ServerConfig: React.FC = () => {
                     />
                   }
                   label="Disable Custom Hooks Endpoints (/api/v1/custom/*)"
+                />
+              </Grid>
+              <Grid item xs={12} md={6}>
+                <FormControlLabel
+                    control={
+                      <Switch
+                          checked={values.disabled_endpoints?.configuration || false}
+                          onChange={(e) => {
+                            setFieldValue('disabled_endpoints.configuration', e.target.checked);
+                            setHasUnsavedChanges(true);
+                          }}
+                          name="disabled_endpoints.configuration"
+                      />
+                    }
+                    label="Disable Configuration Endpoints (/api/v1/config/*)"
                 />
               </Grid>
             </Grid>
@@ -1559,7 +1578,21 @@ const ServerConfig: React.FC = () => {
           {/* Prometheus Timer Configuration moved to MonitoringConfig */}
 
           <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-            <Button type="submit" variant="contained" color="primary" disabled={!hasUnsavedChanges}>
+            <Button 
+              type="submit" 
+              variant="contained" 
+              color="primary" 
+              disabled={!hasUnsavedChanges}
+              onClick={async () => {
+                if (hasUnsavedChanges) {
+                  try {
+                    await handleSubmit(values);
+                  } catch (error) {
+                    console.error('Error saving configuration:', error);
+                  }
+                }
+              }}
+            >
               Save Changes
             </Button>
           </Box>
