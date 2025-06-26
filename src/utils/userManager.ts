@@ -8,7 +8,6 @@ import * as bcrypt from 'bcryptjs';
 
 // Storage keys
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-const CONFIG_STORAGE_KEY = 'nauthilus-ui-user-config';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TOKEN_STORAGE_KEY = 'token';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
