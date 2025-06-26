@@ -27,22 +27,10 @@ const UserConfigSchema = new mongoose.Schema({
   config: { type: mongoose.Schema.Types.Mixed, required: true }
 });
 
-const TokenSchema = new mongoose.Schema({
-  userId: { type: String, required: true },
-  token: { type: String },
-  refreshToken: { type: String }
-});
-
-const ThemeSchema = new mongoose.Schema({
-  userId: { type: String, required: true },
-  theme: { type: String, required: true }
-});
 
 // Create models
 const Profile = mongoose.model('Profile', ProfileSchema);
 const UserConfig = mongoose.model('UserConfig', UserConfigSchema);
-const Token = mongoose.model('Token', TokenSchema);
-const Theme = mongoose.model('Theme', ThemeSchema);
 
 // Function to initialize database with required collections and default admin user
 const initializeDatabase = async () => {
