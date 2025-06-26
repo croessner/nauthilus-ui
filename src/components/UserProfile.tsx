@@ -141,6 +141,7 @@ const UserProfile: React.FC = () => {
   };
 
   // Clear all messages
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const clearMessages = () => {
     setProfileError(null);
     setPasswordError(null);

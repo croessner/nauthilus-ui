@@ -37,7 +37,9 @@ interface ConfigContextType {
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
 // Storage keys for the configuration (kept for backward compatibility)
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const PROFILES_STORAGE_KEY = 'nauthilus-profiles';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
 const DEFAULT_PROFILE_NAME = 'Default';
 
@@ -48,6 +50,7 @@ const getCurrentUserId = async (): Promise<string> => {
 };
 
 // Synchronous version for immediate use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getCurrentUserIdSync = (): string => {
   // Always return default-user since we're storing userId-Session-Infos only in browser
   return 'default-user';

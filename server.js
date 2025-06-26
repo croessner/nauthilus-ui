@@ -276,8 +276,8 @@ app.get('/api/health/mongodb', (req, res) => {
   }
 });
 
-// Middleware for parsing JSON
-app.use(bodyParser.json());
+// Middleware for parsing JSON with increased payload size limit
+app.use(bodyParser.json({ limit: '50mb' }));
 
 // API endpoints for data that was previously in localStorage
 
@@ -463,9 +463,9 @@ app.use((req, res, next) => {
   if (req.path === '/env-config.js') {
     // Create a JavaScript file that sets window._env_
     const envConfig = {
-      JWT_SECRET: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
-      TOKEN_EXPIRY: process.env.REACT_APP_TOKEN_EXPIRY || '3600',
-      REFRESH_TOKEN_EXPIRY: process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'
+      REACT_APP_JWT_SECRET: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+      REACT_APP_TOKEN_EXPIRY: process.env.REACT_APP_TOKEN_EXPIRY || '3600',
+      REACT_APP_REFRESH_TOKEN_EXPIRY: process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'
     };
 
     res.setHeader('Content-Type', 'application/javascript');

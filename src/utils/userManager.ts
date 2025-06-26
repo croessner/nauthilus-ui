@@ -7,8 +7,11 @@ import axios from 'axios';
 import * as bcrypt from 'bcryptjs';
 
 // Storage keys
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const CONFIG_STORAGE_KEY = 'nauthilus-ui-user-config';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const TOKEN_STORAGE_KEY = 'token';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const REFRESH_TOKEN_STORAGE_KEY = 'refresh_token';
 
 // Helper function to get the current user ID
@@ -28,6 +31,7 @@ const getCurrentUserId = async (): Promise<string> => {
 };
 
 // Synchronous version for internal use
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const getCurrentUserIdSync = (): string => {
   // Try to use cached token
   if (cachedTokens?.token) {
@@ -67,10 +71,11 @@ export interface UserManagerConfig {
 const getEnvVar = (name: string, defaultValue: string): string => {
   // In a browser environment, environment variables must be exposed via process.env.REACT_APP_*
   // or via window._env_
-  if (typeof window !== 'undefined' && window._env_ && window._env_[name]) {
-    return window._env_[name];
+  const fullName = `REACT_APP_${name}`;
+  if (typeof window !== 'undefined' && window._env_ && window._env_[fullName]) {
+    return window._env_[fullName];
   }
-  return (process.env[`REACT_APP_${name}`] || defaultValue);
+  return (process.env[fullName] || defaultValue);
 };
 
 // Default configuration
@@ -398,8 +403,8 @@ const generateToken = (user: User, expiry: number): string => {
 export const authenticate = async (username: string, password: string): Promise<{ token: string, refreshToken: string } | null> => {
   const config = await loadConfig();
 
-  // Find user by username
-  const user = config.users.find(u => u.username === username);
+  // Find user by username (case-insensitive)
+  const user = config.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   if (!user) {
     return null;
   }
@@ -445,8 +450,8 @@ let cachedTokens: { token: string, refreshToken: string } | null = null;
 export const authenticateSync = (username: string, password: string): { token: string, refreshToken: string } | null => {
   const config = loadConfigSync();
 
-  // Find user by username
-  const user = config.users.find(u => u.username === username);
+  // Find user by username (case-insensitive)
+  const user = config.users.find(u => u.username.toLowerCase() === username.toLowerCase());
   if (!user) {
     return null;
   }
