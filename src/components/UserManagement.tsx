@@ -64,6 +64,8 @@ const UserManagement: React.FC = () => {
 
   // File upload reference
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Reference for the Add User button to restore focus
+  const addUserButtonRef = useRef<HTMLButtonElement>(null);
 
   // Check if user has admin role
   const isAdmin = currentUser?.roles.includes('admin');
@@ -98,6 +100,13 @@ const UserManagement: React.FC = () => {
       setRoles(['user']);
       setSuccessMessage('User added successfully');
       loadUsers();
+
+      // Restore focus to the Add User button after dialog is closed
+      setTimeout(() => {
+        if (addUserButtonRef.current) {
+          addUserButtonRef.current.focus();
+        }
+      }, 0);
     } catch (err) {
       console.error('Error adding user:', err);
     }
@@ -250,6 +259,7 @@ const UserManagement: React.FC = () => {
               color="primary" 
               startIcon={<PersonAddIcon />}
               onClick={() => setOpenAddDialog(true)}
+              ref={addUserButtonRef}
             >
               Add User
             </Button>
@@ -375,9 +385,19 @@ const UserManagement: React.FC = () => {
           {/* Add User Dialog */}
           <Dialog 
             open={openAddDialog} 
-            onClose={() => setOpenAddDialog(false)}
+            onClose={() => {
+              setOpenAddDialog(false);
+              clearMessages();
+              // Restore focus to the Add User button
+              setTimeout(() => {
+                if (addUserButtonRef.current) {
+                  addUserButtonRef.current.focus();
+                }
+              }, 0);
+            }}
             maxWidth="sm"
             fullWidth
+            disableRestoreFocus
           >
             <DialogTitle>Add New User</DialogTitle>
             <DialogContent>
@@ -440,6 +460,12 @@ const UserManagement: React.FC = () => {
               <Button onClick={() => {
                 setOpenAddDialog(false);
                 clearMessages();
+                // Restore focus to the Add User button
+                setTimeout(() => {
+                  if (addUserButtonRef.current) {
+                    addUserButtonRef.current.focus();
+                  }
+                }, 0);
               }}>
                 Cancel
               </Button>
