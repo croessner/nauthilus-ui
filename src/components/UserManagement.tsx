@@ -346,15 +346,18 @@ const UserManagement: React.FC = () => {
                             <AccountCircleIcon />
                           </IconButton>
                         </Tooltip>
+                        {/* Wrap disabled button in span to allow tooltip to work */}
                         <Tooltip title="Delete User">
-                          <IconButton 
-                            color="error" 
-                            onClick={() => openDelete(user.username)}
-                            size="small"
-                            disabled={currentUser?.username === user.username || !isAdmin}
-                          >
-                            <DeleteIcon />
-                          </IconButton>
+                          <span>
+                            <IconButton 
+                              color="error" 
+                              onClick={() => openDelete(user.username)}
+                              size="small"
+                              disabled={currentUser?.username === user.username || !isAdmin}
+                            >
+                              <DeleteIcon sx={{ color: (currentUser?.username === user.username || !isAdmin) ? 'action.disabled' : 'inherit' }} />
+                            </IconButton>
+                          </span>
                         </Tooltip>
                       </TableCell>
                     </TableRow>
