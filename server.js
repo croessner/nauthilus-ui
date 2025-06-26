@@ -47,7 +47,9 @@ const initializeDatabase = async () => {
             username: 'admin',
             // Default password: 'admin' (hashed with bcrypt)
             passwordHash: bcrypt.hashSync('admin', 12),
-            roles: ['admin']
+            roles: ['admin'],
+            lastLogin: null, // Explicitly set lastLogin to null
+            lastModified: new Date().toISOString() // Set lastModified to current time
           }
         ],
         jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
@@ -76,19 +78,37 @@ const initializeDatabase = async () => {
         if (!userConfig.config.users || userConfig.config.users.length === 0) {
           console.log('User config exists but no users found, adding default admin user');
 
-          // Add default admin user
+          // Add default admin user with lastLogin explicitly set to null
           userConfig.config.users = [
             {
               username: 'admin',
               // Default password: 'admin' (hashed with bcrypt)
               passwordHash: bcrypt.hashSync('admin', 12),
-              roles: ['admin']
+              roles: ['admin'],
+              lastLogin: null, // Explicitly set lastLogin to null
+              lastModified: new Date().toISOString() // Set lastModified to current time
             }
           ];
 
           // Save the updated config
           await userConfig.save();
-          console.log('Default admin user added to existing config');
+          console.log('Default admin user added to existing config with lastLogin explicitly set to null');
+        } else {
+          // Check if any users are missing the lastLogin property
+          let usersUpdated = false;
+          userConfig.config.users.forEach(user => {
+            if (!('lastLogin' in user)) {
+              console.log(`Server: Adding missing lastLogin property for user ${user.username} in default-user config`);
+              user.lastLogin = null; // Set to null if it doesn't exist
+              usersUpdated = true;
+            }
+          });
+
+          // Save the updated config if any users were updated
+          if (usersUpdated) {
+            await userConfig.save();
+            console.log('Updated users in default-user config with lastLogin property');
+          }
         }
       }
 
@@ -103,7 +123,9 @@ const initializeDatabase = async () => {
             {
               username: 'admin',
               passwordHash: bcrypt.hashSync('admin', 12),
-              roles: ['admin']
+              roles: ['admin'],
+              lastLogin: null, // Explicitly set lastLogin to null
+              lastModified: new Date().toISOString() // Set lastModified to current time
             }
           ],
           jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
@@ -118,6 +140,22 @@ const initializeDatabase = async () => {
         });
 
         console.log('User configuration for admin userId created successfully');
+      } else {
+        // Check if any users in admin config are missing the lastLogin property
+        let usersUpdated = false;
+        adminConfig.config.users.forEach(user => {
+          if (!('lastLogin' in user)) {
+            console.log(`Server: Adding missing lastLogin property for user ${user.username} in admin config`);
+            user.lastLogin = null; // Set to null if it doesn't exist
+            usersUpdated = true;
+          }
+        });
+
+        // Save the updated config if any users were updated
+        if (usersUpdated) {
+          await adminConfig.save();
+          console.log('Updated users in admin config with lastLogin property');
+        }
       }
     }
 
@@ -347,7 +385,9 @@ app.get('/api/userconfig/:userId', async (req, res) => {
             username: 'admin',
             // Default password hash for 'admin' (hashed with bcrypt)
             passwordHash: bcrypt.hashSync('admin', 12),
-            roles: ['admin']
+            roles: ['admin'],
+            lastLogin: null, // Explicitly set lastLogin to null
+            lastModified: new Date().toISOString()
           }
         ],
         jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
@@ -364,6 +404,15 @@ app.get('/api/userconfig/:userId', async (req, res) => {
     if (!userConfig) {
       return res.status(404).json({ error: 'User configuration not found' });
     }
+
+
+    // Ensure lastLogin is explicitly set for each user
+    userConfig.config.users.forEach(user => {
+      if (!('lastLogin' in user)) {
+        user.lastLogin = null; // Set to null if it doesn't exist
+      }
+    });
+
 
     res.json({ config: userConfig.config });
   } catch (error) {
@@ -385,12 +434,21 @@ app.post('/api/userconfig/:userId', async (req, res) => {
     const { userId } = req.params;
     const { config } = req.body;
 
+
+    // Ensure lastLogin is explicitly set for each user
+    config.users.forEach(user => {
+      if (!('lastLogin' in user)) {
+        user.lastLogin = null; // Set to null if it doesn't exist
+      }
+    });
+
     // Update or create user config
     const result = await UserConfig.findOneAndUpdate(
       { userId },
       { userId, config },
       { upsert: true, new: true }
     );
+
 
     res.json({ config: result.config });
   } catch (error) {

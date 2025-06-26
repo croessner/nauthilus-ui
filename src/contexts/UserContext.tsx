@@ -1,18 +1,30 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import * as userManager from '../utils/userManager';
 
+// Define the user type
+interface User {
+  username: string;
+  roles: string[];
+  displayName?: string;
+  email?: string;
+  avatar?: string;
+  lastLogin?: string | null;
+  lastModified?: string;
+}
+
 // Define the context type
 interface UserContextType {
   isAuthenticated: boolean;
-  user: { username: string; roles: string[] } | null;
+  user: User | null;
   loading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => Promise<void>;
   addUser: (username: string, password: string, roles: string[]) => Promise<void>;
   removeUser: (username: string) => Promise<void>;
-  getUsers: () => Promise<{ username: string; roles: string[] }[]>;
+  getUsers: () => Promise<User[]>;
   updatePassword: (username: string, password: string) => Promise<void>;
+  updateUserProfile: (username: string, profileData: Partial<Omit<User, 'username' | 'roles'>>) => Promise<void>;
   clearError: () => void;
 }
 
@@ -36,7 +48,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       try {
         const authenticated = await userManager.isAuthenticated();
         setIsAuthenticated(authenticated);
-        
+
         if (authenticated) {
           const currentUser = await userManager.getCurrentUser();
           setUser(currentUser);
@@ -56,10 +68,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const login = async (username: string, password: string): Promise<boolean> => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const result = await userManager.authenticate(username, password);
-      
+
       if (result) {
         setIsAuthenticated(true);
         const currentUser = await userManager.getCurrentUser();
@@ -81,7 +93,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   // Logout function
   const logout = async (): Promise<void> => {
     setLoading(true);
-    
+
     try {
       await userManager.logout();
       setIsAuthenticated(false);
@@ -98,7 +110,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const addUser = async (username: string, password: string, roles: string[]): Promise<void> => {
     setLoading(true);
     setError(null);
-    
+
     try {
       await userManager.addUser(username, password, roles);
     } catch (err) {
@@ -114,7 +126,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const removeUser = async (username: string): Promise<void> => {
     setLoading(true);
     setError(null);
-    
+
     try {
       await userManager.removeUser(username);
     } catch (err) {
@@ -127,10 +139,10 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   };
 
   // Get users function
-  const getUsers = async (): Promise<{ username: string; roles: string[] }[]> => {
+  const getUsers = async (): Promise<User[]> => {
     setLoading(true);
     setError(null);
-    
+
     try {
       return await userManager.getUsers();
     } catch (err) {
@@ -146,20 +158,61 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
   const updatePassword = async (username: string, password: string): Promise<void> => {
     setLoading(true);
     setError(null);
-    
+
     try {
-      // Get current user to preserve roles
+      // Get current user to preserve all user data
       const users = await userManager.getUsers();
       const userToUpdate = users.find(u => u.username === username);
-      
+
       if (userToUpdate) {
-        await userManager.addUser(username, password, userToUpdate.roles);
+        // Extract profile data to preserve
+        const { displayName, email, avatar, lastLogin, lastModified } = userToUpdate;
+        const profileData = { displayName, email, avatar, lastLogin, lastModified };
+
+        // Update user with preserved profile data
+        await userManager.addUser(username, password, userToUpdate.roles, profileData);
       } else {
         throw new Error('User not found');
       }
     } catch (err) {
       console.error('Update password error:', err);
       setError('An error occurred while updating the password');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Update user profile function
+  const updateUserProfile = async (username: string, profileData: Partial<Omit<User, 'username' | 'roles'>>): Promise<void> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Get current user to preserve roles and other data
+      const users = await userManager.getUsers();
+      const userToUpdate = users.find(u => u.username === username);
+
+      if (userToUpdate) {
+        // Add lastModified timestamp
+        const updatedProfileData = {
+          ...profileData,
+          lastModified: new Date().toISOString()
+        };
+
+        await userManager.updateUserProfile(username, updatedProfileData);
+
+        // If the current user is being updated, refresh the user state
+        if (user && user.username === username) {
+          const currentUser = await userManager.getCurrentUser();
+          setUser(currentUser);
+        }
+      } else {
+        throw new Error('User not found');
+      }
+    } catch (err) {
+      console.error('Update user profile error:', err);
+      setError('An error occurred while updating the user profile');
       throw err;
     } finally {
       setLoading(false);
@@ -183,6 +236,7 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
     removeUser,
     getUsers,
     updatePassword,
+    updateUserProfile,
     clearError
   };
 

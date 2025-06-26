@@ -3,8 +3,8 @@
 
 import { jwtDecode } from 'jwt-decode';
 import CryptoJS from 'crypto-js';
-import bcrypt from 'bcryptjs';
 import axios from 'axios';
+import * as bcrypt from 'bcryptjs';
 
 // Storage keys
 const CONFIG_STORAGE_KEY = 'nauthilus-ui-user-config';
@@ -48,6 +48,11 @@ export interface User {
   username: string;
   passwordHash: string;
   roles: string[];
+  displayName?: string;
+  email?: string;
+  avatar?: string;
+  lastLogin?: string | null;
+  lastModified?: string;
 }
 
 // Configuration interface
@@ -75,7 +80,9 @@ const DEFAULT_CONFIG: UserManagerConfig = {
       username: 'admin',
       // Default password hash using bcrypt (password: 'admin')
       passwordHash: bcrypt.hashSync('admin', 12),
-      roles: ['admin']
+      roles: ['admin'],
+      lastLogin: null, // Explicitly set lastLogin to null
+      lastModified: new Date().toISOString() // Set lastModified to current time
     }
   ],
   jwtSecret: getEnvVar('JWT_SECRET', 'nauthilus-ui-default-secret-key-change-in-production'),
@@ -90,6 +97,7 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
   try {
     // Try to load from API
     const response = await axios.get(`/api/userconfig/${userId}`);
+
     return response.data.config;
   } catch (error) {
     console.log('Failed to load user config from API, creating default config:', error);
@@ -132,11 +140,21 @@ export const loadConfigSync = (): UserManagerConfig => {
 export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
   const userId = await getCurrentUserId();
 
+  // Create a deep copy of the config to ensure we're not modifying the original
+  const configToSave = JSON.parse(JSON.stringify(config));
+
+  // Ensure lastLogin is explicitly set for each user
+  configToSave.users.forEach((user: User) => {
+    if (!('lastLogin' in user) && user.lastLogin === undefined) {
+      user.lastLogin = null; // Set to null if it doesn't exist
+    }
+  });
+
   try {
     // Save to API
-    await axios.post(`/api/userconfig/${userId}`, { config });
+    await axios.post(`/api/userconfig/${userId}`, { config: configToSave });
     // Update cache
-    cachedConfig = config;
+    cachedConfig = configToSave;
   } catch (error) {
     console.error('Failed to save user config to API:', error);
     throw new Error('Failed to save user configuration to MongoDB');
@@ -144,45 +162,130 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
 };
 
 // Add or update a user
-export const addUser = async (username: string, password: string, roles: string[] = ['user']): Promise<void> => {
+export const addUser = async (
+  username: string, 
+  password: string, 
+  roles: string[] = ['user'], 
+  profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>> = {}
+): Promise<void> => {
   const config = await loadConfig();
   // Use bcrypt with cost factor 12 for secure password hashing
   const passwordHash = await bcrypt.hash(password, 12);
 
+  // Set lastModified timestamp
+  const now = new Date().toISOString();
+
   const existingUserIndex = config.users.findIndex(user => user.username === username);
   if (existingUserIndex >= 0) {
+
+    // Store existing values that we want to preserve if not explicitly provided
+    const existingLastLogin = config.users[existingUserIndex].lastLogin;
+
+    // Create userData with password and roles
+    const userData = {
+      username,
+      passwordHash,
+      roles,
+      lastModified: now,
+      ...profileData
+    };
+
     // Update existing user
-    config.users[existingUserIndex] = { username, passwordHash, roles };
+    config.users[existingUserIndex] = {
+      ...config.users[existingUserIndex],
+      ...userData
+    };
+
+    // Ensure lastLogin is preserved if it exists and not provided in profileData
+    if (existingLastLogin && !profileData.lastLogin) {
+      config.users[existingUserIndex].lastLogin = existingLastLogin;
+    }
   } else {
+    // Create userData for new user
+    const userData = {
+      username,
+      passwordHash,
+      roles,
+      lastModified: now,
+      ...profileData
+    };
+
     // Add new user
-    config.users.push({ username, passwordHash, roles });
+    config.users.push(userData);
   }
 
-  await saveConfig(config);
+  // Save to MongoDB
+  try {
+    await saveConfig(config);
+  } catch (error) {
+    console.error(`Failed to save user ${username} to MongoDB:`, error);
+    throw error;
+  }
 };
 
 // Synchronous version for internal use
-export const addUserSync = (username: string, password: string, roles: string[] = ['user']): void => {
+export const addUserSync = (
+  username: string, 
+  password: string, 
+  roles: string[] = ['user'],
+  profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>> = {}
+): void => {
   const config = loadConfigSync();
   // Use bcrypt.hashSync with cost factor 12 for secure password hashing
   const passwordHash = bcrypt.hashSync(password, 12);
 
+  // Set lastModified timestamp
+  const now = new Date().toISOString();
+
   const existingUserIndex = config.users.findIndex(user => user.username === username);
   if (existingUserIndex >= 0) {
+
+    // Store existing values that we want to preserve if not explicitly provided
+    const existingLastLogin = config.users[existingUserIndex].lastLogin;
+
+    // Create userData with password and roles
+    const userData = {
+      username,
+      passwordHash,
+      roles,
+      lastModified: now,
+      ...profileData
+    };
+
     // Update existing user
-    config.users[existingUserIndex] = { username, passwordHash, roles };
+    config.users[existingUserIndex] = {
+      ...config.users[existingUserIndex],
+      ...userData
+    };
+
+    // Ensure lastLogin is preserved if it exists and not provided in profileData
+    if (existingLastLogin && !profileData.lastLogin) {
+      config.users[existingUserIndex].lastLogin = existingLastLogin;
+    }
   } else {
+    // Create userData for new user
+    const userData = {
+      username,
+      passwordHash,
+      roles,
+      lastModified: now,
+      ...profileData
+    };
+
     // Add new user
-    config.users.push({ username, passwordHash, roles });
+    config.users.push(userData);
   }
 
   // Update cache immediately
   cachedConfig = config;
 
   // Save to API asynchronously
-  saveConfig(config).catch(error => {
-    console.error('Failed to save user config to API:', error);
-  });
+  setTimeout(() => {
+    saveConfig(config)
+      .catch(error => {
+        console.error(`Failed to save user ${username} to MongoDB:`, error);
+      });
+  }, 0);
 };
 
 // Remove a user
@@ -195,13 +298,15 @@ export const removeUser = async (username: string): Promise<void> => {
 // Get all users (without password hashes)
 export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
   const config = await loadConfig();
-  return config.users.map(({ username, roles }) => ({ username, roles }));
+  return config.users.map(({ username, roles, displayName, email, avatar, lastLogin, lastModified }) => 
+    ({ username, roles, displayName, email, avatar, lastLogin, lastModified }));
 };
 
 // Synchronous version for internal use
 export const getUsersSync = (): Omit<User, 'passwordHash'>[] => {
   const config = loadConfigSync();
-  return config.users.map(({ username, roles }) => ({ username, roles }));
+  return config.users.map(({ username, roles, displayName, email, avatar, lastLogin, lastModified }) => 
+    ({ username, roles, displayName, email, avatar, lastLogin, lastModified }));
 };
 
 // Update JWT secret
@@ -217,6 +322,49 @@ export const updateTokenExpiry = async (tokenExpiry: number, refreshTokenExpiry:
   config.tokenExpiry = tokenExpiry;
   config.refreshTokenExpiry = refreshTokenExpiry;
   await saveConfig(config);
+};
+
+// Update user profile
+export const updateUserProfile = async (username: string, profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>>): Promise<void> => {
+  const config = await loadConfig();
+  const userIndex = config.users.findIndex(user => user.username === username);
+
+  if (userIndex === -1) {
+    throw new Error(`User ${username} not found`);
+  }
+
+
+  // Store existing values that we want to preserve if not explicitly provided
+  const existingLastLogin = config.users[userIndex].lastLogin;
+
+  // Update user with new profile data
+  config.users[userIndex] = {
+    ...config.users[userIndex],
+    ...profileData
+  };
+
+  // Ensure lastLogin is preserved or updated
+  if (profileData.lastLogin) {
+    config.users[userIndex].lastLogin = profileData.lastLogin;
+  } else if (existingLastLogin) {
+    // Restore lastLogin if it existed but wasn't provided in profileData
+    config.users[userIndex].lastLogin = existingLastLogin;
+  }
+
+  // Always update lastModified if not explicitly provided
+  if (!profileData.lastModified) {
+    const now = new Date().toISOString();
+    config.users[userIndex].lastModified = now;
+  }
+
+
+  // Save to MongoDB
+  try {
+    await saveConfig(config);
+  } catch (error) {
+    console.error(`Failed to save profile update for ${username} to MongoDB:`, error);
+    throw error;
+  }
 };
 
 // Generate a JWT token
@@ -262,6 +410,25 @@ export const authenticate = async (username: string, password: string): Promise<
     return null;
   }
 
+  // Update lastLogin timestamp
+  const now = new Date().toISOString();
+
+  // Get current user to ensure we have the latest data
+  const users = await getUsers();
+  const userToUpdate = users.find(u => u.username === username);
+
+  if (userToUpdate) {
+
+    // Update user profile with lastLogin and lastModified
+    await updateUserProfile(username, { 
+      lastLogin: now,
+      lastModified: now
+    });
+
+  } else {
+    console.error(`User ${username} not found when trying to update lastLogin`);
+  }
+
   const token = generateToken(user, config.tokenExpiry);
   const refreshToken = generateToken(user, config.refreshTokenExpiry);
 
@@ -288,6 +455,30 @@ export const authenticateSync = (username: string, password: string): { token: s
   const isPasswordValid = bcrypt.compareSync(password, user.passwordHash);
   if (!isPasswordValid) {
     return null;
+  }
+
+  // Update lastLogin timestamp
+  // Note: We can't use updateUserProfile here because it's async
+  // Instead, we'll update the user directly in the config
+  const now = new Date().toISOString();
+  const userIndex = config.users.findIndex(u => u.username === username);
+  if (userIndex >= 0) {
+
+    // Update both lastLogin and lastModified
+    config.users[userIndex].lastLogin = now;
+    config.users[userIndex].lastModified = now;
+
+
+    // Update cache immediately
+    cachedConfig = config;
+
+    // Save to API asynchronously
+    setTimeout(() => {
+      saveConfig(config)
+        .catch(error => {
+          console.error(`Failed to save user update for ${username} to MongoDB:`, error);
+        });
+    }, 0);
   }
 
   const token = generateToken(user, config.tokenExpiry);
@@ -394,7 +585,7 @@ export const isAuthenticatedSync = (): boolean => {
 };
 
 // Get current user
-export const getCurrentUser = async (): Promise<{ username: string, roles: string[] } | null> => {
+export const getCurrentUser = async (): Promise<Omit<User, 'passwordHash'> | null> => {
   // Use token from browser memory only
   const token = cachedTokens?.token || null;
 
@@ -404,6 +595,17 @@ export const getCurrentUser = async (): Promise<{ username: string, roles: strin
 
   try {
     const decoded = jwtDecode<{ sub: string, roles: string[] }>(token);
+    const username = decoded.sub;
+
+    // Get full user data from config
+    const users = await getUsers();
+    const currentUser = users.find(u => u.username === username);
+
+    if (currentUser) {
+      return currentUser;
+    }
+
+    // Fallback to basic user data from token
     return {
       username: decoded.sub,
       roles: decoded.roles
@@ -414,7 +616,7 @@ export const getCurrentUser = async (): Promise<{ username: string, roles: strin
 };
 
 // Synchronous version for internal use
-export const getCurrentUserSync = (): { username: string, roles: string[] } | null => {
+export const getCurrentUserSync = (): Omit<User, 'passwordHash'> | null => {
   const token = cachedTokens?.token || null;
   if (!token || !validateToken(token)) {
     return null;
@@ -422,6 +624,17 @@ export const getCurrentUserSync = (): { username: string, roles: string[] } | nu
 
   try {
     const decoded = jwtDecode<{ sub: string, roles: string[] }>(token);
+    const username = decoded.sub;
+
+    // Get full user data from config
+    const users = getUsersSync();
+    const currentUser = users.find(u => u.username === username);
+
+    if (currentUser) {
+      return currentUser;
+    }
+
+    // Fallback to basic user data from token
     return {
       username: decoded.sub,
       roles: decoded.roles
@@ -446,8 +659,23 @@ export const initialize = async (): Promise<void> => {
     // Even if config exists, check if it has users
     if (!response.data.config.users || response.data.config.users.length === 0) {
       console.log('User config exists but no users found, adding default admin user');
-      await addUser('admin', 'admin', ['admin']);
-      console.log('Default admin user created');
+      // Add default admin user with lastLogin explicitly set to null
+      await addUser('admin', 'admin', ['admin'], { 
+        lastLogin: null, 
+        lastModified: new Date().toISOString() 
+      });
+    } else {
+      // Check if users have lastLogin property
+      const usersWithoutLastLogin = response.data.config.users.filter((user: User) => !('lastLogin' in user));
+      if (usersWithoutLastLogin.length > 0) {
+        // Update each user to add lastLogin property
+        for (const user of usersWithoutLastLogin) {
+          await updateUserProfile(user.username, { 
+            lastLogin: null, 
+            lastModified: new Date().toISOString() 
+          });
+        }
+      }
     }
   } catch (error) {
     console.log('No user config found in MongoDB, initializing with default config');
@@ -472,8 +700,11 @@ export const initialize = async (): Promise<void> => {
       const users = await getUsers();
       if (users.length === 0) {
         console.log('No users found after initialization, creating default admin user');
-        await addUser('admin', 'admin', ['admin']);
-        console.log('Default admin user created');
+        // Add default admin user with lastLogin explicitly set to null
+        await addUser('admin', 'admin', ['admin'], { 
+          lastLogin: null, 
+          lastModified: new Date().toISOString() 
+        });
       }
     } catch (error) {
       console.error('Error checking/creating users:', error);

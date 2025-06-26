@@ -58,6 +58,7 @@ import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UserProvider, useUser } from './contexts/UserContext';
@@ -81,6 +82,7 @@ import ConfigPreview from './components/ConfigPreview';
 import LicensesPage from './components/LicensesPage';
 import ConfigWizard from './components/ConfigWizard';
 import UserManagement from './components/UserManagement';
+import UserProfile from './components/UserProfile';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 240;
@@ -108,6 +110,7 @@ const MainContent: React.FC = () => {
   const [profileToDelete, setProfileToDelete] = useState('');
   const [uploadProfileDialogOpen, setUploadProfileDialogOpen] = useState(false);
   const [uploadProfileName, setUploadProfileName] = useState('');
+  // Profile state variables removed as we now use a dedicated page
 
   // Menu display states
   const [configMenuExpanded, setConfigMenuExpanded] = useState(true);
@@ -313,6 +316,11 @@ const MainContent: React.FC = () => {
         uploadWithProfileRef.current.value = '';
       }
     }
+  };
+
+  // User profile handler - now navigates to the profile page
+  const handleUserProfileClick = () => {
+    navigate('/profile');
   };
 
   const drawer = (
@@ -714,6 +722,32 @@ const MainContent: React.FC = () => {
               </IconButton>
             </Tooltip>
             {user && (
+              <Tooltip title="Edit Profile">
+                <Button
+                  color="inherit"
+                  onClick={handleUserProfileClick}
+                  startIcon={<AccountCircleIcon />}
+                  sx={{ 
+                    mr: { xs: 0.5, sm: 1 },
+                    display: { xs: 'none', sm: 'flex' }
+                  }}
+                >
+                  Profile
+                </Button>
+              </Tooltip>
+            )}
+            {user && (
+              <Tooltip title="Edit Profile">
+                <IconButton
+                  color="inherit"
+                  onClick={handleUserProfileClick}
+                  sx={{ display: { xs: 'flex', sm: 'none' } }}
+                >
+                  <AccountCircleIcon />
+                </IconButton>
+              </Tooltip>
+            )}
+            {user && (
               <Tooltip title="Logout">
                 <Button
                   color="inherit"
@@ -824,6 +858,7 @@ const MainContent: React.FC = () => {
               <Route path="/licenses" element={<LicensesPage />} />
               <Route path="/config-wizard" element={<ConfigWizard autoOpen={true} />} />
               <Route path="/users" element={<UserManagement />} />
+              <Route path="/profile" element={<UserProfile />} />
             </Routes>
           </>
         )}
@@ -977,6 +1012,8 @@ const MainContent: React.FC = () => {
           <Button onClick={handleUploadWithProfileConfirm} color="primary">Upload</Button>
         </DialogActions>
       </Dialog>
+
+      {/* User Profile Dialog removed - now using a dedicated page */}
     </Box>
   );
 };
