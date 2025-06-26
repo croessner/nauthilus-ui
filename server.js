@@ -6,6 +6,7 @@ const path = require('path');
 const { createProxyMiddleware } = require('http-proxy-middleware');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
+const bcrypt = require('bcryptjs');
 
 const app = express();
 const EXPRESS_PORT = process.env.EXPRESS_PORT || 3001;
@@ -56,8 +57,8 @@ const initializeDatabase = async () => {
         users: [
           {
             username: 'admin',
-            // Default password: 'admin'
-            passwordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
+            // Default password: 'admin' (hashed with bcrypt)
+            passwordHash: bcrypt.hashSync('admin', 12),
             roles: ['admin']
           }
         ],
@@ -66,13 +67,70 @@ const initializeDatabase = async () => {
         refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
       };
 
-      // Create default user config
+      // Create default user config for both 'default-user' and 'admin'
       await UserConfig.create({
         userId: 'default-user',
         config: defaultConfig
       });
 
+      // Also create the same config for 'admin' user
+      await UserConfig.create({
+        userId: 'admin',
+        config: defaultConfig
+      });
+
       console.log('Default user configuration created successfully');
+    } else {
+      // Even if UserConfig collection exists, check if it has the admin user
+      const userConfig = await UserConfig.findOne({ userId: 'default-user' });
+      if (userConfig) {
+        // Check if users array exists and has at least one user
+        if (!userConfig.config.users || userConfig.config.users.length === 0) {
+          console.log('User config exists but no users found, adding default admin user');
+
+          // Add default admin user
+          userConfig.config.users = [
+            {
+              username: 'admin',
+              // Default password: 'admin' (hashed with bcrypt)
+              passwordHash: bcrypt.hashSync('admin', 12),
+              roles: ['admin']
+            }
+          ];
+
+          // Save the updated config
+          await userConfig.save();
+          console.log('Default admin user added to existing config');
+        }
+      }
+
+      // Check if there's a config for 'admin' userId
+      const adminConfig = await UserConfig.findOne({ userId: 'admin' });
+      if (!adminConfig) {
+        console.log('Creating user configuration for admin userId...');
+
+        // Copy config from default-user if it exists, otherwise create new default config
+        const configToUse = userConfig ? userConfig.config : {
+          users: [
+            {
+              username: 'admin',
+              passwordHash: bcrypt.hashSync('admin', 12),
+              roles: ['admin']
+            }
+          ],
+          jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+          tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+          refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+        };
+
+        // Create config for admin userId
+        await UserConfig.create({
+          userId: 'admin',
+          config: configToUse
+        });
+
+        console.log('User configuration for admin userId created successfully');
+      }
     }
 
     // Check if Profile collection has any documents
@@ -299,8 +357,8 @@ app.get('/api/userconfig/:userId', async (req, res) => {
         users: [
           {
             username: 'admin',
-            // Default password hash for 'admin'
-            passwordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
+            // Default password hash for 'admin' (hashed with bcrypt)
+            passwordHash: bcrypt.hashSync('admin', 12),
             roles: ['admin']
           }
         ],
@@ -351,137 +409,6 @@ app.post('/api/userconfig/:userId', async (req, res) => {
     console.log('Error saving user config:', error);
     console.error('Error saving user config:', error);
     res.status(500).json({ error: 'Failed to save user configuration' });
-  }
-});
-
-app.get('/api/tokens/:userId', async (req, res) => {
-  // If MongoDB is not connected, return empty tokens
-  if (!isMongoConnected) {
-    console.log('MongoDB not connected, returning empty tokens');
-    return res.json({
-      token: null,
-      refreshToken: null
-    });
-  }
-
-  try {
-    const { userId } = req.params;
-    const tokenData = await Token.findOne({ userId });
-
-    if (!tokenData) {
-      return res.status(404).json({ error: 'Tokens not found' });
-    }
-
-    res.json({
-      token: tokenData.token,
-      refreshToken: tokenData.refreshToken
-    });
-  } catch (error) {
-    console.log('Error fetching tokens:', error);
-    console.error('Error fetching tokens:', error);
-    res.status(500).json({ error: 'Failed to fetch tokens' });
-  }
-});
-
-app.post('/api/tokens/:userId', async (req, res) => {
-  // If MongoDB is not connected, return success but log warning
-  if (!isMongoConnected) {
-    console.log('MongoDB not connected, tokens not saved but returning success');
-    const { token, refreshToken } = req.body;
-    return res.json({
-      token,
-      refreshToken
-    });
-  }
-
-  try {
-    const { userId } = req.params;
-    const { token, refreshToken } = req.body;
-
-    // Update or create token data
-    const result = await Token.findOneAndUpdate(
-      { userId },
-      { userId, token, refreshToken },
-      { upsert: true, new: true }
-    );
-
-    res.json({
-      token: result.token,
-      refreshToken: result.refreshToken
-    });
-  } catch (error) {
-    console.log('Error saving tokens:', error);
-    console.error('Error saving tokens:', error);
-    res.status(500).json({ error: 'Failed to save tokens' });
-  }
-});
-
-app.delete('/api/tokens/:userId', async (req, res) => {
-  // If MongoDB is not connected, return success but log warning
-  if (!isMongoConnected) {
-    console.log('MongoDB not connected, tokens not deleted but returning success');
-    return res.json({ message: 'Tokens deleted successfully' });
-  }
-
-  try {
-    const { userId } = req.params;
-    await Token.findOneAndDelete({ userId });
-    res.json({ message: 'Tokens deleted successfully' });
-  } catch (error) {
-    console.log('Error deleting tokens:', error);
-    console.error('Error deleting tokens:', error);
-    res.status(500).json({ error: 'Failed to delete tokens' });
-  }
-});
-
-// Theme API
-app.get('/api/theme/:userId', async (req, res) => {
-  // If MongoDB is not connected, return default theme
-  if (!isMongoConnected) {
-    console.log('MongoDB not connected, returning default theme');
-    return res.json({ theme: 'light' });
-  }
-
-  try {
-    const { userId } = req.params;
-    const themeData = await Theme.findOne({ userId });
-
-    if (!themeData) {
-      return res.status(404).json({ error: 'Theme not found' });
-    }
-
-    res.json({ theme: themeData.theme });
-  } catch (error) {
-    console.log('Error fetching theme:', error);
-    console.error('Error fetching theme:', error);
-    res.status(500).json({ error: 'Failed to fetch theme' });
-  }
-});
-
-app.post('/api/theme/:userId', async (req, res) => {
-  // If MongoDB is not connected, return success but log warning
-  if (!isMongoConnected) {
-    console.log('MongoDB not connected, theme not saved but returning success');
-    const { theme } = req.body;
-    return res.json({ theme });
-  }
-
-  try {
-    const { userId } = req.params;
-    const { theme } = req.body;
-
-    // Update or create theme data
-    const result = await Theme.findOneAndUpdate(
-      { userId },
-      { userId, theme },
-      { upsert: true, new: true }
-    );
-
-    res.json({ theme: result.theme });
-  } catch (error) {
-    console.log('Error saving theme:', error);
-    console.error('Error saving theme:', error);
-    res.status(500).json({ error: 'Failed to save theme' });
   }
 });
 

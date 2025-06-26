@@ -3,6 +3,7 @@
 
 import { jwtDecode } from 'jwt-decode';
 import CryptoJS from 'crypto-js';
+import bcrypt from 'bcryptjs';
 import axios from 'axios';
 
 // Storage keys
@@ -72,8 +73,8 @@ const DEFAULT_CONFIG: UserManagerConfig = {
   users: [
     {
       username: 'admin',
-      // Default password hash
-      passwordHash: CryptoJS.SHA256('admin').toString(),
+      // Default password hash using bcrypt (password: 'admin')
+      passwordHash: bcrypt.hashSync('admin', 12),
       roles: ['admin']
     }
   ],
@@ -145,7 +146,8 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
 // Add or update a user
 export const addUser = async (username: string, password: string, roles: string[] = ['user']): Promise<void> => {
   const config = await loadConfig();
-  const passwordHash = CryptoJS.SHA256(password).toString();
+  // Use bcrypt with cost factor 12 for secure password hashing
+  const passwordHash = await bcrypt.hash(password, 12);
 
   const existingUserIndex = config.users.findIndex(user => user.username === username);
   if (existingUserIndex >= 0) {
@@ -162,7 +164,8 @@ export const addUser = async (username: string, password: string, roles: string[
 // Synchronous version for internal use
 export const addUserSync = (username: string, password: string, roles: string[] = ['user']): void => {
   const config = loadConfigSync();
-  const passwordHash = CryptoJS.SHA256(password).toString();
+  // Use bcrypt.hashSync with cost factor 12 for secure password hashing
+  const passwordHash = bcrypt.hashSync(password, 12);
 
   const existingUserIndex = config.users.findIndex(user => user.username === username);
   if (existingUserIndex >= 0) {
@@ -246,10 +249,16 @@ const generateToken = (user: User, expiry: number): string => {
 // Authenticate a user and generate tokens
 export const authenticate = async (username: string, password: string): Promise<{ token: string, refreshToken: string } | null> => {
   const config = await loadConfig();
-  const passwordHash = CryptoJS.SHA256(password).toString();
 
-  const user = config.users.find(u => u.username === username && u.passwordHash === passwordHash);
+  // Find user by username
+  const user = config.users.find(u => u.username === username);
   if (!user) {
+    return null;
+  }
+
+  // Verify password using bcrypt.compare
+  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+  if (!isPasswordValid) {
     return null;
   }
 
@@ -268,10 +277,16 @@ let cachedTokens: { token: string, refreshToken: string } | null = null;
 // Synchronous version for internal use
 export const authenticateSync = (username: string, password: string): { token: string, refreshToken: string } | null => {
   const config = loadConfigSync();
-  const passwordHash = CryptoJS.SHA256(password).toString();
 
-  const user = config.users.find(u => u.username === username && u.passwordHash === passwordHash);
+  // Find user by username
+  const user = config.users.find(u => u.username === username);
   if (!user) {
+    return null;
+  }
+
+  // Verify password using bcrypt.compareSync
+  const isPasswordValid = bcrypt.compareSync(password, user.passwordHash);
+  if (!isPasswordValid) {
     return null;
   }
 
@@ -419,12 +434,21 @@ export const getCurrentUserSync = (): { username: string, roles: string[] } | nu
 // Initialize with default configuration if none exists
 export const initialize = async (): Promise<void> => {
   const userId = await getCurrentUserId();
+  let configExists = false;
 
   try {
     // Check if config exists in MongoDB
-    await axios.get(`/api/userconfig/${userId}`);
+    const response = await axios.get(`/api/userconfig/${userId}`);
     // If we get here, config exists in MongoDB
     console.log('User config found in MongoDB');
+    configExists = true;
+
+    // Even if config exists, check if it has users
+    if (!response.data.config.users || response.data.config.users.length === 0) {
+      console.log('User config exists but no users found, adding default admin user');
+      await addUser('admin', 'admin', ['admin']);
+      console.log('Default admin user created');
+    }
   } catch (error) {
     console.log('No user config found in MongoDB, initializing with default config');
 
@@ -440,17 +464,21 @@ export const initialize = async (): Promise<void> => {
     }
   }
 
-  // Check if any users exist
-  try {
-    const users = await getUsers();
-    if (users.length === 0) {
-      console.log('No users found, creating default admin user');
-      await addUser('admin', 'admin', ['admin']);
-      console.log('Default admin user created');
+  // If config didn't exist before, we've already added the default admin user
+  // If config did exist, we've already checked for users above
+  if (!configExists) {
+    // Double-check that users exist after initialization
+    try {
+      const users = await getUsers();
+      if (users.length === 0) {
+        console.log('No users found after initialization, creating default admin user');
+        await addUser('admin', 'admin', ['admin']);
+        console.log('Default admin user created');
+      }
+    } catch (error) {
+      console.error('Error checking/creating users:', error);
+      throw new Error('Failed to initialize users in MongoDB');
     }
-  } catch (error) {
-    console.error('Error checking/creating users:', error);
-    throw new Error('Failed to initialize users in MongoDB');
   }
 };
 
