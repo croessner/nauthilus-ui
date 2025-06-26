@@ -31,7 +31,7 @@ import PersonAddIcon from '@mui/icons-material/PersonAdd';
 import { useUser } from '../contexts/UserContext';
 
 const UserManagement: React.FC = () => {
-  const { getUsers, addUser, removeUser, updatePassword, loading, error, clearError, user } = useUser();
+  const { getUsers, addUser, removeUser, updatePassword, loading, error, clearError, user: currentUser } = useUser();
   const [users, setUsers] = useState<{ username: string; roles: string[] }[]>([]);
   const [openAddDialog, setOpenAddDialog] = useState(false);
   const [openEditDialog, setOpenEditDialog] = useState(false);
@@ -45,7 +45,7 @@ const UserManagement: React.FC = () => {
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Check if user has admin role
-  const isAdmin = user?.roles.includes('admin');
+  const isAdmin = currentUser?.roles.includes('admin');
 
   // Define loadUsers function with useCallback to memoize it
   const loadUsers = useCallback(async () => {
@@ -103,6 +103,19 @@ const UserManagement: React.FC = () => {
   };
 
   const handleDeleteUser = async () => {
+    // Additional validation to prevent self-deletion and ensure only admins can delete
+    if (currentUser?.username === selectedUser) {
+      setLocalError("You cannot delete your own account");
+      setOpenDeleteDialog(false);
+      return;
+    }
+
+    if (!isAdmin) {
+      setLocalError("Only administrators can delete users");
+      setOpenDeleteDialog(false);
+      return;
+    }
+
     try {
       await removeUser(selectedUser);
       setOpenDeleteDialog(false);
@@ -219,6 +232,7 @@ const UserManagement: React.FC = () => {
                           color="error" 
                           onClick={() => openDelete(user.username)}
                           size="small"
+                          disabled={currentUser?.username === user.username || !isAdmin}
                         >
                           <DeleteIcon />
                         </IconButton>
@@ -388,6 +402,7 @@ const UserManagement: React.FC = () => {
                 onClick={handleDeleteUser} 
                 variant="contained" 
                 color="error"
+                disabled={currentUser?.username === selectedUser || !isAdmin}
               >
                 Delete
               </Button>
