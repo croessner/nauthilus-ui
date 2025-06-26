@@ -38,7 +38,8 @@ const UserSchema = new mongoose.Schema({
 const JwtConfigSchema = new mongoose.Schema({
   jwtSecret: { type: String, required: true },
   tokenExpiry: { type: Number, required: true },
-  refreshTokenExpiry: { type: Number, required: true }
+  refreshTokenExpiry: { type: Number, required: true },
+  rememberMeExpiry: { type: Number, required: true }
 });
 
 // Keep the old schema for backward compatibility during migration
@@ -66,7 +67,8 @@ const initializeDatabase = async () => {
       await JwtConfig.create({
         jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
         tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+        rememberMeExpiry: parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
       });
 
       console.log('Default JWT configuration created successfully');
@@ -525,7 +527,8 @@ app.get('/api/jwtconfig', async (req, res) => {
       jwtConfig: {
         jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
         tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+        rememberMeExpiry: parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
       }
     });
   }
@@ -553,7 +556,7 @@ app.put('/api/jwtconfig', async (req, res) => {
   }
 
   try {
-    const { jwtSecret, tokenExpiry, refreshTokenExpiry } = req.body;
+    const { jwtSecret, tokenExpiry, refreshTokenExpiry, rememberMeExpiry } = req.body;
 
     // Find JWT config
     let jwtConfig = await JwtConfig.findOne();
@@ -563,13 +566,15 @@ app.put('/api/jwtconfig', async (req, res) => {
       jwtConfig = new JwtConfig({
         jwtSecret: jwtSecret || process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
         tokenExpiry: tokenExpiry || parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-        refreshTokenExpiry: refreshTokenExpiry || parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+        refreshTokenExpiry: refreshTokenExpiry || parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+        rememberMeExpiry: rememberMeExpiry || parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
       });
     } else {
       // Update existing JWT config
       if (jwtSecret) jwtConfig.jwtSecret = jwtSecret;
       if (tokenExpiry) jwtConfig.tokenExpiry = tokenExpiry;
       if (refreshTokenExpiry) jwtConfig.refreshTokenExpiry = refreshTokenExpiry;
+      if (rememberMeExpiry) jwtConfig.rememberMeExpiry = rememberMeExpiry;
     }
 
     // Save JWT config
@@ -602,7 +607,8 @@ app.get('/api/userconfig/:userId', async (req, res) => {
         ],
         jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
         tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+        rememberMeExpiry: parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
       }
     });
   }
@@ -628,7 +634,8 @@ app.get('/api/userconfig/:userId', async (req, res) => {
       })),
       jwtSecret: jwtConfig ? jwtConfig.jwtSecret : (process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production'),
       tokenExpiry: jwtConfig ? jwtConfig.tokenExpiry : parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-      refreshTokenExpiry: jwtConfig ? jwtConfig.refreshTokenExpiry : parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+      refreshTokenExpiry: jwtConfig ? jwtConfig.refreshTokenExpiry : parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+      rememberMeExpiry: jwtConfig ? jwtConfig.rememberMeExpiry : parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
     };
 
     res.json({ config });
@@ -691,7 +698,7 @@ app.post('/api/userconfig/:userId', async (req, res) => {
     }
 
     // Process JWT config
-    if (config && (config.jwtSecret || config.tokenExpiry || config.refreshTokenExpiry)) {
+    if (config && (config.jwtSecret || config.tokenExpiry || config.refreshTokenExpiry || config.rememberMeExpiry)) {
       // Find JWT config
       let jwtConfig = await JwtConfig.findOne();
 
@@ -700,13 +707,15 @@ app.post('/api/userconfig/:userId', async (req, res) => {
         jwtConfig = new JwtConfig({
           jwtSecret: config.jwtSecret || process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
           tokenExpiry: config.tokenExpiry || parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-          refreshTokenExpiry: config.refreshTokenExpiry || parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+          refreshTokenExpiry: config.refreshTokenExpiry || parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+          rememberMeExpiry: config.rememberMeExpiry || parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
         });
       } else {
         // Update existing JWT config
         if (config.jwtSecret) jwtConfig.jwtSecret = config.jwtSecret;
         if (config.tokenExpiry) jwtConfig.tokenExpiry = config.tokenExpiry;
         if (config.refreshTokenExpiry) jwtConfig.refreshTokenExpiry = config.refreshTokenExpiry;
+        if (config.rememberMeExpiry) jwtConfig.rememberMeExpiry = config.rememberMeExpiry;
       }
 
       await jwtConfig.save();
@@ -729,7 +738,8 @@ app.post('/api/userconfig/:userId', async (req, res) => {
       })),
       jwtSecret: jwtConfig ? jwtConfig.jwtSecret : (process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production'),
       tokenExpiry: jwtConfig ? jwtConfig.tokenExpiry : parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-      refreshTokenExpiry: jwtConfig ? jwtConfig.refreshTokenExpiry : parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+      refreshTokenExpiry: jwtConfig ? jwtConfig.refreshTokenExpiry : parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'),
+      rememberMeExpiry: jwtConfig ? jwtConfig.rememberMeExpiry : parseInt(process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400')
     };
 
     res.json({ config: updatedConfig });
@@ -747,7 +757,8 @@ app.use((req, res, next) => {
     const envConfig = {
       REACT_APP_JWT_SECRET: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
       REACT_APP_TOKEN_EXPIRY: process.env.REACT_APP_TOKEN_EXPIRY || '3600',
-      REACT_APP_REFRESH_TOKEN_EXPIRY: process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400'
+      REACT_APP_REFRESH_TOKEN_EXPIRY: process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400',
+      REACT_APP_REMEMBER_ME_EXPIRY: process.env.REACT_APP_REMEMBER_ME_EXPIRY || '86400'
     };
 
     res.setHeader('Content-Type', 'application/javascript');

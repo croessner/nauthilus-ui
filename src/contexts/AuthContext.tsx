@@ -13,7 +13,7 @@ interface AuthState {
 // Define the context type
 interface AuthContextType {
   auth: AuthState;
-  login: (username: string, password: string) => Promise<void>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   loginWithOIDC: () => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -69,12 +69,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   }, []);
 
   // Login with username and password
-  const login = async (username: string, password: string) => {
+  const login = async (username: string, password: string, rememberMe: boolean = false) => {
     try {
       setAuth(prev => ({ ...prev, loading: true, error: null }));
 
       // Use the local user manager for authentication
-      const result = await userManager.authenticate(username, password);
+      const result = await userManager.authenticate(username, password, rememberMe);
 
       if (result) {
         setAuth({

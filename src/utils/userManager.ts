@@ -52,6 +52,7 @@ export interface UserManagerConfig {
   jwtSecret: string;
   tokenExpiry: number; // in seconds
   refreshTokenExpiry: number; // in seconds
+  rememberMeExpiry: number; // in seconds
 }
 
 // Get environment variables or use defaults
@@ -79,13 +80,14 @@ const DEFAULT_CONFIG: UserManagerConfig = {
   ],
   jwtSecret: getEnvVar('JWT_SECRET', 'nauthilus-ui-default-secret-key-change-in-production'),
   tokenExpiry: parseInt(getEnvVar('TOKEN_EXPIRY', '3600')), // 1 hour
-  refreshTokenExpiry: parseInt(getEnvVar('REFRESH_TOKEN_EXPIRY', '86400')) // 24 hours
+  refreshTokenExpiry: parseInt(getEnvVar('REFRESH_TOKEN_EXPIRY', '86400')), // 24 hours
+  rememberMeExpiry: parseInt(getEnvVar('REMEMBER_ME_EXPIRY', '86400')) // Default: 1 day
 };
 
 // Cache for config to reduce API calls
 let cachedConfig: UserManagerConfig | null = null;
 let cachedUsers: User[] | null = null;
-let cachedJwtConfig: { jwtSecret: string, tokenExpiry: number, refreshTokenExpiry: number } | null = null;
+let cachedJwtConfig: { jwtSecret: string, tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
 
 // Load configuration from MongoDB
 export const loadConfig = async (): Promise<UserManagerConfig> => {
@@ -112,7 +114,8 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
         users: cachedUsers || [],
         jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
         tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
-        refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry
+        refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
+        rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
       };
 
       cachedConfig = config;
@@ -145,7 +148,8 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
         await axios.put('/api/jwtconfig', {
           jwtSecret: DEFAULT_CONFIG.jwtSecret,
           tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
-          refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry
+          refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
+          rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
         });
       } catch (newApiError) {
         console.log('Failed to save to new API endpoints, falling back to legacy endpoint:', newApiError);
@@ -184,7 +188,8 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
       await axios.put('/api/jwtconfig', {
         jwtSecret: configToSave.jwtSecret,
         tokenExpiry: configToSave.tokenExpiry,
-        refreshTokenExpiry: configToSave.refreshTokenExpiry
+        refreshTokenExpiry: configToSave.refreshTokenExpiry,
+        rememberMeExpiry: configToSave.rememberMeExpiry
       });
 
       // For users, we would need to handle each user individually
@@ -196,7 +201,8 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
       cachedJwtConfig = {
         jwtSecret: configToSave.jwtSecret,
         tokenExpiry: configToSave.tokenExpiry,
-        refreshTokenExpiry: configToSave.refreshTokenExpiry
+        refreshTokenExpiry: configToSave.refreshTokenExpiry,
+        rememberMeExpiry: configToSave.rememberMeExpiry
       };
     } catch (newApiError) {
       console.log('Failed to save to new API endpoints, falling back to legacy endpoint:', newApiError);
@@ -422,7 +428,8 @@ export const updateJwtSecret = async (secret: string): Promise<void> => {
       await axios.put('/api/jwtconfig', {
         jwtSecret: secret,
         tokenExpiry: jwtConfig.tokenExpiry,
-        refreshTokenExpiry: jwtConfig.refreshTokenExpiry
+        refreshTokenExpiry: jwtConfig.refreshTokenExpiry,
+        rememberMeExpiry: jwtConfig.rememberMeExpiry
       });
 
       // Update cached JWT config
@@ -461,7 +468,8 @@ export const updateTokenExpiry = async (tokenExpiry: number, refreshTokenExpiry:
       await axios.put('/api/jwtconfig', {
         jwtSecret: jwtConfig.jwtSecret,
         tokenExpiry,
-        refreshTokenExpiry
+        refreshTokenExpiry,
+        rememberMeExpiry: jwtConfig.rememberMeExpiry
       });
 
       // Update cached JWT config
@@ -617,7 +625,7 @@ export const validateToken = (token: string): boolean => {
 };
 
 // Authenticate a user and generate tokens
-export const authenticate = async (username: string, password: string): Promise<{ token: string, refreshToken: string } | null> => {
+export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | null> => {
   // For authentication, we need the passwordHash which is only available from the legacy API
   const userId = getCurrentUserId();
   let config;
@@ -652,18 +660,23 @@ export const authenticate = async (username: string, password: string): Promise<
     lastLogin: now
   });
 
-  const token = generateToken(user, config.tokenExpiry);
-  const refreshToken = generateToken(user, config.refreshTokenExpiry);
+  // Use rememberMeExpiry if rememberMe is true, otherwise use regular tokenExpiry
+  const tokenExpiryTime = rememberMe ? config.rememberMeExpiry : config.tokenExpiry;
+  // Always use the longer expiry for refresh token
+  const refreshTokenExpiryTime = Math.max(config.refreshTokenExpiry, tokenExpiryTime);
+
+  const token = generateToken(user, tokenExpiryTime);
+  const refreshToken = generateToken(user, refreshTokenExpiryTime);
 
   // Store tokens in cookies
   Cookies.set(TOKEN_COOKIE_NAME, token, {
     ...COOKIE_OPTIONS,
-    expires: new Date(Date.now() + config.tokenExpiry * 1000)
+    expires: new Date(Date.now() + tokenExpiryTime * 1000)
   });
 
   Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
     ...COOKIE_OPTIONS,
-    expires: new Date(Date.now() + config.refreshTokenExpiry * 1000)
+    expires: new Date(Date.now() + refreshTokenExpiryTime * 1000)
   });
 
   return { token, refreshToken };
