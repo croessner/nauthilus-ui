@@ -22,6 +22,26 @@ const ProfileSchema = new mongoose.Schema({
   currentProfileName: { type: String, required: true }
 });
 
+// New schema for individual users
+const UserSchema = new mongoose.Schema({
+  username: { type: String, required: true, unique: true },
+  passwordHash: { type: String, required: true },
+  roles: { type: [String], required: true },
+  displayName: { type: String },
+  email: { type: String },
+  avatar: { type: String },
+  lastLogin: { type: String, default: null },
+  lastModified: { type: String, required: true }
+});
+
+// New schema for JWT configuration
+const JwtConfigSchema = new mongoose.Schema({
+  jwtSecret: { type: String, required: true },
+  tokenExpiry: { type: Number, required: true },
+  refreshTokenExpiry: { type: Number, required: true }
+});
+
+// Keep the old schema for backward compatibility during migration
 const UserConfigSchema = new mongoose.Schema({
   userId: { type: String, required: true },
   config: { type: mongoose.Schema.Types.Mixed, required: true }
@@ -30,133 +50,91 @@ const UserConfigSchema = new mongoose.Schema({
 
 // Create models
 const Profile = mongoose.model('Profile', ProfileSchema);
+const User = mongoose.model('User', UserSchema);
+const JwtConfig = mongoose.model('JwtConfig', JwtConfigSchema);
 const UserConfig = mongoose.model('UserConfig', UserConfigSchema);
 
 // Function to initialize database with required collections and default admin user
 const initializeDatabase = async () => {
   try {
-    // Check if UserConfig collection has any documents
-    const userConfigCount = await UserConfig.countDocuments();
-    if (userConfigCount === 0) {
-      console.log('Creating default user configuration...');
+    // Check if JwtConfig collection has any documents
+    const jwtConfigCount = await JwtConfig.countDocuments();
+    if (jwtConfigCount === 0) {
+      console.log('Creating default JWT configuration...');
 
-      // Default user configuration with admin user
-      const defaultConfig = {
-        users: [
-          {
-            username: 'admin',
-            // Default password: 'admin' (hashed with bcrypt)
-            passwordHash: bcrypt.hashSync('admin', 12),
-            roles: ['admin'],
-            lastLogin: null, // Explicitly set lastLogin to null
-            lastModified: new Date().toISOString() // Set lastModified to current time
-          }
-        ],
+      // Default JWT configuration
+      await JwtConfig.create({
         jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
         tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
         refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
-      };
-
-      // Create default user config for both 'default-user' and 'admin'
-      await UserConfig.create({
-        userId: 'default-user',
-        config: defaultConfig
       });
 
-      // Also create the same config for 'admin' user
-      await UserConfig.create({
-        userId: 'admin',
-        config: defaultConfig
+      console.log('Default JWT configuration created successfully');
+    }
+
+    // Check if User collection has any documents
+    const userCount = await User.countDocuments();
+    if (userCount === 0) {
+      console.log('Creating default admin user...');
+
+      // Default admin user
+      await User.create({
+        username: 'admin',
+        passwordHash: bcrypt.hashSync('admin', 12),
+        roles: ['admin'],
+        lastLogin: null,
+        lastModified: new Date().toISOString()
       });
 
-      console.log('Default user configuration created successfully');
-    } else {
-      // Even if UserConfig collection exists, check if it has the admin user
-      const userConfig = await UserConfig.findOne({ userId: 'default-user' });
-      if (userConfig) {
-        // Check if users array exists and has at least one user
-        if (!userConfig.config.users || userConfig.config.users.length === 0) {
-          console.log('User config exists but no users found, adding default admin user');
+      console.log('Default admin user created successfully');
+    }
 
-          // Add default admin user with lastLogin explicitly set to null
-          userConfig.config.users = [
-            {
-              username: 'admin',
-              // Default password: 'admin' (hashed with bcrypt)
-              passwordHash: bcrypt.hashSync('admin', 12),
-              roles: ['admin'],
-              lastLogin: null, // Explicitly set lastLogin to null
-              lastModified: new Date().toISOString() // Set lastModified to current time
+    // Check if UserConfig collection has any documents (for migration)
+    const userConfigCount = await UserConfig.countDocuments();
+    if (userConfigCount > 0) {
+      // Migrate users from UserConfig to User collection
+      console.log('Migrating users from UserConfig to User collection...');
+
+      // Get all user configs
+      const userConfigs = await UserConfig.find({});
+
+      // Set to track processed usernames to avoid duplicates
+      const processedUsernames = new Set();
+
+      // Process each user config
+      for (const userConfig of userConfigs) {
+        if (userConfig.config && userConfig.config.users && userConfig.config.users.length > 0) {
+          // Process each user in the config
+          for (const userData of userConfig.config.users) {
+            // Skip if already processed
+            if (processedUsernames.has(userData.username)) {
+              continue;
             }
-          ];
 
-          // Save the updated config
-          await userConfig.save();
-          console.log('Default admin user added to existing config with lastLogin explicitly set to null');
-        } else {
-          // Check if any users are missing the lastLogin property
-          let usersUpdated = false;
-          userConfig.config.users.forEach(user => {
-            if (!('lastLogin' in user)) {
-              console.log(`Server: Adding missing lastLogin property for user ${user.username} in default-user config`);
-              user.lastLogin = null; // Set to null if it doesn't exist
-              usersUpdated = true;
+            // Mark as processed
+            processedUsernames.add(userData.username);
+
+            // Check if user already exists in User collection
+            const existingUser = await User.findOne({ username: userData.username });
+            if (!existingUser) {
+              // Create user in User collection
+              await User.create({
+                username: userData.username,
+                passwordHash: userData.passwordHash,
+                roles: userData.roles,
+                displayName: userData.displayName,
+                email: userData.email,
+                avatar: userData.avatar,
+                lastLogin: userData.lastLogin || null,
+                lastModified: userData.lastModified || new Date().toISOString()
+              });
+              console.log(`Migrated user ${userData.username} to User collection`);
             }
-          });
-
-          // Save the updated config if any users were updated
-          if (usersUpdated) {
-            await userConfig.save();
-            console.log('Updated users in default-user config with lastLogin property');
           }
         }
       }
 
-      // Check if there's a config for 'admin' userId
-      const adminConfig = await UserConfig.findOne({ userId: 'admin' });
-      if (!adminConfig) {
-        console.log('Creating user configuration for admin userId...');
-
-        // Copy config from default-user if it exists, otherwise create new default config
-        const configToUse = userConfig ? userConfig.config : {
-          users: [
-            {
-              username: 'admin',
-              passwordHash: bcrypt.hashSync('admin', 12),
-              roles: ['admin'],
-              lastLogin: null, // Explicitly set lastLogin to null
-              lastModified: new Date().toISOString() // Set lastModified to current time
-            }
-          ],
-          jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
-          tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
-          refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
-        };
-
-        // Create config for admin userId
-        await UserConfig.create({
-          userId: 'admin',
-          config: configToUse
-        });
-
-        console.log('User configuration for admin userId created successfully');
-      } else {
-        // Check if any users in admin config are missing the lastLogin property
-        let usersUpdated = false;
-        adminConfig.config.users.forEach(user => {
-          if (!('lastLogin' in user)) {
-            console.log(`Server: Adding missing lastLogin property for user ${user.username} in admin config`);
-            user.lastLogin = null; // Set to null if it doesn't exist
-            usersUpdated = true;
-          }
-        });
-
-        // Save the updated config if any users were updated
-        if (usersUpdated) {
-          await adminConfig.save();
-          console.log('Updated users in admin config with lastLogin property');
-        }
-      }
+      console.log('User migration completed');
     }
 
     // Check if Profile collection has any documents
@@ -373,7 +351,239 @@ app.post('/api/profiles/:userId', async (req, res) => {
   }
 });
 
-// User Config API
+// New API endpoints for user management and JWT configuration
+
+// User API
+app.get('/api/users', async (req, res) => {
+  // If MongoDB is not connected, return default users
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, returning default users');
+    return res.json({
+      users: [
+        {
+          username: 'admin',
+          roles: ['admin'],
+          lastLogin: null,
+          lastModified: new Date().toISOString()
+        }
+      ]
+    });
+  }
+
+  try {
+    // Get all users without passwordHash
+    const users = await User.find({}, { passwordHash: 0 });
+    res.json({ users });
+  } catch (error) {
+    console.log('Error fetching users:', error);
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
+app.get('/api/users/:username', async (req, res) => {
+  // If MongoDB is not connected, return error
+  if (!isMongoConnected) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const { username } = req.params;
+    // Get user without passwordHash
+    const user = await User.findOne({ username }, { passwordHash: 0 });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ user });
+  } catch (error) {
+    console.log('Error fetching user:', error);
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+app.post('/api/users', async (req, res) => {
+  // If MongoDB is not connected, return error
+  if (!isMongoConnected) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const { username, password, roles, ...profileData } = req.body;
+
+    // Check if user already exists
+    const existingUser = await User.findOne({ username });
+    if (existingUser) {
+      return res.status(409).json({ error: 'User already exists' });
+    }
+
+    // Hash password
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    // Create user
+    const user = await User.create({
+      username,
+      passwordHash,
+      roles: roles || ['user'],
+      lastLogin: null,
+      lastModified: new Date().toISOString(),
+      ...profileData
+    });
+
+    // Return user without passwordHash
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.passwordHash;
+
+    res.status(201).json({ user: userWithoutPassword });
+  } catch (error) {
+    console.log('Error creating user:', error);
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.put('/api/users/:username', async (req, res) => {
+  // If MongoDB is not connected, return error
+  if (!isMongoConnected) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const { username } = req.params;
+    const { password, roles, ...profileData } = req.body;
+
+    // Find user
+    const user = await User.findOne({ username });
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    // Update user fields
+    if (password) {
+      user.passwordHash = await bcrypt.hash(password, 12);
+    }
+
+    if (roles) {
+      user.roles = roles;
+    }
+
+    // Update profile data
+    Object.assign(user, profileData);
+
+    // Update lastModified timestamp if not explicitly provided
+    if (!profileData.lastModified) {
+      user.lastModified = new Date().toISOString();
+    }
+
+    // Save user
+    await user.save();
+
+    // Return user without passwordHash
+    const userWithoutPassword = user.toObject();
+    delete userWithoutPassword.passwordHash;
+
+    res.json({ user: userWithoutPassword });
+  } catch (error) {
+    console.log('Error updating user:', error);
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+app.delete('/api/users/:username', async (req, res) => {
+  // If MongoDB is not connected, return error
+  if (!isMongoConnected) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const { username } = req.params;
+
+    // Delete user
+    const result = await User.deleteOne({ username });
+
+    if (result.deletedCount === 0) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.json({ message: 'User deleted successfully' });
+  } catch (error) {
+    console.log('Error deleting user:', error);
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
+  }
+});
+
+// JWT Config API
+app.get('/api/jwtconfig', async (req, res) => {
+  // If MongoDB is not connected, return default JWT config
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, returning default JWT config');
+    return res.json({
+      jwtConfig: {
+        jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+        tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+      }
+    });
+  }
+
+  try {
+    // Get JWT config
+    const jwtConfig = await JwtConfig.findOne();
+
+    if (!jwtConfig) {
+      return res.status(404).json({ error: 'JWT configuration not found' });
+    }
+
+    res.json({ jwtConfig });
+  } catch (error) {
+    console.log('Error fetching JWT config:', error);
+    console.error('Error fetching JWT config:', error);
+    res.status(500).json({ error: 'Failed to fetch JWT configuration' });
+  }
+});
+
+app.put('/api/jwtconfig', async (req, res) => {
+  // If MongoDB is not connected, return error
+  if (!isMongoConnected) {
+    return res.status(503).json({ error: 'Database not connected' });
+  }
+
+  try {
+    const { jwtSecret, tokenExpiry, refreshTokenExpiry } = req.body;
+
+    // Find JWT config
+    let jwtConfig = await JwtConfig.findOne();
+
+    if (!jwtConfig) {
+      // Create new JWT config if none exists
+      jwtConfig = new JwtConfig({
+        jwtSecret: jwtSecret || process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+        tokenExpiry: tokenExpiry || parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+        refreshTokenExpiry: refreshTokenExpiry || parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+      });
+    } else {
+      // Update existing JWT config
+      if (jwtSecret) jwtConfig.jwtSecret = jwtSecret;
+      if (tokenExpiry) jwtConfig.tokenExpiry = tokenExpiry;
+      if (refreshTokenExpiry) jwtConfig.refreshTokenExpiry = refreshTokenExpiry;
+    }
+
+    // Save JWT config
+    await jwtConfig.save();
+
+    res.json({ jwtConfig });
+  } catch (error) {
+    console.log('Error updating JWT config:', error);
+    console.error('Error updating JWT config:', error);
+    res.status(500).json({ error: 'Failed to update JWT configuration' });
+  }
+});
+
+// Legacy User Config API - for backward compatibility during transition
 app.get('/api/userconfig/:userId', async (req, res) => {
   // If MongoDB is not connected, return default user config
   if (!isMongoConnected) {
@@ -398,23 +608,30 @@ app.get('/api/userconfig/:userId', async (req, res) => {
   }
 
   try {
-    const { userId } = req.params;
-    const userConfig = await UserConfig.findOne({ userId });
+    // Get all users from User collection
+    const users = await User.find();
 
-    if (!userConfig) {
-      return res.status(404).json({ error: 'User configuration not found' });
-    }
+    // Get JWT config
+    const jwtConfig = await JwtConfig.findOne();
 
+    // Construct config object in the old format
+    const config = {
+      users: users.map(user => ({
+        username: user.username,
+        passwordHash: user.passwordHash,
+        roles: user.roles,
+        displayName: user.displayName,
+        email: user.email,
+        avatar: user.avatar,
+        lastLogin: user.lastLogin,
+        lastModified: user.lastModified
+      })),
+      jwtSecret: jwtConfig ? jwtConfig.jwtSecret : (process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production'),
+      tokenExpiry: jwtConfig ? jwtConfig.tokenExpiry : parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+      refreshTokenExpiry: jwtConfig ? jwtConfig.refreshTokenExpiry : parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+    };
 
-    // Ensure lastLogin is explicitly set for each user
-    userConfig.config.users.forEach(user => {
-      if (!('lastLogin' in user)) {
-        user.lastLogin = null; // Set to null if it doesn't exist
-      }
-    });
-
-
-    res.json({ config: userConfig.config });
+    res.json({ config });
   } catch (error) {
     console.log('Error fetching user config:', error);
     console.error('Error fetching user config:', error);
@@ -431,26 +648,91 @@ app.post('/api/userconfig/:userId', async (req, res) => {
   }
 
   try {
-    const { userId } = req.params;
     const { config } = req.body;
 
+    // Process users
+    if (config && config.users && Array.isArray(config.users)) {
+      for (const userData of config.users) {
+        // Ensure lastLogin is explicitly set
+        if (!('lastLogin' in userData)) {
+          userData.lastLogin = null;
+        }
 
-    // Ensure lastLogin is explicitly set for each user
-    config.users.forEach(user => {
-      if (!('lastLogin' in user)) {
-        user.lastLogin = null; // Set to null if it doesn't exist
+        // Check if user exists
+        const existingUser = await User.findOne({ username: userData.username });
+
+        if (existingUser) {
+          // Update existing user
+          Object.assign(existingUser, {
+            passwordHash: userData.passwordHash,
+            roles: userData.roles,
+            displayName: userData.displayName,
+            email: userData.email,
+            avatar: userData.avatar,
+            lastLogin: userData.lastLogin,
+            lastModified: userData.lastModified || new Date().toISOString()
+          });
+
+          await existingUser.save();
+        } else {
+          // Create new user
+          await User.create({
+            username: userData.username,
+            passwordHash: userData.passwordHash,
+            roles: userData.roles,
+            displayName: userData.displayName,
+            email: userData.email,
+            avatar: userData.avatar,
+            lastLogin: userData.lastLogin,
+            lastModified: userData.lastModified || new Date().toISOString()
+          });
+        }
       }
-    });
+    }
 
-    // Update or create user config
-    const result = await UserConfig.findOneAndUpdate(
-      { userId },
-      { userId, config },
-      { upsert: true, new: true }
-    );
+    // Process JWT config
+    if (config && (config.jwtSecret || config.tokenExpiry || config.refreshTokenExpiry)) {
+      // Find JWT config
+      let jwtConfig = await JwtConfig.findOne();
 
+      if (!jwtConfig) {
+        // Create new JWT config if none exists
+        jwtConfig = new JwtConfig({
+          jwtSecret: config.jwtSecret || process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+          tokenExpiry: config.tokenExpiry || parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+          refreshTokenExpiry: config.refreshTokenExpiry || parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+        });
+      } else {
+        // Update existing JWT config
+        if (config.jwtSecret) jwtConfig.jwtSecret = config.jwtSecret;
+        if (config.tokenExpiry) jwtConfig.tokenExpiry = config.tokenExpiry;
+        if (config.refreshTokenExpiry) jwtConfig.refreshTokenExpiry = config.refreshTokenExpiry;
+      }
 
-    res.json({ config: result.config });
+      await jwtConfig.save();
+    }
+
+    // Return the updated config
+    const users = await User.find();
+    const jwtConfig = await JwtConfig.findOne();
+
+    const updatedConfig = {
+      users: users.map(user => ({
+        username: user.username,
+        passwordHash: user.passwordHash,
+        roles: user.roles,
+        displayName: user.displayName,
+        email: user.email,
+        avatar: user.avatar,
+        lastLogin: user.lastLogin,
+        lastModified: user.lastModified
+      })),
+      jwtSecret: jwtConfig ? jwtConfig.jwtSecret : (process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production'),
+      tokenExpiry: jwtConfig ? jwtConfig.tokenExpiry : parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+      refreshTokenExpiry: jwtConfig ? jwtConfig.refreshTokenExpiry : parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+    };
+
+    res.json({ config: updatedConfig });
   } catch (error) {
     console.log('Error saving user config:', error);
     console.error('Error saving user config:', error);
