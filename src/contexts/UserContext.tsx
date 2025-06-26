@@ -194,11 +194,15 @@ export const UserProvider: React.FC<UserProviderProps> = ({ children }) => {
       const userToUpdate = users.find(u => u.username === username);
 
       if (userToUpdate) {
-        // Add lastModified timestamp
+        // Only add lastModified timestamp if we're updating something other than just lastLogin
         const updatedProfileData = {
-          ...profileData,
-          lastModified: new Date().toISOString()
+          ...profileData
         };
+
+        // Only update lastModified if we're making actual profile changes (not just updating lastLogin)
+        if (!(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
+          updatedProfileData.lastModified = new Date().toISOString();
+        }
 
         await userManager.updateUserProfile(username, updatedProfileData);
 

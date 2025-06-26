@@ -258,8 +258,9 @@ export const updateUserProfile = async (
     config.users[userIndex].lastLogin = existingLastLogin;
   }
 
-  // Always update lastModified if not explicitly provided
-  if (!profileData.lastModified) {
+  // Only update lastModified if not explicitly provided AND we're not just updating lastLogin
+  if (!profileData.lastModified && 
+      !(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
     const now = new Date().toISOString();
     config.users[userIndex].lastModified = now;
   }
@@ -330,10 +331,9 @@ export const authenticate = async (username: string, password: string): Promise<
   // Update lastLogin timestamp
   const now = new Date().toISOString();
 
-  // Update user profile with lastLogin and lastModified
+  // Update user profile with lastLogin only
   await updateUserProfile(username, { 
-    lastLogin: now,
-    lastModified: now
+    lastLogin: now
   });
 
   const token = generateToken(user, config.tokenExpiry);
