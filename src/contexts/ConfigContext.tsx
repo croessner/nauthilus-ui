@@ -42,19 +42,14 @@ const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
 const DEFAULT_PROFILE_NAME = 'Default';
 
 // Helper function to get the current user ID
-const getCurrentUserId = (): string => {
-  // Try to get the current user from the token in localStorage
-  const token = localStorage.getItem('token');
-  if (token) {
-    try {
-      const decoded = JSON.parse(atob(token.split('.')[1]));
-      return decoded.sub; // Use the username as the user ID
-    } catch (error) {
-      console.error('Error decoding token:', error);
-    }
-  }
+const getCurrentUserId = async (): Promise<string> => {
+  // Always return default-user since we're storing userId-Session-Infos only in browser
+  return 'default-user';
+};
 
-  // Fallback to default user if no token or error decoding
+// Synchronous version for immediate use
+const getCurrentUserIdSync = (): string => {
+  // Always return default-user since we're storing userId-Session-Infos only in browser
   return 'default-user';
 };
 
@@ -346,33 +341,24 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     return errors;
   }, [validateConfig]);
 
-  // Function to load the configuration profiles from MongoDB (with localStorage fallback)
+  // Function to load the configuration profiles from MongoDB
   const refreshConfig = useCallback(async () => {
     await withErrorHandling(async () => {
-      const userId = getCurrentUserId();
+      const userId = await getCurrentUserId();
       let profilesArray: ConfigProfile[];
       let currentProfile: string;
 
       try {
-        // Try to load from API first
+        // Try to load from API
         const response = await axios.get(`/api/profiles/${userId}`);
         profilesArray = response.data.profiles;
         currentProfile = response.data.currentProfileName;
       } catch (error) {
-        console.log('Failed to load from API, falling back to localStorage:', error);
+        console.log('Failed to load from API, creating default profile:', error);
 
-        // Fallback to localStorage if API fails
-        const storedProfiles = localStorage.getItem(PROFILES_STORAGE_KEY);
-        const storedCurrentProfile = localStorage.getItem(CURRENT_PROFILE_KEY);
-
-        if (storedProfiles) {
-          profilesArray = JSON.parse(storedProfiles);
-        } else {
-          // Create default profile if none exists
-          profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
-        }
-
-        currentProfile = storedCurrentProfile || DEFAULT_PROFILE_NAME;
+        // Create default profile if none exists
+        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
+        currentProfile = DEFAULT_PROFILE_NAME;
 
         // Save to API for future use
         try {
@@ -380,8 +366,10 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
             profiles: profilesArray,
             currentProfileName: currentProfile
           });
+          console.log('Created default profile in MongoDB');
         } catch (saveError) {
-          console.error('Failed to save profiles to API:', saveError);
+          console.error('Failed to save default profiles to API:', saveError);
+          throw new Error('Failed to initialize profiles in MongoDB');
         }
       }
 
@@ -410,7 +398,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
     );
 
     // Update in MongoDB
-    const userId = getCurrentUserId();
+    const userId = await getCurrentUserId();
     try {
       await axios.post(`/api/profiles/${userId}`, {
         profiles: updatedProfiles,
@@ -418,8 +406,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       });
     } catch (error) {
       console.error('Failed to save profiles to API:', error);
-      // Fallback to localStorage if API fails
-      localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
+      throw new Error('Failed to save profiles to MongoDB');
     }
 
     setProfiles(updatedProfiles);
@@ -646,7 +633,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       }
 
       // Save profiles to MongoDB
-      const userId = getCurrentUserId();
+      const userId = await getCurrentUserId();
       try {
         await axios.post(`/api/profiles/${userId}`, {
           profiles: updatedProfiles,
@@ -654,11 +641,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         });
       } catch (error) {
         console.error('Failed to save profiles to API:', error);
-        // Fallback to localStorage if API fails
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
-        if (targetProfileName !== currentProfileName) {
-          localStorage.setItem(CURRENT_PROFILE_KEY, targetProfileName);
-        }
+        throw new Error('Failed to save profiles to MongoDB');
       }
 
       setProfiles(updatedProfiles);
@@ -772,7 +755,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       const updatedProfiles = [...profiles, newProfile];
 
       // Save to MongoDB
-      const userId = getCurrentUserId();
+      const userId = await getCurrentUserId();
       try {
         await axios.post(`/api/profiles/${userId}`, {
           profiles: updatedProfiles,
@@ -780,9 +763,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         });
       } catch (error) {
         console.error('Failed to save profiles to API:', error);
-        // Fallback to localStorage if API fails
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
-        localStorage.setItem(CURRENT_PROFILE_KEY, name);
+        throw new Error('Failed to save profiles to MongoDB');
       }
 
       setProfiles(updatedProfiles);
@@ -815,7 +796,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       setConfig(profile.config);
 
       // Save to MongoDB
-      const userId = getCurrentUserId();
+      const userId = await getCurrentUserId();
       try {
         await axios.post(`/api/profiles/${userId}`, {
           profiles,
@@ -823,8 +804,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         });
       } catch (error) {
         console.error('Failed to save current profile to API:', error);
-        // Fallback to localStorage if API fails
-        localStorage.setItem(CURRENT_PROFILE_KEY, name);
+        throw new Error('Failed to save current profile to MongoDB');
       }
 
       setHasUnsavedChanges(false);
@@ -849,7 +829,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       );
 
       // Save to MongoDB
-      const userId = getCurrentUserId();
+      const userId = await getCurrentUserId();
       try {
         await axios.post(`/api/profiles/${userId}`, {
           profiles: updatedProfiles,
@@ -857,11 +837,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         });
       } catch (error) {
         console.error('Failed to save profiles to API:', error);
-        // Fallback to localStorage if API fails
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
-        if (currentProfileName === oldName) {
-          localStorage.setItem(CURRENT_PROFILE_KEY, newName);
-        }
+        throw new Error('Failed to save profiles to MongoDB');
       }
 
       setProfiles(updatedProfiles);
@@ -891,7 +867,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
       const newCurrentProfileConfig = currentProfileName === name ? updatedProfiles[0].config : config;
 
       // Save to MongoDB
-      const userId = getCurrentUserId();
+      const userId = await getCurrentUserId();
       try {
         await axios.post(`/api/profiles/${userId}`, {
           profiles: updatedProfiles,
@@ -899,11 +875,7 @@ export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
         });
       } catch (error) {
         console.error('Failed to save profiles to API:', error);
-        // Fallback to localStorage if API fails
-        localStorage.setItem(PROFILES_STORAGE_KEY, JSON.stringify(updatedProfiles));
-        if (currentProfileName === name) {
-          localStorage.setItem(CURRENT_PROFILE_KEY, newCurrentProfileName);
-        }
+        throw new Error('Failed to save profiles to MongoDB');
       }
 
       setProfiles(updatedProfiles);

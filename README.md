@@ -2,6 +2,8 @@
 
 A standalone web-based configuration builder for the Nauthilus authentication server.
 
+> **⚠️ IMPORTANT**: This application requires both the React frontend and Express backend to be running simultaneously. Simply use `npm start` to run both servers together. See the [Getting Started](#getting-started) section for details.
+
 ## Overview
 
 This UI provides a user-friendly way to create and edit Nauthilus configuration files without having to edit YAML files manually. It's built with React, TypeScript, and Material-UI, and works completely independently from the Nauthilus service.
@@ -42,6 +44,7 @@ ui/
 
 - Node.js 14.x or higher
 - npm 6.x or higher
+- MongoDB 4.x or higher
 
 ### Installation
 
@@ -63,19 +66,33 @@ ui/
 
    These files are referenced in the manifest.json and index.html files.
 
-4. Start the development server:
+4. Configure MongoDB connection in the `.env` file:
+   ```
+   MONGODB_URI=mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+   ```
+
+5. Start the application:
    ```
    npm start
    ```
 
-5. Build for production:
+   This will start both the React frontend on port 3000 and the Express backend on port 3001 simultaneously.
+
+   **IMPORTANT**: Both servers are required for the application to work correctly, which is why they now start together with a single command.
+
+   Alternatively, if you need to run them separately for development purposes:
+   - Start only the frontend: `npm run start-frontend`
+   - Start only the backend: `npm run serve`
+   - Start both (same as `npm start`): `npm run dev`
+
+6. Build for production:
    ```
    npm run build
    ```
 
 ## Configuration
 
-The UI works completely independently from the Nauthilus service. All configuration is stored in the browser's localStorage, and you can upload and download configuration files as needed.
+The UI works completely independently from the Nauthilus service. Configuration data is stored in MongoDB, and you can upload and download configuration files as needed. User session information is stored in the browser memory.
 
 ### User Authentication
 
@@ -129,9 +146,11 @@ The UI provides buttons in the top bar for:
 
 ### Persistent Storage
 
-- Configuration is stored in the browser's localStorage
-- No server-side storage or API is required
-- Configuration persists between browser sessions
+- Configuration data is stored in MongoDB
+- User session information is stored in browser memory only
+- MongoDB provides reliable server-side storage
+- Configuration persists even if the browser data is cleared
+- The Express backend provides API endpoints to interact with MongoDB
 
 ### Backend Health Check
 
@@ -165,7 +184,7 @@ When downloading, the configuration is always saved as a YAML file (nauthilus.ym
 The UI supports both light and dark themes:
 
 - A theme toggle button is available in the top bar (moon/sun icon)
-- Your theme preference is automatically saved in the browser's localStorage
+- Your theme preference is automatically saved in the browser's localStorage (this is the only setting that still uses localStorage)
 - The theme setting persists between browser sessions
 - Dark mode reduces eye strain in low-light environments
 
@@ -267,6 +286,43 @@ When configuring server addresses in the UI:
      { text: 'New Section', icon: <NewIcon />, path: '/new' },
    ];
    ```
+
+## Troubleshooting
+
+### Connection Errors
+
+If you see errors like these in the console:
+
+```
+API proxy error: Error: connect ECONNREFUSED 127.0.0.1:3001
+[HPM] Error occurred while proxying request localhost:3000/api/userconfig/default-user to http://localhost:3001/ [ECONNREFUSED]
+Failed to load resource: the server responded with a status of 500 (Internal Server Error)
+```
+
+**Solution**: The Express backend server is not running. Make sure to start the application with `npm start`, which will run both the frontend and backend servers together. If you're running the servers separately for development, ensure both are running.
+
+### MongoDB Connection Issues
+
+If you see errors related to MongoDB connection:
+
+```
+MongoDB connection error: MongoNetworkError: failed to connect to server
+```
+
+**Solution**: 
+1. Make sure MongoDB is installed and running on your system
+2. Check that the MongoDB connection string in your `.env` file is correct
+3. Verify that the MongoDB user has the correct permissions
+
+### No MongoDB Collections Created
+
+If the application starts but no collections are created in MongoDB:
+
+**Solution**:
+1. Make sure both the frontend and backend servers are running
+2. Check the MongoDB connection string in your `.env` file
+3. Verify that the MongoDB user has write permissions to create collections
+4. Try accessing the MongoDB health check endpoint at `/api/health/mongodb` to trigger a reconnection
 
 ## License
 

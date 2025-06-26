@@ -8,16 +8,8 @@ const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
 
 const app = express();
-const PORT = process.env.PORT || 3000;
-const ADDRESS = process.env.ADDRESS || '0.0.0.0';
-
-// Connect to MongoDB
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => {
-    console.log('MongoDB connection error:', err);
-    console.error('MongoDB connection error:', err);
-  });
+const EXPRESS_PORT = process.env.EXPRESS_PORT || 3001;
+const EXPRESS_ADDRESS = process.env.EXPRESS_ADDRESS || '0.0.0.0';
 
 // Define schemas
 const ProfileSchema = new mongoose.Schema({
@@ -51,6 +43,155 @@ const UserConfig = mongoose.model('UserConfig', UserConfigSchema);
 const Token = mongoose.model('Token', TokenSchema);
 const Theme = mongoose.model('Theme', ThemeSchema);
 
+// Function to initialize database with required collections and default admin user
+const initializeDatabase = async () => {
+  try {
+    // Check if UserConfig collection has any documents
+    const userConfigCount = await UserConfig.countDocuments();
+    if (userConfigCount === 0) {
+      console.log('Creating default user configuration...');
+
+      // Default user configuration with admin user
+      const defaultConfig = {
+        users: [
+          {
+            username: 'admin',
+            // Default password: 'admin'
+            passwordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
+            roles: ['admin']
+          }
+        ],
+        jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+        tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+      };
+
+      // Create default user config
+      await UserConfig.create({
+        userId: 'default-user',
+        config: defaultConfig
+      });
+
+      console.log('Default user configuration created successfully');
+    }
+
+    // Check if Profile collection has any documents
+    const profileCount = await Profile.countDocuments();
+    if (profileCount === 0) {
+      console.log('Creating default profile...');
+
+      // Default empty configuration
+      const defaultConfig = {
+        server: {
+          address: '127.0.0.1:8080',
+          instance_name: 'nauthilus',
+          max_concurrent_requests: 100,
+          max_password_history_entries: 10,
+          redis: {
+            database_number: 0,
+            prefix: 'nt:',
+            master: {
+              address: '127.0.0.1:6379'
+            }
+          }
+        },
+        connection: {
+          backend_url: 'http://127.0.0.1:8080',
+          basic_auth: {
+            enabled: false,
+            username: '',
+            password: ''
+          },
+          jwt_auth: {
+            enabled: false,
+            token: ''
+          }
+        }
+      };
+
+      // Create default profile
+      await Profile.create({
+        userId: 'default-user',
+        profiles: [{ name: 'Default', config: defaultConfig }],
+        currentProfileName: 'Default'
+      });
+
+      console.log('Default profile created successfully');
+    }
+
+    console.log('Database initialization completed');
+  } catch (error) {
+    console.error('Error initializing database:', error);
+  }
+};
+
+// Flag to track MongoDB connection status
+let isMongoConnected = false;
+let mongoConnectionRetryCount = 0;
+const MAX_RETRY_COUNT = 5;
+const RETRY_INTERVAL = 30000; // 30 seconds
+const LONG_RETRY_INTERVAL = 300000; // 5 minutes
+
+// Function to connect to MongoDB
+const connectToMongoDB = (isInitialAttempt = false) => {
+  if (isInitialAttempt) {
+    mongoConnectionRetryCount = 0;
+  }
+
+  console.log(`Attempting to connect to MongoDB (attempt ${mongoConnectionRetryCount + 1}/${MAX_RETRY_COUNT + 1})...`);
+
+  mongoose.connect(process.env.MONGODB_URI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000, // 5 seconds timeout for server selection
+    connectTimeoutMS: 10000, // 10 seconds timeout for initial connection
+    socketTimeoutMS: 45000, // 45 seconds timeout for operations
+    family: 4 // Use IPv4, skip trying IPv6
+  })
+  .then(() => {
+    console.log('Connected to MongoDB');
+    isMongoConnected = true;
+    mongoConnectionRetryCount = 0; // Reset retry count on successful connection
+
+    // Initialize collections and create default admin user if needed
+    initializeDatabase();
+  })
+  .catch(err => {
+    console.log('MongoDB connection error:', err);
+    console.error('MongoDB connection error:', err);
+    isMongoConnected = false;
+
+    // Don't terminate the application, but make it clear there's a DB issue
+    console.error('WARNING: Application running without database connection. Collections will not be created.');
+
+    // Retry connection if we haven't exceeded the maximum retry count
+    if (mongoConnectionRetryCount < MAX_RETRY_COUNT) {
+      mongoConnectionRetryCount++;
+      console.log(`Will retry MongoDB connection in ${RETRY_INTERVAL/1000} seconds...`);
+      setTimeout(connectToMongoDB, RETRY_INTERVAL);
+    } else {
+      console.error(`Maximum MongoDB connection retry attempts (${MAX_RETRY_COUNT + 1}) reached. Will try again in ${LONG_RETRY_INTERVAL/60000} minutes.`);
+      // Schedule a long-term retry
+      setTimeout(() => connectToMongoDB(true), LONG_RETRY_INTERVAL);
+    }
+  });
+};
+
+// Initial connection attempt
+connectToMongoDB(true);
+
+// Add a health check endpoint that can be used to manually trigger a reconnection
+app.get('/api/health/mongodb', (req, res) => {
+  if (isMongoConnected) {
+    res.json({ status: 'connected' });
+  } else {
+    // Try to reconnect if not connected
+    console.log('Manual reconnection attempt triggered via health check endpoint');
+    connectToMongoDB(true);
+    res.json({ status: 'disconnected', message: 'Reconnection attempt triggered' });
+  }
+});
+
 // Middleware for parsing JSON
 app.use(bodyParser.json());
 
@@ -58,6 +199,44 @@ app.use(bodyParser.json());
 
 // Profiles API
 app.get('/api/profiles/:userId', async (req, res) => {
+  // If MongoDB is not connected, return default profile
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, returning default profile');
+    return res.json({
+      profiles: [{ 
+        name: 'Default', 
+        config: {
+          server: {
+            address: '127.0.0.1:8080',
+            instance_name: 'nauthilus',
+            max_concurrent_requests: 100,
+            max_password_history_entries: 10,
+            redis: {
+              database_number: 0,
+              prefix: 'nt:',
+              master: {
+                address: '127.0.0.1:6379'
+              }
+            }
+          },
+          connection: {
+            backend_url: 'http://127.0.0.1:8080',
+            basic_auth: {
+              enabled: false,
+              username: '',
+              password: ''
+            },
+            jwt_auth: {
+              enabled: false,
+              token: ''
+            }
+          }
+        }
+      }],
+      currentProfileName: 'Default'
+    });
+  }
+
   try {
     const { userId } = req.params;
     const profileData = await Profile.findOne({ userId });
@@ -78,6 +257,16 @@ app.get('/api/profiles/:userId', async (req, res) => {
 });
 
 app.post('/api/profiles/:userId', async (req, res) => {
+  // If MongoDB is not connected, return success but log warning
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, profile not saved but returning success');
+    const { profiles, currentProfileName } = req.body;
+    return res.json({
+      profiles,
+      currentProfileName
+    });
+  }
+
   try {
     const { userId } = req.params;
     const { profiles, currentProfileName } = req.body;
@@ -102,6 +291,26 @@ app.post('/api/profiles/:userId', async (req, res) => {
 
 // User Config API
 app.get('/api/userconfig/:userId', async (req, res) => {
+  // If MongoDB is not connected, return default user config
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, returning default user config');
+    return res.json({
+      config: {
+        users: [
+          {
+            username: 'admin',
+            // Default password hash for 'admin'
+            passwordHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918',
+            roles: ['admin']
+          }
+        ],
+        jwtSecret: process.env.REACT_APP_JWT_SECRET || 'nauthilus-ui-default-secret-key-change-in-production',
+        tokenExpiry: parseInt(process.env.REACT_APP_TOKEN_EXPIRY || '3600'),
+        refreshTokenExpiry: parseInt(process.env.REACT_APP_REFRESH_TOKEN_EXPIRY || '86400')
+      }
+    });
+  }
+
   try {
     const { userId } = req.params;
     const userConfig = await UserConfig.findOne({ userId });
@@ -119,6 +328,13 @@ app.get('/api/userconfig/:userId', async (req, res) => {
 });
 
 app.post('/api/userconfig/:userId', async (req, res) => {
+  // If MongoDB is not connected, return success but log warning
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, user config not saved but returning success');
+    const { config } = req.body;
+    return res.json({ config });
+  }
+
   try {
     const { userId } = req.params;
     const { config } = req.body;
@@ -138,8 +354,16 @@ app.post('/api/userconfig/:userId', async (req, res) => {
   }
 });
 
-// Auth Tokens API
 app.get('/api/tokens/:userId', async (req, res) => {
+  // If MongoDB is not connected, return empty tokens
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, returning empty tokens');
+    return res.json({
+      token: null,
+      refreshToken: null
+    });
+  }
+
   try {
     const { userId } = req.params;
     const tokenData = await Token.findOne({ userId });
@@ -160,6 +384,16 @@ app.get('/api/tokens/:userId', async (req, res) => {
 });
 
 app.post('/api/tokens/:userId', async (req, res) => {
+  // If MongoDB is not connected, return success but log warning
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, tokens not saved but returning success');
+    const { token, refreshToken } = req.body;
+    return res.json({
+      token,
+      refreshToken
+    });
+  }
+
   try {
     const { userId } = req.params;
     const { token, refreshToken } = req.body;
@@ -183,6 +417,12 @@ app.post('/api/tokens/:userId', async (req, res) => {
 });
 
 app.delete('/api/tokens/:userId', async (req, res) => {
+  // If MongoDB is not connected, return success but log warning
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, tokens not deleted but returning success');
+    return res.json({ message: 'Tokens deleted successfully' });
+  }
+
   try {
     const { userId } = req.params;
     await Token.findOneAndDelete({ userId });
@@ -196,6 +436,12 @@ app.delete('/api/tokens/:userId', async (req, res) => {
 
 // Theme API
 app.get('/api/theme/:userId', async (req, res) => {
+  // If MongoDB is not connected, return default theme
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, returning default theme');
+    return res.json({ theme: 'light' });
+  }
+
   try {
     const { userId } = req.params;
     const themeData = await Theme.findOne({ userId });
@@ -213,6 +459,13 @@ app.get('/api/theme/:userId', async (req, res) => {
 });
 
 app.post('/api/theme/:userId', async (req, res) => {
+  // If MongoDB is not connected, return success but log warning
+  if (!isMongoConnected) {
+    console.log('MongoDB not connected, theme not saved but returning success');
+    const { theme } = req.body;
+    return res.json({ theme });
+  }
+
   try {
     const { userId } = req.params;
     const { theme } = req.body;
@@ -440,6 +693,6 @@ app.get('*', (req, res) => {
   });
 });
 
-app.listen(PORT, ADDRESS, () => {
-  console.log(`Server running on ${ADDRESS}:${PORT}`);
+app.listen(EXPRESS_PORT, EXPRESS_ADDRESS, () => {
+  console.log(`Server running on ${EXPRESS_ADDRESS}:${EXPRESS_PORT}`);
 });

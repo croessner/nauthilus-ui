@@ -1,6 +1,24 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
+require('dotenv').config();
 
 module.exports = function(app) {
+  // Get Express server address and port from environment variables
+  const EXPRESS_ADDRESS = process.env.EXPRESS_ADDRESS || '0.0.0.0';
+  const EXPRESS_PORT = process.env.EXPRESS_PORT || '3001';
+  const EXPRESS_TARGET = `http://${EXPRESS_ADDRESS === '0.0.0.0' ? 'localhost' : EXPRESS_ADDRESS}:${EXPRESS_PORT}`;
+
+  // Proxy for API requests to the Express server
+  app.use(
+    '/api',
+    createProxyMiddleware({
+      target: EXPRESS_TARGET,
+      changeOrigin: true,
+      onError: (err, req, res) => {
+        console.error('API proxy error:', err);
+        res.status(500).json({ error: err.message });
+      },
+    })
+  );
   // Proxy for backend health check
   app.use(
     '/proxy/ping',
