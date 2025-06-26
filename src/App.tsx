@@ -726,24 +726,36 @@ const MainContent: React.FC = () => {
                 <Button
                   color="inherit"
                   onClick={handleUserProfileClick}
-                  startIcon={<AccountCircleIcon />}
+                  startIcon={user.avatar ? 
+                    <Avatar 
+                      src={user.avatar} 
+                      sx={{ width: 24, height: 24 }} 
+                    /> : 
+                    <AccountCircleIcon />
+                  }
                   sx={{ 
                     mr: { xs: 0.5, sm: 1 },
                     display: { xs: 'none', sm: 'flex' }
                   }}
                 >
-                  Profile
+                  {user.displayName || user.username}
                 </Button>
               </Tooltip>
             )}
             {user && (
-              <Tooltip title="Edit Profile">
+              <Tooltip title={user.displayName || user.username}>
                 <IconButton
                   color="inherit"
                   onClick={handleUserProfileClick}
                   sx={{ display: { xs: 'flex', sm: 'none' } }}
                 >
-                  <AccountCircleIcon />
+                  {user.avatar ? 
+                    <Avatar 
+                      src={user.avatar} 
+                      sx={{ width: 24, height: 24 }} 
+                    /> : 
+                    <AccountCircleIcon />
+                  }
                 </IconButton>
               </Tooltip>
             )}
