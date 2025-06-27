@@ -23,6 +23,9 @@ services:
       dockerfile: Dockerfile.nginx
     container_name: nauthilus-web
     restart: unless-stopped
+    environment:
+      - EXPRESS_PORT=3001
+      - EXPRESS_ADDRESS=api
     ports:
       - "80:80"
       - "443:443"
