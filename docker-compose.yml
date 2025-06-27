@@ -7,12 +7,13 @@ services:
     image: nauthilus-ui:latest
     container_name: nauthilus-ui
     ports:
-      - "80:3000"  # Map host port 80 to container port 3000
+      - "80:3000"  # Map host port 80 to container port 3000 (React)
+    # Port 3001 (Express) is only used internally and doesn't need to be exposed
     environment:
       - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongodb:27017/nauthilus-ui?authSource=admin
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3000/"]
+      test: ["CMD", "wget", "-qO-", "http://localhost:3001/"]
       interval: 30s
       timeout: 3s
       retries: 3
