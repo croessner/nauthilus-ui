@@ -1,5 +1,5 @@
 # Build stage
-FROM node:18-alpine AS build
+FROM node:24-alpine AS build
 
 WORKDIR /app
 
@@ -23,8 +23,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install all dependencies (not just production)
-RUN npm ci
+# Install only production dependencies
+RUN npm ci --only=production
 
 # Copy the build output from the build stage
 COPY --from=build /app/build ./build
@@ -32,12 +32,12 @@ COPY --from=build /app/build ./build
 # Copy the server.js file
 COPY --from=build /app/server.js ./
 
-# Expose ports for both React and Express
-EXPOSE 3000 3001
+# Expose only Express port
+EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
   CMD wget -qO- http://localhost:3001/ || exit 1
 
-# Start both React and Express servers
-CMD ["npm", "start"]
+# Start only the Express server
+CMD ["node", "server.js"]

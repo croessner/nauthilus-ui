@@ -1,55 +1,41 @@
 services:
-  # UI service
-  nauthilus-ui:
+  # Express API server
+  api:
     build:
       context: .
       dockerfile: Dockerfile
-    image: nauthilus-ui:latest
-    container_name: nauthilus-ui
-    ports:
-      - "80:3000"  # Map host port 80 to container port 3000 (React)
-    # Port 3001 (Express) is only used internally and doesn't need to be exposed
-    environment:
-      - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongodb:27017/nauthilus-ui?authSource=admin
+    container_name: nauthilus-api
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:3001/"]
-      interval: 30s
-      timeout: 3s
-      retries: 3
-      start_period: 5s
+    environment:
+      - EXPRESS_PORT=3001
+      - EXPRESS_ADDRESS=0.0.0.0
+      - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongo:27017/nauthilus-ui?authSource=admin
+      - REACT_APP_JWT_SECRET=your-jwt-secret-key-change-in-production
+    depends_on:
+      - mongo
     networks:
       - nauthilus-network
-    depends_on:
-      - mongodb
 
-  # Uncomment the following section if you want to run the backend service as well
-  # nauthilus-backend:
-  #   image: nauthilus:latest
-  #   container_name: nauthilus-backend
-  #   ports:
-  #     - "8180:8180"
-  #   volumes:
-  #     - ./config:/usr/app/config
-  #   environment:
-  #     - TZ=UTC
-  #   restart: unless-stopped
-  #   healthcheck:
-  #     test: ["CMD", "/usr/app/healthcheck"]
-  #     interval: 30s
-  #     timeout: 3s
-  #     retries: 3
-  #     start_period: 5s
-  #   networks:
-  #     - nauthilus-network
-
-  # MongoDB service
-  mongodb:
-    image: mongo:latest
-    container_name: nauthilus-mongodb
+  # Nginx web server
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile.nginx
+    container_name: nauthilus-web
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "80:80"
+      - "443:443"
+    depends_on:
+      - api
+    networks:
+      - nauthilus-network
+
+  # MongoDB database
+  mongo:
+    image: mongo:latest
+    container_name: nauthilus-mongo
+    restart: unless-stopped
     environment:
       - MONGO_INITDB_DATABASE=nauthilus-ui
       - MONGO_INITDB_ROOT_USERNAME=${MONGODB_ROOT_USER:-nauthilus}
