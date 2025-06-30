@@ -279,67 +279,10 @@ const ConnectionConfig: React.FC = () => {
     setStatusMessage('Checking connection...');
 
     try {
-      // Prepare authentication parameters for the proxy
-      let authType = '';
-      let authValue = '';
-
-      // Add Basic Auth if enabled
-      if (connectionConfig.basic_auth?.enabled && 
-          connectionConfig.basic_auth.username && 
-          connectionConfig.basic_auth.password) {
-        authType = 'basic';
-        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-      }
-
-      // For JWT Auth, try to fetch a token if username/password are provided but no token exists
-      if (connectionConfig.jwt_auth?.enabled) {
-        if (connectionConfig.jwt_auth.username && 
-            connectionConfig.jwt_auth.password && 
-            !connectionConfig.jwt_auth.token) {
-          const tokenData = await fetchJWTToken(
-            connectionConfig.backend_url,
-            connectionConfig.jwt_auth.username,
-            connectionConfig.jwt_auth.password
-          );
-
-          if (tokenData) {
-            // Update the connection config with the new token
-            await updateConfigSection('connection', {
-              ...connectionConfig,
-              jwt_auth: {
-                ...connectionConfig.jwt_auth,
-                token: tokenData.token,
-                refresh_token: tokenData.refresh_token,
-                expires_at: tokenData.expires_at
-              }
-            });
-
-            // Use the new token for the current request
-            authType = 'bearer';
-            authValue = tokenData.token;
-
-            setNotification({
-              open: true,
-              message: 'JWT token fetched successfully',
-              severity: 'success'
-            });
-          }
-        } else if (connectionConfig.jwt_auth.token) {
-          // Use existing token if available
-          authType = 'bearer';
-          authValue = connectionConfig.jwt_auth.token;
-        }
-      }
-
       // Use the proxy endpoint to make the request server-side
       // This avoids CORS issues by making the request through Node.js
       const proxyUrl = new URL('/proxy/ping', window.location.origin);
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
-
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
 
       const response = await fetch(proxyUrl.toString(), {
         method: 'GET',
@@ -353,7 +296,7 @@ const ConnectionConfig: React.FC = () => {
         setStatusMessage('Connected to Nauthilus backend (ping successful)');
 
         // Fetch brute force list if connection is successful
-        fetchBruteForceList(connectionConfig);
+        await fetchBruteForceList(connectionConfig);
       } else {
         setConnectionStatus('disconnected');
         const errorMessage = await extractErrorMessage(response);
@@ -372,7 +315,7 @@ const ConnectionConfig: React.FC = () => {
 
     // Check connection status when component mounts
     if (config?.connection?.backend_url) {
-      checkConnection(config.connection);
+      checkConnection(config.connection)
     }
 
     // Extract rule names from brute force buckets in the configuration

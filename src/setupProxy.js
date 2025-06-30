@@ -1,5 +1,6 @@
 const { createProxyMiddleware } = require('http-proxy-middleware');
 require('dotenv').config();
+const { addAuthorizationHeader } = require('./utils/authUtils');
 
 module.exports = function(app) {
   // Get Express server address and port from environment variables
@@ -35,15 +36,7 @@ module.exports = function(app) {
         '^/proxy/ping': '/ping', // Rewrite path to /ping
       },
       changeOrigin: true,
-      secure: false, // Allow insecure connections for testing
-      onProxyReq: (proxyReq, req, res) => {
-        // Add authentication headers if provided in the request
-        if (req.query.authType === 'basic' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
-        } else if (req.query.authType === 'bearer' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
-        }
-      },
+      secure: true, // Ensure secure connections
       onError: (err, req, res) => {
         res.status(500).json({ error: err.message });
       },
@@ -66,7 +59,7 @@ module.exports = function(app) {
         '^/proxy/jwt-token': '/api/v1/jwt/token', // Rewrite path to /api/v1/jwt/token
       },
       changeOrigin: true,
-      secure: false, // Allow insecure connections for testing
+      secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Set content type for POST requests
         proxyReq.setHeader('Content-Type', 'application/json');
@@ -93,14 +86,10 @@ module.exports = function(app) {
         '^/proxy/bruteforce/list': '/api/v1/bruteforce/list', // Rewrite path to /api/v1/bruteforce/list
       },
       changeOrigin: true,
-      secure: false, // Allow insecure connections for testing
+      secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Add authentication headers if provided in the request
-        if (req.query.authType === 'basic' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
-        } else if (req.query.authType === 'bearer' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
-        }
+        addAuthorizationHeader(proxyReq, req);
       },
       onError: (err, req, res) => {
         res.status(500).json({ error: err.message });
@@ -124,14 +113,10 @@ module.exports = function(app) {
         '^/proxy/cache/flush': '/api/v1/cache/flush', // Rewrite path to /api/v1/cache/flush
       },
       changeOrigin: true,
-      secure: false, // Allow insecure connections for testing
+      secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Add authentication headers if provided in the request
-        if (req.query.authType === 'basic' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
-        } else if (req.query.authType === 'bearer' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
-        }
+        addAuthorizationHeader(proxyReq, req);
         // Set content type for POST requests
         proxyReq.setHeader('Content-Type', 'application/json');
       },
@@ -157,14 +142,10 @@ module.exports = function(app) {
         '^/proxy/bruteforce/flush': '/api/v1/bruteforce/flush', // Rewrite path to /api/v1/bruteforce/flush
       },
       changeOrigin: true,
-      secure: false, // Allow insecure connections for testing
+      secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Add authentication headers if provided in the request
-        if (req.query.authType === 'basic' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
-        } else if (req.query.authType === 'bearer' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
-        }
+        addAuthorizationHeader(proxyReq, req);
         // Set content type for POST requests
         proxyReq.setHeader('Content-Type', 'application/json');
       },
@@ -190,14 +171,10 @@ module.exports = function(app) {
         '^/proxy/config/load': '/api/v1/config/load', // Rewrite path to /api/v1/config/load
       },
       changeOrigin: true,
-      secure: false, // Allow insecure connections for testing
+      secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Add authentication headers if provided in the request
-        if (req.query.authType === 'basic' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Basic ${req.query.authValue}`);
-        } else if (req.query.authType === 'bearer' && req.query.authValue) {
-          proxyReq.setHeader('Authorization', `Bearer ${req.query.authValue}`);
-        }
+        addAuthorizationHeader(proxyReq, req);
       },
       onError: (err, req, res) => {
         console.error('Proxy error for config/load:', err);
