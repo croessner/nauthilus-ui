@@ -1058,15 +1058,6 @@ const ConnectionConfig: React.FC = () => {
             </FormSection>
 
             <Box sx={{ mt: 3, display: 'flex', justifyContent: 'flex-end' }}>
-              <Button 
-                variant="outlined" 
-                color="primary" 
-                sx={{ mr: 2 }}
-                onClick={() => checkConnection(values)}
-                disabled={!values.backend_url}
-              >
-                Test Connection
-              </Button>
               {connectionStatus === 'connected' && (
                 <Button 
                   variant="contained" 
