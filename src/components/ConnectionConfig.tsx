@@ -46,6 +46,16 @@ const extractErrorMessage = async (response: Response): Promise<string> => {
   // Extract more detailed error information if available
   let errorMessage = errorData.error || response.statusText;
 
+  // Add HTTP status code to the error message
+  errorMessage = `[${response.status} ${response.statusText}] ${errorMessage}`;
+
+  // Check if there are detailed error information fields
+  if (errorData.details) {
+    errorMessage = `${errorMessage}: ${errorData.details}`;
+  } else if (errorData.code) {
+    errorMessage = `${errorMessage} (Code: ${errorData.code})`;
+  }
+
   // Check if there's a more detailed error message in the result field
   if (errorData.result && typeof errorData.result === 'object') {
     if (errorData.result.error) {
@@ -211,7 +221,10 @@ const ConnectionConfig: React.FC = () => {
       if (!response.ok) {
         const errorMessage = await extractErrorMessage(response);
         console.error('Error fetching brute force list:', errorMessage);
-        // Don't show error notification at the bottom - errors should only be displayed at the top
+
+        // Update the connection status message to show the error
+        setStatusMessage(`Failed to fetch brute force list: ${errorMessage}`);
+
         setBruteForceList(null);
         return;
       }
@@ -260,12 +273,16 @@ const ConnectionConfig: React.FC = () => {
       });
     } catch (error) {
       console.error('Error fetching brute force list:', error);
-      // Don't show error notification at the bottom - errors should only be displayed at the top
+
+      // Update the connection status message to show the error
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      setStatusMessage(`Failed to fetch brute force list: ${errorMessage}`);
+
       setBruteForceList(null);
     } finally {
       setIsLoadingBruteForceList(false);
     }
-  }, [config, setNotification, setBruteForceList, setRuleNames, setIsLoadingBruteForceList]);
+  }, [config, setNotification, setBruteForceList, setRuleNames, setIsLoadingBruteForceList, setStatusMessage]);
 
   // Function to check connection to the backend
   const checkConnection = useCallback(async (connectionConfig: any) => {
@@ -1068,6 +1085,7 @@ const ConnectionConfig: React.FC = () => {
                       message: 'Loading configuration from backend...',
                       severity: 'info'
                     });
+                    setStatusMessage('Loading configuration from backend...');
                     loadConfigFromBackend(values)
                       .then(() => {
                         setNotification({
@@ -1075,9 +1093,11 @@ const ConnectionConfig: React.FC = () => {
                           message: 'Configuration loaded successfully from backend',
                           severity: 'success'
                         });
+                        setStatusMessage('Connected to Nauthilus backend (ping successful)');
                       })
                       .catch((error) => {
-                        // Error is already handled by ConfigContext, no need to show another notification
+                        // Display the error in the status message area
+                        setStatusMessage(`Failed to load configuration: ${error.message}`);
                         console.error('Configuration loading failed:', error.message);
                       });
                   }}
