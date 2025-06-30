@@ -245,6 +245,9 @@ const MainContent: React.FC = () => {
       setError(null);
     }
 
+    // Close the mobile menu when navigating
+    setMobileOpen(false);
+
     if (hasUnsavedChanges) {
       // If there are unsaved changes, store the pending navigation and show the dialog
       setPendingNavigation(path);
