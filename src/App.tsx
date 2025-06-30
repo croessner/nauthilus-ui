@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { 
   AppBar, 
@@ -113,12 +113,16 @@ const MainContent: React.FC = () => {
   const [uploadProfileName, setUploadProfileName] = useState('');
   // Profile state variables removed as we now use a dedicated page
 
+  // State to track AppBar height
+  const [appBarHeight, setAppBarHeight] = useState(64); // Default height
+
   // Menu display states
   const [configMenuExpanded, setConfigMenuExpanded] = useState(true);
   const [runtimeMenuExpanded, setRuntimeMenuExpanded] = useState(true);
   const [iconOnly, setIconOnly] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadWithProfileRef = useRef<HTMLInputElement>(null);
+  const appBarRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const { 
     loading, 
@@ -138,6 +142,26 @@ const MainContent: React.FC = () => {
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
   const { isAuthenticated, user, logout } = useUser();
+
+  // Effect to measure and update AppBar height
+  useEffect(() => {
+    const updateAppBarHeight = () => {
+      if (appBarRef.current) {
+        setAppBarHeight(appBarRef.current.clientHeight);
+      }
+    };
+
+    // Initial measurement
+    updateAppBarHeight();
+
+    // Update on window resize
+    window.addEventListener('resize', updateAppBarHeight);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('resize', updateAppBarHeight);
+    };
+  }, []);
 
   // Compute current drawer width based on display mode
   const drawerWidth = iconOnly ? iconOnlyDrawerWidth : fullDrawerWidth;
@@ -545,6 +569,7 @@ const MainContent: React.FC = () => {
     <Box sx={{ display: 'flex' }}>
       <CssBaseline />
       <AppBar
+        ref={appBarRef}
         position="fixed"
         sx={{
           width: { sm: `calc(100% - ${drawerWidth}px)` },
@@ -847,9 +872,14 @@ const MainContent: React.FC = () => {
       </Box>
       <Box
         component="main"
-        sx={{ flexGrow: 1, p: 3, width: { sm: `calc(100% - ${drawerWidth}px)` } }}
+        sx={{ 
+          flexGrow: 1, 
+          p: 3, 
+          width: { sm: `calc(100% - ${drawerWidth}px)` },
+          // Add dynamic top padding based on AppBar height
+          pt: `calc(${appBarHeight}px + 24px)` // 24px is the default padding (3 * 8px)
+        }}
       >
-        <Toolbar />
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
             <CircularProgress />
