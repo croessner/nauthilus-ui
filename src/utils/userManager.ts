@@ -99,64 +99,46 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
   const userId = getCurrentUserId();
 
   try {
-    // Try to load from new API endpoints first
-    try {
-      // Load users
-      const usersResponse = await axios.get('/api/users');
-      cachedUsers = usersResponse.data.users;
+    // Load users
+    const usersResponse = await axios.get('/api/users');
+    cachedUsers = usersResponse.data.users;
 
-      // Load JWT config
-      const jwtConfigResponse = await axios.get('/api/jwtconfig');
-      cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
+    // Load JWT config
+    const jwtConfigResponse = await axios.get('/api/jwtconfig');
+    cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
 
-      // Construct config object
-      const config: UserManagerConfig = {
-        users: cachedUsers || [],
-        jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
-        tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
-        refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
-        rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
-      };
+    // Construct config object
+    const config: UserManagerConfig = {
+      users: cachedUsers || [],
+      jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
+      tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
+      refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
+      rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
+    };
 
-      cachedConfig = config;
-      return config;
-    } catch (newApiError) {
-      console.log('Failed to load from new API endpoints, falling back to legacy endpoint:', newApiError);
-
-      // Fall back to legacy API
-      const response = await axios.get(`/api/userconfig/${userId}`);
-      cachedConfig = response.data.config;
-      return response.data.config;
-    }
+    cachedConfig = config;
+    return config;
   } catch (error) {
     console.log('Failed to load user config from API, creating default config:', error);
 
     // If API fails, create default config in MongoDB
     try {
-      // Try to save to new API endpoints first
-      try {
-        // Create default admin user
-        await axios.post('/api/users', {
-          username: 'admin',
-          password: 'admin',
-          roles: ['admin'],
-          lastLogin: null,
-          lastModified: new Date().toISOString()
-        });
+      // Create default admin user
+      await axios.post('/api/users', {
+        username: 'admin',
+        password: 'admin',
+        roles: ['admin'],
+        lastLogin: null,
+        lastModified: new Date().toISOString()
+      });
 
-        // Create default JWT config
-        await axios.put('/api/jwtconfig', {
-          jwtSecret: DEFAULT_CONFIG.jwtSecret,
-          tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
-          refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
-          rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
-        });
-      } catch (newApiError) {
-        console.log('Failed to save to new API endpoints, falling back to legacy endpoint:', newApiError);
-
-        // Fall back to legacy API
-        await axios.post(`/api/userconfig/${userId}`, { config: DEFAULT_CONFIG });
-      }
+      // Create default JWT config
+      await axios.put('/api/jwtconfig', {
+        jwtSecret: DEFAULT_CONFIG.jwtSecret,
+        tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
+        refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
+        rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
+      });
 
       cachedConfig = DEFAULT_CONFIG;
       return DEFAULT_CONFIG;
@@ -182,36 +164,26 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
   });
 
   try {
-    // Try to save to new API endpoints first
-    try {
-      // Save JWT config
-      await axios.put('/api/jwtconfig', {
-        jwtSecret: configToSave.jwtSecret,
-        tokenExpiry: configToSave.tokenExpiry,
-        refreshTokenExpiry: configToSave.refreshTokenExpiry,
-        rememberMeExpiry: configToSave.rememberMeExpiry
-      });
+    // Save JWT config
+    await axios.put('/api/jwtconfig', {
+      jwtSecret: configToSave.jwtSecret,
+      tokenExpiry: configToSave.tokenExpiry,
+      refreshTokenExpiry: configToSave.refreshTokenExpiry,
+      rememberMeExpiry: configToSave.rememberMeExpiry
+    });
 
-      // For users, we would need to handle each user individually
-      // This is handled by the specific user management functions (addUser, removeUser, etc.)
-      // We don't need to save all users here as that would be inefficient
+    // For users, we would need to handle each user individually
+    // This is handled by the specific user management functions (addUser, removeUser, etc.)
+    // We don't need to save all users here as that would be inefficient
 
-      // Update cache
-      cachedConfig = configToSave;
-      cachedJwtConfig = {
-        jwtSecret: configToSave.jwtSecret,
-        tokenExpiry: configToSave.tokenExpiry,
-        refreshTokenExpiry: configToSave.refreshTokenExpiry,
-        rememberMeExpiry: configToSave.rememberMeExpiry
-      };
-    } catch (newApiError) {
-      console.log('Failed to save to new API endpoints, falling back to legacy endpoint:', newApiError);
-
-      // Fall back to legacy API
-      await axios.post(`/api/userconfig/${userId}`, { config: configToSave });
-      // Update cache
-      cachedConfig = configToSave;
-    }
+    // Update cache
+    cachedConfig = configToSave;
+    cachedJwtConfig = {
+      jwtSecret: configToSave.jwtSecret,
+      tokenExpiry: configToSave.tokenExpiry,
+      refreshTokenExpiry: configToSave.refreshTokenExpiry,
+      rememberMeExpiry: configToSave.rememberMeExpiry
+    };
   } catch (error) {
     console.error('Failed to save user config to API:', error);
     throw new Error('Failed to save user configuration to MongoDB');
@@ -232,120 +204,69 @@ export const addUser = async (
   }
 
   try {
-    // Try to use new API endpoints first
+    // Check if user exists
+    let userExists = false;
     try {
-      // Check if user exists
-      let userExists = false;
-      try {
-        const response = await axios.get(`/api/users/${username}`);
-        userExists = !!response.data.user;
-      } catch (error) {
-        // User doesn't exist if we get a 404
-        userExists = false;
-      }
+      const response = await axios.get(`/api/users/${username}`);
+      userExists = !!response.data.user;
+    } catch (error) {
+      // User doesn't exist if we get a 404
+      userExists = false;
+    }
 
-      if (userExists) {
-        // Update existing user
-        await axios.put(`/api/users/${username}`, {
-          password,
-          roles,
-          ...profileData
-        });
-      } else {
-        // Create new user
-        await axios.post('/api/users', {
-          username,
-          password,
-          roles,
-          ...profileData
-        });
-      }
+    if (userExists) {
+      // Update existing user
+      await axios.put(`/api/users/${username}`, {
+        password,
+        roles,
+        ...profileData
+      });
+    } else {
+      // Create new user
+      await axios.post('/api/users', {
+        username,
+        password,
+        roles,
+        ...profileData
+      });
+    }
 
-      // Update cached users
-      if (cachedUsers) {
-        const existingUserIndex = cachedUsers.findIndex(user => user.username === username);
-        if (existingUserIndex >= 0) {
-          // Store existing values that we want to preserve if not explicitly provided
-          const existingLastLogin = cachedUsers[existingUserIndex].lastLogin;
-
-          // Update existing user
-          cachedUsers[existingUserIndex] = {
-            ...cachedUsers[existingUserIndex],
-            username,
-            passwordHash: '', // We don't have access to the hash
-            roles,
-            lastModified: profileData.lastModified || now,
-            ...profileData
-          };
-
-          // Ensure lastLogin is preserved if it exists and not provided in profileData
-          if (existingLastLogin && !profileData.lastLogin) {
-            cachedUsers[existingUserIndex].lastLogin = existingLastLogin;
-          }
-        } else {
-          // Add new user to cache
-          cachedUsers.push({
-            username,
-            passwordHash: '', // We don't have access to the hash
-            roles,
-            lastModified: profileData.lastModified || now,
-            ...profileData
-          });
-        }
-
-        // Update cachedConfig
-        if (cachedConfig) {
-          cachedConfig.users = cachedUsers || [];
-        }
-      }
-    } catch (newApiError) {
-      console.log('Failed to use new API endpoints, falling back to legacy approach:', newApiError);
-
-      // Fall back to legacy approach
-      const config = await loadConfig();
-      // Use bcrypt with cost factor 12 for secure password hashing
-      const passwordHash = await bcrypt.hash(password, 12);
-
-      const existingUserIndex = config.users.findIndex(user => user.username === username);
+    // Update cached users
+    if (cachedUsers) {
+      const existingUserIndex = cachedUsers.findIndex(user => user.username === username);
       if (existingUserIndex >= 0) {
         // Store existing values that we want to preserve if not explicitly provided
-        const existingLastLogin = config.users[existingUserIndex].lastLogin;
-
-        // Create userData with password and roles
-        const userData = {
-          username,
-          passwordHash,
-          roles,
-          lastModified: now,
-          ...profileData
-        };
+        const existingLastLogin = cachedUsers[existingUserIndex].lastLogin;
 
         // Update existing user
-        config.users[existingUserIndex] = {
-          ...config.users[existingUserIndex],
-          ...userData
+        cachedUsers[existingUserIndex] = {
+          ...cachedUsers[existingUserIndex],
+          username,
+          passwordHash: '', // We don't have access to the hash
+          roles,
+          lastModified: profileData.lastModified || now,
+          ...profileData
         };
 
         // Ensure lastLogin is preserved if it exists and not provided in profileData
         if (existingLastLogin && !profileData.lastLogin) {
-          config.users[existingUserIndex].lastLogin = existingLastLogin;
+          cachedUsers[existingUserIndex].lastLogin = existingLastLogin;
         }
       } else {
-        // Create userData for new user
-        const userData = {
+        // Add new user to cache
+        cachedUsers.push({
           username,
-          passwordHash,
+          passwordHash: '', // We don't have access to the hash
           roles,
-          lastModified: now,
+          lastModified: profileData.lastModified || now,
           ...profileData
-        };
-
-        // Add new user
-        config.users.push(userData);
+        });
       }
 
-      // Save to MongoDB
-      await saveConfig(config);
+      // Update cachedConfig
+      if (cachedConfig) {
+        cachedConfig.users = cachedUsers || [];
+      }
     }
   } catch (error) {
     console.error(`Failed to save user ${username}:`, error);
@@ -356,27 +277,17 @@ export const addUser = async (
 // Remove a user
 export const removeUser = async (username: string): Promise<void> => {
   try {
-    // Try to use new API endpoints first
-    try {
-      // Delete user
-      await axios.delete(`/api/users/${username}`);
+    // Delete user
+    await axios.delete(`/api/users/${username}`);
 
-      // Update cached users
-      if (cachedUsers) {
-        cachedUsers = cachedUsers.filter(user => user.username !== username);
+    // Update cached users
+    if (cachedUsers) {
+      cachedUsers = cachedUsers.filter(user => user.username !== username);
 
-        // Update cachedConfig
-        if (cachedConfig) {
-          cachedConfig.users = cachedUsers || [];
-        }
+      // Update cachedConfig
+      if (cachedConfig) {
+        cachedConfig.users = cachedUsers || [];
       }
-    } catch (newApiError) {
-      console.log('Failed to use new API endpoints, falling back to legacy approach:', newApiError);
-
-      // Fall back to legacy approach
-      const config = await loadConfig();
-      config.users = config.users.filter(user => user.username !== username);
-      await saveConfig(config);
     }
   } catch (error) {
     console.error(`Failed to remove user ${username}:`, error);
@@ -387,28 +298,18 @@ export const removeUser = async (username: string): Promise<void> => {
 // Get all users (without password hashes)
 export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
   try {
-    // Try to use new API endpoints first
-    try {
-      // Get users
-      const response = await axios.get('/api/users');
+    // Get users
+    const response = await axios.get('/api/users');
 
-      // Update cached users
-      cachedUsers = response.data.users;
+    // Update cached users
+    cachedUsers = response.data.users;
 
-      // Update cachedConfig if it exists
-      if (cachedConfig) {
-        cachedConfig.users = cachedUsers || [];
-      }
-
-      return response.data.users;
-    } catch (newApiError) {
-      console.log('Failed to use new API endpoints, falling back to legacy approach:', newApiError);
-
-      // Fall back to legacy approach
-      const config = await loadConfig();
-      return config.users.map(({ username, roles, displayName, email, avatar, lastLogin, lastModified }) => 
-        ({ username, roles, displayName, email, avatar, lastLogin, lastModified }));
+    // Update cachedConfig if it exists
+    if (cachedConfig) {
+      cachedConfig.users = cachedUsers || [];
     }
+
+    return response.data.users;
   } catch (error) {
     console.error('Failed to get users:', error);
     throw error;
@@ -418,36 +319,26 @@ export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
 // Update JWT secret
 export const updateJwtSecret = async (secret: string): Promise<void> => {
   try {
-    // Try to use new API endpoints first
-    try {
-      // Get current JWT config
-      const response = await axios.get('/api/jwtconfig');
-      const jwtConfig = response.data.jwtConfig;
+    // Get current JWT config
+    const response = await axios.get('/api/jwtconfig');
+    const jwtConfig = response.data.jwtConfig;
 
-      // Update JWT secret
-      await axios.put('/api/jwtconfig', {
-        jwtSecret: secret,
-        tokenExpiry: jwtConfig.tokenExpiry,
-        refreshTokenExpiry: jwtConfig.refreshTokenExpiry,
-        rememberMeExpiry: jwtConfig.rememberMeExpiry
-      });
+    // Update JWT secret
+    await axios.put('/api/jwtconfig', {
+      jwtSecret: secret,
+      tokenExpiry: jwtConfig.tokenExpiry,
+      refreshTokenExpiry: jwtConfig.refreshTokenExpiry,
+      rememberMeExpiry: jwtConfig.rememberMeExpiry
+    });
 
-      // Update cached JWT config
-      if (cachedJwtConfig) {
-        cachedJwtConfig.jwtSecret = secret;
-      }
+    // Update cached JWT config
+    if (cachedJwtConfig) {
+      cachedJwtConfig.jwtSecret = secret;
+    }
 
-      // Update cachedConfig
-      if (cachedConfig) {
-        cachedConfig.jwtSecret = secret;
-      }
-    } catch (newApiError) {
-      console.log('Failed to use new API endpoints, falling back to legacy approach:', newApiError);
-
-      // Fall back to legacy approach
-      const config = await loadConfig();
-      config.jwtSecret = secret;
-      await saveConfig(config);
+    // Update cachedConfig
+    if (cachedConfig) {
+      cachedConfig.jwtSecret = secret;
     }
   } catch (error) {
     console.error('Failed to update JWT secret:', error);
@@ -458,39 +349,28 @@ export const updateJwtSecret = async (secret: string): Promise<void> => {
 // Update token expiry times
 export const updateTokenExpiry = async (tokenExpiry: number, refreshTokenExpiry: number): Promise<void> => {
   try {
-    // Try to use new API endpoints first
-    try {
-      // Get current JWT config
-      const response = await axios.get('/api/jwtconfig');
-      const jwtConfig = response.data.jwtConfig;
+    // Get current JWT config
+    const response = await axios.get('/api/jwtconfig');
+    const jwtConfig = response.data.jwtConfig;
 
-      // Update token expiry times
-      await axios.put('/api/jwtconfig', {
-        jwtSecret: jwtConfig.jwtSecret,
-        tokenExpiry,
-        refreshTokenExpiry,
-        rememberMeExpiry: jwtConfig.rememberMeExpiry
-      });
+    // Update token expiry times
+    await axios.put('/api/jwtconfig', {
+      jwtSecret: jwtConfig.jwtSecret,
+      tokenExpiry,
+      refreshTokenExpiry,
+      rememberMeExpiry: jwtConfig.rememberMeExpiry
+    });
 
-      // Update cached JWT config
-      if (cachedJwtConfig) {
-        cachedJwtConfig.tokenExpiry = tokenExpiry;
-        cachedJwtConfig.refreshTokenExpiry = refreshTokenExpiry;
-      }
+    // Update cached JWT config
+    if (cachedJwtConfig) {
+      cachedJwtConfig.tokenExpiry = tokenExpiry;
+      cachedJwtConfig.refreshTokenExpiry = refreshTokenExpiry;
+    }
 
-      // Update cachedConfig
-      if (cachedConfig) {
-        cachedConfig.tokenExpiry = tokenExpiry;
-        cachedConfig.refreshTokenExpiry = refreshTokenExpiry;
-      }
-    } catch (newApiError) {
-      console.log('Failed to use new API endpoints, falling back to legacy approach:', newApiError);
-
-      // Fall back to legacy approach
-      const config = await loadConfig();
-      config.tokenExpiry = tokenExpiry;
-      config.refreshTokenExpiry = refreshTokenExpiry;
-      await saveConfig(config);
+    // Update cachedConfig
+    if (cachedConfig) {
+      cachedConfig.tokenExpiry = tokenExpiry;
+      cachedConfig.refreshTokenExpiry = refreshTokenExpiry;
     }
   } catch (error) {
     console.error('Failed to update token expiry times:', error);
@@ -504,81 +384,41 @@ export const updateUserProfile = async (
   profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>>
 ): Promise<void> => {
   try {
-    // Try to use new API endpoints first
-    try {
-      // Only update lastModified if not explicitly provided AND we're not just updating lastLogin
-      if (!profileData.lastModified && 
-          !(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
-        profileData.lastModified = new Date().toISOString();
-      }
+    // Only update lastModified if not explicitly provided AND we're not just updating lastLogin
+    if (!profileData.lastModified && 
+        !(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
+      profileData.lastModified = new Date().toISOString();
+    }
 
-      // Update user
-      await axios.put(`/api/users/${username}`, profileData);
+    // Update user
+    await axios.put(`/api/users/${username}`, profileData);
 
-      // Update cached users
-      if (cachedUsers) {
-        const userIndex = cachedUsers.findIndex(user => user.username === username);
-        if (userIndex !== -1) {
-          // Store existing values that we want to preserve if not explicitly provided
-          const existingLastLogin = cachedUsers[userIndex].lastLogin;
+    // Update cached users
+    if (cachedUsers) {
+      const userIndex = cachedUsers.findIndex(user => user.username === username);
+      if (userIndex !== -1) {
+        // Store existing values that we want to preserve if not explicitly provided
+        const existingLastLogin = cachedUsers[userIndex].lastLogin;
 
-          // Update user with new profile data
-          cachedUsers[userIndex] = {
-            ...cachedUsers[userIndex],
-            ...profileData
-          };
+        // Update user with new profile data
+        cachedUsers[userIndex] = {
+          ...cachedUsers[userIndex],
+          ...profileData
+        };
 
-          // Ensure lastLogin is preserved or updated
-          if (profileData.lastLogin) {
-            cachedUsers[userIndex].lastLogin = profileData.lastLogin;
-          } else if (existingLastLogin) {
-            // Restore lastLogin if it existed but wasn't provided in profileData
-            cachedUsers[userIndex].lastLogin = existingLastLogin;
-          }
+        // Ensure lastLogin is preserved or updated
+        if (profileData.lastLogin) {
+          cachedUsers[userIndex].lastLogin = profileData.lastLogin;
+        } else if (existingLastLogin) {
+          // Restore lastLogin if it existed but wasn't provided in profileData
+          cachedUsers[userIndex].lastLogin = existingLastLogin;
+        }
 
-          // Update cachedConfig
-          if (cachedConfig) {
-            cachedConfig.users = cachedUsers || [];
-          }
+        // Update cachedConfig
+        if (cachedConfig) {
+          cachedConfig.users = cachedUsers || [];
         }
       }
-    } catch (newApiError) {
-      console.log('Failed to use new API endpoints, falling back to legacy approach:', newApiError);
-
-      // Fall back to legacy approach
-      const config = await loadConfig();
-      const userIndex = config.users.findIndex(user => user.username === username);
-
-      if (userIndex === -1) {
-        throw new Error(`User ${username} not found`);
-      }
-
-      // Store existing values that we want to preserve if not explicitly provided
-      const existingLastLogin = config.users[userIndex].lastLogin;
-
-      // Update user with new profile data
-      config.users[userIndex] = {
-        ...config.users[userIndex],
-        ...profileData
-      };
-
-      // Ensure lastLogin is preserved or updated
-      if (profileData.lastLogin) {
-        config.users[userIndex].lastLogin = profileData.lastLogin;
-      } else if (existingLastLogin) {
-        // Restore lastLogin if it existed but wasn't provided in profileData
-        config.users[userIndex].lastLogin = existingLastLogin;
-      }
-
-      // Only update lastModified if not explicitly provided AND we're not just updating lastLogin
-      if (!profileData.lastModified && 
-          !(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
-        const now = new Date().toISOString();
-        config.users[userIndex].lastModified = now;
-      }
-
-      // Save to MongoDB
-      await saveConfig(config);
     }
   } catch (error) {
     console.error(`Failed to update profile for ${username}:`, error);
@@ -626,29 +466,46 @@ export const validateToken = (token: string): boolean => {
 
 // Authenticate a user and generate tokens
 export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | null> => {
-  // For authentication, we need the passwordHash which is only available from the legacy API
-  const userId = getCurrentUserId();
-  let config;
+  let config = cachedConfig || await loadConfig();
+  let user;
 
   try {
-    // Always use the legacy API for authentication to get the passwordHash
-    const response = await axios.get(`/api/userconfig/${userId}`);
-    config = response.data.config;
+    // Try to find the user by username
+    try {
+      const response = await axios.get(`/api/users/${username}`);
+      if (response.data.user) {
+        user = response.data.user;
+      } else {
+        return null;
+      }
+    } catch (error) {
+      // User not found
+      return null;
+    }
+
+    // Authenticate with backend
+    try {
+      // This would ideally be a dedicated authentication endpoint
+      // For now, we'll use the existing user API and rely on the cached config
+      // In a production environment, you would implement a proper authentication endpoint
+
+      // Find user in cached config (case-insensitive)
+      const cachedUser = config.users.find((u: User) => u.username.toLowerCase() === username.toLowerCase());
+      if (!cachedUser || !cachedUser.passwordHash) {
+        return null;
+      }
+
+      // Verify password using bcrypt.compare
+      const isPasswordValid = await bcrypt.compare(password, cachedUser.passwordHash);
+      if (!isPasswordValid) {
+        return null;
+      }
+    } catch (error) {
+      console.error('Authentication failed:', error);
+      return null;
+    }
   } catch (error) {
-    console.error('Failed to load user config for authentication:', error);
-    // Fall back to cached config or default if API fails
-    config = cachedConfig || DEFAULT_CONFIG;
-  }
-
-  // Find user by username (case-insensitive)
-  const user = config.users.find((u: User) => u.username.toLowerCase() === username.toLowerCase());
-  if (!user) {
-    return null;
-  }
-
-  // Verify password using bcrypt.compare
-  const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-  if (!isPasswordValid) {
+    console.error('Failed to authenticate user:', error);
     return null;
   }
 
@@ -796,21 +653,31 @@ export const getCurrentUser = async (): Promise<Omit<User, 'passwordHash'> | nul
 // Initialize with default configuration if none exists
 export const initialize = async (): Promise<void> => {
   try {
-    // Check if config exists in MongoDB
-    const userId = getCurrentUserId();
-    let configExists = false;
-
+    // Try to load existing configuration
     try {
-      // Check if config exists in MongoDB
-      const response = await axios.get(`/api/userconfig/${userId}`);
-      // If we get here, config exists in MongoDB
-      console.log('User config found in MongoDB');
-      configExists = true;
-      cachedConfig = response.data.config;
+      // Load users
+      const usersResponse = await axios.get('/api/users');
+      cachedUsers = usersResponse.data.users;
 
-      // Even if config exists, check if it has users
-      if (!response.data.config.users || response.data.config.users.length === 0) {
-        console.log('User config exists but no users found, adding default admin user');
+      // Load JWT config
+      const jwtConfigResponse = await axios.get('/api/jwtconfig');
+      cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
+
+      // Construct config object
+      const config: UserManagerConfig = {
+        users: cachedUsers || [],
+        jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
+        tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
+        refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
+        rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
+      };
+
+      cachedConfig = config;
+      console.log('Configuration loaded successfully');
+
+      // Check if users exist
+      if (cachedUsers.length === 0) {
+        console.log('No users found, creating default admin user');
         // Add default admin user with lastLogin explicitly set to null
         await addUser('admin', 'admin', ['admin'], { 
           lastLogin: null, 
@@ -818,7 +685,7 @@ export const initialize = async (): Promise<void> => {
         });
       } else {
         // Check if users have lastLogin property
-        const usersWithoutLastLogin = response.data.config.users.filter((user: User) => !('lastLogin' in user));
+        const usersWithoutLastLogin = cachedUsers.filter(user => !('lastLogin' in user));
         if (usersWithoutLastLogin.length > 0) {
           // Update each user to add lastLogin property
           for (const user of usersWithoutLastLogin) {
@@ -830,37 +697,32 @@ export const initialize = async (): Promise<void> => {
         }
       }
     } catch (error) {
-      console.log('No user config found in MongoDB, initializing with default config');
+      console.log('Failed to load configuration, initializing with defaults:', error);
 
-      // Save default config to MongoDB
+      // Create default configuration
       try {
-        await axios.post(`/api/userconfig/${userId}`, { config: DEFAULT_CONFIG });
-        // Update cache
+        // Create default admin user
+        await axios.post('/api/users', {
+          username: 'admin',
+          password: 'admin',
+          roles: ['admin'],
+          lastLogin: null,
+          lastModified: new Date().toISOString()
+        });
+
+        // Create default JWT config
+        await axios.put('/api/jwtconfig', {
+          jwtSecret: DEFAULT_CONFIG.jwtSecret,
+          tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
+          refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
+          rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
+        });
+
         cachedConfig = DEFAULT_CONFIG;
-        console.log('Default config saved to MongoDB');
+        console.log('Default configuration created successfully');
       } catch (saveError) {
-        console.error('Failed to save default config to MongoDB:', saveError);
-        throw new Error('Failed to initialize user configuration in MongoDB');
-      }
-    }
-
-    // If config didn't exist before, we've already added the default admin user
-    // If config did exist, we've already checked for users above
-    if (!configExists) {
-      // Double-check that users exist after initialization
-      try {
-        const users = await getUsers();
-        if (users.length === 0) {
-          console.log('No users found after initialization, creating default admin user');
-          // Add default admin user with lastLogin explicitly set to null
-          await addUser('admin', 'admin', ['admin'], { 
-            lastLogin: null, 
-            lastModified: new Date().toISOString() 
-          });
-        }
-      } catch (error) {
-        console.error('Error checking/creating users:', error);
-        throw new Error('Failed to initialize users in MongoDB');
+        console.error('Failed to create default configuration:', saveError);
+        throw new Error('Failed to initialize configuration');
       }
     }
   } catch (error) {

@@ -3,16 +3,16 @@ require('dotenv').config();
 const { addAuthorizationHeader } = require('./utils/authUtils');
 
 module.exports = function(app) {
-  // Get Express server address and port from environment variables
-  const EXPRESS_ADDRESS = process.env.EXPRESS_ADDRESS || '0.0.0.0';
-  const EXPRESS_PORT = process.env.EXPRESS_PORT || '3001';
-  const EXPRESS_TARGET = `http://${EXPRESS_ADDRESS === '0.0.0.0' ? 'localhost' : EXPRESS_ADDRESS}:${EXPRESS_PORT}`;
+  // Get API server address and port from environment variables
+  const API_ADDRESS = process.env.API_ADDRESS || '0.0.0.0';
+  const API_PORT = process.env.API_PORT || '3001';
+  const API_TARGET = `http://${API_ADDRESS === '0.0.0.0' ? 'localhost' : API_ADDRESS}:${API_PORT}`;
 
-  // Proxy for API requests to the Express server
+  // Proxy for API requests to the Go API server
   app.use(
     '/api',
     createProxyMiddleware({
-      target: EXPRESS_TARGET,
+      target: API_TARGET,
       changeOrigin: true,
       onError: (err, req, res) => {
         console.error('API proxy error:', err);

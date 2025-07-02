@@ -2,7 +2,7 @@
 
 A standalone web-based configuration builder for the Nauthilus authentication server.
 
-> **⚠️ IMPORTANT**: This application requires both the React frontend and Express backend to be running simultaneously. Simply use `npm start` to run both servers together. See the [Getting Started](#getting-started) section for details.
+> **⚠️ IMPORTANT**: This application uses a Go-based API server to handle backend operations. The React frontend communicates with this Go server. See the [Getting Started](#getting-started) section for details.
 
 ## Overview
 
@@ -42,8 +42,9 @@ ui/
 
 ### Prerequisites
 
-- Node.js 14.x or higher
-- npm 6.x or higher
+- Go 1.22 or higher (for the API server)
+- Node.js 14.x or higher (for building the React frontend)
+- npm 6.x or higher (for building the React frontend)
 - MongoDB 4.x or higher
 
 ### Installation
@@ -71,24 +72,107 @@ ui/
    MONGODB_URI=mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
    ```
 
-5. Start the application:
+5. For development:
+
+   a. Start the React development server:
    ```
    npm start
    ```
 
-   This will start both the React frontend on port 3000 and the Express backend on port 3001 simultaneously.
+   b. In a separate terminal, start the Go API server:
+   ```
+   cd server
+   go run .
+   ```
 
-   **IMPORTANT**: Both servers are required for the application to work correctly, which is why they now start together with a single command.
+   The React frontend will run on port 3000 and the Go API server on port 3001.
 
-   Alternatively, if you need to run them separately for development purposes:
-   - Start only the frontend: `npm run start-frontend`
-   - Start only the backend: `npm run serve`
-   - Start both (same as `npm start`): `npm run dev`
+   c. Development Mode Architecture:
+   - In development mode, the React development server proxies API requests to the Go backend
+   - The proxy configuration is in `src/setupProxy.js`
+   - The Go backend has CORS enabled in development mode to allow cross-origin requests
+   - This setup allows you to work on both the frontend and backend simultaneously
+   - In production, the Go server serves the static React files directly, so no proxy or CORS is needed
 
-6. Build for production:
+6. For production deployment, use Docker Compose:
+   ```
+   docker-compose up -d
+   ```
+
+   This will build and start the entire application stack including the Go API server and MongoDB.
+
+7. For multi-architecture builds (cross-compilation), use Docker Buildx:
+   ```
+   # Set up Docker Buildx builder if you haven't already
+   docker buildx create --name mybuilder --use
+
+   # Build and push multi-architecture images using the bake file
+   docker buildx bake --push
+   ```
+
+   This will build images for multiple architectures (amd64, arm64, armv7, armv6, 386) using the configuration in `docker-bake.hcl`.
+
+   You can also build for specific platforms:
+   ```
+   # Build only for specific platforms
+   docker buildx bake --set "*.platform=linux/amd64,linux/arm64" --push
+   ```
+
+   To build without pushing to a registry (for local testing):
+   ```
+   # Build without pushing (load to local Docker)
+   docker buildx bake --set "*.platform=linux/amd64" --load
+   ```
+
+   Note: The `--load` flag only works with a single platform. For multi-platform builds, you must use `--push`.
+
+8. Alternatively, build the React frontend for production:
    ```
    npm run build
    ```
+
+## Development Tools
+
+### Code Linting
+
+The project uses [golangci-lint](https://golangci-lint.run/) for Go code linting. This is a fast, parallel runner for many Go linters that ensures code quality and consistency.
+
+#### Setup
+
+1. Install golangci-lint:
+   ```
+   make install-lint
+   ```
+
+   Or manually:
+   ```
+   curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+   ```
+
+2. Run the linter:
+   ```
+   make lint
+   ```
+
+3. Format the code:
+   ```
+   make fmt
+   ```
+
+The linter configuration is in `.golangci.yml` at the root of the project. It includes settings for various linters and rules for code quality.
+
+#### Available Make Commands
+
+The project includes a Makefile with several useful commands:
+
+- `make all` - Run lint, fmt, and build
+- `make build` - Build the application
+- `make clean` - Clean build artifacts
+- `make lint` - Run golangci-lint
+- `make fmt` - Format Go code
+- `make test` - Run tests
+- `make install-lint` - Install golangci-lint
+- `make help` - Show help message
 
 ## Configuration
 
@@ -150,26 +234,31 @@ The UI provides buttons in the top bar for:
 - User session information is stored in browser memory only
 - MongoDB provides reliable server-side storage
 - Configuration persists even if the browser data is cleared
-- The Express backend provides API endpoints to interact with MongoDB
+- The Go API server provides endpoints to interact with MongoDB
 
 ### Backend Health Check
 
-- The UI includes a proxy middleware to handle backend health checks
-- Health checks are performed server-side through Node.js to avoid CORS issues
-- The proxy is implemented in `src/setupProxy.js` using http-proxy-middleware
-- This allows the UI to check connectivity to the Nauthilus backend without CORS restrictions
+- The Go API server includes health check endpoints
+- The `/api/health` endpoint checks the overall API server health
+- The `/api/health/mongodb` endpoint checks the MongoDB connection
+- This allows the UI to check connectivity to the backend and database
 
-### Node.js Server Requirement
+### Go API Server
 
-- The UI now requires a Node.js server to handle proxy requests to the backend
-- In development mode, this is handled by the Create React App development server
-- In production, a custom Express server (`server.js`) is used to:
-  - Serve the static files from the build directory
-  - Handle proxy requests for backend health checks and JWT token requests
-- The Docker setup has been updated to:
-  - Use node:18-alpine instead of nginx:alpine
-  - Run the Express server on port 3000
-  - Map container port 3000 to host port 80
+- The application uses a Go-based API server built with the Gin framework
+- The Go server handles all backend operations including:
+  - API endpoints for configuration management
+  - MongoDB database interactions
+  - User authentication and JWT token management
+  - Health checks and monitoring
+- In development mode, the Go server runs separately from the React development server
+  - CORS is automatically enabled in development mode
+  - You can control this behavior by setting the `GO_ENV` environment variable:
+    - When `GO_ENV` is not set or is not "production", CORS is enabled
+    - When `GO_ENV=production`, CORS is disabled
+- In production, the Docker setup includes:
+  - A Go API server container that serves both the static React files and handles API requests
+  - A MongoDB container for data storage
 
 ### Supported File Formats
 
@@ -294,12 +383,26 @@ When configuring server addresses in the UI:
 If you see errors like these in the console:
 
 ```
-API proxy error: Error: connect ECONNREFUSED 127.0.0.1:3001
-[HPM] Error occurred while proxying request localhost:3000/api/userconfig/default-user to http://localhost:3001/ [ECONNREFUSED]
+Failed to fetch: TypeError: Failed to fetch
+GET http://localhost:3001/api/health 404 (Not Found)
 Failed to load resource: the server responded with a status of 500 (Internal Server Error)
 ```
 
-**Solution**: The Express backend server is not running. Make sure to start the application with `npm start`, which will run both the frontend and backend servers together. If you're running the servers separately for development, ensure both are running.
+**Solution**: The Go API server is not running or is not accessible. Make sure to start the Go server with `cd server && go run .` in development mode, or ensure the API container is running in Docker (`docker-compose ps`).
+
+### CORS Errors
+
+If you see errors like these in the console:
+
+```
+Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localhost:3000' has been blocked by CORS policy
+```
+
+**Solution**:
+1. Make sure you're running the Go server in development mode (GO_ENV not set to "production")
+2. Check that the CORS middleware is properly registered in the Go server
+3. Verify that the React development server is correctly proxying requests to the Go server
+4. If you're running in production mode, you shouldn't need CORS as the Go server serves the static files directly
 
 ### MongoDB Connection Issues
 
@@ -319,10 +422,11 @@ MongoDB connection error: MongoNetworkError: failed to connect to server
 If the application starts but no collections are created in MongoDB:
 
 **Solution**:
-1. Make sure both the frontend and backend servers are running
+1. Make sure the Go API server is running
 2. Check the MongoDB connection string in your `.env` file
 3. Verify that the MongoDB user has write permissions to create collections
 4. Try accessing the MongoDB health check endpoint at `/api/health/mongodb` to trigger a reconnection
+5. Check the Go server logs for any MongoDB connection errors
 
 ## License
 

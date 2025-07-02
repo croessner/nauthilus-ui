@@ -1,5 +1,5 @@
 services:
-  # Express API server
+  # Go API server
   api:
     build:
       context: .
@@ -7,30 +7,15 @@ services:
     container_name: nauthilus-api
     restart: unless-stopped
     environment:
-      - EXPRESS_PORT=3001
-      - EXPRESS_ADDRESS=0.0.0.0
+      - API_PORT=3001
+      - API_ADDRESS=0.0.0.0
       - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongo:27017/nauthilus-ui?authSource=admin
       - REACT_APP_JWT_SECRET=your-jwt-secret-key-change-in-production
+    ports:
+      - "80:3001"
+      - "443:3001"
     depends_on:
       - mongo
-    networks:
-      - nauthilus-network
-
-  # Nginx web server
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile.nginx
-    container_name: nauthilus-web
-    restart: unless-stopped
-    environment:
-      - EXPRESS_PORT=3001
-      - EXPRESS_ADDRESS=api
-    ports:
-      - "80:80"
-      - "443:443"
-    depends_on:
-      - api
     networks:
       - nauthilus-network
 
