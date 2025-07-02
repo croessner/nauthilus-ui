@@ -5,7 +5,6 @@ import {
   TextField, 
   Typography, 
   Paper, 
-  Divider, 
   CircularProgress,
   Alert,
   Checkbox,
@@ -17,7 +16,7 @@ import { useNavigate } from 'react-router-dom';
 import * as userManager from '../utils/userManager';
 
 const LoginPage: React.FC = () => {
-  const { auth, login: authLogin, loginWithOIDC } = useAuth();
+  const { auth, login: authLogin } = useAuth();
   const { login: userLogin } = useUser();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -89,9 +88,6 @@ const LoginPage: React.FC = () => {
     }
   };
 
-  const handleOIDCLogin = () => {
-    loginWithOIDC();
-  };
 
   return (
     <Box

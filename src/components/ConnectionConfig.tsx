@@ -324,7 +324,7 @@ const ConnectionConfig: React.FC = () => {
       setConnectionStatus('disconnected');
       setStatusMessage(`Connection error: ${error instanceof Error ? error.message : String(error)}`);
     }
-  }, [setConnectionStatus, setStatusMessage, updateConfigSection, setNotification, fetchBruteForceList]);
+  }, [setConnectionStatus, setStatusMessage, fetchBruteForceList]);
 
   // Reset unsaved changes flag when component mounts
   useEffect(() => {

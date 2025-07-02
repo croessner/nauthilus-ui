@@ -1,5 +1,4 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import configApi from '../api/configApi';
 import * as userManager from '../utils/userManager';
 
 // Define the authentication state

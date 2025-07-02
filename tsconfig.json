@@ -25,5 +25,10 @@
   },
   "include": [
     "src"
+  ],
+  "exclude": [
+    "server",
+    "build",
+    "node_modules"
   ]
 }

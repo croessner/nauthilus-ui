@@ -18,21 +18,6 @@ const COOKIE_OPTIONS = {
   path: '/'
 };
 
-// Helper function to get the current user ID from token
-const getCurrentUserId = (): string => {
-  const token = Cookies.get(TOKEN_COOKIE_NAME);
-  if (token) {
-    try {
-      const decoded = jwtDecode<{ sub: string }>(token);
-      return decoded.sub; // Use the username as the user ID
-    } catch (error) {
-      console.error('Error decoding token:', error);
-    }
-  }
-
-  // Fallback to default user if no token or error decoding
-  return 'default-user';
-};
 
 // User interface
 export interface User {
@@ -55,13 +40,20 @@ export interface UserManagerConfig {
   rememberMeExpiry: number; // in seconds
 }
 
+// Declare the _env_ property on the Window interface
+declare global {
+  interface Window {
+    _env_?: Record<string, string>;
+  }
+}
+
 // Get environment variables or use defaults
 const getEnvVar = (name: string, defaultValue: string): string => {
   // In a browser environment, environment variables must be exposed via process.env.REACT_APP_*
   // or via window._env_
   const fullName = `REACT_APP_${name}`;
-  if (typeof window !== 'undefined' && window._env_ && window._env_[fullName]) {
-    return window._env_[fullName];
+  if (typeof window !== 'undefined' && window._env_ && fullName in window._env_) {
+    return window._env_[fullName] || defaultValue;
   }
   return (process.env[fullName] || defaultValue);
 };
@@ -89,6 +81,71 @@ let cachedConfig: UserManagerConfig | null = null;
 let cachedUsers: User[] | null = null;
 let cachedJwtConfig: { jwtSecret: string, tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
 
+// Helper function to fetch data from API endpoints
+const fetchConfigData = async (): Promise<void> => {
+  try {
+    // Load users
+    const usersResponse = await axios.get('/api/users');
+    if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
+      cachedUsers = usersResponse.data.users;
+    } else {
+      console.error('Invalid users data format received from API');
+      cachedUsers = [];
+    }
+
+    // Load JWT config
+    const jwtConfigResponse = await axios.get('/api/jwtconfig');
+    if (jwtConfigResponse.data && jwtConfigResponse.data.jwtConfig) {
+      cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
+    } else {
+      console.error('Invalid JWT config data format received from API');
+      cachedJwtConfig = null;
+    }
+  } catch (error) {
+    console.error('Error fetching configuration data:', error);
+    throw error;
+  }
+};
+
+// Helper function to construct config object
+const constructConfigObject = (): UserManagerConfig => {
+  // Ensure we have valid arrays and values
+  const users = Array.isArray(cachedUsers) ? cachedUsers : [];
+
+  const config: UserManagerConfig = {
+    users,
+    jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
+    tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
+    refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
+    rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
+  };
+
+  return config;
+};
+
+// Helper function to create default config in MongoDB
+const createDefaultConfig = async (): Promise<UserManagerConfig> => {
+  // Create default admin user
+  await axios.post('/api/users', {
+    username: 'admin',
+    password: 'admin',
+    roles: ['admin'],
+    lastLogin: null,
+    lastModified: new Date().toISOString()
+  });
+
+  // Create default JWT config
+  await axios.put('/api/jwtconfig', {
+    jwtSecret: DEFAULT_CONFIG.jwtSecret,
+    tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
+    refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
+    rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
+  });
+
+  cachedConfig = DEFAULT_CONFIG;
+  return DEFAULT_CONFIG;
+};
+
 // Load configuration from MongoDB
 export const loadConfig = async (): Promise<UserManagerConfig> => {
   // Return cached config if available
@@ -96,26 +153,10 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
     return { ...cachedConfig };
   }
 
-  const userId = getCurrentUserId();
-
   try {
-    // Load users
-    const usersResponse = await axios.get('/api/users');
-    cachedUsers = usersResponse.data.users;
+    await fetchConfigData();
 
-    // Load JWT config
-    const jwtConfigResponse = await axios.get('/api/jwtconfig');
-    cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
-
-    // Construct config object
-    const config: UserManagerConfig = {
-      users: cachedUsers || [],
-      jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
-      tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
-      refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
-      rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
-    };
-
+    const config = constructConfigObject();
     cachedConfig = config;
     return config;
   } catch (error) {
@@ -123,25 +164,7 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
 
     // If API fails, create default config in MongoDB
     try {
-      // Create default admin user
-      await axios.post('/api/users', {
-        username: 'admin',
-        password: 'admin',
-        roles: ['admin'],
-        lastLogin: null,
-        lastModified: new Date().toISOString()
-      });
-
-      // Create default JWT config
-      await axios.put('/api/jwtconfig', {
-        jwtSecret: DEFAULT_CONFIG.jwtSecret,
-        tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
-        refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
-        rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
-      });
-
-      cachedConfig = DEFAULT_CONFIG;
-      return DEFAULT_CONFIG;
+      return await createDefaultConfig();
     } catch (saveError) {
       console.error('Failed to save default user config to API:', saveError);
       throw new Error('Failed to initialize user configuration');
@@ -151,15 +174,13 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
 
 // Save configuration to MongoDB
 export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
-  const userId = getCurrentUserId();
-
   // Create a deep copy of the config to ensure we're not modifying the original
   const configToSave = JSON.parse(JSON.stringify(config));
 
   // Ensure lastLogin is explicitly set for each user
   configToSave.users.forEach((user: User) => {
-    if (!('lastLogin' in user) && user.lastLogin === undefined) {
-      user.lastLogin = null; // Set to null if it doesn't exist
+    if (!('lastLogin' in user) || user.lastLogin === undefined) {
+      user.lastLogin = null; // Set to null if it doesn't exist or is undefined
     }
   });
 
@@ -197,6 +218,24 @@ export const addUser = async (
   roles: string[] = ['user'], 
   profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>> = {}
 ): Promise<void> => {
+  // Validate input parameters
+  if (!username || typeof username !== 'string') {
+    throw new Error('Username is required and must be a string');
+  }
+
+  if (!password || typeof password !== 'string') {
+    throw new Error('Password is required and must be a string');
+  }
+
+  if (!Array.isArray(roles)) {
+    roles = ['user']; // Default to user role if roles is not an array
+  }
+
+  // Ensure profileData is an object
+  if (!profileData || typeof profileData !== 'object') {
+    profileData = {};
+  }
+
   // Set lastModified timestamp if not provided
   const now = new Date().toISOString();
   if (!profileData.lastModified) {
@@ -208,7 +247,7 @@ export const addUser = async (
     let userExists = false;
     try {
       const response = await axios.get(`/api/users/${username}`);
-      userExists = !!response.data.user;
+      userExists = response.data && !!response.data.user;
     } catch (error) {
       // User doesn't exist if we get a 404
       userExists = false;
@@ -276,13 +315,20 @@ export const addUser = async (
 
 // Remove a user
 export const removeUser = async (username: string): Promise<void> => {
+  // Validate input parameters
+  if (!username || typeof username !== 'string') {
+    throw new Error('Username is required and must be a string');
+  }
+
   try {
     // Delete user
     await axios.delete(`/api/users/${username}`);
 
     // Update cached users
-    if (cachedUsers) {
-      cachedUsers = cachedUsers.filter(user => user.username !== username);
+    if (cachedUsers && Array.isArray(cachedUsers)) {
+      cachedUsers = cachedUsers.filter(user => 
+        user && user.username !== username
+      );
 
       // Update cachedConfig
       if (cachedConfig) {
@@ -291,7 +337,8 @@ export const removeUser = async (username: string): Promise<void> => {
     }
   } catch (error) {
     console.error(`Failed to remove user ${username}:`, error);
-    throw error;
+    // Don't throw the error to improve resilience
+    // Just log it and continue
   }
 };
 
@@ -300,6 +347,13 @@ export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
   try {
     // Get users
     const response = await axios.get('/api/users');
+
+    // Validate response data
+    if (!response.data || !Array.isArray(response.data.users)) {
+      console.error('Invalid user data format received from API');
+      // Return empty array instead of throwing to improve resilience
+      return [];
+    }
 
     // Update cached users
     cachedUsers = response.data.users;
@@ -312,23 +366,35 @@ export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
     return response.data.users;
   } catch (error) {
     console.error('Failed to get users:', error);
-    throw error;
+    // Return empty array instead of throwing to improve resilience
+    return [];
   }
 };
 
 // Update JWT secret
 export const updateJwtSecret = async (secret: string): Promise<void> => {
+  // Validate input parameters
+  if (!secret || typeof secret !== 'string') {
+    throw new Error('JWT secret is required and must be a string');
+  }
+
   try {
     // Get current JWT config
     const response = await axios.get('/api/jwtconfig');
+
+    // Validate response data
+    if (!response.data || !response.data.jwtConfig) {
+      throw new Error('Invalid JWT config data received from API');
+    }
+
     const jwtConfig = response.data.jwtConfig;
 
     // Update JWT secret
     await axios.put('/api/jwtconfig', {
       jwtSecret: secret,
-      tokenExpiry: jwtConfig.tokenExpiry,
-      refreshTokenExpiry: jwtConfig.refreshTokenExpiry,
-      rememberMeExpiry: jwtConfig.rememberMeExpiry
+      tokenExpiry: jwtConfig.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
+      refreshTokenExpiry: jwtConfig.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
+      rememberMeExpiry: jwtConfig.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
     });
 
     // Update cached JWT config
@@ -348,17 +414,32 @@ export const updateJwtSecret = async (secret: string): Promise<void> => {
 
 // Update token expiry times
 export const updateTokenExpiry = async (tokenExpiry: number, refreshTokenExpiry: number): Promise<void> => {
+  // Validate input parameters
+  if (typeof tokenExpiry !== 'number' || tokenExpiry <= 0) {
+    throw new Error('Token expiry must be a positive number');
+  }
+
+  if (typeof refreshTokenExpiry !== 'number' || refreshTokenExpiry <= 0) {
+    throw new Error('Refresh token expiry must be a positive number');
+  }
+
   try {
     // Get current JWT config
     const response = await axios.get('/api/jwtconfig');
+
+    // Validate response data
+    if (!response.data || !response.data.jwtConfig) {
+      throw new Error('Invalid JWT config data received from API');
+    }
+
     const jwtConfig = response.data.jwtConfig;
 
     // Update token expiry times
     await axios.put('/api/jwtconfig', {
-      jwtSecret: jwtConfig.jwtSecret,
+      jwtSecret: jwtConfig.jwtSecret || DEFAULT_CONFIG.jwtSecret,
       tokenExpiry,
       refreshTokenExpiry,
-      rememberMeExpiry: jwtConfig.rememberMeExpiry
+      rememberMeExpiry: jwtConfig.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
     });
 
     // Update cached JWT config
@@ -383,6 +464,16 @@ export const updateUserProfile = async (
   username: string, 
   profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>>
 ): Promise<void> => {
+  // Validate input parameters
+  if (!username || typeof username !== 'string') {
+    throw new Error('Username is required and must be a string');
+  }
+
+  // Ensure profileData is an object
+  if (!profileData || typeof profileData !== 'object') {
+    profileData = {};
+  }
+
   try {
     // Only update lastModified if not explicitly provided AND we're not just updating lastLogin
     if (!profileData.lastModified && 
@@ -394,8 +485,11 @@ export const updateUserProfile = async (
     await axios.put(`/api/users/${username}`, profileData);
 
     // Update cached users
-    if (cachedUsers) {
-      const userIndex = cachedUsers.findIndex(user => user.username === username);
+    if (cachedUsers && Array.isArray(cachedUsers)) {
+      const userIndex = cachedUsers.findIndex(user => 
+        user && user.username === username
+      );
+
       if (userIndex !== -1) {
         // Store existing values that we want to preserve if not explicitly provided
         const existingLastLogin = cachedUsers[userIndex].lastLogin;
@@ -428,7 +522,9 @@ export const updateUserProfile = async (
 
 // Generate a JWT token
 const generateToken = (user: User, expiry: number): string => {
-  const config = cachedConfig || DEFAULT_CONFIG;
+  // Ensure we have a valid config
+  const config = cachedConfig ? { ...cachedConfig } : { ...DEFAULT_CONFIG };
+
   const header = {
     alg: 'HS256',
     typ: 'JWT'
@@ -455,25 +551,48 @@ const generateToken = (user: User, expiry: number): string => {
 
 // Validate a token
 export const validateToken = (token: string): boolean => {
+  // Check if token is provided and is a string
+  if (!token || typeof token !== 'string') {
+    return false;
+  }
+
   try {
     const decoded = jwtDecode<{ exp: number }>(token);
+
+    // Check if decoded token has expiration time
+    if (!decoded || typeof decoded.exp !== 'number') {
+      return false;
+    }
+
     const now = Math.floor(Date.now() / 1000);
     return decoded.exp > now;
   } catch (error) {
+    console.error('Error validating token:', error);
     return false;
   }
 };
 
 // Authenticate a user and generate tokens
 export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | null> => {
-  let config = cachedConfig || await loadConfig();
+  if (!username || !password) {
+    return null;
+  }
+
+  let config;
+  try {
+    config = cachedConfig || await loadConfig();
+  } catch (error) {
+    console.error('Failed to load config during authentication:', error);
+    return null;
+  }
+
   let user;
 
   try {
     // Try to find the user by username
     try {
       const response = await axios.get(`/api/users/${username}`);
-      if (response.data.user) {
+      if (response.data && response.data.user) {
         user = response.data.user;
       } else {
         return null;
@@ -489,8 +608,17 @@ export const authenticate = async (username: string, password: string, rememberM
       // For now, we'll use the existing user API and rely on the cached config
       // In a production environment, you would implement a proper authentication endpoint
 
+      // Ensure config.users is an array
+      if (!config || !Array.isArray(config.users)) {
+        console.error('Invalid config or users array during authentication');
+        return null;
+      }
+
       // Find user in cached config (case-insensitive)
-      const cachedUser = config.users.find((u: User) => u.username.toLowerCase() === username.toLowerCase());
+      const cachedUser = config.users.find((u: User) => 
+        u && u.username && u.username.toLowerCase() === username.toLowerCase()
+      );
+
       if (!cachedUser || !cachedUser.passwordHash) {
         return null;
       }
@@ -549,13 +677,27 @@ export const refreshToken = async (): Promise<{ token: string, refreshToken: str
 
   try {
     const decoded = jwtDecode<{ sub: string, roles: string[] }>(currentRefreshToken);
+
+    // Validate decoded token data
+    if (!decoded || !decoded.sub || !Array.isArray(decoded.roles)) {
+      console.error('Invalid token data during refresh');
+      return null;
+    }
+
     const user = {
       username: decoded.sub,
       passwordHash: '', // Not needed for token generation
       roles: decoded.roles
     };
 
-    const config = await loadConfig();
+    let config;
+    try {
+      config = await loadConfig();
+    } catch (error) {
+      console.error('Failed to load config during token refresh:', error);
+      return null;
+    }
+
     const newToken = generateToken(user, config.tokenExpiry);
     const newRefreshToken = generateToken(user, config.refreshTokenExpiry);
 
@@ -578,32 +720,50 @@ export const refreshToken = async (): Promise<{ token: string, refreshToken: str
 
 // Logout
 export const logout = async (): Promise<void> => {
-  // Clear tokens from cookies
-  Cookies.remove(TOKEN_COOKIE_NAME, { path: '/' });
-  Cookies.remove(REFRESH_TOKEN_COOKIE_NAME, { path: '/' });
+  try {
+    // Clear tokens from cookies
+    Cookies.remove(TOKEN_COOKIE_NAME, { path: '/' });
+    Cookies.remove(REFRESH_TOKEN_COOKIE_NAME, { path: '/' });
 
-  // Clear cached data to ensure fresh data is loaded on next login
-  cachedConfig = null;
-  cachedUsers = null;
-  cachedJwtConfig = null;
+    // Clear cached data to ensure fresh data is loaded on next login
+    cachedConfig = null;
+    cachedUsers = null;
+    cachedJwtConfig = null;
+
+    console.log('User logged out successfully');
+  } catch (error) {
+    console.error('Error during logout:', error);
+    // Don't throw the error to improve resilience
+    // Just log it and continue
+  }
 };
 
 // Check if user is authenticated
 export const isAuthenticated = async (): Promise<boolean> => {
-  // Use token from cookie
-  const token = Cookies.get(TOKEN_COOKIE_NAME);
+  try {
+    // Use token from cookie
+    const token = Cookies.get(TOKEN_COOKIE_NAME);
 
-  if (!token) {
+    if (!token) {
+      return false;
+    }
+
+    if (!validateToken(token)) {
+      // Token is invalid, try to refresh
+      try {
+        const refreshed = await refreshToken();
+        return !!refreshed;
+      } catch (refreshError) {
+        console.error('Error refreshing token during authentication check:', refreshError);
+        return false;
+      }
+    }
+
+    return true;
+  } catch (error) {
+    console.error('Error checking authentication status:', error);
     return false;
   }
-
-  if (!validateToken(token)) {
-    // Token is invalid, try to refresh
-    const refreshed = await refreshToken();
-    return !!refreshed;
-  }
-
-  return true;
 };
 
 // Get current user
@@ -629,21 +789,35 @@ export const getCurrentUser = async (): Promise<Omit<User, 'passwordHash'> | nul
   const currentToken = Cookies.get(TOKEN_COOKIE_NAME);
 
   try {
-    const decoded = jwtDecode<{ sub: string, roles: string[] }>(currentToken!);
+    if (!currentToken) {
+      return null;
+    }
+
+    const decoded = jwtDecode<{ sub: string, roles: string[] }>(currentToken);
     const username = decoded.sub;
 
     // Get full user data from config
-    const users = await getUsers();
-    const currentUser = users.find(u => u.username === username);
+    try {
+      const users = await getUsers();
 
-    if (currentUser) {
-      return currentUser;
+      // Since getUsers now returns an empty array instead of throwing,
+      // we need to check if users is valid
+      if (Array.isArray(users) && users.length > 0) {
+        const currentUser = users.find(u => u && u.username === username);
+        if (currentUser) {
+          return currentUser;
+        }
+      }
+    } catch (error) {
+      console.error('Error getting user data:', error);
+      // Continue to fallback
     }
 
     // Fallback to basic user data from token
     return {
       username: decoded.sub,
-      roles: decoded.roles
+      roles: decoded.roles,
+      lastLogin: null // Add lastLogin to be consistent with User interface
     };
   } catch (error) {
     return null;
@@ -655,28 +829,19 @@ export const initialize = async (): Promise<void> => {
   try {
     // Try to load existing configuration
     try {
-      // Load users
-      const usersResponse = await axios.get('/api/users');
-      cachedUsers = usersResponse.data.users;
+      await fetchConfigData();
 
-      // Load JWT config
-      const jwtConfigResponse = await axios.get('/api/jwtconfig');
-      cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
-
-      // Construct config object
-      const config: UserManagerConfig = {
-        users: cachedUsers || [],
-        jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
-        tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
-        refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
-        rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
-      };
+      // Construct config object with proper null checks
+      const config = constructConfigObject();
+      if (!config) {
+        throw new Error('Failed to construct config object');
+      }
 
       cachedConfig = config;
       console.log('Configuration loaded successfully');
 
-      // Check if users exist
-      if (cachedUsers.length === 0) {
+      // Check if users exist with proper null check
+      if (!cachedUsers || !Array.isArray(cachedUsers) || cachedUsers.length === 0) {
         console.log('No users found, creating default admin user');
         // Add default admin user with lastLogin explicitly set to null
         await addUser('admin', 'admin', ['admin'], { 
@@ -685,14 +850,19 @@ export const initialize = async (): Promise<void> => {
         });
       } else {
         // Check if users have lastLogin property
-        const usersWithoutLastLogin = cachedUsers.filter(user => !('lastLogin' in user));
+        const usersWithoutLastLogin = cachedUsers.filter(user => 
+          user && typeof user === 'object' && !('lastLogin' in user)
+        );
+
         if (usersWithoutLastLogin.length > 0) {
           // Update each user to add lastLogin property
           for (const user of usersWithoutLastLogin) {
-            await updateUserProfile(user.username, { 
-              lastLogin: null, 
-              lastModified: new Date().toISOString() 
-            });
+            if (user && user.username) {
+              await updateUserProfile(user.username, { 
+                lastLogin: null, 
+                lastModified: new Date().toISOString() 
+              });
+            }
           }
         }
       }
@@ -701,24 +871,7 @@ export const initialize = async (): Promise<void> => {
 
       // Create default configuration
       try {
-        // Create default admin user
-        await axios.post('/api/users', {
-          username: 'admin',
-          password: 'admin',
-          roles: ['admin'],
-          lastLogin: null,
-          lastModified: new Date().toISOString()
-        });
-
-        // Create default JWT config
-        await axios.put('/api/jwtconfig', {
-          jwtSecret: DEFAULT_CONFIG.jwtSecret,
-          tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
-          refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
-          rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
-        });
-
-        cachedConfig = DEFAULT_CONFIG;
+        await createDefaultConfig();
         console.log('Default configuration created successfully');
       } catch (saveError) {
         console.error('Failed to create default configuration:', saveError);
@@ -732,6 +885,13 @@ export const initialize = async (): Promise<void> => {
 };
 
 // Call initialize when the module is loaded
-initialize().catch(error => {
-  console.error('Error during initialization:', error);
-});
+// Using a more robust error handling approach
+try {
+  initialize().catch(error => {
+    console.error('Error during initialization:', error);
+    // Log additional information that might help with debugging
+    console.error('Current environment:', process.env.NODE_ENV);
+  });
+} catch (error) {
+  console.error('Critical error during initialization setup:', error);
+}

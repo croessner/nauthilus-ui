@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
+import { Routes, Route, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 
   Box, 
@@ -141,7 +141,7 @@ const MainContent: React.FC = () => {
     deleteProfile
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
-  const { isAuthenticated, user, logout } = useUser();
+  const { user, logout } = useUser();
 
   // Effect to measure and update AppBar height
   useEffect(() => {
