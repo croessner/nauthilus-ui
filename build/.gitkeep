@@ -1,5 +1,0 @@
-# This file ensures the public directory is tracked by git
-# The following files need to be added manually:
-# - favicon.ico
-# - logo192.png
-# - logo512.png
