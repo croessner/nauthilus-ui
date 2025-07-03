@@ -94,7 +94,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const LDAPConfig: React.FC = () => {
+const LDAPConfig = (): JSX.Element => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
   const [createPoolDialogOpen, setCreatePoolDialogOpen] = useState(false);

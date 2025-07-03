@@ -18,7 +18,7 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
+export const ThemeProvider = ({ children }: ThemeProviderProps): JSX.Element => {
   // Initialize theme mode from localStorage or default to 'light'
   const [mode, setMode] = useState<PaletteMode>(() => {
     const storedMode = localStorage.getItem(THEME_STORAGE_KEY);

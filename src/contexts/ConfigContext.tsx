@@ -90,7 +90,7 @@ interface ConfigProviderProps {
   children: ReactNode;
 }
 
-export const ConfigProvider: React.FC<ConfigProviderProps> = ({ children }) => {
+export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element => {
   const [config, setConfig] = useState<NauthilusConfig | null>(null);
   const [profiles, setProfiles] = useState<ConfigProfile[]>([]);
   const [currentProfileName, setCurrentProfileName] = useState<string>(DEFAULT_PROFILE_NAME);

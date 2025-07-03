@@ -18,7 +18,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
-const UserProfile: React.FC = () => {
+const UserProfile = (): JSX.Element => {
   const { user, updateUserProfile, updatePassword, loading, error, clearError } = useUser();
 
   // Profile section state

@@ -34,7 +34,7 @@ const BackendsConfigSchema = Yup.object().shape({
   ),
 });
 
-const BackendsConfig: React.FC = () => {
+const BackendsConfig = (): JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
   const [isFormChanged, setIsFormChanged] = useState(false);
 

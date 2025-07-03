@@ -132,7 +132,7 @@ const FrontendConfigSchema = Yup.object().shape({
   }),
 });
 
-const FrontendConfig: React.FC = () => {
+const FrontendConfig = (): JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
   const [isFormChanged, setIsFormChanged] = useState(false);
 

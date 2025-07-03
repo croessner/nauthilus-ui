@@ -19,7 +19,7 @@ interface PasswordFieldProps {
   margin?: 'none' | 'dense' | 'normal';
 }
 
-const PasswordField: React.FC<PasswordFieldProps> = ({
+const PasswordField = ({
   name,
   label,
   value,
@@ -33,7 +33,7 @@ const PasswordField: React.FC<PasswordFieldProps> = ({
   disabled = false,
   className,
   margin,
-}) => {
+}: PasswordFieldProps): JSX.Element => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleClickShowPassword = () => {

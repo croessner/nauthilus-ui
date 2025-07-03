@@ -10,13 +10,13 @@ interface CollapsibleFormSectionProps {
   required?: boolean;
 }
 
-const CollapsibleFormSection: React.FC<CollapsibleFormSectionProps> = ({ 
+const CollapsibleFormSection = ({ 
   title, 
   description, 
   children, 
   defaultExpanded = false,
   required = false
-}) => {
+}: CollapsibleFormSectionProps): JSX.Element => {
   const [expanded, setExpanded] = useState(defaultExpanded);
 
   const handleChange = () => {

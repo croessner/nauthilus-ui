@@ -35,7 +35,7 @@ interface ConfigWizardProps {
   autoOpen?: boolean;
 }
 
-const ConfigWizard: React.FC<ConfigWizardProps> = ({ autoOpen = false }) => {
+const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges } = useConfig();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);

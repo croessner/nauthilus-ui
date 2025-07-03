@@ -71,7 +71,7 @@ const AuthConfigSchema = Yup.object().shape({
   }),
 });
 
-const AuthConfig: React.FC = () => {
+const AuthConfig = (): JSX.Element => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
   // Reset unsaved changes flag when component mounts

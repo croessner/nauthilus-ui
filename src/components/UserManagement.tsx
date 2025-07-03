@@ -36,7 +36,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useUser } from '../contexts/UserContext';
 
-const UserManagement: React.FC = () => {
+const UserManagement = (): JSX.Element => {
   const { getUsers, addUser, removeUser, updatePassword, updateUserProfile, loading, error, clearError, user: currentUser } = useUser();
   const [users, setUsers] = useState<{
     username: string;

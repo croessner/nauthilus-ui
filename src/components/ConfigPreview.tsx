@@ -6,7 +6,7 @@ import { BackendConfig } from '../types/config';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
-const ConfigPreview: React.FC = () => {
+const ConfigPreview = (): JSX.Element => {
   const { config, validateConfigSection } = useConfig();
   const theme = useTheme();
 

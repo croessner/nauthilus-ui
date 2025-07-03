@@ -96,7 +96,7 @@ interface NavigationMenuItem {
 }
 
 // Main content component
-const MainContent: React.FC = () => {
+const MainContent = (): JSX.Element => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [navigationDialogOpen, setNavigationDialogOpen] = useState(false);
@@ -1062,7 +1062,7 @@ const MainContent: React.FC = () => {
 };
 
 // AppContent component to handle conditional rendering based on authentication
-const AppContent: React.FC = () => {
+const AppContent = (): JSX.Element => {
   const { isAuthenticated } = useUser();
 
   // If the user is authenticated, show the main content
@@ -1081,7 +1081,7 @@ const AppContent: React.FC = () => {
 };
 
 // Wrap the app content with the ConfigProvider, ThemeProvider, and UserProvider
-const App: React.FC = () => {
+const App = (): JSX.Element => {
   return (
     <ThemeProvider>
       <ConfigProvider>

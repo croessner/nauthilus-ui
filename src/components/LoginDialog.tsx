@@ -17,7 +17,7 @@ interface LoginDialogProps {
   open: boolean;
 }
 
-const LoginDialog: React.FC<LoginDialogProps> = ({ open }) => {
+const LoginDialog = ({ open }: LoginDialogProps): JSX.Element => {
   const { login, loading, error, clearError } = useUser();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -49,13 +49,13 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open }) => {
               Please enter your credentials to access the application.
             </Typography>
           </Box>
-          
+
           {error && (
             <Alert severity="error" sx={{ mb: 2 }} onClose={clearError}>
               {error}
             </Alert>
           )}
-          
+
           <TextField
             autoFocus
             margin="dense"
@@ -70,7 +70,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open }) => {
             required
             sx={{ mb: 2 }}
           />
-          
+
           <TextField
             margin="dense"
             id="password"
@@ -84,7 +84,7 @@ const LoginDialog: React.FC<LoginDialogProps> = ({ open }) => {
             required
           />
         </DialogContent>
-        
+
         <DialogActions sx={{ px: 3, pb: 3 }}>
           <Button 
             type="submit" 

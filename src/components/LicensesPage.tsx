@@ -54,7 +54,7 @@ const licenses: License[] = [
   { name: 'yup', version: '1.3.2', license: 'MIT', website: 'https://github.com/jquense/yup' }
 ];
 
-const LicensesPage: React.FC = () => {
+const LicensesPage = (): JSX.Element => {
   return (
     <Box sx={{ width: '100%', mt: 2 }}>
       <Typography variant="h5" gutterBottom>
