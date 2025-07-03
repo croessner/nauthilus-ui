@@ -68,19 +68,16 @@ const LoginPage: React.FC = () => {
 
     if (isValid) {
       try {
-        // First authenticate directly using userManager
-        const authResult = await userManager.authenticate(username, password, rememberMe);
+        // Update AuthContext first
+        await authLogin(username, password, rememberMe);
 
-        if (authResult) {
-          // If authentication was successful, update both contexts
-          await authLogin(username, password, rememberMe);
-          const userResult = await userLogin(username, password);
+        // Then update UserContext
+        const userResult = await userLogin(username, password);
 
-          // If both logins were successful, navigate to the server menu page
-          if (userResult) {
-            // Force navigation to the server menu page
-            navigate('/');
-          }
+        // If login was successful, navigate to the server menu page
+        if (userResult) {
+          // Force navigation to the server menu page
+          navigate('/');
         }
       } catch (error) {
         console.error('Login error:', error);

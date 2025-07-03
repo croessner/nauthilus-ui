@@ -62,7 +62,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UserProvider, useUser } from './contexts/UserContext';
-import { AuthProvider } from './contexts/AuthContext';
+import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ValidationErrors from './components/common/ValidationErrors';
 import LoginPage from './components/LoginPage';
 
@@ -1064,29 +1064,32 @@ const MainContent = (): JSX.Element => {
 // AppContent component to handle conditional rendering based on authentication
 const AppContent = (): JSX.Element => {
   const { isAuthenticated } = useUser();
+  const { auth } = useAuth();
 
   // If the user is authenticated, show the main content
   // Otherwise, show only the login page
   return (
-    <AuthProvider>
-      {isAuthenticated ? (
+    <>
+      {isAuthenticated && auth.isAuthenticated ? (
         <MainContent />
       ) : (
         <Box sx={{ height: '100vh', bgcolor: 'background.default' }}>
           <LoginPage />
         </Box>
       )}
-    </AuthProvider>
+    </>
   );
 };
 
-// Wrap the app content with the ConfigProvider, ThemeProvider, and UserProvider
+// Wrap the app content with the ConfigProvider, ThemeProvider, UserProvider, and AuthProvider
 const App = (): JSX.Element => {
   return (
     <ThemeProvider>
       <ConfigProvider>
         <UserProvider>
-          <AppContent />
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
         </UserProvider>
       </ConfigProvider>
     </ThemeProvider>

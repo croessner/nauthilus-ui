@@ -589,43 +589,16 @@ export const authenticate = async (username: string, password: string, rememberM
   let user;
 
   try {
-    // Try to find the user by username
+    // Authenticate with backend using the dedicated authentication endpoint
     try {
-      const response = await axios.get(`/api/users/${username}`);
+      const response = await axios.post('/api/auth/login', {
+        username,
+        password
+      });
+
       if (response.data && response.data.user) {
         user = response.data.user;
       } else {
-        return null;
-      }
-    } catch (error) {
-      // User not found
-      return null;
-    }
-
-    // Authenticate with backend
-    try {
-      // This would ideally be a dedicated authentication endpoint
-      // For now, we'll use the existing user API and rely on the cached config
-      // In a production environment, you would implement a proper authentication endpoint
-
-      // Ensure config.users is an array
-      if (!config || !Array.isArray(config.users)) {
-        console.error('Invalid config or users array during authentication');
-        return null;
-      }
-
-      // Find user in cached config (case-insensitive)
-      const cachedUser = config.users.find((u: User) => 
-        u && u.username && u.username.toLowerCase() === username.toLowerCase()
-      );
-
-      if (!cachedUser || !cachedUser.passwordHash) {
-        return null;
-      }
-
-      // Verify password using bcrypt.compare
-      const isPasswordValid = await bcrypt.compare(password, cachedUser.passwordHash);
-      if (!isPasswordValid) {
         return null;
       }
     } catch (error) {
@@ -641,9 +614,15 @@ export const authenticate = async (username: string, password: string, rememberM
   const now = new Date().toISOString();
 
   // Update user profile with lastLogin only
-  await updateUserProfile(username, { 
-    lastLogin: now
-  });
+  try {
+    await updateUserProfile(username, { 
+      lastLogin: now
+    });
+  } catch (error) {
+    // Log the error but continue with authentication
+    console.error('Failed to update lastLogin timestamp:', error);
+    // Don't return null here, continue with the authentication process
+  }
 
   // Use rememberMeExpiry if rememberMe is true, otherwise use regular tokenExpiry
   const tokenExpiryTime = rememberMe ? config.rememberMeExpiry : config.tokenExpiry;
