@@ -4,7 +4,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nauthilus-api
+    container_name: nauthilus-ui
     restart: unless-stopped
     environment:
       - API_PORT=3001

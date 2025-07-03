@@ -28,12 +28,6 @@ RUN apk --no-cache add upx git
 
 WORKDIR /app
 
-# Copy Go module files
-COPY server/go.mod server/go.sum ./
-
-# Download dependencies
-RUN go mod download
-
 # Copy the Go source code
 COPY server/ ./
 
