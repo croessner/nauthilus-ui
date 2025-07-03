@@ -24,20 +24,23 @@ module.exports = function(app) {
   app.use(
     '/proxy/ping',
     createProxyMiddleware({
-      router: (req) => {
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
         // Get the target URL from the query parameter
         const targetUrl = req.query.url;
         if (!targetUrl) {
           throw new Error('Target URL is required');
         }
-        return targetUrl;
-      },
-      pathRewrite: {
-        '^/proxy/ping': '/ping', // Rewrite path to /ping
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        return '/proxy/ping'; // Keep the original path for the Go backend
       },
       changeOrigin: true,
       secure: true, // Ensure secure connections
       onError: (err, req, res) => {
+        console.error('Proxy error for ping:', err);
         res.status(500).json({ error: err.message });
       },
     })
@@ -47,16 +50,18 @@ module.exports = function(app) {
   app.use(
     '/proxy/jwt-token',
     createProxyMiddleware({
-      router: (req) => {
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
         // Get the target URL from the query parameter
         const targetUrl = req.query.url;
         if (!targetUrl) {
           throw new Error('Target URL is required');
         }
-        return targetUrl;
-      },
-      pathRewrite: {
-        '^/proxy/jwt-token': '/api/v1/jwt/token', // Rewrite path to /api/v1/jwt/token
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        return '/proxy/jwt-token'; // Keep the original path for the Go backend
       },
       changeOrigin: true,
       secure: true, // Ensure secure connections
@@ -65,6 +70,7 @@ module.exports = function(app) {
         proxyReq.setHeader('Content-Type', 'application/json');
       },
       onError: (err, req, res) => {
+        console.error('Proxy error for jwt-token:', err);
         res.status(500).json({ error: err.message });
       },
     })
@@ -74,16 +80,24 @@ module.exports = function(app) {
   app.use(
     '/proxy/bruteforce/list',
     createProxyMiddleware({
-      router: (req) => {
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
         // Get the target URL from the query parameter
         const targetUrl = req.query.url;
         if (!targetUrl) {
           throw new Error('Target URL is required');
         }
-        return targetUrl;
-      },
-      pathRewrite: {
-        '^/proxy/bruteforce/list': '/api/v1/bruteforce/list', // Rewrite path to /api/v1/bruteforce/list
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/bruteforce/list'; // Keep the original path for the Go backend
       },
       changeOrigin: true,
       secure: true, // Ensure secure connections
@@ -92,6 +106,7 @@ module.exports = function(app) {
         addAuthorizationHeader(proxyReq, req);
       },
       onError: (err, req, res) => {
+        console.error('Proxy error for bruteforce/list:', err);
         res.status(500).json({ error: err.message });
       },
     })
@@ -101,26 +116,36 @@ module.exports = function(app) {
   app.use(
     '/proxy/cache/flush',
     createProxyMiddleware({
-      router: (req) => {
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
         // Get the target URL from the query parameter
         const targetUrl = req.query.url;
         if (!targetUrl) {
           throw new Error('Target URL is required');
         }
-        return targetUrl;
-      },
-      pathRewrite: {
-        '^/proxy/cache/flush': '/api/v1/cache/flush', // Rewrite path to /api/v1/cache/flush
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/cache/flush'; // Keep the original path for the Go backend
       },
       changeOrigin: true,
       secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Add authentication headers if provided in the request
         addAuthorizationHeader(proxyReq, req);
+
         // Set content type for POST requests
         proxyReq.setHeader('Content-Type', 'application/json');
       },
       onError: (err, req, res) => {
+        console.error('Proxy error for cache/flush:', err);
         res.status(500).json({ error: err.message });
       },
     })
@@ -130,26 +155,36 @@ module.exports = function(app) {
   app.use(
     '/proxy/bruteforce/flush',
     createProxyMiddleware({
-      router: (req) => {
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
         // Get the target URL from the query parameter
         const targetUrl = req.query.url;
         if (!targetUrl) {
           throw new Error('Target URL is required');
         }
-        return targetUrl;
-      },
-      pathRewrite: {
-        '^/proxy/bruteforce/flush': '/api/v1/bruteforce/flush', // Rewrite path to /api/v1/bruteforce/flush
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/bruteforce/flush'; // Keep the original path for the Go backend
       },
       changeOrigin: true,
       secure: true, // Ensure secure connections
       onProxyReq: (proxyReq, req, res) => {
         // Add authentication headers if provided in the request
         addAuthorizationHeader(proxyReq, req);
+
         // Set content type for POST requests
         proxyReq.setHeader('Content-Type', 'application/json');
       },
       onError: (err, req, res) => {
+        console.error('Proxy error for bruteforce/flush:', err);
         res.status(500).json({ error: err.message });
       },
     })
@@ -159,16 +194,24 @@ module.exports = function(app) {
   app.use(
     '/proxy/config/load',
     createProxyMiddleware({
-      router: (req) => {
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
         // Get the target URL from the query parameter
         const targetUrl = req.query.url;
         if (!targetUrl) {
           throw new Error('Target URL is required');
         }
-        return targetUrl;
-      },
-      pathRewrite: {
-        '^/proxy/config/load': '/api/v1/config/load', // Rewrite path to /api/v1/config/load
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/config/load'; // Keep the original path for the Go backend
       },
       changeOrigin: true,
       secure: true, // Ensure secure connections
@@ -178,6 +221,331 @@ module.exports = function(app) {
       },
       onError: (err, req, res) => {
         console.error('Proxy error for config/load:', err);
+
+        // Provide more detailed error information
+        const errorDetails = {
+          error: 'Failed to connect to backend server',
+          details: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          target: req.query.url
+        };
+
+        res.status(502).json(errorDetails);
+      },
+    })
+  );
+
+  // Proxy for distributed-brute-force-admin hook endpoint
+  app.use(
+    '/proxy/hooks/distributed-brute-force-admin',
+    createProxyMiddleware({
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Get the endpoint path from the query parameter
+        const endpointPath = req.query.endpoint_path;
+        if (!endpointPath) {
+          throw new Error('Endpoint path is required');
+        }
+
+        // Store the endpoint path in the request object for the Go backend to use
+        req.headers['x-endpoint-path'] = endpointPath;
+
+        // If operation is provided, store it in the request object
+        const operation = req.query.operation;
+        if (operation) {
+          req.headers['x-operation'] = operation;
+        }
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/hooks/distributed-brute-force-admin'; // Keep the original path for the Go backend
+      },
+      changeOrigin: true,
+      secure: true, // Ensure secure connections
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        addAuthorizationHeader(proxyReq, req);
+
+        // Set content type for POST requests
+        if (req.method === 'POST') {
+          proxyReq.setHeader('Content-Type', 'application/json');
+        }
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for distributed-brute-force-admin:', err);
+
+        // Provide more detailed error information
+        const errorDetails = {
+          error: 'Failed to connect to backend server',
+          details: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          target: req.query.url
+        };
+
+        res.status(502).json(errorDetails);
+      },
+    })
+  );
+
+  // Proxy for distributed-brute-force-test hook endpoint
+  app.use(
+    '/proxy/hooks/distributed-brute-force-test',
+    createProxyMiddleware({
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Get the endpoint path from the query parameter
+        const endpointPath = req.query.endpoint_path;
+        if (!endpointPath) {
+          throw new Error('Endpoint path is required');
+        }
+
+        // Store the endpoint path in the request object for the Go backend to use
+        req.headers['x-endpoint-path'] = endpointPath;
+
+        // If operation is provided, store it in the request object
+        const operation = req.query.operation;
+        if (operation) {
+          req.headers['x-operation'] = operation;
+        }
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/hooks/distributed-brute-force-test'; // Keep the original path for the Go backend
+      },
+      changeOrigin: true,
+      secure: true, // Ensure secure connections
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        addAuthorizationHeader(proxyReq, req);
+
+        // Set content type for POST requests
+        if (req.method === 'POST') {
+          proxyReq.setHeader('Content-Type', 'application/json');
+        }
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for distributed-brute-force-test:', err);
+
+        // Provide more detailed error information
+        const errorDetails = {
+          error: 'Failed to connect to backend server',
+          details: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          target: req.query.url
+        };
+
+        res.status(502).json(errorDetails);
+      },
+    })
+  );
+
+  // Proxy for learning-mode hook endpoint
+  app.use(
+    '/proxy/hooks/learning-mode',
+    createProxyMiddleware({
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Get the endpoint path from the query parameter
+        const endpointPath = req.query.endpoint_path;
+        if (!endpointPath) {
+          throw new Error('Endpoint path is required');
+        }
+
+        // Store the endpoint path in the request object for the Go backend to use
+        req.headers['x-endpoint-path'] = endpointPath;
+
+        // If operation is provided, store it in the request object
+        const operation = req.query.operation;
+        if (operation) {
+          req.headers['x-operation'] = operation;
+        }
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/hooks/learning-mode'; // Keep the original path for the Go backend
+      },
+      changeOrigin: true,
+      secure: true, // Ensure secure connections
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        addAuthorizationHeader(proxyReq, req);
+
+        // Set content type for POST requests
+        if (req.method === 'POST') {
+          proxyReq.setHeader('Content-Type', 'application/json');
+        }
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for learning-mode:', err);
+
+        // Provide more detailed error information
+        const errorDetails = {
+          error: 'Failed to connect to backend server',
+          details: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          target: req.query.url
+        };
+
+        res.status(502).json(errorDetails);
+      },
+    })
+  );
+
+  // Proxy for neural-feedback hook endpoint
+  app.use(
+    '/proxy/hooks/neural-feedback',
+    createProxyMiddleware({
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Get the endpoint path from the query parameter
+        const endpointPath = req.query.endpoint_path;
+        if (!endpointPath) {
+          throw new Error('Endpoint path is required');
+        }
+
+        // Store the endpoint path in the request object for the Go backend to use
+        req.headers['x-endpoint-path'] = endpointPath;
+
+        // If operation is provided, store it in the request object
+        const operation = req.query.operation;
+        if (operation) {
+          req.headers['x-operation'] = operation;
+        }
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/hooks/neural-feedback'; // Keep the original path for the Go backend
+      },
+      changeOrigin: true,
+      secure: true, // Ensure secure connections
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        addAuthorizationHeader(proxyReq, req);
+
+        // Set content type for POST requests
+        if (req.method === 'POST') {
+          proxyReq.setHeader('Content-Type', 'application/json');
+        }
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for neural-feedback:', err);
+
+        // Provide more detailed error information
+        const errorDetails = {
+          error: 'Failed to connect to backend server',
+          details: err.message,
+          code: err.code || 'UNKNOWN_ERROR',
+          target: req.query.url
+        };
+
+        res.status(502).json(errorDetails);
+      },
+    })
+  );
+
+  // Proxy for train-neural-network hook endpoint
+  app.use(
+    '/proxy/hooks/train-neural-network',
+    createProxyMiddleware({
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
+        // Get the target URL from the query parameter
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+
+        // Store the target URL in the request object for the Go backend to use
+        req.headers['x-target-url'] = targetUrl;
+
+        // Get the endpoint path from the query parameter
+        const endpointPath = req.query.endpoint_path;
+        if (!endpointPath) {
+          throw new Error('Endpoint path is required');
+        }
+
+        // Store the endpoint path in the request object for the Go backend to use
+        req.headers['x-endpoint-path'] = endpointPath;
+
+        // If operation is provided, store it in the request object
+        const operation = req.query.operation;
+        if (operation) {
+          req.headers['x-operation'] = operation;
+        }
+
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+
+        return '/proxy/hooks/train-neural-network'; // Keep the original path for the Go backend
+      },
+      changeOrigin: true,
+      secure: true, // Ensure secure connections
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        addAuthorizationHeader(proxyReq, req);
+
+        // Set content type for POST requests
+        if (req.method === 'POST') {
+          proxyReq.setHeader('Content-Type', 'application/json');
+        }
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for train-neural-network:', err);
 
         // Provide more detailed error information
         const errorDetails = {

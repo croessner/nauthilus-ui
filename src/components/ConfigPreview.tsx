@@ -16,6 +16,12 @@ const ConfigPreview = (): JSX.Element => {
     // Create a deep copy of the config object
     const configCopy = JSON.parse(JSON.stringify(config));
 
+    // Exclude connection and hooks settings from the preview
+    delete configCopy.connection;
+    if (configCopy.lua && configCopy.lua.hooks) {
+      delete configCopy.lua.hooks;
+    }
+
     // Ensure refresh_token_expiry is set if refresh_token is enabled
     if (configCopy.server?.jwt_auth?.refresh_token && !configCopy.server.jwt_auth.refresh_token_expiry) {
       if (!configCopy.server.jwt_auth) {
@@ -139,7 +145,7 @@ const ConfigPreview = (): JSX.Element => {
     // Check if features are properly configured
     if (configCopy.server?.features && Array.isArray(configCopy.server.features)) {
       // Check RBL feature
-      if (configCopy.server.features.includes('rbl')) {
+      if (configCopy.server.features.includes('realtime_blackhole_lists')) {
         if (!configCopy.rbl) {
           essentialErrors.push('RBL feature is enabled but RBL configuration is missing.');
         } else if (!configCopy.rbl.lists || !Array.isArray(configCopy.rbl.lists) || configCopy.rbl.lists.length === 0) {

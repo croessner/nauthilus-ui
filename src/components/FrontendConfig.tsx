@@ -22,6 +22,7 @@ import {
   Select,
   MenuItem
 } from '@mui/material';
+import PasswordField from './common/PasswordField';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -233,13 +234,12 @@ const FrontendConfig = (): JSX.Element => {
                   <>
                     <Grid item xs={12} md={6}>
                       <Field
-                        as={TextField}
+                        as={PasswordField}
                         fullWidth
                         label="CSRF Secret"
                         name="frontend.csrf_secret"
                         value={values.frontend?.csrf_secret || ''}
                         onChange={handleChange}
-                        onBlur={handleBlur}
                         error={Boolean(getIn(touched, 'frontend.csrf_secret') && getIn(errors, 'frontend.csrf_secret'))}
                         helperText={
                           (getIn(touched, 'frontend.csrf_secret') && getIn(errors, 'frontend.csrf_secret')) ||
@@ -250,13 +250,12 @@ const FrontendConfig = (): JSX.Element => {
 
                     <Grid item xs={12} md={6}>
                       <Field
-                        as={TextField}
+                        as={PasswordField}
                         fullWidth
                         label="Cookie Store Auth Key"
                         name="frontend.cookie_store_auth_key"
                         value={values.frontend?.cookie_store_auth_key || ''}
                         onChange={handleChange}
-                        onBlur={handleBlur}
                         error={Boolean(getIn(touched, 'frontend.cookie_store_auth_key') && getIn(errors, 'frontend.cookie_store_auth_key'))}
                         helperText={
                           (getIn(touched, 'frontend.cookie_store_auth_key') && getIn(errors, 'frontend.cookie_store_auth_key')) ||
@@ -267,13 +266,12 @@ const FrontendConfig = (): JSX.Element => {
 
                     <Grid item xs={12} md={6}>
                       <Field
-                        as={TextField}
+                        as={PasswordField}
                         fullWidth
                         label="Cookie Store Encryption Key"
                         name="frontend.cookie_store_encryption_key"
                         value={values.frontend?.cookie_store_encryption_key || ''}
                         onChange={handleChange}
-                        onBlur={handleBlur}
                         error={Boolean(getIn(touched, 'frontend.cookie_store_encryption_key') && getIn(errors, 'frontend.cookie_store_encryption_key'))}
                         helperText={
                           (getIn(touched, 'frontend.cookie_store_encryption_key') && getIn(errors, 'frontend.cookie_store_encryption_key')) ||

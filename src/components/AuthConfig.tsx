@@ -133,7 +133,7 @@ const AuthConfig = (): JSX.Element | null => {
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Basic Authentication</Typography>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -190,7 +190,7 @@ const AuthConfig = (): JSX.Element | null => {
               <Grid item xs={12}>
                 <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>JWT Authentication</Typography>
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <FormControlLabel
                   control={
                     <Switch

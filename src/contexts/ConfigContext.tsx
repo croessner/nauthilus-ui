@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import { NauthilusConfig } from '../types/config';
+import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
 import axios from 'axios';
 
@@ -455,6 +455,57 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
     }, `Failed to update ${section} configuration. Please try again.`);
   }, [withErrorHandling, config, updateProfilesWithConfig, validateConfigSection]);
 
+  // Helper function to filter out unknown settings
+  const filterUnknownSettings = (config: NauthilusConfig): NauthilusConfig => {
+    // Create a new config object with only the known properties
+    const filteredConfig: NauthilusConfig = {
+      server: {
+        redis: { database_number: 0, prefix: 'nt:' }
+      }
+    };
+
+    // Copy known server properties
+    if (config.server) {
+      const serverProps = [
+        'address', 'max_concurrent_requests', 'max_password_history_entries',
+        'http3', 'haproxy_v2', 'disabled_endpoints', 'tls', 'basic_auth',
+        'jwt_auth', 'instance_name', 'log', 'backends', 'features',
+        'brute_force_protocols', 'ory_hydra_admin_url', 'dns', 'insights',
+        'redis', 'master_user', 'frontend', 'prometheus_timer',
+        'default_http_request_header', 'http_client', 'compression', 'keep_alive'
+      ];
+
+      serverProps.forEach(prop => {
+        const key = prop as keyof typeof config.server;
+        if (config.server[key] !== undefined) {
+          // Use type assertion to help TypeScript understand the assignment
+          (filteredConfig.server as any)[key] = config.server[key];
+        }
+      });
+    }
+
+    // Copy other known top-level properties
+    const knownProps = [
+      'ldap', 'lua', 'oauth2', 'brute_force', 'realtime_blackhole_lists',
+      'relay_domains', 'backend_server_monitoring', 'cleartext_networks'
+    ];
+
+    knownProps.forEach(prop => {
+      const key = prop as keyof NauthilusConfig;
+      if (config[key] !== undefined) {
+        // Use type assertion to help TypeScript understand the assignment
+        (filteredConfig as any)[key] = config[key];
+      }
+    });
+
+    // Preserve connection settings if they exist
+    if (config.connection) {
+      filteredConfig.connection = config.connection;
+    }
+
+    return filteredConfig;
+  };
+
   // Helper function to initialize feature configurations
   const initializeFeatureConfigurations = (config: NauthilusConfig): NauthilusConfig => {
     const newConfig = { ...config };
@@ -608,6 +659,9 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
           }
         }
 
+        // Filter out unknown settings
+        newConfig = filterUnknownSettings(newConfig);
+
         // Initialize feature configurations
         newConfig = initializeFeatureConfigurations(newConfig);
       } else {
@@ -689,6 +743,12 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
 
       // Create a deep copy of the configuration to ensure all nested objects are included
       const configToDownload = JSON.parse(JSON.stringify(config));
+
+      // Exclude connection and hooks settings from the download
+      delete configToDownload.connection;
+      if (configToDownload.lua && configToDownload.lua.hooks) {
+        delete configToDownload.lua.hooks;
+      }
 
       // Add profile name as a comment in the YAML
       const profileComment = `# Profile: ${currentProfileName}`;
@@ -1014,12 +1074,95 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
           throw new Error('Unexpected response format');
         }
 
+        // Filter out unknown settings
+        newConfig = filterUnknownSettings(newConfig);
+
         // Initialize feature configurations
         newConfig = initializeFeatureConfigurations(newConfig);
 
         // Ensure connection configuration is preserved
         if (!newConfig.connection) {
           newConfig.connection = connectionConfig;
+        }
+
+        // Check for custom hooks in the loaded configuration
+        if (newConfig.lua?.custom_hooks && newConfig.lua?.custom_hooks.length > 0) {
+          console.log('Found custom hooks in loaded configuration:', newConfig.lua?.custom_hooks);
+
+          // Initialize lua and hooks objects if they don't exist
+          if (!newConfig.lua) {
+            newConfig.lua = {};
+          }
+          if (!newConfig.lua.hooks) {
+            newConfig.lua.hooks = {};
+          }
+
+          // Map script filenames to hook names
+          const scriptToHookMap: Record<string, keyof LuaHooksConfig> = {
+            'distributed-brute-force-admin.lua': 'distributed_brute_force_admin',
+            'distributed-brute-force-test.lua': 'distributed_brute_force_test',
+            'learning-mode.lua': 'learning_mode',
+            'neural-feedback.lua': 'neural_feedback',
+            'train-neural-network.lua': 'train_neural_network'
+          };
+
+          // Check each custom hook
+          newConfig.lua?.custom_hooks?.forEach(customHook => {
+            // Extract the script filename from the path
+            const scriptPath = customHook.script_path;
+            const scriptName = scriptPath.split('/').pop();
+
+            if (scriptName && scriptToHookMap[scriptName]) {
+              const hookName = scriptToHookMap[scriptName];
+              console.log(`Found matching hook: ${scriptName} -> ${hookName}`);
+
+              // Get the current hook configuration if it exists
+              const currentHook = config?.lua?.hooks?.[hookName];
+              const newHook = newConfig.lua?.hooks?.[hookName];
+
+              // Create or update the hook configuration
+              if (newConfig.lua && newConfig.lua.hooks) {
+                // If the hook already exists in the current config, preserve its enabled state
+                if (currentHook && typeof currentHook.enabled === 'boolean') {
+                  newConfig.lua.hooks[hookName] = {
+                    ...newHook,
+                    endpoint_path: newHook?.endpoint_path || '',
+                    enabled: currentHook.enabled
+                  };
+                } else {
+                  // If the hook doesn't exist in the current config or is not properly configured,
+                  // create it and enable it since it's defined in custom_hooks
+                  const httpLocation = customHook.http_location || '';
+                  newConfig.lua.hooks[hookName] = {
+                    enabled: true,
+                    endpoint_path: httpLocation
+                  };
+                  console.log(`Enabled hook ${hookName} with endpoint ${httpLocation}`);
+                }
+              }
+            }
+          });
+        }
+
+        // Preserve the enabled state of hooks if they exist in the current configuration
+        if (config?.lua?.hooks && newConfig.lua?.hooks) {
+          // For each hook in the new config that also exists in the current config
+          Object.keys(newConfig.lua?.hooks).forEach(hookName => {
+            const typedHookName = hookName as keyof LuaHooksConfig;
+            const currentHook = config.lua?.hooks?.[typedHookName];
+            const newHook = newConfig.lua?.hooks?.[typedHookName];
+
+            if (currentHook && newHook && typeof currentHook.enabled === 'boolean') {
+              // Preserve the enabled state from the current config
+              if (newConfig.lua && newConfig.lua.hooks) {
+                newConfig.lua.hooks[typedHookName] = {
+                  ...newHook,
+                  endpoint_path: newHook?.endpoint_path || '',
+                  enabled: currentHook.enabled
+                };
+              }
+            }
+          });
         }
 
         // Update the current profile with the new configuration

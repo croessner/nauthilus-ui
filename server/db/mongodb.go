@@ -42,6 +42,7 @@ type MongoDB struct {
 	ProfileColl   *mongo.Collection
 	UserColl      *mongo.Collection
 	JWTConfigColl *mongo.Collection
+	RuntimeColl   *mongo.Collection
 	Config        *config.Config
 	RetryCount    int
 	IsConnected   bool
@@ -87,6 +88,7 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	m.ProfileColl = m.DB.Collection("profiles")
 	m.UserColl = m.DB.Collection("users")
 	m.JWTConfigColl = m.DB.Collection("jwtconfig")
+	m.RuntimeColl = m.DB.Collection("runtime")
 	m.IsConnected = true
 	m.RetryCount = 0
 

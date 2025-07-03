@@ -69,3 +69,17 @@ type HealthResponse struct {
 	Status  string `json:"status"`
 	Message string `json:"message,omitempty"`
 }
+
+// RuntimeSettings represents runtime settings for a user profile
+type RuntimeSettings struct {
+	UserID      string                 `bson:"userId" json:"userId"`
+	ProfileName string                 `bson:"profileName" json:"profileName"`
+	Connection  map[string]interface{} `bson:"connection" json:"connection"`
+	Hooks       map[string]interface{} `bson:"hooks" json:"hooks"`
+}
+
+// RuntimeSettingsResponse represents a runtime settings response
+type RuntimeSettingsResponse struct {
+	Connection map[string]interface{} `json:"connection"`
+	Hooks      map[string]interface{} `json:"hooks"`
+}

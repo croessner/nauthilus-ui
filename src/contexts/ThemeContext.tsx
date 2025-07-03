@@ -29,6 +29,54 @@ export const ThemeProvider = ({ children }: ThemeProviderProps): JSX.Element => 
   const theme = createTheme({
     palette: {
       mode,
+      ...(mode === 'dark' && {
+        // Customize button colors for dark mode
+        primary: {
+          main: '#5c6bc0', // A less bright blue
+        },
+      }),
+    },
+    components: {
+      // Customize default button styling for dark mode
+      MuiButton: {
+        styleOverrides: {
+          // Target only the default variant buttons
+          text: {
+            ...(mode === 'dark' && {
+              color: '#b0b0b0', // Dimmer text color for text buttons
+            }),
+          },
+          outlined: {
+            ...(mode === 'dark' && {
+              borderColor: '#5c6bc0', // Match with primary color
+              color: '#b0b0b0', // Dimmer text color
+              '&:hover': {
+                borderColor: '#7986cb', // Slightly lighter border on hover
+                backgroundColor: 'rgba(92, 107, 192, 0.08)', // Very subtle background on hover
+              },
+            }),
+          },
+          contained: {
+            ...(mode === 'dark' && {
+              backgroundColor: '#8c9eff', // Much lighter blue background for buttons in dark mode
+              color: '#000000', // Dark text color for better contrast with light background
+              '&:hover': {
+                backgroundColor: '#9fa8da', // Slightly lighter on hover
+              },
+            }),
+          },
+          // Ensure default variant (no color prop specified) gets the new styling
+          containedPrimary: {
+            ...(mode === 'dark' && {
+              backgroundColor: '#8c9eff', // Same lighter background
+              color: '#000000', // Dark text color for better contrast
+              '&:hover': {
+                backgroundColor: '#9fa8da', // Same hover effect
+              },
+            }),
+          },
+        },
+      },
     },
   });
 

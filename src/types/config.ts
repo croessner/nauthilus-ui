@@ -275,6 +275,19 @@ export interface LuaSearchProtocolConfig {
   backend_name?: string;
 }
 
+export interface LuaHookConfig {
+  enabled: boolean;
+  endpoint_path: string;
+}
+
+export interface LuaHooksConfig {
+  distributed_brute_force_admin?: LuaHookConfig;
+  distributed_brute_force_test?: LuaHookConfig;
+  learning_mode?: LuaHookConfig;
+  neural_feedback?: LuaHookConfig;
+  train_neural_network?: LuaHookConfig;
+}
+
 export interface LuaConfig {
   features?: LuaFeatureConfig[];
   filters?: LuaFilterConfig[];
@@ -283,6 +296,7 @@ export interface LuaConfig {
   config?: LuaScriptConfig;
   search?: LuaSearchProtocolConfig[];
   optional_lua_backends?: Record<string, LuaScriptConfig>;
+  hooks?: LuaHooksConfig;
 }
 
 export interface LuaFeatureConfig {

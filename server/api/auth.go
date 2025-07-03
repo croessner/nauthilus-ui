@@ -40,12 +40,14 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	var loginRequest LoginRequest
 	if err := c.ShouldBindJSON(&loginRequest); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
 		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+
 		return
 	}
 
@@ -58,6 +60,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
+
 		return
 	}
 
@@ -65,6 +68,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(loginRequest.Password))
 	if err != nil {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
+
 		return
 	}
 

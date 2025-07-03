@@ -92,6 +92,9 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 
 	authHandler := api.NewAuthHandler(mongoDB)
 	authHandler.RegisterRoutes(r)
+
+	runtimeHandler := api.NewRuntimeHandler(mongoDB)
+	runtimeHandler.RegisterRoutes(r)
 }
 
 // registerProxyHandlers registers all proxy handlers with the router
