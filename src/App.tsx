@@ -60,6 +60,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
+import { RuntimeProvider } from './contexts/RuntimeContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -1087,16 +1088,18 @@ const AppContent = (): JSX.Element => {
   );
 };
 
-// Wrap the app content with the ConfigProvider, ThemeProvider, UserProvider, and AuthProvider
+// Wrap the app content with the ThemeProvider, ConfigProvider, RuntimeProvider, UserProvider, and AuthProvider
 const App = (): JSX.Element => {
   return (
     <ThemeProvider>
       <ConfigProvider>
-        <UserProvider>
-          <AuthProvider>
-            <AppContent />
-          </AuthProvider>
-        </UserProvider>
+        <RuntimeProvider>
+          <UserProvider>
+            <AuthProvider>
+              <AppContent />
+            </AuthProvider>
+          </UserProvider>
+        </RuntimeProvider>
       </ConfigProvider>
     </ThemeProvider>
   );

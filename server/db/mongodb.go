@@ -128,6 +128,11 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 		return err
 	}
 
+	// Initialize runtime collection
+	if err := m.initializeRuntimeCollection(ctx); err != nil {
+		return err
+	}
+
 	slog.Info("Database initialization completed")
 
 	return nil
@@ -260,6 +265,18 @@ func (m *MongoDB) initializeDefaultProfile(ctx context.Context) error {
 		slog.Info("Default profile created successfully")
 	}
 
+	return nil
+}
+
+// initializeRuntimeCollection ensures the runtime collection exists
+func (m *MongoDB) initializeRuntimeCollection(ctx context.Context) error {
+	// Check if Runtime collection has any documents
+	runtimeCount, err := m.RuntimeColl.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	slog.Info("Runtime collection initialized", "documents", runtimeCount)
 	return nil
 }
 

@@ -12,30 +12,12 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
-  Tabs,
-  Tab,
-  Paper,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
-  FormHelperText,
-  Radio
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import RefreshIcon from '@mui/icons-material/Refresh';
-import DeleteIcon from '@mui/icons-material/Delete';
-import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
+import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
 
@@ -71,6 +53,7 @@ const extractErrorMessage = async (response: Response): Promise<string> => {
 };
 
 // Utility function to prepare authentication parameters for API requests
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const prepareAuthParams = (connectionConfig: any): { authType: string, authValue: string } => {
   let authType = '';
   let authValue = '';
@@ -140,7 +123,8 @@ type ConnectionStatus = 'unknown' | 'connected' | 'disconnected' | 'checking';
 
 
 const ConnectionConfig: React.FC = () => {
-  const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges, loadConfigFromBackend } = useConfig();
+  const { config, hasUnsavedChanges, setHasUnsavedChanges, loadConfigFromBackend, currentProfileName } = useConfig();
+  const { saveRuntimeSettings, connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings } = useRuntime();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
@@ -190,35 +174,52 @@ const ConnectionConfig: React.FC = () => {
     }
   }, [setConnectionStatus, setStatusMessage]);
 
-  // Reset unsaved changes flag when component mounts
+  // Reset unsaved changes flag and load runtime settings when component mounts
   useEffect(() => {
     setHasUnsavedChanges(false);
 
-    // Check connection status when component mounts
-    if (config?.connection?.backend_url) {
-      checkConnection(config.connection)
-    }
-  }, [setHasUnsavedChanges, config, checkConnection]);
+    // Load runtime settings when component mounts
+    const loadSettings = async () => {
+      try {
+        const userId = await getCurrentUserId();
+        await loadRuntimeSettings(userId, currentProfileName);
+
+        // Check connection status after loading runtime settings
+        // This ensures we have the latest connection data
+        const connectionToCheck = runtimeConnection || config?.connection;
+        if (connectionToCheck?.backend_url) {
+          checkConnection(connectionToCheck);
+        }
+      } catch (error) {
+        console.error('Failed to load runtime settings:', error);
+      }
+    };
+
+    loadSettings();
+  }, [setHasUnsavedChanges, config, checkConnection, loadRuntimeSettings, currentProfileName]);
 
   if (!config) {
     return null;
   }
 
   // Initialize connection configuration
+  // Use runtime connection if available, otherwise use config connection
+  const connectionSource = runtimeConnection || {};
+
   const initialValues = {
-    backend_url: config.connection?.backend_url || '',
+    backend_url: connectionSource.backend_url || '',
     basic_auth: {
-      enabled: config.connection?.basic_auth?.enabled || false,
-      username: config.connection?.basic_auth?.username || '',
-      password: config.connection?.basic_auth?.password || '',
+      enabled: connectionSource.basic_auth?.enabled || false,
+      username: connectionSource.basic_auth?.username || '',
+      password: connectionSource.basic_auth?.password || '',
     },
     jwt_auth: {
-      enabled: config.connection?.jwt_auth?.enabled || false,
-      username: config.connection?.jwt_auth?.username || '',
-      password: config.connection?.jwt_auth?.password || '',
-      token: config.connection?.jwt_auth?.token || '',
-      refresh_token: config.connection?.jwt_auth?.refresh_token || '',
-      expires_at: config.connection?.jwt_auth?.expires_at || 0,
+      enabled: connectionSource.jwt_auth?.enabled || false,
+      username: connectionSource.jwt_auth?.username || '',
+      password: connectionSource.jwt_auth?.password || '',
+      token: connectionSource.jwt_auth?.token || '',
+      refresh_token: connectionSource.jwt_auth?.refresh_token || '',
+      expires_at: connectionSource.jwt_auth?.expires_at || 0,
     },
   };
 
@@ -287,12 +288,18 @@ const ConnectionConfig: React.FC = () => {
         }
       }
 
-      // Update the connection configuration
-      await updateConfigSection('connection', {
-        backend_url: values.backend_url,
-        basic_auth: values.basic_auth,
-        jwt_auth: values.jwt_auth,
-      });
+      // Save the full connection data to runtime collection
+      const userId = await getCurrentUserId();
+      await saveRuntimeSettings(
+        userId,
+        currentProfileName,
+        {
+          backend_url: values.backend_url,
+          basic_auth: values.basic_auth,
+          jwt_auth: values.jwt_auth,
+        },
+        runtimeHooks || {}
+      );
 
       // Check connection after saving
       checkConnection(values);
@@ -312,16 +319,28 @@ const ConnectionConfig: React.FC = () => {
   // Function to reset JWT token
   const resetJwtToken = async () => {
     try {
-      // Update the connection configuration with empty token
-      await updateConfigSection('connection', {
-        ...config.connection,
+      // Get the current connection data
+      const connectionData = runtimeConnection || config.connection || {};
+
+      // Create updated connection data with reset JWT token
+      const updatedConnection = {
+        ...connectionData,
         jwt_auth: {
-          ...config.connection?.jwt_auth,
+          ...connectionData.jwt_auth,
           token: '',
           refresh_token: '',
           expires_at: 0
         }
-      });
+      };
+
+      // Save the full updated connection data to runtime collection
+      const userId = await getCurrentUserId();
+      await saveRuntimeSettings(
+        userId,
+        currentProfileName,
+        updatedConnection,
+        runtimeHooks || {}
+      );
 
       setNotification({
         open: true,
