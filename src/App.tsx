@@ -84,6 +84,7 @@ import LicensesPage from './components/LicensesPage';
 import ConfigWizard from './components/ConfigWizard';
 import UserManagement from './components/UserManagement';
 import UserProfile from './components/UserProfile';
+import BruteForceConfig from './components/BruteForceConfig';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 240;
@@ -184,6 +185,7 @@ const MainContent = (): JSX.Element => {
   // Define other menu items
   const runtimeMenuItems: NavigationMenuItem[] = [
     { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
+    { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
   ];
 
   // Define application menu items
@@ -893,6 +895,7 @@ const MainContent = (): JSX.Element => {
               <Route path="/" element={<ServerConfig />} />
               <Route path="/auth" element={<AuthConfig />} />
               <Route path="/connection" element={<ConnectionConfig />} />
+              <Route path="/bruteforce" element={<BruteForceConfig />} />
               <Route path="/backends" element={<BackendsConfig />} />
               <Route path="/features" element={<FeaturesConfig />} />
               <Route path="/redis" element={<RedisConfig />} />
