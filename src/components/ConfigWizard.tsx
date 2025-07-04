@@ -35,7 +35,7 @@ interface ConfigWizardProps {
   autoOpen?: boolean;
 }
 
-const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): JSX.Element => {
+const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): React.JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges } = useConfig();
   const navigate = useNavigate();
   const [activeStep, setActiveStep] = useState(0);
@@ -95,7 +95,7 @@ const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): JSX.Element => {
   const handleClose = () => {
     setOpen(false);
     setActiveStep(0);
-    navigate('/'); // Navigate to Server Configuration page
+    navigate('/'); // Navigate to the Server Configuration page
   };
 
   // Handle moving to the next step
@@ -282,7 +282,7 @@ const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): JSX.Element => {
         }
         newConfig.lua.config.backend_script_path = luaScriptPath;
 
-        // Add package path if provided
+        // Add a package path if provided
         if (luaPackagePath) {
           newConfig.lua.config.package_path = luaPackagePath;
         }
@@ -291,8 +291,8 @@ const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): JSX.Element => {
 
     // Force update the configuration even if validation fails
     // This is intentional as per requirements - we want to save partial configuration
-    updateConfig(newConfig);
-    setHasUnsavedChanges(true);
+    updateConfig(newConfig)
+        .then(() => setHasUnsavedChanges(true))
 
     // Close the wizard
     handleClose();
