@@ -34,7 +34,7 @@ const ServerConfigSchema = Yup.object().shape({
         const ipv4WithPortRegex = /^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?):[0-9]{1,5}$/;
 
         // IPv6 with port regex: matches formats like [::1]:8080 or [2001:db8::1]:8080
-        const ipv6WithPortRegex = /^\[(([0-9a-fA-F]{1,4}:){7,7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]{1,}|::(ffff(:0{1,4}){0,1}:){0,1}((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9])\.){3,3}(25[0-5]|(2[0-4]|1{0,1}[0-9]){0,1}[0-9]))\]:[0-9]{1,5}$/;
+        const ipv6WithPortRegex = /^\[(([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,7}:|([0-9a-fA-F]{1,4}:){1,6}:[0-9a-fA-F]{1,4}|([0-9a-fA-F]{1,4}:){1,5}(:[0-9a-fA-F]{1,4}){1,2}|([0-9a-fA-F]{1,4}:){1,4}(:[0-9a-fA-F]{1,4}){1,3}|([0-9a-fA-F]{1,4}:){1,3}(:[0-9a-fA-F]{1,4}){1,4}|([0-9a-fA-F]{1,4}:){1,2}(:[0-9a-fA-F]{1,4}){1,5}|[0-9a-fA-F]{1,4}:((:[0-9a-fA-F]{1,4}){1,6})|:((:[0-9a-fA-F]{1,4}){1,7}|:)|fe80:(:[0-9a-fA-F]{0,4}){0,4}%[0-9a-zA-Z]+|::(ffff(:0{1,4})?:)?((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9])|([0-9a-fA-F]{1,4}:){1,4}:((25[0-5]|(2[0-4]|1?[0-9])?[0-9])\.){3}(25[0-5]|(2[0-4]|1?[0-9])?[0-9]))]:[0-9]{1,5}$/;
 
         return ipv4WithPortRegex.test(value) || ipv6WithPortRegex.test(value);
       }
@@ -155,7 +155,7 @@ const ServerConfigSchema = Yup.object().shape({
   }),
 });
 
-const ServerConfig: React.FC = () => {
+const ServerConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
   const [customProtocol, setCustomProtocol] = React.useState<string>('');
 
@@ -443,8 +443,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.tls?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('tls.enabled', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('tls.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="tls.enabled"
                     />
@@ -505,8 +505,8 @@ const ServerConfig: React.FC = () => {
                         <Switch
                           checked={values.tls?.skip_verify || false}
                           onChange={(e) => {
-                            setFieldValue('tls.skip_verify', e.target.checked);
-                            setHasUnsavedChanges(true);
+                            setFieldValue('tls.skip_verify', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
                           }}
                           name="tls.skip_verify"
                         />
@@ -598,8 +598,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.auth_header || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_header', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.auth_header', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.auth_header"
                     />
@@ -613,8 +613,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.auth_json || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_json', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.auth_json', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.auth_json"
                     />
@@ -628,8 +628,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.auth_basic || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_basic', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.auth_basic', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.auth_basic"
                     />
@@ -643,8 +643,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.auth_nginx || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_nginx', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.auth_nginx', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.auth_nginx"
                     />
@@ -658,8 +658,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.auth_saslauthd || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_saslauthd', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.auth_saslauthd', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.auth_saslauthd"
                     />
@@ -673,8 +673,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.auth_jwt || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_jwt', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.auth_jwt', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.auth_jwt"
                     />
@@ -688,8 +688,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.disabled_endpoints?.custom_hooks || false}
                       onChange={(e) => {
-                        setFieldValue('disabled_endpoints.custom_hooks', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('disabled_endpoints.custom_hooks', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="disabled_endpoints.custom_hooks"
                     />
@@ -703,8 +703,8 @@ const ServerConfig: React.FC = () => {
                       <Switch
                           checked={values.disabled_endpoints?.configuration || false}
                           onChange={(e) => {
-                            setFieldValue('disabled_endpoints.configuration', e.target.checked);
-                            setHasUnsavedChanges(true);
+                            setFieldValue('disabled_endpoints.configuration', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
                           }}
                           name="disabled_endpoints.configuration"
                       />
@@ -1076,8 +1076,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.compression?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('compression.enabled', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('compression.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="compression.enabled"
                     />
@@ -1128,8 +1128,8 @@ const ServerConfig: React.FC = () => {
                         multiple
                         value={values.compression?.content_types || []}
                         onChange={(e) => {
-                          setFieldValue('compression.content_types', e.target.value);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('compression.content_types', e.target.value)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                       >
@@ -1164,8 +1164,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.keep_alive?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('keep_alive.enabled', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('keep_alive.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="keep_alive.enabled"
                     />
@@ -1302,8 +1302,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.http_client?.tls?.skip_verify || false}
                       onChange={(e) => {
-                        setFieldValue('http_client.tls.skip_verify', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('http_client.tls.skip_verify', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="http_client.tls.skip_verify"
                     />
@@ -1326,7 +1326,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.log?.json || false}
                       onChange={(e) => {
-                        setFieldValue('log.json', e.target.checked);
+                        setFieldValue('log.json', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="log.json"
                     />
@@ -1340,7 +1341,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.log?.color || false}
                       onChange={(e) => {
-                        setFieldValue('log.color', e.target.checked);
+                        setFieldValue('log.color', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="log.color"
                     />
@@ -1354,7 +1356,8 @@ const ServerConfig: React.FC = () => {
                   <Select
                     value={values.log?.level || 'info'}
                     onChange={(e) => {
-                      setFieldValue('log.level', e.target.value);
+                      setFieldValue('log.level', e.target.value)
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                     label="Log Level"
                   >
@@ -1375,7 +1378,8 @@ const ServerConfig: React.FC = () => {
                       const selectedModules = Array.isArray(e.target.value) 
                         ? e.target.value
                         : [];
-                      setFieldValue('log.debug_modules', selectedModules);
+                      setFieldValue('log.debug_modules', selectedModules)
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                     renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                   >
@@ -1427,7 +1431,8 @@ const ServerConfig: React.FC = () => {
                       const selectedProtocols = Array.isArray(e.target.value) 
                         ? e.target.value
                         : [];
-                      setFieldValue('brute_force_protocols', selectedProtocols);
+                      setFieldValue('brute_force_protocols', selectedProtocols)
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                     renderValue={(selected) => (Array.isArray(selected) ? selected.map(s => s.toLowerCase()).join(', ') : '')}
                   >
@@ -1478,8 +1483,8 @@ const ServerConfig: React.FC = () => {
                           setFieldValue('brute_force_protocols', [
                             ...currentProtocols,
                             customProtocol.trim()
-                          ]);
-                          setCustomProtocol('');
+                          ])
+                              .then(() => setHasUnsavedChanges(true));
                         }
                       }
                     }}
@@ -1528,7 +1533,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.dns?.resolve_client_ip || false}
                       onChange={(e) => {
-                        setFieldValue('dns.resolve_client_ip', e.target.checked);
+                        setFieldValue('dns.resolve_client_ip', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="dns.resolve_client_ip"
                     />
@@ -1551,7 +1557,8 @@ const ServerConfig: React.FC = () => {
                     <Switch
                       checked={values.master_user?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('master_user.enabled', e.target.checked);
+                        setFieldValue('master_user.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="master_user.enabled"
                     />
