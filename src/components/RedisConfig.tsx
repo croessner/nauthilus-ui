@@ -206,10 +206,10 @@ const RedisConfigSchema = Yup.object().shape({
   }),
 });
 
-const RedisConfig: React.FC = () => {
+const RedisConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
-  // Reset unsaved changes flag when component mounts
+  // Reset unsaved changes flag when the component mounts
   React.useEffect(() => {
     setHasUnsavedChanges(false);
   }, [setHasUnsavedChanges]);
@@ -517,7 +517,8 @@ const RedisConfig: React.FC = () => {
                     <Switch
                       checked={values.redis.tls?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('redis.tls.enabled', e.target.checked);
+                        setFieldValue('redis.tls.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="redis.tls.enabled"
                     />
@@ -563,7 +564,8 @@ const RedisConfig: React.FC = () => {
                         <Switch
                           checked={values.redis.tls?.skip_verify || false}
                           onChange={(e) => {
-                            setFieldValue('redis.tls.skip_verify', e.target.checked);
+                            setFieldValue('redis.tls.skip_verify', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
                           }}
                           name="redis.tls.skip_verify"
                         />
@@ -649,10 +651,10 @@ const RedisConfig: React.FC = () => {
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Replica Addresses</Typography>
                   <FieldArray name="redis.replica.addresses">
-                    {({ push, remove, form }) => (
+                    {({ push, remove}) => (
                       <div>
                         {values.redis.replica?.addresses && values.redis.replica.addresses.length > 0 ? (
-                          values.redis.replica.addresses.map((address, index) => (
+                          values.redis.replica.addresses.map((_address, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                               <Field
                                 as={TextField}
@@ -729,10 +731,10 @@ const RedisConfig: React.FC = () => {
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Sentinel Addresses</Typography>
                   <FieldArray name="redis.sentinels.addresses">
-                    {({ push, remove, form }) => (
+                    {({ push, remove}) => (
                       <div>
                         {values.redis.sentinels?.addresses && values.redis.sentinels.addresses.length > 0 ? (
-                          values.redis.sentinels.addresses.map((address, index) => (
+                          values.redis.sentinels.addresses.map((_address, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                               <Field
                                 as={TextField}
@@ -828,10 +830,10 @@ const RedisConfig: React.FC = () => {
                 <Grid item xs={12}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Cluster Addresses</Typography>
                   <FieldArray name="redis.cluster.addresses">
-                    {({ push, remove, form }) => (
+                    {({ push, remove}) => (
                       <div>
                         {values.redis.cluster?.addresses && values.redis.cluster.addresses.length > 0 ? (
-                          values.redis.cluster.addresses.map((address, index) => (
+                          values.redis.cluster.addresses.map((_address, index) => (
                             <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                               <Field
                                 as={TextField}
@@ -918,8 +920,8 @@ const RedisConfig: React.FC = () => {
                       <Switch
                         checked={values.redis.cluster?.route_by_latency || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.route_by_latency', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('redis.cluster.route_by_latency', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="redis.cluster.route_by_latency"
                       />
@@ -933,8 +935,8 @@ const RedisConfig: React.FC = () => {
                       <Switch
                         checked={values.redis.cluster?.route_randomly || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.route_randomly', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('redis.cluster.route_randomly', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="redis.cluster.route_randomly"
                       />
@@ -948,8 +950,8 @@ const RedisConfig: React.FC = () => {
                       <Switch
                         checked={values.redis.cluster?.route_reads_to_replicas || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="redis.cluster.route_reads_to_replicas"
                       />
