@@ -36,7 +36,7 @@ interface UserProviderProps {
   children: ReactNode;
 }
 
-export const UserProvider = ({ children }: UserProviderProps): JSX.Element => {
+export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element => {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [user, setUser] = useState<{ username: string; roles: string[] } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
@@ -61,7 +61,9 @@ export const UserProvider = ({ children }: UserProviderProps): JSX.Element => {
       }
     };
 
-    checkAuth();
+    (async () => {
+      await checkAuth();
+    })();
   }, []);
 
   // Login function
@@ -172,7 +174,8 @@ export const UserProvider = ({ children }: UserProviderProps): JSX.Element => {
         // Update user with preserved profile data
         await userManager.addUser(username, password, userToUpdate.roles, profileData);
       } else {
-        throw new Error('User not found');
+        console.error('User not found');
+        return;
       }
     } catch (err) {
       console.error('Update password error:', err);
@@ -189,12 +192,12 @@ export const UserProvider = ({ children }: UserProviderProps): JSX.Element => {
     setError(null);
 
     try {
-      // Get current user to preserve roles and other data
+      // Get the current user to preserve roles and other data
       const users = await userManager.getUsers();
       const userToUpdate = users.find(u => u.username === username);
 
       if (userToUpdate) {
-        // Only add lastModified timestamp if we're updating something other than just lastLogin
+        // Only add the lastModified timestamp if we're updating something other than just lastLogin
         const updatedProfileData = {
           ...profileData
         };
@@ -212,7 +215,8 @@ export const UserProvider = ({ children }: UserProviderProps): JSX.Element => {
           setUser(currentUser);
         }
       } else {
-        throw new Error('User not found');
+        console.error('User not found');
+        return;
       }
     } catch (err) {
       console.error('Update user profile error:', err);

@@ -18,7 +18,7 @@ interface ThemeProviderProps {
   children: ReactNode;
 }
 
-export const ThemeProvider = ({ children }: ThemeProviderProps): JSX.Element => {
+export const ThemeProvider = ({ children }: ThemeProviderProps): React.JSX.Element => {
   // Initialize theme mode from localStorage or default to 'light'
   const [mode, setMode] = useState<PaletteMode>(() => {
     const storedMode = localStorage.getItem(THEME_STORAGE_KEY);
@@ -59,13 +59,13 @@ export const ThemeProvider = ({ children }: ThemeProviderProps): JSX.Element => 
           contained: {
             ...(mode === 'dark' && {
               backgroundColor: '#8c9eff', // Much lighter blue background for buttons in dark mode
-              color: '#000000', // Dark text color for better contrast with light background
+              color: '#000000', // Dark text color for better contrast with a light background
               '&:hover': {
                 backgroundColor: '#9fa8da', // Slightly lighter on hover
               },
             }),
           },
-          // Ensure default variant (no color prop specified) gets the new styling
+          // Ensure the default variant (no color prop specified) gets the new styling
           containedPrimary: {
             ...(mode === 'dark' && {
               backgroundColor: '#8c9eff', // Same lighter background
