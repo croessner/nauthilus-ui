@@ -13,9 +13,8 @@ import {
 import { useAuth } from '../contexts/AuthContext';
 import { useUser } from '../contexts/UserContext';
 import { useNavigate } from 'react-router-dom';
-import * as userManager from '../utils/userManager';
 
-const LoginPage: React.FC = () => {
+const LoginPage = (): React.JSX.Element => {
   const { auth, login: authLogin } = useAuth();
   const { login: userLogin } = useUser();
   const [username, setUsername] = useState('');
