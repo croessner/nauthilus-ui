@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { 
   TextField, 
-  Grid, 
-  Button, 
+  Button,
   Box,
   Typography,
   CircularProgress,
-  Tooltip,
   IconButton,
   Tabs,
   Tab,
@@ -18,7 +16,6 @@ import {
   Dialog,
   DialogTitle,
   DialogContent,
-  DialogContentText,
   DialogActions,
   MenuItem,
   Select,
@@ -35,7 +32,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { extractErrorMessage, prepareAuthParams } from '../utils/apiUtils';
+import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil } from '../utils/apiUtils';
 
 // Brute force protection types
 interface BruteForceListItem {
@@ -85,7 +82,7 @@ const BruteForceConfig: React.FC = () => {
   const [searchType, setSearchType] = useState<'ip' | 'user'>('ip');
   const [ruleNames, setRuleNames] = useState<string[]>([]);
 
-  // Function to fetch brute force list
+  // Function to fetch the brute force list
   const fetchBruteForceList = useCallback(async (connectionConfig: any) => {
     if (!connectionConfig.backend_url) {
       setNotification({
@@ -212,7 +209,7 @@ const BruteForceConfig: React.FC = () => {
         setConnectionStatus('connected');
         setStatusMessage('Connected to Nauthilus backend (ping successful)');
 
-        // Fetch brute force list if connection is successful
+        // Fetch the brute force list if the connection is successful
         await fetchBruteForceList(connectionConfig);
       } else {
         setConnectionStatus('disconnected');
@@ -226,26 +223,20 @@ const BruteForceConfig: React.FC = () => {
     }
   }, [setConnectionStatus, setStatusMessage, fetchBruteForceList]);
 
-  // Check connection status and load runtime settings when component mounts
+  // Memoize the function that returns runtimeConnection to avoid infinite loops
+  const getRuntimeConnection = useCallback(() => runtimeConnection, [runtimeConnection]);
+
+  // Check connection status and load runtime settings when the component mounts
   useEffect(() => {
-    // Load runtime settings when component mounts
-    const loadSettings = async () => {
-      try {
-        const userId = await getCurrentUserId();
-        await loadRuntimeSettings(userId, currentProfileName);
-
-        // Check connection status after loading runtime settings
-        // This ensures we have the latest connection data
-        const connectionToCheck = runtimeConnection || config?.connection;
-        if (connectionToCheck?.backend_url) {
-          checkConnection(connectionToCheck);
-        }
-      } catch (error) {
-        console.error('Failed to load runtime settings:', error);
-      }
-    };
-
-    loadSettings();
+    (async () => {
+      await loadSettingsUtil(
+        getCurrentUserId,
+        loadRuntimeSettings,
+        currentProfileName,
+        checkConnection,
+        getRuntimeConnection
+      );
+    })();
 
     // Extract rule names from brute force buckets in the configuration
     if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
@@ -257,7 +248,7 @@ const BruteForceConfig: React.FC = () => {
         setRuleNames(configRuleNames);
       }
     }
-  }, [config, checkConnection, loadRuntimeSettings, currentProfileName]);
+  }, [config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
 
   // Function to free user by account
   const freeUserByAccount = async (connectionConfig: any, username: string) => {
@@ -313,7 +304,7 @@ const BruteForceConfig: React.FC = () => {
       });
 
       // Refresh the brute force list
-      fetchBruteForceList(connectionConfig);
+      await fetchBruteForceList(connectionConfig);
     } catch (error) {
       console.error('Error freeing user by account:', error);
       setNotification({
@@ -353,7 +344,7 @@ const BruteForceConfig: React.FC = () => {
         proxyUrl.searchParams.append('authValue', authValue);
       }
 
-      // Prepare request body
+      // Prepare the request body
       const requestBody: any = {
         ip_address: ipAddress,
         rule_name: ruleName
@@ -396,7 +387,7 @@ const BruteForceConfig: React.FC = () => {
       });
 
       // Refresh the brute force list
-      fetchBruteForceList(connectionConfig);
+      await fetchBruteForceList(connectionConfig);
     } catch (error) {
       console.error('Error freeing user by IP address:', error);
       setNotification({
@@ -411,17 +402,17 @@ const BruteForceConfig: React.FC = () => {
   };
 
   // Function to handle tab change
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
-  // Function to open user dialog
+  // Function to open a user dialog
   const handleOpenUserDialog = (username: string) => {
     setSelectedUser(username);
     setOpenUserDialog(true);
   };
 
-  // Function to open IP dialog
+  // Function to open an IP dialog
   const handleOpenIpDialog = (ipAddress: string, ruleName: string = '*', protocol: string = '', oidcCid: string = '') => {
     setSelectedIp(ipAddress);
     setSelectedRule(ruleName);
@@ -431,7 +422,7 @@ const BruteForceConfig: React.FC = () => {
   };
 
   // Check if we have a valid connection configuration
-  const hasValidConnection = (runtimeConnection || config?.connection)?.backend_url;
+  const hasValidConnection = runtimeConnection?.backend_url;
 
   return (
     <>
@@ -466,7 +457,7 @@ const BruteForceConfig: React.FC = () => {
                 <Button 
                   variant="outlined" 
                   color="primary"
-                  onClick={() => fetchBruteForceList(runtimeConnection || config?.connection)}
+                  onClick={() => fetchBruteForceList(runtimeConnection)}
                   disabled={isLoadingBruteForceList}
                   startIcon={isLoadingBruteForceList ? <CircularProgress size={20} /> : <RefreshIcon />}
                 >
@@ -633,7 +624,7 @@ const BruteForceConfig: React.FC = () => {
               <Button 
                 variant="outlined" 
                 color="primary"
-                onClick={() => checkConnection(runtimeConnection || config?.connection)}
+                onClick={() => checkConnection(runtimeConnection)}
                 sx={{ mt: 2 }}
                 startIcon={<RefreshIcon />}
               >
@@ -668,7 +659,7 @@ const BruteForceConfig: React.FC = () => {
             Cancel
           </Button>
           <Button 
-            onClick={() => freeUserByAccount(runtimeConnection || config?.connection, selectedUser)}
+            onClick={() => freeUserByAccount(runtimeConnection, selectedUser)}
             color="secondary" 
             variant="contained"
             disabled={isProcessing}
@@ -862,7 +853,7 @@ const BruteForceConfig: React.FC = () => {
             Cancel
           </Button>
           <Button 
-            onClick={() => freeUserByIp(runtimeConnection || config?.connection, selectedIp, selectedRule, selectedProtocol || undefined, selectedOidcCid || undefined)}
+            onClick={() => freeUserByIp(runtimeConnection, selectedIp, selectedRule, selectedProtocol || undefined, selectedOidcCid || undefined)}
             color="secondary" 
             variant="contained"
             disabled={isProcessing}

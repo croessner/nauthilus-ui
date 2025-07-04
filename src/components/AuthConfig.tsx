@@ -141,6 +141,11 @@ const AuthConfig = (): React.JSX.Element | null => {
                       onChange={(e) => {
                         setFieldValue('basic_auth.enabled', e.target.checked)
                             .then(() => setHasUnsavedChanges(true));
+                        // If enabling Basic Auth, disable JWT Auth
+                        if (e.target.checked && values.jwt_auth?.enabled) {
+                          setFieldValue('jwt_auth.enabled', false)
+                              .then(() => setHasUnsavedChanges(true));
+                        }
                       }}
                       name="basic_auth.enabled"
                     />
@@ -198,6 +203,11 @@ const AuthConfig = (): React.JSX.Element | null => {
                       onChange={(e) => {
                         setFieldValue('jwt_auth.enabled', e.target.checked)
                             .then(() => setHasUnsavedChanges(true));
+                        // If enabling JWT Auth, disable Basic Auth
+                        if (e.target.checked && values.basic_auth?.enabled) {
+                          setFieldValue('basic_auth.enabled', false)
+                              .then(() => setHasUnsavedChanges(true));
+                        }
                       }}
                       name="jwt_auth.enabled"
                     />

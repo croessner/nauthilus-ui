@@ -494,5 +494,4 @@ export interface NauthilusConfig {
   relay_domains?: RelayDomainsConfig;
   backend_server_monitoring?: BackendServerMonitoringConfig;
   cleartext_networks?: string[];
-  connection?: ConnectionConfig;
 }

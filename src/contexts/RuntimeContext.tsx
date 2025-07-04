@@ -1,10 +1,24 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import axios from 'axios';
-import { LuaHooksConfig } from '../types/config';
+import { ConnectionConfig, LuaHooksConfig } from '../types/config';
+import { withErrorHandling as apiWithErrorHandling } from '../utils/apiUtils';
+
+const DEFAULT_CONFIG: ConnectionConfig = {
+  backend_url: 'http://127.0.0.1:8080',
+  basic_auth: {
+    enabled: false,
+    username: '',
+    password: ''
+  },
+  jwt_auth: {
+    enabled: false,
+    token: ''
+  }
+}
 
 // Define the context type
 interface RuntimeContextType {
-  connection: any | null;
+  connection: ConnectionConfig;
   hooks: LuaHooksConfig | null;
   loading: boolean;
   error: string | null;
@@ -27,8 +41,8 @@ interface RuntimeProviderProps {
   children: ReactNode;
 }
 
-export const RuntimeProvider = ({ children }: RuntimeProviderProps): JSX.Element => {
-  const [connection, setConnection] = useState<any | null>(null);
+export const RuntimeProvider = ({ children }: RuntimeProviderProps): React.JSX.Element => {
+  const [connection, setConnection] = useState<any | null>(DEFAULT_CONFIG);
   const [hooks, setHooks] = useState<LuaHooksConfig | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
@@ -38,17 +52,7 @@ export const RuntimeProvider = ({ children }: RuntimeProviderProps): JSX.Element
     operation: () => Promise<T> | T,
     errorMessage: string
   ): Promise<T | undefined> => {
-    try {
-      setLoading(true);
-      setError(null);
-      return await operation();
-    } catch (err) {
-      setError(errorMessage);
-      console.error(`${errorMessage}:`, err);
-      return undefined;
-    } finally {
-      setLoading(false);
-    }
+    return apiWithErrorHandling(setLoading, setError, operation, errorMessage);
   }, [setLoading, setError]);
 
   // Function to load runtime settings
@@ -63,8 +67,8 @@ export const RuntimeProvider = ({ children }: RuntimeProviderProps): JSX.Element
           setConnection(response.data.connection);
           console.log('Connection settings loaded from runtime collection');
         } else {
-          setConnection(null);
-          console.log('No connection settings found in runtime collection');
+          setConnection(DEFAULT_CONFIG);
+          console.log('No connection settings found in runtime collection, using default config');
         }
 
         // Update hooks settings if they exist
@@ -114,7 +118,7 @@ export const RuntimeProvider = ({ children }: RuntimeProviderProps): JSX.Element
 
   // Provide the context value
   const contextValue: RuntimeContextType = {
-    connection,
+    connection: connection || DEFAULT_CONFIG,
     hooks,
     loading,
     error,

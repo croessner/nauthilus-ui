@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
 import axios from 'axios';
+import { withErrorHandling as apiWithErrorHandling, prepareAuthParams } from '../utils/apiUtils';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -37,10 +38,6 @@ interface ConfigContextType {
 const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
 // Storage keys for the configuration (kept for backward compatibility)
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const PROFILES_STORAGE_KEY = 'nauthilus-profiles';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const CURRENT_PROFILE_KEY = 'nauthilus-current-profile';
 const DEFAULT_PROFILE_NAME = 'Default';
 
 // Helper function to get the current user ID
@@ -49,38 +46,20 @@ const getCurrentUserId = async (): Promise<string> => {
   return 'default-user';
 };
 
-// Synchronous version for immediate use
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-const getCurrentUserIdSync = (): string => {
-  // Always return default-user since we're storing userId-Session-Infos only in browser
-  return 'default-user';
-};
-
-  // Default empty configuration
+// Default empty configuration
 const DEFAULT_CONFIG: NauthilusConfig = {
   server: {
     address: '127.0.0.1:8080',
     instance_name: 'nauthilus',
     max_concurrent_requests: 100,
     max_password_history_entries: 10,
+    backends: ['cache'],
     redis: {
       database_number: 0,
       prefix: 'nt:',
       master: {
         address: '127.0.0.1:6379'
       }
-    }
-  },
-  connection: {
-    backend_url: 'http://127.0.0.1:8080',
-    basic_auth: {
-      enabled: false,
-      username: '',
-      password: ''
-    },
-    jwt_auth: {
-      enabled: false,
-      token: ''
     }
   }
 };
@@ -90,7 +69,7 @@ interface ConfigProviderProps {
   children: ReactNode;
 }
 
-export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element => {
+export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Element => {
   const [config, setConfig] = useState<NauthilusConfig | null>(null);
   const [profiles, setProfiles] = useState<ConfigProfile[]>([]);
   const [currentProfileName, setCurrentProfileName] = useState<string>(DEFAULT_PROFILE_NAME);
@@ -103,17 +82,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
     operation: () => Promise<T> | T,
     errorMessage: string
   ): Promise<T | undefined> => {
-    try {
-      setLoading(true);
-      setError(null);
-      return await operation();
-    } catch (err) {
-      setError(errorMessage);
-      console.error(`${errorMessage}:`, err);
-      return undefined;
-    } finally {
-      setLoading(false);
-    }
+    return apiWithErrorHandling(setLoading, setError, operation, errorMessage);
   }, [setLoading, setError]);
 
   // Helper functions for validation
@@ -316,25 +285,6 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
         validateLuaConfiguration(config, errors);
         break;
 
-      case 'connection':
-        // No specific validation for connection section
-        // Just ensure it exists to avoid errors
-        if (!config.connection) {
-          config.connection = {
-            backend_url: '',
-            basic_auth: {
-              enabled: false,
-              username: '',
-              password: ''
-            },
-            jwt_auth: {
-              enabled: false,
-              token: ''
-            }
-          };
-        }
-        break;
-
       default:
         // For other sections, use the general validation
         errors.push(...validateConfig(config));
@@ -497,11 +447,6 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
         (filteredConfig as any)[key] = config[key];
       }
     });
-
-    // Preserve connection settings if they exist
-    if (config.connection) {
-      filteredConfig.connection = config.connection;
-    }
 
     return filteredConfig;
   };
@@ -985,22 +930,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
       }
 
       // Prepare authentication parameters for the proxy
-      let authType = '';
-      let authValue = '';
-
-      // Add Basic Auth if enabled
-      if (connectionConfig.basic_auth?.enabled && 
-          connectionConfig.basic_auth.username && 
-          connectionConfig.basic_auth.password) {
-        authType = 'basic';
-        authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-      }
-
-      // For JWT Auth, use existing token if available
-      if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
-        authType = 'bearer';
-        authValue = connectionConfig.jwt_auth.token;
-      }
+      const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
       const proxyUrl = new URL('/proxy/config/load', window.location.origin);
@@ -1061,29 +991,24 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
       // Parse the configuration
       let newConfig: NauthilusConfig;
 
-      try {
-        // If the result is a string (YAML), parse it
-        if (typeof data.result === 'string') {
-          newConfig = yaml.load(data.result) as NauthilusConfig;
-        } 
-        // If the result is already an object, use it directly
-        else if (typeof data.result === 'object') {
-          newConfig = data.result as NauthilusConfig;
-        }
-        else {
-          throw new Error('Unexpected response format');
-        }
+      // If the result is a string (YAML), parse it
+      if (typeof data.result === 'string') {
+        newConfig = yaml.load(data.result) as NauthilusConfig;
+      }
+      // If the result is already an object, use it directly
+      else if (typeof data.result === 'object') {
+        newConfig = data.result as NauthilusConfig;
+      }
+      else {
+        throw new Error('Unexpected response format');
+      }
 
+      try {
         // Filter out unknown settings
         newConfig = filterUnknownSettings(newConfig);
 
         // Initialize feature configurations
         newConfig = initializeFeatureConfigurations(newConfig);
-
-        // Ensure connection configuration is preserved
-        if (!newConfig.connection) {
-          newConfig.connection = connectionConfig;
-        }
 
         // Check for custom hooks in the loaded configuration
         if (newConfig.lua?.custom_hooks && newConfig.lua?.custom_hooks.length > 0) {
@@ -1123,7 +1048,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
               // Create or update the hook configuration
               if (newConfig.lua && newConfig.lua.hooks) {
                 // If the hook already exists in the current config, preserve its enabled state
-                if (currentHook && typeof currentHook.enabled === 'boolean') {
+                if (currentHook) {
                   newConfig.lua.hooks[hookName] = {
                     ...newHook,
                     endpoint_path: newHook?.endpoint_path || '',
@@ -1149,10 +1074,10 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
           // For each hook in the new config that also exists in the current config
           Object.keys(newConfig.lua?.hooks).forEach(hookName => {
             const typedHookName = hookName as keyof LuaHooksConfig;
-            const currentHook = config.lua?.hooks?.[typedHookName];
+            const currentHook = config?.lua?.hooks?.[typedHookName];
             const newHook = newConfig.lua?.hooks?.[typedHookName];
 
-            if (currentHook && newHook && typeof currentHook.enabled === 'boolean') {
+            if (currentHook && newHook) {
               // Preserve the enabled state from the current config
               if (newConfig.lua && newConfig.lua.hooks) {
                 newConfig.lua.hooks[typedHookName] = {
@@ -1172,7 +1097,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): JSX.Element =
         throw new Error(`Failed to parse configuration: ${error instanceof Error ? error.message : String(error)}`);
       }
     }, 'Failed to load configuration from backend. Please try again.');
-  }, [withErrorHandling, updateProfilesWithConfig]);
+  }, [withErrorHandling, config?.lua?.hooks, updateProfilesWithConfig]);
 
   // Provide the context value
   const contextValue: ConfigContextType = {

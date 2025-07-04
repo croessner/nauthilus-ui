@@ -20,7 +20,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
-import { extractErrorMessage } from '../utils/apiUtils';
+import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState } from '../utils/apiUtils';
 
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
@@ -68,7 +68,6 @@ const ConnectionConfigSchema = Yup.object().shape({
 // Connection status type
 type ConnectionStatus = 'unknown' | 'connected' | 'disconnected' | 'checking';
 
-
 const ConnectionConfig: React.FC = () => {
   const { config, hasUnsavedChanges, setHasUnsavedChanges, loadConfigFromBackend, currentProfileName } = useConfig();
   const { saveRuntimeSettings, connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings } = useRuntime();
@@ -80,70 +79,29 @@ const ConnectionConfig: React.FC = () => {
     severity: 'info'
   });
 
-
-
   // Function to check connection to the backend
   const checkConnection = useCallback(async (connectionConfig: any) => {
-    if (!connectionConfig.backend_url) {
-      setConnectionStatus('unknown');
-      setStatusMessage('No backend URL configured');
-      return;
-    }
-
-    setConnectionStatus('checking');
-    setStatusMessage('Checking connection...');
-
-    try {
-      // Use the proxy endpoint to make the request server-side
-      // This avoids CORS issues by making the request through Node.js
-      const proxyUrl = new URL('/proxy/ping', window.location.origin);
-      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
-
-      const response = await fetch(proxyUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        setConnectionStatus('connected');
-        setStatusMessage('Connected to Nauthilus backend (ping successful)');
-      } else {
-        setConnectionStatus('disconnected');
-        const errorMessage = await extractErrorMessage(response);
-        setStatusMessage(`Failed to connect: ${errorMessage}`);
-      }
-    } catch (error) {
-      console.error('Error checking connection:', error);
-      setConnectionStatus('disconnected');
-      setStatusMessage(`Connection error: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    await checkConnectionUtil(connectionConfig, setConnectionStatus, setStatusMessage);
   }, [setConnectionStatus, setStatusMessage]);
 
-  // Reset unsaved changes flag and load runtime settings when component mounts
+  // Memoize the function that returns runtimeConnection to avoid infinite loops
+  const getRuntimeConnection = useCallback(() => runtimeConnection, [runtimeConnection]);
+
+  // Reset unsaved changes flag and load runtime settings when the component mounts
   useEffect(() => {
     setHasUnsavedChanges(false);
 
-    // Load runtime settings when component mounts
-    const loadSettings = async () => {
-      try {
-        const userId = await getCurrentUserId();
-        await loadRuntimeSettings(userId, currentProfileName);
-
-        // Check connection status after loading runtime settings
-        // This ensures we have the latest connection data
-        const connectionToCheck = runtimeConnection || config?.connection;
-        if (connectionToCheck?.backend_url) {
-          checkConnection(connectionToCheck);
-        }
-      } catch (error) {
-        console.error('Failed to load runtime settings:', error);
-      }
-    };
-
-    loadSettings();
-  }, [setHasUnsavedChanges, config, checkConnection, loadRuntimeSettings, currentProfileName]);
+    // Load runtime settings using a utility function
+    (async () => {
+      await loadSettingsUtil(
+          getCurrentUserId,
+          loadRuntimeSettings,
+          currentProfileName,
+          checkConnection,
+          getRuntimeConnection
+      );
+    })();
+  }, [setHasUnsavedChanges, config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
 
   if (!config) {
     return null;
@@ -216,7 +174,7 @@ const ConnectionConfig: React.FC = () => {
 
   const handleSubmit = async (values: any) => {
     try {
-      // If JWT Auth is enabled and we have username/password but no token, fetch a token
+      // If JWT Auth is enabled, and we have a username/password but no token, fetch a token
       if (values.jwt_auth?.enabled && 
           values.jwt_auth.username && 
           values.jwt_auth.password && 
@@ -235,7 +193,7 @@ const ConnectionConfig: React.FC = () => {
         }
       }
 
-      // Save the full connection data to runtime collection
+      // Save the full connection data to the runtime collection
       const userId = await getCurrentUserId();
       await saveRuntimeSettings(
         userId,
@@ -248,8 +206,18 @@ const ConnectionConfig: React.FC = () => {
         runtimeHooks || {}
       );
 
+      // Reset settings state to force a reload on next component mount
+      // This is necessary because the connection settings have changed
+      resetSettingsState();
+
       // Check connection after saving
-      checkConnection(values);
+      await checkConnection(values);
+
+      setNotification({
+        open: true,
+        message: 'Connection settings saved successfully',
+        severity: 'success'
+      });
     } catch (error) {
       console.error('Error updating connection configuration:', error);
       setNotification({
@@ -267,9 +235,9 @@ const ConnectionConfig: React.FC = () => {
   const resetJwtToken = async () => {
     try {
       // Get the current connection data
-      const connectionData = runtimeConnection || config.connection || {};
+      const connectionData = runtimeConnection || {};
 
-      // Create updated connection data with reset JWT token
+      // Create updated connection data with a reset JWT token
       const updatedConnection = {
         ...connectionData,
         jwt_auth: {
@@ -280,7 +248,7 @@ const ConnectionConfig: React.FC = () => {
         }
       };
 
-      // Save the full updated connection data to runtime collection
+      // Save the full updated connection data to the runtime collection
       const userId = await getCurrentUserId();
       await saveRuntimeSettings(
         userId,
@@ -288,6 +256,10 @@ const ConnectionConfig: React.FC = () => {
         updatedConnection,
         runtimeHooks || {}
       );
+
+      // Reset settings state to force a reload on next component mount
+      // This is necessary because the connection settings have changed
+      resetSettingsState();
 
       setNotification({
         open: true,
@@ -385,12 +357,13 @@ const ConnectionConfig: React.FC = () => {
                       <Switch
                         checked={values.basic_auth?.enabled || false}
                         onChange={(e) => {
-                          setFieldValue('basic_auth.enabled', e.target.checked);
+                          setFieldValue('basic_auth.enabled', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                           // If enabling Basic Auth, disable JWT Auth
                           if (e.target.checked && values.jwt_auth?.enabled) {
-                            setFieldValue('jwt_auth.enabled', false);
+                            setFieldValue('jwt_auth.enabled', false)
+                                .then(() => setHasUnsavedChanges(true));
                           }
-                          setHasUnsavedChanges(true);
                         }}
                         name="basic_auth.enabled"
                       />
@@ -450,12 +423,13 @@ const ConnectionConfig: React.FC = () => {
                       <Switch
                         checked={values.jwt_auth?.enabled || false}
                         onChange={(e) => {
-                          setFieldValue('jwt_auth.enabled', e.target.checked);
+                          setFieldValue('jwt_auth.enabled', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                           // If enabling JWT Auth, disable Basic Auth
                           if (e.target.checked && values.basic_auth?.enabled) {
-                            setFieldValue('basic_auth.enabled', false);
+                            setFieldValue('basic_auth.enabled', false)
+                                .then(() => setHasUnsavedChanges(true));
                           }
-                          setHasUnsavedChanges(true);
                         }}
                         name="jwt_auth.enabled"
                       />
@@ -506,7 +480,7 @@ const ConnectionConfig: React.FC = () => {
                       </Grid>
                     </Grid>
 
-                    {/* Token Status and Reset Button */}
+                    {/* Token Status and Reset-Button */}
                     {values.jwt_auth?.token && (
                       <Grid item xs={12} sx={{ mt: 2 }}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
@@ -556,6 +530,10 @@ const ConnectionConfig: React.FC = () => {
                       severity: 'info'
                     });
                     setStatusMessage('Loading configuration from backend...');
+
+                    // Reset settings state to force a reload after configuration is loaded
+                    resetSettingsState();
+
                     loadConfigFromBackend(values)
                       .then(() => {
                         setNotification({

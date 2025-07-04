@@ -10,14 +10,6 @@ import {
   Paper,
   FormControlLabel,
   Switch,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Card,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  CardContent,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  CardHeader,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Divider,
   Snackbar,
   Alert,
   CircularProgress,
@@ -26,22 +18,6 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Tabs,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Tab,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  List,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ListItem,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ListItemText,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  ListItemSecondaryAction,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  IconButton,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  Tooltip,
   Select,
   MenuItem,
   InputLabel,
@@ -51,28 +27,21 @@ import {
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import SecurityIcon from '@mui/icons-material/Security';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import SettingsIcon from '@mui/icons-material/Settings';
-import { LuaHookConfig, LuaHooksConfig, 
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  NauthilusConfig 
-} from '../types/config';
+import { LuaHookConfig, LuaHooksConfig} from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import ValidationErrors from './common/ValidationErrors';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
-import { extractErrorMessage, prepareAuthParams } from '../utils/apiUtils';
+import { extractErrorMessage, prepareAuthParams, checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState } from '../utils/apiUtils';
 
 // Helper functions for path handling
 const extractPathParts = (fullPath: string): { apiVersion: string, customPath: string } => {
   // Default values
   let apiVersion = 'v1';
-  let customPath = '';
+  let customPath: string;
 
-  // Extract API version and custom path from the full path
+  // Extract the API version and custom path from the full path
   const match = fullPath.match(/^\/api\/(v\d+)\/custom\/(.+)$/); // eslint-disable-line no-useless-escape
   if (match) {
     apiVersion = match[1];
@@ -102,7 +71,7 @@ const validateEndpointPath = (value: string, enabled: boolean): true | string =>
   if (!customPath) return 'Custom part of the endpoint path is required';
 
   // Check if the custom path contains invalid characters
-  if (/[^a-zA-Z0-9\-_\/]/.test(customPath)) {
+  if (/[^a-zA-Z0-9\-_/]/.test(customPath)) {
     return 'Custom path can only contain letters, numbers, hyphens, underscores, and slashes';
   }
 
@@ -206,19 +175,15 @@ interface HookOperationResult {
 }
 
 const HooksConfig: React.FC = () => {
-  const { config, 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    updateConfigSection, 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    hasUnsavedChanges, 
-    setHasUnsavedChanges, error, loadConfigFromBackend, currentProfileName } = useConfig();
+  const { config, setHasUnsavedChanges, error, loadConfigFromBackend, currentProfileName } = useConfig();
   const { saveRuntimeSettings, hooks: runtimeHooks, connection: runtimeConnection, loadRuntimeSettings } = useRuntime();
   const [isFormChanged, setIsFormChanged] = useState(false);
   const [testingHook, setTestingHook] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected' | 'checking'>('unknown');
-  const [statusMessage, setStatusMessage] = useState<string>('');
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_statusMessage, setStatusMessage] = useState<string>('');
 
   // State for API version selection
   const [apiVersion, setApiVersion] = useState<string>('v1');
@@ -278,63 +243,24 @@ const HooksConfig: React.FC = () => {
 
   // Function to check connection to the backend
   const checkConnection = useCallback(async (connectionConfig: any) => {
-    if (!connectionConfig.backend_url) {
-      setConnectionStatus('unknown');
-      setStatusMessage('No backend URL configured');
-      return;
-    }
-
-    setConnectionStatus('checking');
-    setStatusMessage('Checking connection...');
-
-    try {
-      // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/ping', window.location.origin);
-      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
-
-      const response = await fetch(proxyUrl.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        setConnectionStatus('connected');
-        setStatusMessage('Connected to Nauthilus backend (ping successful)');
-      } else {
-        setConnectionStatus('disconnected');
-        const errorMessage = await extractErrorMessage(response);
-        setStatusMessage(`Failed to connect: ${errorMessage}`);
-      }
-    } catch (error) {
-      console.error('Error checking connection:', error);
-      setConnectionStatus('disconnected');
-      setStatusMessage(`Connection error: ${error instanceof Error ? error.message : String(error)}`);
-    }
+    await checkConnectionUtil(connectionConfig, setConnectionStatus, setStatusMessage);
   }, [setConnectionStatus, setStatusMessage]);
 
-  // Check connection status and load runtime settings when component mounts
+  // Memoize the function that returns runtimeConnection to avoid infinite loops
+  const getRuntimeConnection = useCallback(() => runtimeConnection, [runtimeConnection]);
+
+  // Check connection status and load runtime settings when the component mounts
   useEffect(() => {
-    // Load runtime settings when component mounts
-    const loadSettings = async () => {
-      try {
-        const userId = await getCurrentUserId();
-        await loadRuntimeSettings(userId, currentProfileName);
-
-        // Check connection status after loading runtime settings
-        // This ensures we have the latest connection data
-        const connectionToCheck = runtimeConnection || config?.connection;
-        if (connectionToCheck?.backend_url) {
-          checkConnection(connectionToCheck);
-        }
-      } catch (error) {
-        console.error('Failed to load runtime settings:', error);
-      }
-    };
-
-    loadSettings();
-  }, [config, checkConnection, loadRuntimeSettings, currentProfileName]);
+    (async () => {
+      await loadSettingsUtil(
+        getCurrentUserId,
+        loadRuntimeSettings,
+        currentProfileName,
+        checkConnection,
+        getRuntimeConnection
+      );
+    })();
+  }, [config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
 
   // Function to test a hook
   const testHook = async (hookName: string, hookConfig: LuaHookConfig) => {
@@ -348,7 +274,7 @@ const HooksConfig: React.FC = () => {
     }
 
     // Use runtime connection if available, otherwise use config connection
-    const connectionConfig = runtimeConnection || config?.connection;
+    const connectionConfig = runtimeConnection;
 
     if (!connectionConfig?.backend_url) {
       setTestResult({
@@ -435,7 +361,7 @@ const HooksConfig: React.FC = () => {
     }
 
     // Use runtime connection if available, otherwise use config connection
-    const connectionConfig = runtimeConnection || config?.connection;
+    const connectionConfig = runtimeConnection;
 
     if (!connectionConfig?.backend_url) {
       return {
@@ -543,7 +469,7 @@ const HooksConfig: React.FC = () => {
     if (!config) return;
 
     try {
-      // Save hooks data to runtime collection
+      // Save hooks data to theruntime collection
       const userId = await getCurrentUserId();
       await saveRuntimeSettings(
         userId,
@@ -552,9 +478,19 @@ const HooksConfig: React.FC = () => {
         values.hooks
       );
 
+      // Reset settings state to force a reload on next component mount
+      // This is necessary because the hooks settings have changed
+      resetSettingsState();
+
       // Reset unsaved changes flag after saving
       setHasUnsavedChanges(false);
       setIsFormChanged(false);
+
+      setTestResult({
+        success: true,
+        message: 'Hooks settings saved successfully'
+      });
+      setSnackbarOpen(true);
     } catch (error) {
       console.error('Failed to save hooks settings:', error);
       setTestResult({
@@ -1139,7 +1075,7 @@ const HooksConfig: React.FC = () => {
       {/* Display validation errors at the top of the form */}
       <ValidationErrors error={error} />
 
-      {!(runtimeConnection?.backend_url || config?.connection?.backend_url) && (
+      {!runtimeConnection?.backend_url && (
         <Alert severity="warning" sx={{ mb: 3 }}>
           Hook functionality is not available because there is no valid connection configured. 
           Please configure a connection in the Connection menu first.
@@ -1156,10 +1092,10 @@ const HooksConfig: React.FC = () => {
           const hasChanged = checkFormChanged(values, initialValues);
           setIsFormChanged(hasChanged);
           setHasUnsavedChanges(hasChanged);
-          return {}; // Return empty object (no validation errors)
+          return {}; // Return an empty object (no validation errors)
         }}
       >
-        {({ values, errors, touched, handleChange, setFieldValue }) => (
+        {({ values, errors, touched, setFieldValue }) => (
           <Form>
             <FormSection title="Lua Hooks Configuration">
               <Typography variant="body1" gutterBottom>
@@ -1188,7 +1124,8 @@ const HooksConfig: React.FC = () => {
                           setFieldValue(
                             `hooks.${hookName}.endpoint_path`,
                             combinePathParts(e.target.value, customPath)
-                          );
+                          )
+                              .then(() => setHasUnsavedChanges(true));
                         }
                       });
                       setHasUnsavedChanges(true);
@@ -1232,8 +1169,8 @@ const HooksConfig: React.FC = () => {
                           <Switch
                             checked={hookConfig.enabled}
                             onChange={(e) => {
-                              setFieldValue(`hooks.${hookName}.enabled`, e.target.checked);
-                              setHasUnsavedChanges(true);
+                              setFieldValue(`hooks.${hookName}.enabled`, e.target.checked)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                             name={`hooks.${hookName}.enabled`}
                           />
@@ -1250,9 +1187,11 @@ const HooksConfig: React.FC = () => {
                         onChange={(e) => {
                           // Combine the API version with the custom path entered by the user
                           const newEndpointPath = combinePathParts(apiVersion, e.target.value);
-                          setFieldValue(`hooks.${hookName}.endpoint_path`, newEndpointPath);
-                          setHasUnsavedChanges(true);
-                          setIsFormChanged(true);
+                          setFieldValue(`hooks.${hookName}.endpoint_path`, newEndpointPath)
+                              .then(() => {
+                                setHasUnsavedChanges(true)
+                                setIsFormChanged(true);
+                              });
                         }}
                         disabled={!hookConfig.enabled}
                         error={Boolean(
@@ -1304,13 +1243,16 @@ const HooksConfig: React.FC = () => {
                     });
                     setStatusMessage('Loading configuration from backend...');
 
+                    // Reset settings state to force a reload after configuration is loaded
+                    resetSettingsState();
+
                     // Log the current hooks configuration before loading
                     console.log('Hooks configuration before loading:', config?.lua?.hooks);
                     console.log('Custom hooks configuration before loading:', config?.lua?.custom_hooks);
 
-                    loadConfigFromBackend(runtimeConnection || config?.connection)
+                    loadConfigFromBackend(runtimeConnection)
                       .then(() => {
-                        // Log the hooks configuration after loading
+                        // Log the hooks-configuration after loading
                         console.log('Hooks configuration after loading:', config?.lua?.hooks);
                         console.log('Custom hooks configuration after loading:', config?.lua?.custom_hooks);
 
