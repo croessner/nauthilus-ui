@@ -33,7 +33,7 @@ const MonitoringConfigSchema = Yup.object().shape({
   }),
 });
 
-const MonitoringConfig: React.FC = () => {
+const MonitoringConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
   // Reset unsaved changes flag when the component mounts
