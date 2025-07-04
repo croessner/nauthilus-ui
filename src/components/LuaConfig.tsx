@@ -28,6 +28,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import { LuaFeatureConfig, LuaFilterConfig, LuaActionConfig, LuaCustomHookConfig, LuaSearchProtocolConfig, LuaConfig as LuaConfigType, NauthilusConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import ValidationErrors from './common/ValidationErrors';
+import ProtocolsConfig from './ProtocolsConfig';
 
 // Validation schema
 const LuaConfigSchema = Yup.object().shape({
@@ -146,7 +147,7 @@ const LuaConfig: React.FC = () => {
     optional_lua_backends: config?.lua?.optional_lua_backends || {},
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
@@ -171,10 +172,8 @@ const LuaConfig: React.FC = () => {
     };
 
 
-    updateConfig(updatedConfig);
-
-    // Reset unsaved changes flag after saving
-    setHasUnsavedChanges(false);
+    updateConfig(updatedConfig)
+        .then(() => setHasUnsavedChanges(false))
   };
 
   return (
@@ -258,8 +257,8 @@ const LuaConfig: React.FC = () => {
                             onClick={() => {
                               const newFeatures = [...values.features];
                               newFeatures.splice(index, 1);
-                              setFieldValue('features', newFeatures);
-                              setHasUnsavedChanges(true);
+                              setFieldValue('features', newFeatures)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                           >
                             <DeleteIcon />
@@ -278,8 +277,8 @@ const LuaConfig: React.FC = () => {
                       setFieldValue('features', [
                         ...values.features,
                         { name: '', script_path: '' },
-                      ]);
-                      setHasUnsavedChanges(true);
+                      ])
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                   >
                     Add Feature
@@ -339,8 +338,8 @@ const LuaConfig: React.FC = () => {
                             onClick={() => {
                               const newFilters = [...values.filters];
                               newFilters.splice(index, 1);
-                              setFieldValue('filters', newFilters);
-                              setHasUnsavedChanges(true);
+                              setFieldValue('filters', newFilters)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                           >
                             <DeleteIcon />
@@ -359,8 +358,8 @@ const LuaConfig: React.FC = () => {
                       setFieldValue('filters', [
                         ...values.filters,
                         { name: '', script_path: '' },
-                      ]);
-                      setHasUnsavedChanges(true);
+                      ])
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                   >
                     Add Filter
@@ -443,8 +442,8 @@ const LuaConfig: React.FC = () => {
                             onClick={() => {
                               const newActions = [...values.actions];
                               newActions.splice(index, 1);
-                              setFieldValue('actions', newActions);
-                              setHasUnsavedChanges(true);
+                              setFieldValue('actions', newActions)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                           >
                             <DeleteIcon />
@@ -463,8 +462,8 @@ const LuaConfig: React.FC = () => {
                       setFieldValue('actions', [
                         ...values.actions,
                         { type: '', name: '', script_path: '' },
-                      ]);
-                      setHasUnsavedChanges(true);
+                      ])
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                   >
                     Add Action
@@ -549,8 +548,8 @@ const LuaConfig: React.FC = () => {
                             value={hook.roles ? (Array.isArray(hook.roles) ? hook.roles.join(',') : hook.roles) : ''}
                             onChange={(e) => {
                               const roles = e.target.value.split(',').map(role => role.trim()).filter(role => role);
-                              setFieldValue(`custom_hooks[${index}].roles`, roles);
-                              setHasUnsavedChanges(true);
+                              setFieldValue(`custom_hooks[${index}].roles`, roles)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                           />
                         </Grid>
@@ -560,8 +559,8 @@ const LuaConfig: React.FC = () => {
                             onClick={() => {
                               const newHooks = [...values.custom_hooks];
                               newHooks.splice(index, 1);
-                              setFieldValue('custom_hooks', newHooks);
-                              setHasUnsavedChanges(true);
+                              setFieldValue('custom_hooks', newHooks)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                           >
                             <DeleteIcon />
@@ -580,8 +579,8 @@ const LuaConfig: React.FC = () => {
                       setFieldValue('custom_hooks', [
                         ...values.custom_hooks,
                         { http_location: '', http_method: 'GET', script_path: '', roles: [] },
-                      ]);
-                      setHasUnsavedChanges(true);
+                      ])
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                   >
                     Add Custom Hook
@@ -602,24 +601,13 @@ const LuaConfig: React.FC = () => {
                     <ListItem key={index} divider={index < values.search.length - 1}>
                       <Grid container spacing={2} alignItems="center">
                         <Grid item xs={4}>
-                          <TextField
-                            fullWidth
-                            label="Protocols (comma-separated)"
-                            name={`search[${index}].protocol`}
-                            value={searchProtocol.protocol ? (Array.isArray(searchProtocol.protocol) ? searchProtocol.protocol.join(',') : searchProtocol.protocol) : ''}
-                            onChange={(e) => {
-                              const protocols = e.target.value.split(',').map(protocol => protocol.trim()).filter(protocol => protocol);
-                              setFieldValue(`search[${index}].protocol`, protocols);
-                              setHasUnsavedChanges(true);
-                            }}
-                            error={Boolean(
-                              getIn(touched, `search[${index}].protocol`) &&
-                              getIn(errors, `search[${index}].protocol`)
-                            )}
-                            helperText={
-                              getIn(touched, `search[${index}].protocol`) &&
-                              getIn(errors, `search[${index}].protocol`)
-                            }
+                          <ProtocolsConfig
+                            index={index}
+                            protocol={searchProtocol.protocol}
+                            setFieldValue={setFieldValue}
+                            touched={touched}
+                            errors={errors}
+                            setHasUnsavedChanges={setHasUnsavedChanges}
                           />
                         </Grid>
                         <Grid item xs={3}>
@@ -662,8 +650,8 @@ const LuaConfig: React.FC = () => {
                             onClick={() => {
                               const newSearch = [...values.search];
                               newSearch.splice(index, 1);
-                              setFieldValue('search', newSearch);
-                              setHasUnsavedChanges(true);
+                              setFieldValue('search', newSearch)
+                                  .then(() => setHasUnsavedChanges(true));
                             }}
                           >
                             <DeleteIcon />
@@ -682,8 +670,8 @@ const LuaConfig: React.FC = () => {
                       setFieldValue('search', [
                         ...values.search,
                         { protocol: [], cache_name: '', backend_name: '' },
-                      ]);
-                      setHasUnsavedChanges(true);
+                      ])
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                   >
                     Add Search Protocol
@@ -705,7 +693,7 @@ const LuaConfig: React.FC = () => {
                       Optional Lua Backends
                     </Typography>
 
-                    {Object.entries(values.optional_lua_backends).map(([backendName, backendConfig]: [string, any], index: number) => (
+                    {Object.entries(values.optional_lua_backends).map(([backendName, backendConfig]: [string, any]) => (
                       <Box key={backendName} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                         <Grid container spacing={2} alignItems="center">
                           <Grid item xs={10}>
@@ -722,8 +710,8 @@ const LuaConfig: React.FC = () => {
                               onClick={() => {
                                 const newBackends = { ...values.optional_lua_backends };
                                 delete newBackends[backendName];
-                                setFieldValue('optional_lua_backends', newBackends);
-                                setHasUnsavedChanges(true);
+                                setFieldValue('optional_lua_backends', newBackends)
+                                    .then(() => setHasUnsavedChanges(true));
                               }}
                             >
                               <DeleteIcon />
@@ -792,8 +780,8 @@ const LuaConfig: React.FC = () => {
                                         onClick={() => {
                                           const newPaths = [...(backendConfig.init_script_paths || [])];
                                           newPaths.splice(pathIndex, 1);
-                                          setFieldValue(`optional_lua_backends.${backendName}.init_script_paths`, newPaths);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue(`optional_lua_backends.${backendName}.init_script_paths`, newPaths)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                       >
                                         <DeleteIcon />
@@ -811,8 +799,8 @@ const LuaConfig: React.FC = () => {
                                   setFieldValue(`optional_lua_backends.${backendName}.init_script_paths`, [
                                     ...(backendConfig.init_script_paths || []),
                                     '',
-                                  ]);
-                                  setHasUnsavedChanges(true);
+                                  ])
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               >
                                 Add Init Script Path
@@ -942,8 +930,8 @@ const LuaConfig: React.FC = () => {
                                 onClick={() => {
                                   const newPaths = [...(values.config.init_script_paths || [])];
                                   newPaths.splice(index, 1);
-                                  setFieldValue('config.init_script_paths', newPaths);
-                                  setHasUnsavedChanges(true);
+                                  setFieldValue('config.init_script_paths', newPaths)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               >
                                 <DeleteIcon />
@@ -961,8 +949,8 @@ const LuaConfig: React.FC = () => {
                           setFieldValue('config.init_script_paths', [
                             ...(values.config.init_script_paths || []),
                             '',
-                          ]);
-                          setHasUnsavedChanges(true);
+                          ])
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                       >
                         Add Init Script Path

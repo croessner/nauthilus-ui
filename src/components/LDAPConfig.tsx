@@ -31,6 +31,7 @@ import { LDAPConfig as LDAPConfigType, LDAPSearchProtocolConfig, NauthilusConfig
 import { useConfig } from '../contexts/ConfigContext';
 import ValidationErrors from './common/ValidationErrors';
 import PasswordField from './common/PasswordField';
+import ProtocolsConfig from './ProtocolsConfig';
 
 // Validation schema
 const LDAPConfigSchema = Yup.object().shape({
@@ -798,24 +799,13 @@ const LDAPConfig = (): React.JSX.Element => {
 
                         <Grid container spacing={2} sx={{ mt: 1 }}>
                           <Grid item xs={12} md={6}>
-                            <TextField
-                              fullWidth
-                              label="Protocols (comma-separated)"
-                              name={`search[${index}].protocol`}
-                              value={searchProtocol.protocol ? (Array.isArray(searchProtocol.protocol) ? searchProtocol.protocol.join(',') : searchProtocol.protocol) : ''}
-                              onChange={(e) => {
-                                const protocols = e.target.value.split(',').map(protocol => protocol.trim()).filter(protocol => protocol);
-                                setFieldValue(`search[${index}].protocol`, protocols)
-                                    .then(() => setHasUnsavedChanges(true));
-                              }}
-                              error={Boolean(
-                                getIn(touched, `search[${index}].protocol`) &&
-                                getIn(errors, `search[${index}].protocol`)
-                              )}
-                              helperText={
-                                getIn(touched, `search[${index}].protocol`) &&
-                                getIn(errors, `search[${index}].protocol`)
-                              }
+                            <ProtocolsConfig
+                              index={index}
+                              protocol={searchProtocol.protocol}
+                              setFieldValue={setFieldValue}
+                              touched={touched}
+                              errors={errors}
+                              setHasUnsavedChanges={setHasUnsavedChanges}
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
