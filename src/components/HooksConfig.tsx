@@ -64,37 +64,7 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import ValidationErrors from './common/ValidationErrors';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
-
-// Utility function to extract error message from response
-const extractErrorMessage = async (response: Response): Promise<string> => {
-  const errorData = await response.json().catch(() => ({ error: response.statusText }));
-
-  // Extract more detailed error information if available
-  let errorMessage = errorData.error || response.statusText;
-
-  // Add HTTP status code to the error message
-  errorMessage = `[${response.status} ${response.statusText}] ${errorMessage}`;
-
-  // Check if there are detailed error information fields
-  if (errorData.details) {
-    errorMessage = `${errorMessage}: ${errorData.details}`;
-  } else if (errorData.code) {
-    errorMessage = `${errorMessage} (Code: ${errorData.code})`;
-  }
-
-  // Check if there's a more detailed error message in the result field
-  if (errorData.result && typeof errorData.result === 'object') {
-    if (errorData.result.error) {
-      errorMessage = `${errorMessage}: ${errorData.result.error}`;
-    } else if (typeof errorData.result === 'string') {
-      errorMessage = `${errorMessage}: ${errorData.result}`;
-    } else if (JSON.stringify(errorData.result) !== '{}') {
-      errorMessage = `${errorMessage}: ${JSON.stringify(errorData.result)}`;
-    }
-  }
-
-  return errorMessage;
-};
+import { extractErrorMessage, prepareAuthParams } from '../utils/apiUtils';
 
 // Helper functions for path handling
 const extractPathParts = (fullPath: string): { apiVersion: string, customPath: string } => {
@@ -117,28 +87,6 @@ const extractPathParts = (fullPath: string): { apiVersion: string, customPath: s
 
 const combinePathParts = (apiVersion: string, customPath: string): string => {
   return `/api/${apiVersion}/custom/${customPath}`;
-};
-
-// Utility function to prepare authentication parameters for API requests
-const prepareAuthParams = (connectionConfig: any): { authType: string, authValue: string } => {
-  let authType = '';
-  let authValue = '';
-
-  // Add Basic Auth if enabled
-  if (connectionConfig.basic_auth?.enabled && 
-      connectionConfig.basic_auth.username && 
-      connectionConfig.basic_auth.password) {
-    authType = 'basic';
-    authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
-  }
-
-  // For JWT Auth, use existing token if available
-  if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
-    authType = 'bearer';
-    authValue = connectionConfig.jwt_auth.token;
-  }
-
-  return { authType, authValue };
 };
 
 // Custom validation function for endpoint paths
