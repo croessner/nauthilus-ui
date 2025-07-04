@@ -478,8 +478,8 @@ const HooksConfig: React.FC = () => {
         values.hooks
       );
 
-      // Reset settings state to force a reload on next component mount
-      // This is necessary because the hooks settings have changed
+      // Reset settings state to force a reload on the next component mount
+      // This is necessary because the "hooks" settings have changed
       resetSettingsState();
 
       // Reset unsaved changes flag after saving
@@ -1243,7 +1243,7 @@ const HooksConfig: React.FC = () => {
                     });
                     setStatusMessage('Loading configuration from backend...');
 
-                    // Reset settings state to force a reload after configuration is loaded
+                    // Reset settings state to force a reload after the configuration is loaded
                     resetSettingsState();
 
                     // Log the current hooks configuration before loading
