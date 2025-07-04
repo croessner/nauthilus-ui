@@ -94,7 +94,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const LDAPConfig = (): JSX.Element => {
+const LDAPConfig = (): React.JSX.Element => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
   const [createPoolDialogOpen, setCreatePoolDialogOpen] = useState(false);
@@ -126,7 +126,7 @@ const LDAPConfig = (): JSX.Element => {
     search: config?.ldap?.search || [],
   };
 
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
@@ -147,10 +147,8 @@ const LDAPConfig = (): JSX.Element => {
     };
 
 
-    updateConfig(updatedConfig);
-
-    // Reset unsaved changes flag after saving
-    setHasUnsavedChanges(false);
+    updateConfig(updatedConfig)
+        .then(() => setHasUnsavedChanges(false))
   };
 
   return (
@@ -461,8 +459,8 @@ const LDAPConfig = (): JSX.Element => {
                                     : [values.config.server_uri].filter(Boolean);
                                   const newUris = [...currentUris];
                                   newUris.splice(index, 1);
-                                  setFieldValue('config.server_uri', newUris);
-                                  setHasUnsavedChanges(true);
+                                  setFieldValue('config.server_uri', newUris)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                                 disabled={(Array.isArray(values.config.server_uri) ? values.config.server_uri : [values.config.server_uri].filter(Boolean)).length <= 1}
                               >
@@ -484,8 +482,8 @@ const LDAPConfig = (): JSX.Element => {
                           setFieldValue('config.server_uri', [
                             ...currentUris,
                             '',
-                          ]);
-                          setHasUnsavedChanges(true);
+                          ])
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                       >
                         Add Server URI
@@ -509,7 +507,7 @@ const LDAPConfig = (): JSX.Element => {
                       Optional LDAP Pools
                     </Typography>
 
-                    {Object.entries(values.optional_ldap_pools).map(([poolName, poolConfig]: [string, any], index: number) => (
+                    {Object.entries(values.optional_ldap_pools).map(([poolName, poolConfig]: [string, any]) => (
                       <Box key={poolName} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                         <Grid container spacing={2} alignItems="center">
                           <Grid item xs={10}>
@@ -526,8 +524,8 @@ const LDAPConfig = (): JSX.Element => {
                               onClick={() => {
                                 const newPools = { ...values.optional_ldap_pools };
                                 delete newPools[poolName];
-                                setFieldValue('optional_ldap_pools', newPools);
-                                setHasUnsavedChanges(true);
+                                setFieldValue('optional_ldap_pools', newPools)
+                                    .then(() => setHasUnsavedChanges(true));
                               }}
                             >
                               <DeleteIcon />
@@ -714,8 +712,8 @@ const LDAPConfig = (): JSX.Element => {
                                             : [poolConfig.server_uri].filter(Boolean);
                                           const newUris = [...currentUris];
                                           newUris.splice(uriIndex, 1);
-                                          setFieldValue(`optional_ldap_pools.${poolName}.server_uri`, newUris);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue(`optional_ldap_pools.${poolName}.server_uri`, newUris)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                         disabled={(Array.isArray(poolConfig.server_uri) ? poolConfig.server_uri : [poolConfig.server_uri].filter(Boolean)).length <= 1}
                                       >
@@ -737,8 +735,8 @@ const LDAPConfig = (): JSX.Element => {
                                   setFieldValue(`optional_ldap_pools.${poolName}.server_uri`, [
                                     ...currentUris,
                                     '',
-                                  ]);
-                                  setHasUnsavedChanges(true);
+                                  ])
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               >
                                 Add Server URI
@@ -789,8 +787,8 @@ const LDAPConfig = (): JSX.Element => {
                               onClick={() => {
                                 const newSearch = [...values.search];
                                 newSearch.splice(index, 1);
-                                setFieldValue('search', newSearch);
-                                setHasUnsavedChanges(true);
+                                setFieldValue('search', newSearch)
+                                    .then(() => setHasUnsavedChanges(true));
                               }}
                             >
                               <DeleteIcon />
@@ -807,8 +805,8 @@ const LDAPConfig = (): JSX.Element => {
                               value={searchProtocol.protocol ? (Array.isArray(searchProtocol.protocol) ? searchProtocol.protocol.join(',') : searchProtocol.protocol) : ''}
                               onChange={(e) => {
                                 const protocols = e.target.value.split(',').map(protocol => protocol.trim()).filter(protocol => protocol);
-                                setFieldValue(`search[${index}].protocol`, protocols);
-                                setHasUnsavedChanges(true);
+                                setFieldValue(`search[${index}].protocol`, protocols)
+                                    .then(() => setHasUnsavedChanges(true));
                               }}
                               error={Boolean(
                                 getIn(touched, `search[${index}].protocol`) &&
@@ -898,8 +896,8 @@ const LDAPConfig = (): JSX.Element => {
                               value={searchProtocol.attribute ? (Array.isArray(searchProtocol.attribute) ? searchProtocol.attribute.join(',') : searchProtocol.attribute) : ''}
                               onChange={(e) => {
                                 const attributes = e.target.value.split(',').map(attr => attr.trim()).filter(attr => attr);
-                                setFieldValue(`search[${index}].attribute`, attributes);
-                                setHasUnsavedChanges(true);
+                                setFieldValue(`search[${index}].attribute`, attributes)
+                                    .then(() => setHasUnsavedChanges(true));
                               }}
                               error={Boolean(
                                 getIn(touched, `search[${index}].attribute`) &&
@@ -1172,8 +1170,8 @@ const LDAPConfig = (): JSX.Element => {
                           },
                           attribute: [],
                         },
-                      ]);
-                      setHasUnsavedChanges(true);
+                      ])
+                          .then(() => setHasUnsavedChanges(true));
                     }}
                   >
                     Add Search Protocol
