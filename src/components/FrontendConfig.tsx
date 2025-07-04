@@ -133,7 +133,7 @@ const FrontendConfigSchema = Yup.object().shape({
   }),
 });
 
-const FrontendConfig = (): JSX.Element => {
+const FrontendConfig = (): React.JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
   const [isFormChanged, setIsFormChanged] = useState(false);
 
@@ -173,9 +173,11 @@ const FrontendConfig = (): JSX.Element => {
       oauth2: values.oauth2
     };
 
-    updateConfig(newConfig);
-    setHasUnsavedChanges(false);
-    setIsFormChanged(false);
+    updateConfig(newConfig)
+        .then(() => {
+          setHasUnsavedChanges(false);
+          setIsFormChanged(false);
+        })
   };
 
   // Function to check if form values have changed from initial values
@@ -198,10 +200,10 @@ const FrontendConfig = (): JSX.Element => {
         // Check if current values differ from initial values
         const hasChanged = checkFormChanged(values, initialValues);
         setIsFormChanged(hasChanged);
-        return {}; // Return empty object (no validation errors)
+        return {}; // Return an empty object (no validation errors)
       }}
     >
-      {({ values, errors, touched, handleChange, handleBlur, isSubmitting, setFieldValue, dirty }) => {
+      {({ values, errors, touched, handleChange, handleBlur, isSubmitting, setFieldValue}) => {
 
         return (
           <Form>
@@ -222,7 +224,8 @@ const FrontendConfig = (): JSX.Element => {
                         color="primary"
                         checked={values.frontend?.enabled || false}
                         onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
-                          setFieldValue('frontend.enabled', e.target.checked);
+                          setFieldValue('frontend.enabled', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                       />
                     }
@@ -321,7 +324,7 @@ const FrontendConfig = (): JSX.Element => {
                     </AccordionSummary>
                     <AccordionDetails>
                       <FieldArray name="oauth2.custom_scopes">
-                        {({ push, remove, form }) => (
+                        {({ push, remove }) => (
                           <Box>
                             {values.oauth2?.custom_scopes && values.oauth2.custom_scopes.length > 0 ? (
                               values.oauth2.custom_scopes.map((scope, scopeIndex) => (
@@ -370,7 +373,7 @@ const FrontendConfig = (): JSX.Element => {
                                       {({ push: pushClaim, remove: removeClaim }) => (
                                         <Box>
                                           {scope.claims && scope.claims.length > 0 ? (
-                                            scope.claims.map((claim, claimIndex) => (
+                                            scope.claims.map((_claim, claimIndex) => (
                                               <Grid container spacing={2} key={claimIndex} sx={{ mb: 1 }}>
                                                 <Grid item xs={5}>
                                                   <Field
