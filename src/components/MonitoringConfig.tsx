@@ -36,7 +36,7 @@ const MonitoringConfigSchema = Yup.object().shape({
 const MonitoringConfig: React.FC = () => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
-  // Reset unsaved changes flag when component mounts
+  // Reset unsaved changes flag when the component mounts
   React.useEffect(() => {
     setHasUnsavedChanges(false);
   }, [setHasUnsavedChanges]);
@@ -46,7 +46,7 @@ const MonitoringConfig: React.FC = () => {
   }
 
   const initialValues = {
-    // Initialize insights configuration
+    // Initialize the insights-configuration
     insights: {
       enable_pprof: config.server.insights?.enable_pprof || false,
       enable_block_profile: config.server.insights?.enable_block_profile || false,
@@ -81,7 +81,7 @@ const MonitoringConfig: React.FC = () => {
       onSubmit={handleSubmit}
       enableReinitialize={true}
     >
-      {({ errors, touched, values, handleChange, setFieldValue }) => (
+      {({values, setFieldValue }) => (
         <Form>
           <FormSection
             title="Monitoring Configuration"
@@ -99,8 +99,8 @@ const MonitoringConfig: React.FC = () => {
                       <Switch
                         checked={values.insights?.enable_pprof || false}
                         onChange={(e) => {
-                          setFieldValue('insights.enable_pprof', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('insights.enable_pprof', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="insights.enable_pprof"
                       />
@@ -114,8 +114,8 @@ const MonitoringConfig: React.FC = () => {
                       <Switch
                         checked={values.insights?.enable_block_profile || false}
                         onChange={(e) => {
-                          setFieldValue('insights.enable_block_profile', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('insights.enable_block_profile', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="insights.enable_block_profile"
                       />
@@ -129,8 +129,8 @@ const MonitoringConfig: React.FC = () => {
                       <Switch
                         checked={values.insights?.monitor_connections || false}
                         onChange={(e) => {
-                          setFieldValue('insights.monitor_connections', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('insights.monitor_connections', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="insights.monitor_connections"
                       />
@@ -153,8 +153,8 @@ const MonitoringConfig: React.FC = () => {
                       <Switch
                         checked={values.prometheus_timer?.enabled || false}
                         onChange={(e) => {
-                          setFieldValue('prometheus_timer.enabled', e.target.checked);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('prometheus_timer.enabled', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         name="prometheus_timer.enabled"
                       />
@@ -170,8 +170,8 @@ const MonitoringConfig: React.FC = () => {
                         multiple
                         value={values.prometheus_timer?.labels || []}
                         onChange={(e) => {
-                          setFieldValue('prometheus_timer.labels', e.target.value);
-                          setHasUnsavedChanges(true);
+                          setFieldValue('prometheus_timer.labels', e.target.value)
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                         renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                       >
