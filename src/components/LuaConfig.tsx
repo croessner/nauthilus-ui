@@ -122,7 +122,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-const LuaConfig: React.FC = () => {
+const LuaConfig = (): React.JSX.Element => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges, error } = useConfig();
   const [tabValue, setTabValue] = useState(0);
   const [createBackendDialogOpen, setCreateBackendDialogOpen] = useState(false);
