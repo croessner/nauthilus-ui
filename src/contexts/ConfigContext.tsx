@@ -309,7 +309,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       } catch (error) {
         console.log('Failed to load from API, creating default profile:', error);
 
-        // Create default profile if none exists
+        // Create a default profile if none exists
         profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
         currentProfile = DEFAULT_PROFILE_NAME;
 
@@ -326,7 +326,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         }
       }
 
-      // Make sure the current profile exists in the profiles array
+      // Make sure the current profile exists in the profiles-array
       if (!profilesArray.some(profile => profile.name === currentProfile)) {
         currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
       }
@@ -365,7 +365,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
     setProfiles(updatedProfiles);
     setConfig(newConfig);
 
-    // Reset unsaved changes flag since we've just saved
+    // Reset the unsaved changes flag since we've just saved
     setHasUnsavedChanges(false);
 
     return updatedProfiles;
@@ -468,17 +468,17 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           };
         }
 
-        // Ensure lists array is properly initialized
+        // Ensure the "lists" array is properly initialized
         if (!newConfig.realtime_blackhole_lists.lists) {
           newConfig.realtime_blackhole_lists.lists = [];
         }
 
-        // Ensure ip_whitelist array is properly initialized
+        // Ensure the ip_whitelist array is properly initialized
         if (!newConfig.realtime_blackhole_lists.ip_whitelist) {
           newConfig.realtime_blackhole_lists.ip_whitelist = [];
         }
 
-        // Ensure soft_whitelist object is properly initialized
+        // Ensure the soft_whitelist object is properly initialized
         if (!newConfig.realtime_blackhole_lists.soft_whitelist) {
           newConfig.realtime_blackhole_lists.soft_whitelist = {};
         }
@@ -494,12 +494,12 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           };
         }
 
-        // Ensure static array is properly initialized
+        // Ensure the static array is properly initialized
         if (!newConfig.relay_domains.static) {
           newConfig.relay_domains.static = [];
         }
 
-        // Ensure soft_whitelist object is properly initialized
+        // Ensure the soft_whitelist object is properly initialized
         if (!newConfig.relay_domains.soft_whitelist) {
           newConfig.relay_domains.soft_whitelist = {};
         }
@@ -514,7 +514,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           };
         }
 
-        // Ensure backend_servers array is properly initialized
+        // Ensure the backend_servers array is properly initialized
         if (!newConfig.backend_server_monitoring.backend_servers) {
           newConfig.backend_server_monitoring.backend_servers = [];
         }
@@ -532,22 +532,22 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           };
         }
 
-        // Ensure buckets array is properly initialized
+        // Ensure the "buckets" array is properly initialized
         if (!newConfig.brute_force.buckets) {
           newConfig.brute_force.buckets = [];
         }
 
-        // Ensure ip_whitelist array is properly initialized
+        // Ensure the ip_whitelist array is properly initialized
         if (!newConfig.brute_force.ip_whitelist) {
           newConfig.brute_force.ip_whitelist = [];
         }
 
-        // Ensure soft_whitelist object is properly initialized
+        // Ensure the soft_whitelist object is properly initialized
         if (!newConfig.brute_force.soft_whitelist) {
           newConfig.brute_force.soft_whitelist = {};
         }
 
-        // Ensure custom_tolerations array is properly initialized
+        // Ensure the custom_tolerations array is properly initialized
         if (!newConfig.brute_force.custom_tolerations) {
           newConfig.brute_force.custom_tolerations = [];
         }
@@ -555,7 +555,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
       // Handle TLS Encryption configuration
       if (newConfig.server.features.includes('tls_encryption')) {
-        // Ensure cleartext_networks array is properly initialized
+        // Ensure the cleartext_networks array is properly initialized
         if (!newConfig.cleartext_networks) {
           newConfig.cleartext_networks = [];
         }
@@ -594,7 +594,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           }
         }
 
-        // Fix backend configuration format if it's an array of objects with 'backend' property
+        // Fix the backend configuration format if it's an array of objects with the 'backend' property
         if (newConfig.server?.backends && Array.isArray(newConfig.server.backends)) {
           // Check if the backends are objects with 'backend' property instead of strings
           const firstBackend = newConfig.server.backends[0];
@@ -627,7 +627,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           config: newConfig
         };
       } else {
-        // Create new profile if it doesn't exist
+        // Create a new profile if it doesn't exist
         updatedProfiles.push({
           name: targetProfileName,
           config: newConfig
@@ -657,7 +657,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         setConfig(newConfig);
       }
 
-      // Reset unsaved changes flag since we've just saved
+      // Reset the unsaved changes flag since we've just saved
       setHasUnsavedChanges(false);
 
       return updatedProfiles;
@@ -695,7 +695,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         delete configToDownload.lua.hooks;
       }
 
-      // Add profile name as a comment in the YAML
+      // Add a profile name as a comment in the YAML
       const profileComment = `# Profile: ${currentProfileName}`;
 
       // Ensure brute_force_protocols are lowercase
@@ -716,7 +716,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       // Convert the configuration to YAML
       const yamlContent = yaml.dump(configToDownload);
 
-      // Create a blob and download link with the profile comment at the top
+      // Create a blob and download the link with the profile comment at the top
       const contentWithComment = `${profileComment}\n\n${yamlContent}`;
       const blob = new Blob([contentWithComment], { type: 'text/yaml' });
       const url = URL.createObjectURL(blob);
@@ -738,7 +738,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
   // Function to reset the configuration to default
   const resetConfig = useCallback(async () => {
-    // Reset only the current profile to default
+    // Reset only the current profile by default
     await withErrorHandling(
       () => updateProfilesWithConfig(DEFAULT_CONFIG),
       'Failed to reset configuration. Please try again.'
@@ -748,7 +748,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   // Function to create a new profile
   const createProfile = useCallback(async (name: string, configData?: NauthilusConfig) => {
     await withErrorHandling(async () => {
-      // Check if profile with this name already exists
+      // Check if the profile with this name already exists
       if (profiles.some(profile => profile.name === name)) {
         throw new Error(`A profile with the name "${name}" already exists.`);
       }
@@ -759,7 +759,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         config: configData || DEFAULT_CONFIG
       };
 
-      // Add new profile to the list
+      // Add a new profile to the list
       const updatedProfiles = [...profiles, newProfile];
 
       // Save to MongoDB
@@ -824,7 +824,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   // Function to rename a profile
   const renameProfile = useCallback(async (oldName: string, newName: string) => {
     await withErrorHandling(async () => {
-      // Check if new name already exists
+      // Check if a new name already exists
       if (profiles.some(profile => profile.name === newName)) {
         throw new Error(`A profile with the name "${newName}" already exists.`);
       }
@@ -850,7 +850,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
       setProfiles(updatedProfiles);
 
-      // If the renamed profile is the current one, update currentProfileName
+      // If the renamed profile is the current one, update the currentProfileName
       if (currentProfileName === oldName) {
         setCurrentProfileName(newName);
       }

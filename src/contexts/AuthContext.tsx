@@ -25,7 +25,7 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
-export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
+export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element => {
   const [auth, setAuth] = useState<AuthState>({
     isAuthenticated: false,
     username: null,
@@ -33,7 +33,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
     error: null,
   });
 
-  // Check if the user is already authenticated on mount
+  // Check if the user is already authenticated on the mount
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -64,7 +64,9 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
       }
     };
 
-    checkAuth();
+    (async () => {
+      await checkAuth();
+    })();
   }, []);
 
   // Login with username and password
@@ -83,7 +85,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): JSX.Element => {
           error: null,
         });
       } else {
-        throw new Error('Invalid username or password');
+        console.error('Invalid username or password');
       }
     } catch (err) {
       setAuth(prev => ({

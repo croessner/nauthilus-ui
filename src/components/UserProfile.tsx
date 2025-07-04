@@ -18,7 +18,7 @@ import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 
-const UserProfile = (): JSX.Element => {
+const UserProfile = (): React.JSX.Element => {
   const { user, updateUserProfile, updatePassword, loading, error, clearError } = useUser();
 
   // Profile section state
@@ -40,7 +40,7 @@ const UserProfile = (): JSX.Element => {
   const [profileError, setProfileError] = useState<string | null>(null);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
-  // Initialize form with current user data
+  // Initialize the form with current user data
   useEffect(() => {
     if (user) {
       setDisplayName(user.displayName || '');
@@ -112,7 +112,7 @@ const UserProfile = (): JSX.Element => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Check file type
+    // Check the file type
     if (!file.type.match('image.*')) {
       setProfileError('Please select an image file');
       return;
@@ -138,16 +138,6 @@ const UserProfile = (): JSX.Element => {
   // Trigger file input click
   const handleAvatarUploadClick = () => {
     fileInputRef.current?.click();
-  };
-
-  // Clear all messages
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const clearMessages = () => {
-    setProfileError(null);
-    setPasswordError(null);
-    setProfileSuccess(null);
-    setPasswordSuccess(null);
-    clearError();
   };
 
   if (!user) {
