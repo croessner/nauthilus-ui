@@ -71,10 +71,10 @@ const AuthConfigSchema = Yup.object().shape({
   }),
 });
 
-const AuthConfig = (): JSX.Element | null => {
+const AuthConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
-  // Reset unsaved changes flag when component mounts
+  // Reset unsaved changes flag when the component mounts
   React.useEffect(() => {
     setHasUnsavedChanges(false);
   }, [setHasUnsavedChanges]);
@@ -139,8 +139,8 @@ const AuthConfig = (): JSX.Element | null => {
                     <Switch
                       checked={values.basic_auth?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('basic_auth.enabled', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('basic_auth.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="basic_auth.enabled"
                     />
@@ -196,8 +196,8 @@ const AuthConfig = (): JSX.Element | null => {
                     <Switch
                       checked={values.jwt_auth?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('jwt_auth.enabled', e.target.checked);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('jwt_auth.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       name="jwt_auth.enabled"
                     />
@@ -250,8 +250,8 @@ const AuthConfig = (): JSX.Element | null => {
                         <Switch
                           checked={values.jwt_auth?.refresh_token || false}
                           onChange={(e) => {
-                            setFieldValue('jwt_auth.refresh_token', e.target.checked);
-                            setHasUnsavedChanges(true);
+                            setFieldValue('jwt_auth.refresh_token', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
                           }}
                           name="jwt_auth.refresh_token"
                         />
@@ -286,8 +286,8 @@ const AuthConfig = (): JSX.Element | null => {
                         <Switch
                           checked={values.jwt_auth?.store_in_redis || false}
                           onChange={(e) => {
-                            setFieldValue('jwt_auth.store_in_redis', e.target.checked);
-                            setHasUnsavedChanges(true);
+                            setFieldValue('jwt_auth.store_in_redis', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
                           }}
                           name="jwt_auth.store_in_redis"
                         />
@@ -305,7 +305,7 @@ const AuthConfig = (): JSX.Element | null => {
                       </Typography>
                     </Box>
                     {values.jwt_auth?.users && values.jwt_auth.users.length > 0 ? (
-                      values.jwt_auth.users.map((user, index) => (
+                      values.jwt_auth.users.map((_user, index) => (
                         <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
                           <Grid container spacing={2}>
                             <Grid item xs={12} md={6}>
@@ -367,7 +367,8 @@ const AuthConfig = (): JSX.Element | null => {
                                 // Process the roles when the field loses focus
                                 onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
                                   const rolesArray = e.target.value.split(',').map((role: string) => role.trim()).filter(Boolean);
-                                  setFieldValue(`jwt_auth.users[${index}].roles`, rolesArray);
+                                  setFieldValue(`jwt_auth.users[${index}].roles`, rolesArray)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               />
                               <FormHelperText>
@@ -381,8 +382,8 @@ const AuthConfig = (): JSX.Element | null => {
                                 onClick={() => {
                                   const newUsers = [...(values.jwt_auth?.users || [])];
                                   newUsers.splice(index, 1);
-                                  setFieldValue('jwt_auth.users', newUsers);
-                                  setHasUnsavedChanges(true);
+                                  setFieldValue('jwt_auth.users', newUsers)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               >
                                 Remove User
@@ -401,8 +402,8 @@ const AuthConfig = (): JSX.Element | null => {
                       onClick={() => {
                         const newUser = { username: '', password: '', roles: ['authenticate'] };
                         const newUsers = [...(values.jwt_auth?.users || []), newUser];
-                        setFieldValue('jwt_auth.users', newUsers);
-                        setHasUnsavedChanges(true);
+                        setFieldValue('jwt_auth.users', newUsers)
+                            .then(() => setHasUnsavedChanges(true));
                       }}
                       sx={{ mt: 1 }}
                     >
