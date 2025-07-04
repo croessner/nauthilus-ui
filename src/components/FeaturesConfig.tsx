@@ -210,7 +210,7 @@ const FeaturesConfig: React.FC = () => {
   }, [config?.lua?.features]);
 
   // Handle tab change
-  const handleTabChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
   };
 
@@ -284,7 +284,7 @@ const FeaturesConfig: React.FC = () => {
       // Create a properly typed copy of the config
       const updatedConfig: NauthilusConfig = { 
         ...config as NauthilusConfig,
-        // Ensure server is properly initialized
+        // Ensure the server is properly initialized
         server: {
           ...(config?.server || {}) as ServerConfig,
           features: values.selectedFeatures,
@@ -411,8 +411,8 @@ const FeaturesConfig: React.FC = () => {
                           multiple
                           value={values.selectedFeatures}
                           onChange={(e) => {
-                            setFieldValue('selectedFeatures', e.target.value);
-                            setHasUnsavedChanges(true);
+                            setFieldValue('selectedFeatures', e.target.value)
+                                .then(() => setHasUnsavedChanges(true));
                           }}
                           renderValue={(selected) => {
                             // Convert feature values to labels for display
@@ -460,7 +460,7 @@ const FeaturesConfig: React.FC = () => {
                       {({ push, remove }) => (
                         <div>
                           {values.cleartext_networks && values.cleartext_networks.length > 0 ? (
-                            values.cleartext_networks.map((network: string, index: number) => (
+                            values.cleartext_networks.map((_network: string, index: number) => (
                               <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                 <Field
                                   as={TextField}
@@ -537,7 +537,7 @@ const FeaturesConfig: React.FC = () => {
                       {({ push, remove }) => (
                         <div>
                           {values.realtime_blackhole_lists?.ip_whitelist && values.realtime_blackhole_lists.ip_whitelist.length > 0 ? (
-                            values.realtime_blackhole_lists.ip_whitelist.map((ip: string, index: number) => (
+                            values.realtime_blackhole_lists.ip_whitelist.map((_ip: string, index: number) => (
                               <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                 <Field
                                   as={TextField}
@@ -590,7 +590,7 @@ const FeaturesConfig: React.FC = () => {
                         The soft whitelist allows you to specify which usernames are allowed to bypass RBL checks from specific IP addresses or networks.
                       </Typography>
                       <FieldArray name="realtime_blackhole_lists.soft_whitelist">
-                        {({ push, remove }) => (
+                        {() => (
                           <div>
                             {Object.keys(values.realtime_blackhole_lists?.soft_whitelist || {}).length > 0 ? (
                               Object.entries(values.realtime_blackhole_lists?.soft_whitelist || {}).map(([username, networks], index) => (
@@ -627,8 +627,8 @@ const FeaturesConfig: React.FC = () => {
                                               const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                               updatedSoftWhitelist[username] = updatedNetworks;
 
-                                              setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
-                                              setHasUnsavedChanges(true);
+                                              setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist)
+                                                  .then(() => setHasUnsavedChanges(true));
                                             }}
                                           />
                                           <IconButton
@@ -646,8 +646,8 @@ const FeaturesConfig: React.FC = () => {
                                                 updatedSoftWhitelist[username] = updatedNetworks;
                                               }
 
-                                              setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
-                                              setHasUnsavedChanges(true);
+                                              setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist)
+                                                  .then(() => setHasUnsavedChanges(true));
                                             }}
                                             sx={{ ml: 1 }}
                                             color="error"
@@ -665,8 +665,8 @@ const FeaturesConfig: React.FC = () => {
                                           const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                           updatedSoftWhitelist[username] = [...(networks as string[]), ''];
 
-                                          setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                       >
                                         Add Network
@@ -682,8 +682,8 @@ const FeaturesConfig: React.FC = () => {
                                           const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                           delete updatedSoftWhitelist[username];
 
-                                          setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                       >
                                         Remove User
@@ -704,7 +704,8 @@ const FeaturesConfig: React.FC = () => {
                                 variant="outlined"
                                 value={values.newSoftWhitelistUsername || ''}
                                 onChange={(e: React.ChangeEvent<any>) => {
-                                  setFieldValue('newSoftWhitelistUsername', e.target.value);
+                                  setFieldValue('newSoftWhitelistUsername', e.target.value)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               />
                               <Button
@@ -717,9 +718,10 @@ const FeaturesConfig: React.FC = () => {
                                     const updatedSoftWhitelist = { ...values.realtime_blackhole_lists?.soft_whitelist };
                                     updatedSoftWhitelist[values.newSoftWhitelistUsername] = [''];
 
-                                    setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist);
-                                    setFieldValue('newSoftWhitelistUsername', '');
-                                    setHasUnsavedChanges(true);
+                                    setFieldValue('realtime_blackhole_lists.soft_whitelist', updatedSoftWhitelist)
+                                        .then(() => setHasUnsavedChanges(true));
+                                    setFieldValue('newSoftWhitelistUsername', '')
+                                        .then(() => setHasUnsavedChanges(true));
                                   }
                                 }}
                               >
@@ -737,7 +739,7 @@ const FeaturesConfig: React.FC = () => {
                       {({ push, remove }) => (
                         <div>
                           {values.realtime_blackhole_lists?.lists && values.realtime_blackhole_lists.lists.length > 0 ? (
-                            values.realtime_blackhole_lists.lists.map((list, index) => (
+                            values.realtime_blackhole_lists.lists.map((_list, index) => (
                               <Paper key={index} sx={{ p: 2, mb: 2 }}>
                                 <Grid container spacing={2}>
                                   <Grid item xs={12} md={6}>
@@ -776,7 +778,7 @@ const FeaturesConfig: React.FC = () => {
                                       {({ push, remove}) => (
                                         <div>
                                           {values.realtime_blackhole_lists?.lists[index]?.return_codes && values.realtime_blackhole_lists.lists[index].return_codes.length > 0 ? (
-                                            values.realtime_blackhole_lists.lists[index].return_codes.map((code, codeIndex) => (
+                                            values.realtime_blackhole_lists.lists[index].return_codes.map((_code, codeIndex) => (
                                               <Box key={codeIndex} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                                 <Field
                                                   as={TextField}
@@ -845,8 +847,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.realtime_blackhole_lists?.lists[index]?.allow_failure || false}
                                           onChange={(e) => {
-                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].allow_failure`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].allow_failure`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`realtime_blackhole_lists.lists[${index}].allow_failure`}
                                         />
@@ -860,8 +862,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.realtime_blackhole_lists?.lists[index]?.ipv4 || false}
                                           onChange={(e) => {
-                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].ipv4`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].ipv4`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`realtime_blackhole_lists.lists[${index}].ipv4`}
                                         />
@@ -875,8 +877,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.realtime_blackhole_lists?.lists[index]?.ipv6 || false}
                                           onChange={(e) => {
-                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].ipv6`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`realtime_blackhole_lists.lists[${index}].ipv6`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`realtime_blackhole_lists.lists[${index}].ipv6`}
                                         />
@@ -931,7 +933,7 @@ const FeaturesConfig: React.FC = () => {
                       {({ push, remove }) => (
                         <div>
                           {values.relay_domains?.static && values.relay_domains.static.length > 0 ? (
-                            values.relay_domains.static.map((domain: string, index: number) => (
+                            values.relay_domains.static.map((_domain: string, index: number) => (
                               <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                 <Field
                                   as={TextField}
@@ -991,7 +993,7 @@ const FeaturesConfig: React.FC = () => {
                       {({ push, remove }) => (
                         <div>
                           {values.backend_server_monitoring?.backend_servers && values.backend_server_monitoring.backend_servers.length > 0 ? (
-                            values.backend_server_monitoring.backend_servers.map((server: BackendServerConfig, index: number) => (
+                            values.backend_server_monitoring.backend_servers.map((_server: BackendServerConfig, index: number) => (
                               <Paper key={index} sx={{ p: 2, mb: 2 }}>
                                 <Grid container spacing={2}>
                                   <Grid item xs={12} md={6}>
@@ -1055,8 +1057,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.deep_check || false}
                                           onChange={(e) => {
-                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].deep_check`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].deep_check`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`backend_server_monitoring.backend_servers[${index}].deep_check`}
                                         />
@@ -1117,8 +1119,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.tls || false}
                                           onChange={(e) => {
-                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`backend_server_monitoring.backend_servers[${index}].tls`}
                                         />
@@ -1132,8 +1134,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.tls_skip_verify || false}
                                           onChange={(e) => {
-                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls_skip_verify`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].tls_skip_verify`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`backend_server_monitoring.backend_servers[${index}].tls_skip_verify`}
                                         />
@@ -1147,8 +1149,8 @@ const FeaturesConfig: React.FC = () => {
                                         <Switch
                                           checked={values.backend_server_monitoring?.backend_servers[index]?.haproxy_v2 || false}
                                           onChange={(e) => {
-                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].haproxy_v2`, e.target.checked);
-                                            setHasUnsavedChanges(true);
+                                            setFieldValue(`backend_server_monitoring.backend_servers[${index}].haproxy_v2`, e.target.checked)
+                                                .then(() => setHasUnsavedChanges(true));
                                           }}
                                           name={`backend_server_monitoring.backend_servers[${index}].haproxy_v2`}
                                         />
@@ -1214,7 +1216,7 @@ const FeaturesConfig: React.FC = () => {
                       {({ push, remove }) => (
                         <div>
                           {values.brute_force?.ip_whitelist && values.brute_force.ip_whitelist.length > 0 ? (
-                            values.brute_force.ip_whitelist.map((ip: string, index: number) => (
+                            values.brute_force.ip_whitelist.map((_ip: string, index: number) => (
                               <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                 <Field
                                   as={TextField}
@@ -1267,7 +1269,7 @@ const FeaturesConfig: React.FC = () => {
                         The soft whitelist allows you to specify which usernames are allowed to bypass brute force checks from specific IP addresses or networks.
                       </Typography>
                       <FieldArray name="brute_force.soft_whitelist">
-                        {({ push, remove }) => (
+                        {() => (
                           <div>
                             {Object.keys(values.brute_force?.soft_whitelist || {}).length > 0 ? (
                               Object.entries(values.brute_force?.soft_whitelist || {}).map(([username, networks], index) => (
@@ -1304,8 +1306,8 @@ const FeaturesConfig: React.FC = () => {
                                               const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
                                               updatedSoftWhitelist[username] = updatedNetworks;
 
-                                              setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
-                                              setHasUnsavedChanges(true);
+                                              setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist)
+                                                  .then(() => setHasUnsavedChanges(true));
                                             }}
                                           />
                                           <IconButton
@@ -1323,8 +1325,8 @@ const FeaturesConfig: React.FC = () => {
                                                 updatedSoftWhitelist[username] = updatedNetworks;
                                               }
 
-                                              setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
-                                              setHasUnsavedChanges(true);
+                                              setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist)
+                                                  .then(() => setHasUnsavedChanges(true));
                                             }}
                                             sx={{ ml: 1 }}
                                             color="error"
@@ -1342,8 +1344,8 @@ const FeaturesConfig: React.FC = () => {
                                           const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
                                           updatedSoftWhitelist[username] = [...(networks as string[]), ''];
 
-                                          setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                       >
                                         Add Network
@@ -1359,8 +1361,8 @@ const FeaturesConfig: React.FC = () => {
                                           const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
                                           delete updatedSoftWhitelist[username];
 
-                                          setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                       >
                                         Remove User
@@ -1381,7 +1383,8 @@ const FeaturesConfig: React.FC = () => {
                                 variant="outlined"
                                 value={values.newBruteForceWhitelistUsername || ''}
                                 onChange={(e: React.ChangeEvent<any>) => {
-                                  setFieldValue('newBruteForceWhitelistUsername', e.target.value);
+                                  setFieldValue('newBruteForceWhitelistUsername', e.target.value)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                               />
                               <Button
@@ -1394,9 +1397,10 @@ const FeaturesConfig: React.FC = () => {
                                     const updatedSoftWhitelist = { ...values.brute_force?.soft_whitelist };
                                     updatedSoftWhitelist[values.newBruteForceWhitelistUsername] = [''];
 
-                                    setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist);
-                                    setFieldValue('newBruteForceWhitelistUsername', '');
-                                    setHasUnsavedChanges(true);
+                                    setFieldValue('brute_force.soft_whitelist', updatedSoftWhitelist)
+                                        .then(() => setHasUnsavedChanges(true));
+                                    setFieldValue('newBruteForceWhitelistUsername', '')
+                                        .then(() => setHasUnsavedChanges(true));
                                   }
                                 }}
                               >
@@ -1450,8 +1454,8 @@ const FeaturesConfig: React.FC = () => {
                               <Switch
                                 checked={values.brute_force?.adaptive_toleration || false}
                                 onChange={(e) => {
-                                  setFieldValue('brute_force.adaptive_toleration', e.target.checked);
-                                  setHasUnsavedChanges(true);
+                                  setFieldValue('brute_force.adaptive_toleration', e.target.checked)
+                                      .then(() => setHasUnsavedChanges(true));
                                 }}
                                 name="brute_force.adaptive_toleration"
                               />
@@ -1524,7 +1528,7 @@ const FeaturesConfig: React.FC = () => {
                         {({ push, remove }) => (
                           <div>
                             {values.brute_force?.custom_tolerations && values.brute_force.custom_tolerations.length > 0 ? (
-                              values.brute_force.custom_tolerations.map((toleration: any, index: number) => (
+                              values.brute_force.custom_tolerations.map((_toleration: any, index: number) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
                                     <Grid item xs={12} md={6}>
@@ -1580,8 +1584,8 @@ const FeaturesConfig: React.FC = () => {
                                           <Switch
                                             checked={values.brute_force?.custom_tolerations[index]?.adaptive_toleration || false}
                                             onChange={(e) => {
-                                              setFieldValue(`brute_force.custom_tolerations[${index}].adaptive_toleration`, e.target.checked);
-                                              setHasUnsavedChanges(true);
+                                              setFieldValue(`brute_force.custom_tolerations[${index}].adaptive_toleration`, e.target.checked)
+                                                  .then(() => setHasUnsavedChanges(true));
                                             }}
                                             name={`brute_force.custom_tolerations[${index}].adaptive_toleration`}
                                           />
@@ -1693,7 +1697,7 @@ const FeaturesConfig: React.FC = () => {
                         {({ push, remove }) => (
                           <div>
                             {values.brute_force?.buckets && values.brute_force.buckets.length > 0 ? (
-                              values.brute_force.buckets.map((bucket: any, index: number) => (
+                              values.brute_force.buckets.map((_bucket: any, index: number) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
                                     <Grid item xs={12} md={6}>
@@ -1750,12 +1754,13 @@ const FeaturesConfig: React.FC = () => {
                                         name={`brute_force.buckets[${index}].ip_version`}
                                         value={values.brute_force?.buckets[index]?.ipv4 ? 'ipv4' : 'ipv6'}
                                         onChange={(e: React.ChangeEvent<any>) => {
-                                          // Set ipv4 to true and ipv6 to false if ipv4 is selected
-                                          // Set ipv4 to false and ipv6 to true if ipv6 is selected
+                                          // Set ipv4 to true, and ipv6 to false if ipv4 is selected
+                                          // Set ipv4 to false, and ipv6 to true if ipv6 is selected
                                           const isIPv4 = e.target.value === 'ipv4';
-                                          setFieldValue(`brute_force.buckets[${index}].ipv4`, isIPv4);
-                                          setFieldValue(`brute_force.buckets[${index}].ipv6`, !isIPv4);
-                                          setHasUnsavedChanges(true);
+                                          setFieldValue(`brute_force.buckets[${index}].ipv4`, isIPv4)
+                                              .then(() => setHasUnsavedChanges(true));
+                                          setFieldValue(`brute_force.buckets[${index}].ipv6`, !isIPv4)
+                                              .then(() => setHasUnsavedChanges(true));
                                         }}
                                       >
                                         <FormControlLabel value="ipv4" control={<Radio />} label="IPv4" />
@@ -1785,7 +1790,7 @@ const FeaturesConfig: React.FC = () => {
                                         {({ push: pushProtocol, remove: removeProtocol }) => (
                                           <div>
                                             {values.brute_force?.buckets[index]?.filter_by_protocol && Array.isArray(values.brute_force?.buckets[index]?.filter_by_protocol) && values.brute_force?.buckets[index]?.filter_by_protocol!.length > 0 ? (
-                                              values.brute_force?.buckets[index]?.filter_by_protocol!.map((protocol: string, protocolIndex: number) => (
+                                              values.brute_force?.buckets[index]?.filter_by_protocol!.map((_protocol: string, protocolIndex: number) => (
                                                 <Box key={protocolIndex} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                                   <Field
                                                     as={TextField}
@@ -1836,7 +1841,7 @@ const FeaturesConfig: React.FC = () => {
                                         {({ push: pushOIDC, remove: removeOIDC }) => (
                                           <div>
                                             {values.brute_force?.buckets[index]?.filter_by_oidc_cid && Array.isArray(values.brute_force?.buckets[index]?.filter_by_oidc_cid) && values.brute_force?.buckets[index]?.filter_by_oidc_cid!.length > 0 ? (
-                                              values.brute_force?.buckets[index]?.filter_by_oidc_cid!.map((oidc: string, oidcIndex: number) => (
+                                              values.brute_force?.buckets[index]?.filter_by_oidc_cid!.map((_oidc: string, oidcIndex: number) => (
                                                 <Box key={oidcIndex} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                                                   <Field
                                                     as={TextField}
