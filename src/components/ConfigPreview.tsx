@@ -6,7 +6,7 @@ import { BackendConfig } from '../types/config';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
-const ConfigPreview = (): JSX.Element => {
+const ConfigPreview = (): React.JSX.Element => {
   const { config, validateConfigSection } = useConfig();
   const theme = useTheme();
 
@@ -60,7 +60,7 @@ const ConfigPreview = (): JSX.Element => {
     } else {
       // Check if all backends are valid strings
       const invalidBackends = configCopy.server.backends.filter((backend: BackendConfig) => 
-        !backend || typeof backend !== 'string' || backend.trim() === ''
+        !backend || backend.trim() === ''
       );
 
       if (invalidBackends.length > 0) {
@@ -72,35 +72,27 @@ const ConfigPreview = (): JSX.Element => {
 
     // Check if LDAP is configured when LDAP backend is used
     const hasLdapBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-      if (typeof backend === 'string') {
-        return backend === 'ldap' || backend.startsWith('ldap(');
-      }
-      return false;
+      return backend === 'ldap' || backend.startsWith('ldap(');
     });
 
     if (hasLdapBackend) {
       // Check if standard LDAP is configured
       const hasStandardLdapBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-        if (typeof backend === 'string') {
-          return backend === 'ldap';
-        }
-        return false;
+        return backend === 'ldap';
       });
 
       if (hasStandardLdapBackend && (!configCopy.ldap || !configCopy.ldap.config || !configCopy.ldap.config.server_uri)) {
         essentialErrors.push('LDAP backend is configured but LDAP configuration is missing or incomplete.');
       }
 
-      // Check if LDAP pool is configured
+      // Check if an LDAP pool is configured
       const ldapPoolRegex = /^ldap\((.+)\)$/;
       configCopy.server?.backends?.forEach((backend: BackendConfig) => {
-        if (typeof backend === 'string') {
-          const match = backend.match(ldapPoolRegex);
-          if (match) {
-            const poolName = match[1];
-            if (!configCopy.ldap || !configCopy.ldap.optional_ldap_pools || !configCopy.ldap.optional_ldap_pools[poolName]) {
-              essentialErrors.push(`LDAP pool "${poolName}" is configured as a backend but the pool configuration is missing.`);
-            }
+        const match = backend.match(ldapPoolRegex);
+        if (match) {
+          const poolName = match[1];
+          if (!configCopy.ldap || !configCopy.ldap.optional_ldap_pools || !configCopy.ldap.optional_ldap_pools[poolName]) {
+            essentialErrors.push(`LDAP pool "${poolName}" is configured as a backend but the pool configuration is missing.`);
           }
         }
       });
@@ -108,19 +100,13 @@ const ConfigPreview = (): JSX.Element => {
 
     // Check if Lua is configured when Lua backend is used
     const hasLuaBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-      if (typeof backend === 'string') {
-        return backend === 'lua' || backend.startsWith('lua(');
-      }
-      return false;
+      return backend === 'lua' || backend.startsWith('lua(');
     });
 
     if (hasLuaBackend) {
-      // Check if standard Lua backend is configured
+      // Check if a standard Lua backend is configured
       const hasStandardLuaBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-        if (typeof backend === 'string') {
-          return backend === 'lua';
-        }
-        return false;
+        return backend === 'lua';
       });
 
       if (hasStandardLuaBackend && (!configCopy.lua || !configCopy.lua.search || configCopy.lua.search.length === 0)) {
@@ -130,13 +116,11 @@ const ConfigPreview = (): JSX.Element => {
       // Check if optional Lua backends are configured
       const luaBackendRegex = /^lua\((.+)\)$/;
       configCopy.server?.backends?.forEach((backend: BackendConfig) => {
-        if (typeof backend === 'string') {
-          const match = backend.match(luaBackendRegex);
-          if (match) {
-            const backendName = match[1];
-            if (!configCopy.lua || !configCopy.lua.optional_lua_backends || !configCopy.lua.optional_lua_backends[backendName]) {
-              essentialErrors.push(`Lua backend "${backendName}" is configured but the backend configuration is missing.`);
-            }
+        const match = backend.match(luaBackendRegex);
+        if (match) {
+          const backendName = match[1];
+          if (!configCopy.lua || !configCopy.lua.optional_lua_backends || !configCopy.lua.optional_lua_backends[backendName]) {
+            essentialErrors.push(`Lua backend "${backendName}" is configured but the backend configuration is missing.`);
           }
         }
       });
@@ -153,7 +137,7 @@ const ConfigPreview = (): JSX.Element => {
         }
       }
 
-      // Check relay_domains feature
+      // Check the relay_domains feature
       if (configCopy.server.features.includes('relay_domains')) {
         if (!configCopy.relay_domains) {
           essentialErrors.push('Relay Domains feature is enabled but Relay Domains configuration is missing.');
