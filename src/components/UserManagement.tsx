@@ -36,7 +36,7 @@ import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import { useUser } from '../contexts/UserContext';
 
-const UserManagement = (): JSX.Element => {
+const UserManagement = (): React.JSX.Element => {
   const { getUsers, addUser, removeUser, updatePassword, updateUserProfile, loading, error, clearError, user: currentUser } = useUser();
   const [users, setUsers] = useState<{
     username: string;
@@ -67,7 +67,7 @@ const UserManagement = (): JSX.Element => {
   // Reference for the Add User button to restore focus
   const addUserButtonRef = useRef<HTMLButtonElement>(null);
 
-  // Check if user has admin role
+  // Check if the user has the admin role
   const isAdmin = currentUser?.roles.includes('admin');
 
   // Define loadUsers function with useCallback to memoize it
@@ -78,9 +78,10 @@ const UserManagement = (): JSX.Element => {
 
   // Load users on component mount
   useEffect(() => {
-    loadUsers();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    (async () => {
+      await loadUsers();
+    })();
+  }, [loadUsers]);
 
   const handleAddUser = async () => {
     setLocalError(null);
@@ -99,9 +100,9 @@ const UserManagement = (): JSX.Element => {
       setConfirmPassword('');
       setRoles(['user']);
       setSuccessMessage('User added successfully');
-      loadUsers();
+      await loadUsers();
 
-      // Restore focus to the Add User button after dialog is closed
+      // Restore focus to the Add User button after the dialog is closed
       setTimeout(() => {
         if (addUserButtonRef.current) {
           addUserButtonRef.current.focus();
@@ -150,7 +151,7 @@ const UserManagement = (): JSX.Element => {
       await removeUser(selectedUser);
       setOpenDeleteDialog(false);
       setSuccessMessage('User deleted successfully');
-      loadUsers();
+      await loadUsers();
     } catch (err) {
       console.error('Error deleting user:', err);
     }
@@ -189,7 +190,7 @@ const UserManagement = (): JSX.Element => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    // Check file type
+    // Check the file type
     if (!file.type.match('image.*')) {
       setLocalError('Please select an image file');
       return;
@@ -228,7 +229,7 @@ const UserManagement = (): JSX.Element => {
       });
       setOpenProfileDialog(false);
       setSuccessMessage('Profile updated successfully');
-      loadUsers();
+      await loadUsers();
     } catch (err) {
       console.error('Error updating profile:', err);
     }
@@ -356,7 +357,7 @@ const UserManagement = (): JSX.Element => {
                             <AccountCircleIcon />
                           </IconButton>
                         </Tooltip>
-                        {/* Wrap disabled button in span to allow tooltip to work */}
+                        {/* Wrap the disabled button in span to allow the tooltip to work */}
                         <Tooltip title="Delete User">
                           <span>
                             <IconButton 
@@ -379,7 +380,7 @@ const UserManagement = (): JSX.Element => {
         </>
       )}
 
-      {/* Only render dialogs if user is admin */}
+      {/* Only render dialogs if the user is admin */}
       {isAdmin && (
         <>
           {/* Add User Dialog */}
