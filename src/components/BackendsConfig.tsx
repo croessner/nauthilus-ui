@@ -34,7 +34,7 @@ const BackendsConfigSchema = Yup.object().shape({
   ),
 });
 
-const BackendsConfig = (): JSX.Element => {
+const BackendsConfig = (): React.JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
   const [isFormChanged, setIsFormChanged] = useState(false);
 
@@ -67,9 +67,11 @@ const BackendsConfig = (): JSX.Element => {
       },
     };
 
-    updateConfig(newConfig);
-    setHasUnsavedChanges(false);
-    setIsFormChanged(false);
+    updateConfig(newConfig)
+        .then(() => {
+          setHasUnsavedChanges(false);
+          setIsFormChanged(false)
+        });
   };
 
   // Function to check if form values have changed from initial values
@@ -118,7 +120,7 @@ const BackendsConfig = (): JSX.Element => {
         const hasChanged = checkFormChanged(values, initialValues);
         setIsFormChanged(hasChanged);
         setHasUnsavedChanges(hasChanged);
-        return {}; // Return empty object (no validation errors)
+        return {}; // Return an empty object (no validation errors)
       }}
     >
       {({ values, errors, touched, isSubmitting, setFieldValue }) => {
@@ -154,7 +156,8 @@ const BackendsConfig = (): JSX.Element => {
                                   onChange={(e) => {
                                     const newBackends = [...values.backends];
                                     newBackends[index] = e.target.value;
-                                    setFieldValue('backends', newBackends);
+                                    setFieldValue('backends', newBackends)
+                                        .then(() => setHasUnsavedChanges(true));
                                   }}
                                   error={touched.backends !== undefined && errors.backends !== undefined && 
                                     Array.isArray(touched.backends) && Array.isArray(errors.backends) &&
@@ -179,8 +182,8 @@ const BackendsConfig = (): JSX.Element => {
                                       const temp = newBackends[index];
                                       newBackends[index] = newBackends[index - 1];
                                       newBackends[index - 1] = temp;
-                                      setFieldValue('backends', newBackends);
-                                      setHasUnsavedChanges(true);
+                                      setFieldValue('backends', newBackends)
+                                          .then(() => setHasUnsavedChanges(true));
                                     }
                                   }}
                                   disabled={index === 0}
@@ -195,8 +198,8 @@ const BackendsConfig = (): JSX.Element => {
                                       const temp = newBackends[index];
                                       newBackends[index] = newBackends[index + 1];
                                       newBackends[index + 1] = temp;
-                                      setFieldValue('backends', newBackends);
-                                      setHasUnsavedChanges(true);
+                                      setFieldValue('backends', newBackends)
+                                          .then(() => setHasUnsavedChanges(true));
                                     }
                                   }}
                                   disabled={index === values.backends.length - 1}
@@ -208,8 +211,8 @@ const BackendsConfig = (): JSX.Element => {
                                   onClick={() => {
                                     const newBackends = [...values.backends];
                                     newBackends.splice(index, 1);
-                                    setFieldValue('backends', newBackends);
-                                    setHasUnsavedChanges(true);
+                                    setFieldValue('backends', newBackends)
+                                        .then(() => setHasUnsavedChanges(true));
                                   }}
                                 >
                                   <DeleteIcon />
@@ -229,8 +232,8 @@ const BackendsConfig = (): JSX.Element => {
                           setFieldValue('backends', [
                             ...values.backends,
                             'cache',
-                          ]);
-                          setHasUnsavedChanges(true);
+                          ])
+                              .then(() => setHasUnsavedChanges(true));
                         }}
                       >
                         Add Backend
