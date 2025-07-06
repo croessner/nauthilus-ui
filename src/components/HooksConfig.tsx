@@ -24,7 +24,6 @@ import {
   FormControl,
   InputAdornment,
 } from '@mui/material';
-import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LuaHookConfig, LuaHooksConfig} from '../types/config';
@@ -174,11 +173,10 @@ interface HookOperationResult {
   data?: any;
 }
 
-const HooksConfig: React.FC = () => {
+const HooksConfig = (): React.JSX.Element => {
   const { config, setHasUnsavedChanges, error, loadConfigFromBackend, currentProfileName } = useConfig();
   const { saveRuntimeSettings, hooks: runtimeHooks, connection: runtimeConnection, loadRuntimeSettings } = useRuntime();
   const [isFormChanged, setIsFormChanged] = useState(false);
-  const [testingHook, setTestingHook] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [snackbarOpen, setSnackbarOpen] = useState(false);
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected' | 'checking'>('unknown');
@@ -262,87 +260,6 @@ const HooksConfig: React.FC = () => {
     })();
   }, [config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
 
-  // Function to test a hook
-  const testHook = async (hookName: string, hookConfig: LuaHookConfig) => {
-    if (!hookConfig.enabled) {
-      setTestResult({
-        success: false,
-        message: "Hook is not enabled. Please enable it first."
-      });
-      setSnackbarOpen(true);
-      return;
-    }
-
-    // Use runtime connection if available, otherwise use config connection
-    const connectionConfig = runtimeConnection;
-
-    if (!connectionConfig?.backend_url) {
-      setTestResult({
-        success: false,
-        message: "Backend URL is not configured. Please configure it in the Connection settings."
-      });
-      setSnackbarOpen(true);
-      return;
-    }
-
-    setTestingHook(hookName);
-
-    try {
-      // Construct the proxy URL based on the hook name
-      const proxyEndpoint = `/proxy/hooks/${hookName.replace(/_/g, '-')}`;
-
-      // Add query parameters for the backend URL and endpoint path
-      const url = new URL(proxyEndpoint, window.location.origin);
-      url.searchParams.append('url', connectionConfig.backend_url);
-      url.searchParams.append('endpoint_path', hookConfig.endpoint_path);
-
-      // Add authentication parameters if available
-      const { authType, authValue } = prepareAuthParams(connectionConfig);
-      if (authType && authValue) {
-        url.searchParams.append('authType', authType);
-        url.searchParams.append('authValue', authValue);
-      }
-
-      // Send the request
-      const response = await fetch(url.toString(), {
-        method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-
-        // Update hook-specific data if available
-        if (data && data.result) {
-          setHookData(prevData => ({
-            ...prevData,
-            [hookName]: data.result
-          }));
-        }
-
-        setTestResult({
-          success: true,
-          message: `Successfully tested ${hookDisplayNames[hookName] || hookName}`
-        });
-      } else {
-        const errorMessage = await extractErrorMessage(response);
-        setTestResult({
-          success: false,
-          message: `Failed to test hook: ${errorMessage}`
-        });
-      }
-    } catch (error) {
-      setTestResult({
-        success: false,
-        message: `Error testing hook: ${error instanceof Error ? error.message : String(error)}`
-      });
-    } finally {
-      setTestingHook(null);
-      setSnackbarOpen(true);
-    }
-  };
 
   // Function to execute a hook operation
   const executeHookOperation = async (
@@ -1060,7 +977,7 @@ const HooksConfig: React.FC = () => {
       default:
         return (
           <Typography variant="body2" color="text.secondary">
-            No specific UI available for this hook. Use the Test button to interact with it.
+            No specific UI available for this hook.
           </Typography>
         );
     }
@@ -1151,17 +1068,6 @@ const HooksConfig: React.FC = () => {
                   description={hookDescriptions[hookName] || ""}
                   defaultExpanded={false}
                 >
-                  <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
-                    <Button
-                      variant="outlined"
-                      color="primary"
-                      startIcon={testingHook === hookName ? <CircularProgress size={20} /> : <PlayArrowIcon />}
-                      onClick={() => testHook(hookName, hookConfig)}
-                      disabled={testingHook !== null || !hookConfig.enabled || connectionStatus !== 'connected'}
-                    >
-                      Test
-                    </Button>
-                  </Box>
                   <Grid container spacing={2}>
                     <Grid item xs={12}>
                       <FormControlLabel
