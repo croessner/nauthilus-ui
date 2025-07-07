@@ -475,11 +475,9 @@ export const updateUserProfile = async (
   }
 
   try {
-    // Only update lastModified if not explicitly provided AND we're not just updating lastLogin
-    if (!profileData.lastModified && 
-        !(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
-      profileData.lastModified = new Date().toISOString();
-    }
+    // If lastModified is explicitly provided, use it
+    // Otherwise, it should have been set correctly in the UserContext
+    // based on whether there were actual changes to the profile
 
     // Update user
     await axios.put(`/api/users/${username}`, profileData);
@@ -613,11 +611,23 @@ export const authenticate = async (username: string, password: string, rememberM
   // Update lastLogin timestamp
   const now = new Date().toISOString();
 
-  // Update user profile with lastLogin only
+  // Update user profile with lastLogin only, but preserve lastModified
   try {
-    await updateUserProfile(username, { 
-      lastLogin: now
-    });
+    // Get the current user to preserve the lastModified timestamp
+    const users = await getUsers();
+    const currentUser = users.find(u => u.username === username);
+
+    if (currentUser) {
+      await updateUserProfile(username, { 
+        lastLogin: now,
+        lastModified: currentUser.lastModified // Explicitly preserve the existing lastModified value
+      });
+    } else {
+      // Fallback if we can't find the current user
+      await updateUserProfile(username, { 
+        lastLogin: now
+      });
+    }
   } catch (error) {
     // Log the error but continue with authentication
     console.error('Failed to update lastLogin timestamp:', error);

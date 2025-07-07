@@ -197,14 +197,44 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
       const userToUpdate = users.find(u => u.username === username);
 
       if (userToUpdate) {
-        // Only add the lastModified timestamp if we're updating something other than just lastLogin
+        // Create a copy of the profile data
         const updatedProfileData = {
           ...profileData
         };
 
-        // Only update lastModified if we're making actual profile changes (not just updating lastLogin)
-        if (!(Object.keys(profileData).length === 1 && 'lastLogin' in profileData)) {
-          updatedProfileData.lastModified = new Date().toISOString();
+        // Check if we're only updating lastLogin
+        const isOnlyLastLoginUpdate = Object.keys(profileData).length === 1 && 'lastLogin' in profileData;
+
+        // If we're not just updating lastLogin, check if there are actual changes
+        if (!isOnlyLastLoginUpdate) {
+          // Check if there are actual changes to the profile
+          let hasChanges = false;
+
+          // Compare each field in profileData with the current user data
+          for (const key in profileData) {
+            if (key !== 'lastLogin' && key !== 'lastModified') {
+              // Handle undefined values correctly
+              const newValue = profileData[key as keyof typeof profileData];
+              const currentValue = userToUpdate[key as keyof typeof userToUpdate];
+
+              // Check if the values are different
+              if ((newValue || '') !== (currentValue || '')) {
+                hasChanges = true;
+                break;
+              }
+            }
+          }
+
+          // Only update lastModified if there are actual changes
+          if (hasChanges) {
+            updatedProfileData.lastModified = new Date().toISOString();
+          } else {
+            // No changes, preserve the existing lastModified value
+            updatedProfileData.lastModified = userToUpdate.lastModified;
+          }
+        } else {
+          // For lastLogin updates, preserve the existing lastModified value
+          updatedProfileData.lastModified = userToUpdate.lastModified;
         }
 
         await userManager.updateUserProfile(username, updatedProfileData);
