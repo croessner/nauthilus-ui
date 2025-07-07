@@ -261,6 +261,36 @@ const HooksConfig = (): React.JSX.Element => {
   }, [config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
 
 
+  // Helper function to update UI after hook operation
+  const updateUIAfterHookOperation = async (
+    result: HookOperationResult,
+    hookName: string,
+    hookConfig: LuaHookConfig
+  ) => {
+    setTestResult(result);
+    setSnackbarOpen(true);
+    setOpenDialog(false);
+
+    // Refresh status after operation
+    const statusResult = await executeHookOperation(
+      hookName,
+      hookConfig,
+      'status',
+      {}
+    );
+
+    // Update UI with the new status
+    if (statusResult.success && statusResult.data) {
+      setHookData(prevData => ({
+        ...prevData,
+        [hookName]: {
+          ...prevData[hookName],
+          status: statusResult.data
+        }
+      }));
+    }
+  };
+
   // Function to execute a hook operation
   const executeHookOperation = async (
     hookName: string, 
@@ -313,15 +343,26 @@ const HooksConfig = (): React.JSX.Element => {
         url.searchParams.append('authValue', authValue);
       }
 
-      console.log(`Final URL: ${url.toString()}`);
+      // For learning_mode, use GET method as the backend expects GET requests
+      // For other hooks, use POST method
+      const method = hookName === 'learning_mode' ? 'GET' : 'POST';
+
+      // For GET requests, add parameters as query parameters
+      if (method === 'GET' && Object.keys(params).length > 0) {
+        for (const [key, value] of Object.entries(params)) {
+          url.searchParams.append(key, String(value));
+        }
+      }
+
+      console.log(`Final URL: ${url.toString()}, Method: ${method}`);
 
       // Send the request
       const response = await fetch(url.toString(), {
-        method: 'POST',
+        method: method,
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(params),
+        body: method === 'POST' ? JSON.stringify(params) : undefined,
       });
 
       if (response.ok) {
@@ -339,15 +380,47 @@ const HooksConfig = (): React.JSX.Element => {
             console.log(`New hook data:`, newData);
             return newData;
           });
+
+          return {
+            success: true,
+            message: `Operation completed successfully`,
+            data: data.result
+          };
+        } else if (data && (data.learning_mode !== undefined || data.status === 'success')) {
+          // Handle direct response format from learning-mode.lua
+          console.log(`Setting direct data for ${hookName}:`, data);
+          const statusData = {
+            enabled: data.learning_mode,
+            status: data.status,
+            message: data.message
+          };
+
+          setHookData(prevData => {
+            const newData = {
+              ...prevData,
+              [hookName]: {
+                ...prevData[hookName],
+                status: statusData
+              }
+            };
+            console.log(`New hook data with direct format:`, newData);
+            return newData;
+          });
+
+          return {
+            success: true,
+            message: data.message || `Operation completed successfully`,
+            data: statusData
+          };
         } else {
           console.log(`No result data found in response for ${hookName}`);
-        }
 
-        return {
-          success: true,
-          message: `Operation completed successfully`,
-          data: data.result
-        };
+          return {
+            success: true,
+            message: `Operation completed successfully`,
+            data: data
+          };
+        }
       } else {
         const errorMessage = await extractErrorMessage(response);
         return {
@@ -638,8 +711,55 @@ const HooksConfig = (): React.JSX.Element => {
         );
 
       case 'learning_mode':
+        // Determine which button should be the default action
+        const defaultAction = hookData[hookName]?.status?.enabled === true ? 'disable' : 'enable';
+
+        // Function to execute the default action
+        const executeDefaultAction = async () => {
+          const operation = defaultAction;
+          const dialogTitle = defaultAction === 'enable' ? 'Enable Learning Mode' : 'Disable Learning Mode';
+          const dialogContent = defaultAction === 'enable' 
+            ? 'Are you sure you want to enable learning mode? This will put the system in a state where it learns from authentication attempts.'
+            : 'Are you sure you want to disable learning mode? This will stop the system from learning from authentication attempts.';
+          const confirmLabel = defaultAction === 'enable' ? 'Enable' : 'Disable';
+
+          showConfirmationDialog(
+            dialogTitle,
+            <Typography>{dialogContent}</Typography>,
+            confirmLabel,
+            async () => {
+              const result = await executeHookOperation(
+                hookName,
+                hookConfig,
+                operation,
+                {}
+              );
+
+              // Create a custom result with a more descriptive message
+              const customResult = {
+                ...result,
+                message: `Learning Mode ${defaultAction === 'enable' ? 'enabled' : 'disabled'} successfully`
+              };
+
+              // Update UI with the custom result
+              await updateUIAfterHookOperation(customResult, hookName, hookConfig);
+            }
+          );
+        };
+
         return (
           <Box sx={{ mt: 2 }}>
+            {/* Notification for current learning mode status */}
+            {hookData[hookName]?.status && (
+              <Alert 
+                severity={hookData[hookName].status.enabled ? "info" : "warning"} 
+                sx={{ mb: 2 }}
+              >
+                Learning Mode is currently {hookData[hookName].status.enabled ? 'Enabled' : 'Disabled'}. 
+                Click the "{defaultAction === 'enable' ? 'Enable' : 'Disable'} Learning Mode" button to {defaultAction === 'enable' ? 'enable' : 'disable'} it.
+              </Alert>
+            )}
+
             <Typography variant="subtitle1" gutterBottom>
               Learning Mode Configuration
             </Typography>
@@ -657,6 +777,16 @@ const HooksConfig = (): React.JSX.Element => {
                       'status',
                       {}
                     );
+                    // Update the UI with the status information
+                    if (result.success && result.data) {
+                      setHookData(prevData => ({
+                        ...prevData,
+                        [hookName]: {
+                          ...prevData[hookName],
+                          status: result.data
+                        }
+                      }));
+                    }
                     setTestResult(result);
                     setSnackbarOpen(true);
                   }}
@@ -674,94 +804,14 @@ const HooksConfig = (): React.JSX.Element => {
                   variant="contained"
                   color="primary"
                   fullWidth
-                  onClick={() => {
-                    showConfirmationDialog(
-                      'Enable Learning Mode',
-                      <Typography>
-                        Are you sure you want to enable learning mode? This will put the system in a state where it learns from authentication attempts.
-                      </Typography>,
-                      'Enable',
-                      async () => {
-                        const result = await executeHookOperation(
-                          hookName,
-                          hookConfig,
-                          'enable',
-                          {}
-                        );
-                        setTestResult(result);
-                        setSnackbarOpen(true);
-                        setOpenDialog(false);
-                      }
-                    );
-                  }}
-                  disabled={isProcessing || activeHook === hookName || (hookData[hookName]?.status?.enabled === true)}
+                  onClick={executeDefaultAction}
+                  disabled={isProcessing || activeHook === hookName || !hookData[hookName]?.status}
                 >
-                  Enable Learning Mode
-                </Button>
-              </Grid>
-              <Grid item xs={12} sm={6} md={4}>
-                <Button
-                  variant="outlined"
-                  color="secondary"
-                  fullWidth
-                  onClick={() => {
-                    showConfirmationDialog(
-                      'Disable Learning Mode',
-                      <Typography>
-                        Are you sure you want to disable learning mode? This will stop the system from learning from authentication attempts.
-                      </Typography>,
-                      'Disable',
-                      async () => {
-                        const result = await executeHookOperation(
-                          hookName,
-                          hookConfig,
-                          'disable',
-                          {}
-                        );
-                        setTestResult(result);
-                        setSnackbarOpen(true);
-                        setOpenDialog(false);
-                      }
-                    );
-                  }}
-                  disabled={isProcessing || activeHook === hookName || (hookData[hookName]?.status?.enabled === false)}
-                >
-                  Disable Learning Mode
+                  {defaultAction === 'enable' ? 'Enable' : 'Disable'} Learning Mode
                 </Button>
               </Grid>
             </Grid>
 
-            {/* Display learning mode status if available */}
-            {hookData[hookName] && hookData[hookName].status && (
-              <Paper sx={{ mt: 2, p: 2 }}>
-                <Typography variant="h6" gutterBottom>
-                  Learning Mode Status
-                </Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <Typography variant="subtitle2">Status</Typography>
-                    <Typography 
-                      variant="body1" 
-                      color={hookData[hookName].status.enabled ? 'success.main' : 'text.secondary'}
-                    >
-                      {hookData[hookName].status.enabled ? 'Enabled' : 'Disabled'}
-                    </Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <Typography variant="subtitle2">Records Collected</Typography>
-                    <Typography variant="body1">{hookData[hookName].status.records_collected || 0}</Typography>
-                  </Grid>
-                  <Grid item xs={12} sm={6} md={4}>
-                    <Typography variant="subtitle2">Last Update</Typography>
-                    <Typography variant="body1">
-                      {hookData[hookName].status.last_update 
-                        ? new Date(hookData[hookName].status.last_update).toLocaleString() 
-                        : 'N/A'}
-                    </Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
-            )}
           </Box>
         );
 

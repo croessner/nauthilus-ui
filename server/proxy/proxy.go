@@ -390,6 +390,22 @@ func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
 	// If operation is provided, append it as a query parameter
 	operation := getOperation(c)
 	if operation != "" {
+		// For learning-mode, we need to set the enabled parameter based on the operation
+		if operation == "enable" || operation == "disable" {
+			// Set the enabled parameter based on the operation
+			enabledValue := "true"
+			if operation == "disable" {
+				enabledValue = "false"
+			}
+
+			// Check if the endpoint path already has query parameters
+			if target.RawQuery != "" {
+				target.RawQuery += "&enabled=" + enabledValue
+			} else {
+				target.RawQuery = "enabled=" + enabledValue
+			}
+		}
+
 		// Check if the endpoint path already has query parameters
 		if target.RawQuery != "" {
 			target.RawQuery += "&operation=" + operation
