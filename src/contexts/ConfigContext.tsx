@@ -843,6 +843,25 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           profiles: updatedProfiles,
           currentProfileName: currentProfileName === oldName ? newName : currentProfileName
         });
+
+        // Update runtime settings reference to the profile
+        try {
+          // First, get the current runtime settings for the old profile name
+          const runtimeResponse = await axios.get(`/api/runtime/${userId}/${oldName}`);
+          const { connection, hooks } = runtimeResponse.data;
+
+          // Save the runtime settings with the new profile name
+          await axios.post(`/api/runtime/${userId}/${newName}`, {
+            connection,
+            hooks
+          });
+
+          console.log(`Runtime settings updated for renamed profile from "${oldName}" to "${newName}"`);
+        } catch (runtimeError) {
+          console.warn(`No runtime settings found for profile "${oldName}" or failed to update:`, runtimeError);
+          // Don't throw an error here, as the profile rename was successful
+          // and there might not be any runtime settings for this profile yet
+        }
       } catch (error) {
         console.error('Failed to save profiles to API:', error);
         throw new Error('Failed to save profiles to MongoDB');
