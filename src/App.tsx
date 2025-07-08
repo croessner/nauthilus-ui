@@ -66,6 +66,7 @@ import { UserProvider, useUser } from './contexts/UserContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ValidationErrors from './components/common/ValidationErrors';
 import LoginPage from './components/LoginPage';
+import MFAPage from './components/MFAPage';
 
 // Import configuration components
 import ServerConfig from './components/ServerConfig';
@@ -195,7 +196,7 @@ const MainContent = (): JSX.Element => {
   // Define application menu items
   const applicationMenuItems: NavigationMenuItem[] = [
     { text: 'User Management', icon: <PeopleIcon />, path: '/users' },
-    { text: 'Two-Factor Authentication', icon: <SecurityIcon />, path: '/mfa' },
+    { text: 'Two-Factor Authentication', icon: <SecurityIcon />, path: '/mfa-settings' },
   ];
 
   // Define licenses menu item separately to place it at the bottom
@@ -914,7 +915,7 @@ const MainContent = (): JSX.Element => {
               <Route path="/config-wizard" element={<ConfigWizard autoOpen={true} />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="/profile" element={<UserProfile />} />
-              <Route path="/mfa" element={<MFASettings />} />
+              <Route path="/mfa-settings" element={<MFASettings />} />
             </Routes>
           </>
         )}
@@ -1077,15 +1078,25 @@ const AppContent = (): JSX.Element => {
   const { auth } = useAuth();
 
   // If the user is authenticated, show the main content
-  // Otherwise, show only the login page
+  // If MFA is required, show the MFA page
+  // Otherwise, show the login page
   return (
     <>
-      {isAuthenticated && auth.isAuthenticated ? (
+      {isAuthenticated && auth.isAuthenticated && !auth.mfaRequired ? (
         <MainContent />
       ) : (
-        <Box sx={{ height: '100vh', bgcolor: 'background.default' }}>
-          <LoginPage />
-        </Box>
+        <Routes>
+          <Route path="/mfa" element={
+            <Box sx={{ height: '100vh', bgcolor: 'background.default' }}>
+              <MFAPage />
+            </Box>
+          } />
+          <Route path="*" element={
+            <Box sx={{ height: '100vh', bgcolor: 'background.default' }}>
+              {auth.mfaRequired ? <MFAPage /> : <LoginPage />}
+            </Box>
+          } />
+        </Routes>
       )}
     </>
   );

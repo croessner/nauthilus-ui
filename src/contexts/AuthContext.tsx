@@ -7,6 +7,8 @@ interface AuthState {
   username: string | null;
   loading: boolean;
   error: string | null;
+  mfaRequired?: boolean;
+  mfaType?: string;
 }
 
 // Define the context type
@@ -15,6 +17,7 @@ interface AuthContextType {
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   loginWithOIDC: () => Promise<void>;
   logout: () => Promise<void>;
+  completeMfaLogin: (username: string, rememberMe?: boolean) => Promise<{ token: string; refreshToken: string; } | null>;
 }
 
 // Create the context with a default value
@@ -78,14 +81,38 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
       const result = await userManager.authenticate(username, password, rememberMe);
 
       if (result) {
-        setAuth({
-          isAuthenticated: true,
-          username,
-          loading: false,
-          error: null,
-        });
+        // Check if MFA is required
+        if ('mfaRequired' in result && result.mfaRequired) {
+          // Handle MFA required response
+          // For now, just set loading to false and don't set isAuthenticated
+          setAuth(prev => ({
+            ...prev,
+            loading: false,
+            error: null,
+            // Store MFA info in the auth state for use by MFA components
+            mfaRequired: result.mfaRequired,
+            mfaType: result.mfaType,
+            username: result.username,
+          }));
+
+          // We don't redirect to MFA pages, instead we let the UI components
+          // handle the display of MFA verification UI based on the auth state
+        } else if ('token' in result) {
+          // Normal authentication success
+          setAuth({
+            isAuthenticated: true,
+            username,
+            loading: false,
+            error: null,
+          });
+        }
       } else {
         console.error('Invalid username or password');
+        setAuth(prev => ({
+          ...prev,
+          loading: false,
+          error: 'Invalid username or password',
+        }));
       }
     } catch (err) {
       setAuth(prev => ({
@@ -137,12 +164,58 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
     }
   };
 
+  // Complete MFA login after successful verification
+  const completeMfaLogin = async (username: string, rememberMe: boolean = false): Promise<{ token: string; refreshToken: string; } | null> => {
+    try {
+      console.log('AuthContext: Starting completeMfaLogin for user:', username);
+      setAuth(prev => ({ ...prev, loading: true, error: null }));
+
+      // Use the user manager to complete MFA login
+      console.log('AuthContext: Calling userManager.completeMfaLogin');
+      const result = await userManager.completeMfaLogin(username, rememberMe);
+      console.log('AuthContext: Result from userManager.completeMfaLogin:', result);
+
+      if (result) {
+        console.log('AuthContext: Result exists, checking for token property');
+        // Authentication success
+        setAuth({
+          isAuthenticated: true,
+          username,
+          loading: false,
+          error: null,
+          // Clear MFA flags
+          mfaRequired: false,
+          mfaType: undefined,
+        });
+        console.log('AuthContext: Authentication successful, updated auth state');
+        return result; // Return the result to the caller
+      } else {
+        console.error('AuthContext: Failed to complete MFA login, result is null or undefined');
+        setAuth(prev => ({
+          ...prev,
+          loading: false,
+          error: 'Failed to complete authentication',
+        }));
+        return null; // Explicitly return null in error case
+      }
+    } catch (err) {
+      console.error('AuthContext: MFA login error:', err);
+      setAuth(prev => ({
+        ...prev,
+        loading: false,
+        error: 'Failed to complete authentication',
+      }));
+      return null; // Explicitly return null in error case
+    }
+  };
+
   // Provide the context value
   const contextValue: AuthContextType = {
     auth,
     login,
     loginWithOIDC,
     logout,
+    completeMfaLogin,
   };
 
   return (

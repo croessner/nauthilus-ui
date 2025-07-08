@@ -25,6 +25,7 @@ interface UserContextType {
   loading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<User | null>;
+  loginAfterMfa: (username: string) => Promise<User | null>;
   logout: () => Promise<void>;
   addUser: (username: string, password: string, roles: string[]) => Promise<void>;
   removeUser: (username: string) => Promise<void>;
@@ -92,6 +93,35 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } catch (err) {
       console.error('Login error:', err);
       setError('An error occurred during login');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Login after MFA completion function
+  const loginAfterMfa = async (username: string): Promise<User | null> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      // Skip authentication since it's already done in AuthContext
+      // Just update the user state with the current user
+      setIsAuthenticated(true);
+      const currentUser = await userManager.getCurrentUser();
+
+      if (currentUser) {
+        console.log('UserContext: Setting user after MFA completion:', currentUser);
+        setUser(currentUser);
+        return currentUser;
+      } else {
+        console.error('UserContext: Failed to get current user after MFA completion');
+        setError('Failed to get user information after MFA');
+        return null;
+      }
+    } catch (err) {
+      console.error('UserContext: Error in loginAfterMfa:', err);
+      setError('An error occurred during login after MFA');
       return null;
     } finally {
       setLoading(false);
@@ -275,6 +305,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     loading,
     error,
     login,
+    loginAfterMfa,
     logout,
     addUser,
     removeUser,

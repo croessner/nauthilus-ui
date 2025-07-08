@@ -7,3 +7,9 @@ export const module = {
         }
     ]
 };
+
+export const resolve = {
+    fallback: {
+        "crypto": false
+    }
+};

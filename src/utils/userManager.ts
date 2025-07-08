@@ -536,7 +536,7 @@ export const updateUserProfile = async (
 };
 
 // Generate a JWT token
-const generateToken = (user: User, expiry: number): string => {
+const generateToken = (user: Omit<User, 'passwordHash'> & { passwordHash?: string }, expiry: number): string => {
   // Ensure we have a valid config
   const config = cachedConfig ? { ...cachedConfig } : { ...DEFAULT_CONFIG };
 
@@ -588,7 +588,7 @@ export const validateToken = (token: string): boolean => {
 };
 
 // Authenticate a user and generate tokens
-export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | null> => {
+export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | { mfaRequired: boolean, mfaType: string, username: string } | null> => {
   if (!username || !password) {
     return null;
   }
@@ -611,7 +611,14 @@ export const authenticate = async (username: string, password: string, rememberM
         password
       });
 
-      if (response.data && response.data.user) {
+      // Check if MFA is required
+      if (response.data && response.data.mfaRequired) {
+        return {
+          mfaRequired: response.data.mfaRequired,
+          mfaType: response.data.mfaType,
+          username: response.data.username
+        };
+      } else if (response.data && response.data.user) {
         user = response.data.user;
       } else {
         return null;
@@ -674,6 +681,98 @@ export const authenticate = async (username: string, password: string, rememberM
 };
 
 // Refresh a token
+// Complete MFA login after successful verification
+export const completeMfaLogin = async (username: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | null> => {
+  console.log('Starting completeMfaLogin for user:', username);
+  if (!username) {
+    console.error('Username is null or empty');
+    return null;
+  }
+
+  let config;
+  try {
+    config = cachedConfig || await loadConfig();
+    console.log('Config loaded successfully:', config ? 'Config exists' : 'Config is null');
+  } catch (error) {
+    console.error('Failed to load config during MFA completion:', error);
+    return null;
+  }
+
+  // Get user data
+  const users = await getUsers();
+  console.log('Users retrieved during MFA completion:', users ? `${users.length} users found` : 'No users found');
+  const user = users.find(u => u.username === username);
+
+  if (!user) {
+    console.error('User not found during MFA completion');
+    return null;
+  }
+
+  console.log('User found during MFA completion:', user);
+
+  // Check if user has required properties
+  if (!user.roles) {
+    console.error('User does not have roles property:', user);
+    // Add default roles if missing
+    user.roles = ['user'];
+    console.log('Added default roles to user:', user);
+  }
+
+  // Update lastLogin timestamp
+  const now = new Date().toISOString();
+  console.log('Updating lastLogin timestamp to:', now);
+
+  try {
+    await updateUserProfile(username, { 
+      lastLogin: now,
+      lastModified: user.lastModified // Preserve the existing lastModified value
+    });
+    console.log('LastLogin timestamp updated successfully');
+  } catch (error) {
+    // Log the error but continue with authentication
+    console.error('Failed to update lastLogin timestamp:', error);
+  }
+
+  // Use rememberMeExpiry if rememberMe is true, otherwise use regular tokenExpiry
+  const tokenExpiryTime = rememberMe ? config.rememberMeExpiry : config.tokenExpiry;
+  // Always use the longer expiry for refresh token
+  const refreshTokenExpiryTime = Math.max(config.refreshTokenExpiry, tokenExpiryTime);
+
+  console.log('Token expiry time:', tokenExpiryTime);
+  console.log('Refresh token expiry time:', refreshTokenExpiryTime);
+
+  let token, refreshToken;
+
+  try {
+    console.log('Generating token with user:', { username: user.username, roles: user.roles });
+    token = generateToken(user, tokenExpiryTime);
+    console.log('Token generated successfully:', token ? 'Token exists' : 'Token is null');
+
+    refreshToken = generateToken(user, refreshTokenExpiryTime);
+    console.log('Refresh token generated successfully:', refreshToken ? 'Refresh token exists' : 'Refresh token is null');
+
+    // Store tokens in cookies
+    Cookies.set(TOKEN_COOKIE_NAME, token, {
+      ...COOKIE_OPTIONS,
+      expires: new Date(Date.now() + tokenExpiryTime * 1000)
+    });
+    console.log('Token cookie set successfully');
+
+    Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+      ...COOKIE_OPTIONS,
+      expires: new Date(Date.now() + refreshTokenExpiryTime * 1000)
+    });
+    console.log('Refresh token cookie set successfully');
+
+    const result = { token, refreshToken };
+    console.log('Returning result:', result ? 'Result object exists' : 'Result is null');
+    return result;
+  } catch (error) {
+    console.error('Error during token generation or cookie setting:', error);
+    return null;
+  }
+};
+
 export const refreshToken = async (): Promise<{ token: string, refreshToken: string } | null> => {
   // Use refresh token from cookie
   const currentRefreshToken = Cookies.get(REFRESH_TOKEN_COOKIE_NAME);

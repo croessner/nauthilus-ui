@@ -72,6 +72,25 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	}
 
+	// Check if TOTP or WebAuthn is enabled for the user
+	if user.TOTPEnabled {
+		// TOTP is enabled, so we need to require MFA verification
+		c.JSON(http.StatusOK, models.MFARequiredResponse{
+			MFARequired: true,
+			MFAType:     "totp",
+			Username:    user.Username,
+		})
+		return
+	} else if user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0 {
+		// WebAuthn is enabled, so we need to require MFA verification
+		c.JSON(http.StatusOK, models.MFARequiredResponse{
+			MFARequired: true,
+			MFAType:     "webauthn",
+			Username:    user.Username,
+		})
+		return
+	}
+
 	// Return user without passwordHash
 	user.PasswordHash = ""
 	c.JSON(http.StatusOK, models.UserResponse{User: user})

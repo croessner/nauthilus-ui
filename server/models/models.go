@@ -100,3 +100,10 @@ type RuntimeSettingsResponse struct {
 	Connection map[string]interface{} `json:"connection"`
 	Hooks      map[string]interface{} `json:"hooks"`
 }
+
+// MFARequiredResponse represents a response indicating that MFA is required
+type MFARequiredResponse struct {
+	MFARequired bool   `json:"mfaRequired"`
+	MFAType     string `json:"mfaType"`
+	Username    string `json:"username"`
+}
