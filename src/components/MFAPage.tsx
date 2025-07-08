@@ -222,6 +222,47 @@ const MFAPage = (): React.JSX.Element => {
     }
   };
 
+  // Handle paste events for TOTP digit inputs
+  const handleTotpDigitPaste = (index: number, e: React.ClipboardEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    const pastedData = e.clipboardData.getData('text');
+
+    // Filter out non-digit characters
+    const digits = pastedData.replace(/\D/g, '').split('').slice(0, 6);
+
+    if (digits.length > 0) {
+      // Create a new array with the pasted digits
+      const newDigits = [...totpDigits];
+
+      // Fill in the digits starting from the current index
+      for (let i = 0; i < digits.length && index + i < 6; i++) {
+        newDigits[index + i] = digits[i];
+      }
+
+      setTotpDigits(newDigits);
+
+      // Combine all digits to form the TOTP token
+      const newToken = newDigits.join('');
+      setTotpToken(newToken);
+
+      // Focus the next empty field or the last field if all are filled
+      const nextEmptyIndex = newDigits.findIndex((digit, idx) => digit === '' && idx >= index);
+      if (nextEmptyIndex !== -1 && nextEmptyIndex < 6) {
+        const nextInput = document.getElementById(`totp-digit-${nextEmptyIndex}`);
+        if (nextInput) {
+          nextInput.focus();
+        }
+      } else {
+        // If all fields are filled or no empty field after current index, focus the last field
+        const lastFilledIndex = Math.min(index + digits.length - 1, 5);
+        const lastInput = document.getElementById(`totp-digit-${lastFilledIndex}`);
+        if (lastInput) {
+          lastInput.focus();
+        }
+      }
+    }
+  };
+
   return (
     <Box
       sx={{
@@ -293,6 +334,7 @@ const MFAPage = (): React.JSX.Element => {
                   variant="outlined"
                   inputProps={{ 
                     maxLength: 1,
+                    inputMode: 'numeric',
                     style: { 
                       textAlign: 'center',
                       fontSize: '1.5rem',
@@ -303,6 +345,7 @@ const MFAPage = (): React.JSX.Element => {
                   value={digit}
                   onChange={(e) => handleTotpDigitChange(index, e.target.value)}
                   onKeyDown={(e) => handleTotpDigitKeyDown(index, e)}
+                  onPaste={(e) => handleTotpDigitPaste(index, e)}
                   disabled={mfaLoading}
                   autoFocus={index === 0}
                   sx={{ width: '50px' }}

@@ -196,6 +196,10 @@ const MainContent = (): JSX.Element => {
   // Define application menu items
   const applicationMenuItems: NavigationMenuItem[] = [
     { text: 'User Management', icon: <PeopleIcon />, path: '/users' },
+  ];
+
+  // Define MFA menu items (available to all users)
+  const mfaMenuItems: NavigationMenuItem[] = [
     { text: 'Two-Factor Authentication', icon: <SecurityIcon />, path: '/mfa-settings' },
   ];
 
@@ -511,6 +515,51 @@ const MainContent = (): JSX.Element => {
           }
         >
           {applicationMenuItems.map((item) => (
+            <ListItem key={item.text} disablePadding>
+              {iconOnly ? (
+                <Tooltip title={item.text} placement="right">
+                  <ListItemButton 
+                    onClick={() => handleNavigation(item.path)}
+                    sx={{ 
+                      justifyContent: 'center',
+                      '&:hover': {
+                        backgroundColor: 'action.hover',
+                        borderRadius: 1
+                      }
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 0, mr: 0 }}>
+                      {item.icon}
+                    </ListItemIcon>
+                  </ListItemButton>
+                </Tooltip>
+              ) : (
+                <ListItemButton onClick={() => handleNavigation(item.path)}>
+                  <ListItemIcon>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </ListItemButton>
+              )}
+            </ListItem>
+          ))}
+        </List>
+      )}
+
+      {/* MFA Section - Visible to all authenticated users */}
+      {user && (
+        <List
+          subheader={
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+              {!iconOnly && (
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                  Security
+                </Typography>
+              )}
+            </Box>
+          }
+        >
+          {mfaMenuItems.map((item) => (
             <ListItem key={item.text} disablePadding>
               {iconOnly ? (
                 <Tooltip title={item.text} placement="right">

@@ -278,7 +278,7 @@ const UserProfile = (): React.JSX.Element => {
               <Button 
                 variant="outlined" 
                 color="secondary" 
-                onClick={() => navigate('/mfa')}
+                onClick={() => navigate('/mfa-settings')}
                 fullWidth
                 startIcon={<SecurityIcon />}
               >
