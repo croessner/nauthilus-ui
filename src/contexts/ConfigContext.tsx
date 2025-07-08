@@ -856,6 +856,15 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
             hooks
           });
 
+          // Delete the old runtime settings
+          try {
+            await axios.delete(`/api/runtime/${userId}/${oldName}`);
+            console.log(`Old runtime settings deleted for profile "${oldName}"`);
+          } catch (deleteError) {
+            console.warn(`Failed to delete old runtime settings for profile "${oldName}":`, deleteError);
+            // Don't throw an error here, as the profile rename and new runtime settings creation were successful
+          }
+
           console.log(`Runtime settings updated for renamed profile from "${oldName}" to "${newName}"`);
         } catch (runtimeError) {
           console.warn(`No runtime settings found for profile "${oldName}" or failed to update:`, runtimeError);

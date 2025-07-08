@@ -28,6 +28,7 @@ func NewRuntimeHandler(mongoDB *db.MongoDB) *RuntimeHandler {
 func (h *RuntimeHandler) RegisterRoutes(router *gin.Engine) {
 	router.GET("/api/runtime/:userId/:profileName", h.GetRuntimeSettings)
 	router.POST("/api/runtime/:userId/:profileName", h.SaveRuntimeSettings)
+	router.DELETE("/api/runtime/:userId/:profileName", h.DeleteRuntimeSettings)
 }
 
 // GetRuntimeSettings handles the GET /api/runtime/:userId/:profileName endpoint
@@ -122,4 +123,32 @@ func (h *RuntimeHandler) SaveRuntimeSettings(c *gin.Context) {
 		Connection: runtimeSettings.Connection,
 		Hooks:      runtimeSettings.Hooks,
 	})
+}
+
+// DeleteRuntimeSettings handles the DELETE /api/runtime/:userId/:profileName endpoint
+func (h *RuntimeHandler) DeleteRuntimeSettings(c *gin.Context) {
+	// If MongoDB is not connected, return success
+	if !h.MongoDB.IsConnected {
+		c.JSON(http.StatusOK, models.MessageResponse{Message: "Runtime settings deleted successfully"})
+		return
+	}
+
+	userID := c.Param("userId")
+	profileName := c.Param("profileName")
+
+	// Delete runtime settings
+	filter := bson.M{"userId": userID, "profileName": profileName}
+	result, err := h.MongoDB.RuntimeColl.DeleteOne(context.Background(), filter)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete runtime settings"})
+		return
+	}
+
+	if result.DeletedCount == 0 {
+		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Runtime settings not found"})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.MessageResponse{Message: "Runtime settings deleted successfully"})
 }
