@@ -26,6 +26,12 @@ type Config struct {
 	RefreshTokenExpiry int
 	// RememberMeExpiry is the expiration time for "remember me" tokens in seconds.
 	RememberMeExpiry int
+
+	// WebAuthn configuration
+	// WebAuthnRPID is the Relying Party ID for WebAuthn.
+	WebAuthnRPID string
+	// WebAuthnRPDisplayName is the Relying Party display name for WebAuthn.
+	WebAuthnRPDisplayName string
 }
 
 // LoadConfig loads configuration from environment variables.
@@ -44,6 +50,10 @@ func LoadConfig() *Config {
 		TokenExpiry:        getEnvAsInt("REACT_APP_TOKEN_EXPIRY", 3600),
 		RefreshTokenExpiry: getEnvAsInt("REACT_APP_REFRESH_TOKEN_EXPIRY", 86400),
 		RememberMeExpiry:   getEnvAsInt("REACT_APP_REMEMBER_ME_EXPIRY", 86400),
+
+		// WebAuthn configuration
+		WebAuthnRPID:          getEnv("WEBAUTHN_RP_ID", ""),
+		WebAuthnRPDisplayName: getEnv("WEBAUTHN_RP_DISPLAY_NAME", "Nauthilus UI"),
 	}
 
 	return config

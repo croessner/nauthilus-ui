@@ -19,6 +19,17 @@ const COOKIE_OPTIONS = {
 };
 
 
+// WebAuthnCredential interface
+export interface WebAuthnCredential {
+  id: string;
+  publicKey: string; // Base64 encoded
+  name: string;
+  createdAt: string;
+  lastUsed: string;
+  aaguid: string;
+  authenticator: string;
+}
+
 // User interface
 export interface User {
   username: string;
@@ -29,6 +40,12 @@ export interface User {
   avatar?: string;
   lastLogin?: string | null;
   lastModified?: string;
+  // TOTP fields
+  totpEnabled?: boolean;
+  totpSecret?: string;
+  // WebAuthn fields
+  webAuthnEnabled?: boolean;
+  webAuthnDevices?: WebAuthnCredential[];
 }
 
 // Configuration interface

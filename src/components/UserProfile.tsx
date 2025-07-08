@@ -14,12 +14,15 @@ import {
   Divider
 } from '@mui/material';
 import { useUser } from '../contexts/UserContext';
+import { useNavigate } from 'react-router-dom';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
+import SecurityIcon from '@mui/icons-material/Security';
 
 const UserProfile = (): React.JSX.Element => {
   const { user, updateUserProfile, updatePassword, loading, error, clearError } = useUser();
+  const navigate = useNavigate();
 
   // Profile section state
   const [displayName, setDisplayName] = useState('');
@@ -267,8 +270,19 @@ const UserProfile = (): React.JSX.Element => {
                 color="primary" 
                 onClick={handleUpdateProfile}
                 fullWidth
+                sx={{ mb: 2 }}
               >
                 Update Profile
+              </Button>
+
+              <Button 
+                variant="outlined" 
+                color="secondary" 
+                onClick={() => navigate('/mfa')}
+                fullWidth
+                startIcon={<SecurityIcon />}
+              >
+                Manage Two-Factor Authentication
               </Button>
             </Paper>
           </Grid>

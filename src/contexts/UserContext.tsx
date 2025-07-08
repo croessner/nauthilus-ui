@@ -10,6 +10,12 @@ interface User {
   avatar?: string;
   lastLogin?: string | null;
   lastModified?: string;
+  // TOTP fields
+  totpEnabled?: boolean;
+  totpSecret?: string;
+  // WebAuthn fields
+  webAuthnEnabled?: boolean;
+  webAuthnDevices?: userManager.WebAuthnCredential[];
 }
 
 // Define the context type
@@ -18,7 +24,7 @@ interface UserContextType {
   user: User | null;
   loading: boolean;
   error: string | null;
-  login: (username: string, password: string) => Promise<boolean>;
+  login: (username: string, password: string) => Promise<User | null>;
   logout: () => Promise<void>;
   addUser: (username: string, password: string, roles: string[]) => Promise<void>;
   removeUser: (username: string) => Promise<void>;
@@ -67,7 +73,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
   }, []);
 
   // Login function
-  const login = async (username: string, password: string): Promise<boolean> => {
+  const login = async (username: string, password: string): Promise<User | null> => {
     setLoading(true);
     setError(null);
 
@@ -78,15 +84,15 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
         setIsAuthenticated(true);
         const currentUser = await userManager.getCurrentUser();
         setUser(currentUser);
-        return true;
+        return currentUser;
       } else {
         setError('Invalid username or password');
-        return false;
+        return null;
       }
     } catch (err) {
       console.error('Login error:', err);
       setError('An error occurred during login');
-      return false;
+      return null;
     } finally {
       setLoading(false);
     }

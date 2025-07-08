@@ -95,6 +95,14 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 
 	runtimeHandler := api.NewRuntimeHandler(mongoDB)
 	runtimeHandler.RegisterRoutes(r)
+
+	// Register MFA handler
+	mfaHandler, err := api.NewMFAHandler(mongoDB)
+	if err != nil {
+		slog.Error("Failed to create MFA handler", "error", err)
+	} else {
+		mfaHandler.RegisterRoutes(r)
+	}
 }
 
 // registerProxyHandlers registers all proxy handlers with the router

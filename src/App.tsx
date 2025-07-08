@@ -87,6 +87,7 @@ import ConfigWizard from './components/ConfigWizard';
 import UserManagement from './components/UserManagement';
 import UserProfile from './components/UserProfile';
 import BruteForceConfig from './components/BruteForceConfig';
+import MFASettings from './components/MFASettings';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 240;
@@ -194,6 +195,7 @@ const MainContent = (): JSX.Element => {
   // Define application menu items
   const applicationMenuItems: NavigationMenuItem[] = [
     { text: 'User Management', icon: <PeopleIcon />, path: '/users' },
+    { text: 'Two-Factor Authentication', icon: <SecurityIcon />, path: '/mfa' },
   ];
 
   // Define licenses menu item separately to place it at the bottom
@@ -912,6 +914,7 @@ const MainContent = (): JSX.Element => {
               <Route path="/config-wizard" element={<ConfigWizard autoOpen={true} />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="/profile" element={<UserProfile />} />
+              <Route path="/mfa" element={<MFASettings />} />
             </Routes>
           </>
         )}

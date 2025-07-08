@@ -1,5 +1,16 @@
 package models
 
+// WebAuthnCredential represents a WebAuthn credential for a user
+type WebAuthnCredential struct {
+	ID            string `bson:"id" json:"id"`
+	PublicKey     []byte `bson:"publicKey" json:"publicKey"`
+	Name          string `bson:"name" json:"name"`
+	CreatedAt     string `bson:"createdAt" json:"createdAt"`
+	LastUsed      string `bson:"lastUsed" json:"lastUsed"`
+	AAGUID        string `bson:"aaguid" json:"aaguid"`
+	Authenticator string `bson:"authenticator" json:"authenticator"`
+}
+
 // User represents a user in the system
 type User struct {
 	Username     string   `bson:"username" json:"username"`
@@ -10,6 +21,12 @@ type User struct {
 	Avatar       string   `bson:"avatar,omitempty" json:"avatar,omitempty"`
 	LastLogin    *string  `bson:"lastLogin" json:"lastLogin"`
 	LastModified string   `bson:"lastModified" json:"lastModified"`
+	// TOTP fields
+	TOTPEnabled bool   `bson:"totpEnabled" json:"totpEnabled"`
+	TOTPSecret  string `bson:"totpSecret,omitempty" json:"totpSecret,omitempty"`
+	// WebAuthn fields
+	WebAuthnEnabled bool                 `bson:"webAuthnEnabled" json:"webAuthnEnabled"`
+	WebAuthnDevices []WebAuthnCredential `bson:"webAuthnDevices,omitempty" json:"webAuthnDevices,omitempty"`
 }
 
 // ProfileData represents a single profile configuration
