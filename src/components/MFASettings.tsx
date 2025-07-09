@@ -176,39 +176,52 @@ const MFASettings: React.FC = () => {
       // Start registration
       const { publicKey, sessionData } = await mfaUtils.beginWebAuthnRegistration(user.username);
 
+      if (!publicKey) {
+        throw new Error('Failed to get WebAuthn registration options from server');
+      }
+
       // Create credential
-      const credential = await navigator.credentials.create({
-        publicKey
-      }) as PublicKeyCredential;
+      try {
+        const credential = await navigator.credentials.create({
+          publicKey
+        }) as PublicKeyCredential;
 
-      // Finish registration
-      const success = await mfaUtils.finishWebAuthnRegistration(credential, deviceName, sessionData);
-
-      if (success) {
-        setWebAuthnSetupOpen(false);
-        setWebAuthnSuccess('Security key has been successfully registered!');
-
-        // Update user context to reflect WebAuthn is enabled
-        if (user) {
-          user.webAuthnEnabled = true;
-
-          // Refresh the list of devices
-          // In a real app, you would fetch the updated user data here
-          // For now, we'll just add a placeholder
-          const newDevice: userManager.WebAuthnCredential = {
-            id: Math.random().toString(36).substring(7),
-            publicKey: '', // This would normally come from the server
-            name: deviceName,
-            createdAt: new Date().toISOString(),
-            lastUsed: new Date().toISOString(),
-            aaguid: '', // This would normally come from the server
-            authenticator: 'WebAuthn Device'
-          };
-
-          setWebAuthnDevices(prev => [...prev, newDevice]);
+        if (!credential) {
+          throw new Error('Browser did not return a credential');
         }
-      } else {
-        setWebAuthnError('Failed to register security key. Please try again.');
+
+        // Finish registration
+        const success = await mfaUtils.finishWebAuthnRegistration(credential, deviceName, sessionData);
+
+        if (success) {
+          setWebAuthnSetupOpen(false);
+          setWebAuthnSuccess('Security key has been successfully registered!');
+
+          // Update user context to reflect WebAuthn is enabled
+          if (user) {
+            user.webAuthnEnabled = true;
+
+            // Refresh the list of devices
+            // In a real app, you would fetch the updated user data here
+            // For now, we'll just add a placeholder
+            const newDevice: userManager.WebAuthnCredential = {
+              id: Math.random().toString(36).substring(7),
+              publicKey: '', // This would normally come from the server
+              name: deviceName,
+              createdAt: new Date().toISOString(),
+              lastUsed: new Date().toISOString(),
+              aaguid: '', // This would normally come from the server
+              authenticator: 'WebAuthn Device'
+            };
+
+            setWebAuthnDevices(prev => [...prev, newDevice]);
+          }
+        } else {
+          setWebAuthnError('Failed to register security key. Please try again.');
+        }
+      } catch (credentialError) {
+        console.error('Error creating credential:', credentialError);
+        setWebAuthnError('Failed to create credential. Please try again or use a different security key.');
       }
     } catch (error) {
       setWebAuthnError('Failed to register security key. Please try again.');
