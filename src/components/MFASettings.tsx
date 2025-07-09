@@ -174,15 +174,15 @@ const MFASettings: React.FC = () => {
 
     try {
       // Start registration
-      const options = await mfaUtils.beginWebAuthnRegistration(user.username);
+      const { publicKey, sessionData } = await mfaUtils.beginWebAuthnRegistration(user.username);
 
       // Create credential
       const credential = await navigator.credentials.create({
-        publicKey: options
+        publicKey
       }) as PublicKeyCredential;
 
       // Finish registration
-      const success = await mfaUtils.finishWebAuthnRegistration(credential, deviceName);
+      const success = await mfaUtils.finishWebAuthnRegistration(credential, deviceName, sessionData);
 
       if (success) {
         setWebAuthnSetupOpen(false);

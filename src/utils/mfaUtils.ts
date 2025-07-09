@@ -32,21 +32,24 @@ export const disableTOTP = async (username: string): Promise<boolean> => {
 };
 
 // WebAuthn API functions
-export const beginWebAuthnRegistration = async (username: string): Promise<PublicKeyCredentialCreationOptions> => {
+export const beginWebAuthnRegistration = async (username: string): Promise<{ publicKey: PublicKeyCredentialCreationOptions, sessionData: string }> => {
   try {
     const response = await axios.get(`/api/auth/webauthn/begin-registration?username=${encodeURIComponent(username)}`);
-    
+
+    // Extract the publicKey and sessionData from the response
+    const { publicKey, sessionData } = response.data;
+
     // Convert base64 strings to ArrayBuffer
-    const publicKeyCredentialCreationOptions = response.data;
-    
+    const publicKeyCredentialCreationOptions = publicKey;
+
     // Convert challenge from base64 to ArrayBuffer
     publicKeyCredentialCreationOptions.challenge = base64ToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
-    
+
     // Convert user.id from base64 to ArrayBuffer
     if (publicKeyCredentialCreationOptions.user && publicKeyCredentialCreationOptions.user.id) {
       publicKeyCredentialCreationOptions.user.id = base64ToArrayBuffer(publicKeyCredentialCreationOptions.user.id);
     }
-    
+
     // Convert excludeCredentials.id from base64 to ArrayBuffer
     if (publicKeyCredentialCreationOptions.excludeCredentials) {
       publicKeyCredentialCreationOptions.excludeCredentials = publicKeyCredentialCreationOptions.excludeCredentials.map((credential: any) => {
@@ -56,15 +59,15 @@ export const beginWebAuthnRegistration = async (username: string): Promise<Publi
         };
       });
     }
-    
-    return publicKeyCredentialCreationOptions;
+
+    return { publicKey: publicKeyCredentialCreationOptions, sessionData };
   } catch (error) {
     console.error('Error beginning WebAuthn registration:', error);
     throw error;
   }
 };
 
-export const finishWebAuthnRegistration = async (credential: PublicKeyCredential, name: string): Promise<boolean> => {
+export const finishWebAuthnRegistration = async (credential: PublicKeyCredential, name: string, sessionData: string): Promise<boolean> => {
   try {
     // Convert ArrayBuffer to base64
     const credentialResponse = {
@@ -76,8 +79,9 @@ export const finishWebAuthnRegistration = async (credential: PublicKeyCredential
         clientDataJSON: arrayBufferToBase64((credential.response as AuthenticatorAttestationResponse).clientDataJSON),
       },
       name,
+      sessionData,
     };
-    
+
     const response = await axios.post('/api/auth/webauthn/finish-registration', credentialResponse);
     return response.status === 200;
   } catch (error) {
@@ -89,13 +93,13 @@ export const finishWebAuthnRegistration = async (credential: PublicKeyCredential
 export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCredentialRequestOptions> => {
   try {
     const response = await axios.get(`/api/auth/webauthn/begin-login?username=${encodeURIComponent(username)}`);
-    
+
     // Convert base64 strings to ArrayBuffer
     const publicKeyCredentialRequestOptions = response.data;
-    
+
     // Convert challenge from base64 to ArrayBuffer
     publicKeyCredentialRequestOptions.challenge = base64ToArrayBuffer(publicKeyCredentialRequestOptions.challenge);
-    
+
     // Convert allowCredentials.id from base64 to ArrayBuffer
     if (publicKeyCredentialRequestOptions.allowCredentials) {
       publicKeyCredentialRequestOptions.allowCredentials = publicKeyCredentialRequestOptions.allowCredentials.map((credential: any) => {
@@ -105,7 +109,7 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
         };
       });
     }
-    
+
     return publicKeyCredentialRequestOptions;
   } catch (error) {
     console.error('Error beginning WebAuthn login:', error);
@@ -129,7 +133,7 @@ export const finishWebAuthnLogin = async (credential: PublicKeyCredential): Prom
           null,
       },
     };
-    
+
     const response = await axios.post('/api/auth/webauthn/finish-login', credentialResponse);
     return response.status === 200;
   } catch (error) {

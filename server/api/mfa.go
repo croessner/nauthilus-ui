@@ -1,10 +1,13 @@
 package api
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -406,52 +409,80 @@ func (h *MFAHandler) BeginWebAuthnRegistration(c *gin.Context) {
 		return
 	}
 
-	// Store session data in context
-	c.Set("webauthnSessionData", sessionData)
-	c.Set("webauthnUsername", username)
+	// Encode session data to base64 to send to client
+	sessionDataBytes, err := json.Marshal(sessionData)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode session data"})
 
-	// Return registration options
-	c.JSON(http.StatusOK, options)
+		return
+	}
+
+	sessionDataBase64 := base64.StdEncoding.EncodeToString(sessionDataBytes)
+
+	// Return registration options with session data
+	c.JSON(http.StatusOK, gin.H{
+		"publicKey":   options,
+		"sessionData": sessionDataBase64,
+	})
 }
 
 // FinishRegistrationRequest represents a request to finish WebAuthn registration
 type FinishRegistrationRequest struct {
-	Name string `json:"name" binding:"required"`
+	Name        string `json:"name" binding:"required"`
+	SessionData string `json:"sessionData" binding:"required"`
+	// The credential fields will be parsed from the request body
 }
 
 // FinishWebAuthnRegistration handles the POST /api/auth/webauthn/finish-registration endpoint
 func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
+	// Read the raw request body
+	bodyBytes, err := io.ReadAll(c.Request.Body)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
+
+		return
+	}
+
+	// Close the original body and replace it with a new reader for later use
+	c.Request.Body.Close()
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+	// Parse the request to get the name and session data
 	var req FinishRegistrationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if err := json.Unmarshal(bodyBytes, &req); err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
 
-	// Get session data from context
-	sessionData, exists := c.Get("webauthnSessionData")
-	if !exists {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No session data found"})
+	// Decode session data from base64
+	sessionDataBytes, err := base64.StdEncoding.DecodeString(req.SessionData)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid session data"})
 
 		return
 	}
 
-	username, exists := c.Get("webauthnUsername")
-	if !exists {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No username found"})
+	// Unmarshal session data
+	var sessionData webauthn.SessionData
+	if err := json.Unmarshal(sessionDataBytes, &sessionData); err != nil {
+		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to decode session data"})
 
 		return
 	}
+
+	// Extract username from session data
+	usernameStr := string(sessionData.UserID)
 
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(username.(string))
+	user, err := h.GetWebAuthnUser(usernameStr)
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
 
-	// Parse response
+	// Parse response using the original request body
 	response, err := protocol.ParseCredentialCreationResponseBody(c.Request.Body)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
@@ -460,7 +491,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	}
 
 	// Finish registration
-	credential, err := h.WebAuthn.CreateCredential(user, sessionData.(webauthn.SessionData), response)
+	credential, err := h.WebAuthn.CreateCredential(user, sessionData, response)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create credential: %v", err)})
 
@@ -473,7 +504,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	// Update user with new credential
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
 		context.Background(),
-		bson.M{"username": username.(string)},
+		bson.M{"username": usernameStr},
 		bson.M{
 			"$push": bson.M{"webAuthnDevices": modelCredential},
 			"$set":  bson.M{"webAuthnEnabled": true},
