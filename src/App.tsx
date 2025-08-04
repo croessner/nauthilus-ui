@@ -78,7 +78,6 @@ import FeaturesConfig from './components/FeaturesConfig';
 import RedisConfig from './components/RedisConfig';
 import MonitoringConfig from './components/MonitoringConfig';
 import LuaConfig from './components/LuaConfig';
-import HooksConfig from './components/HooksConfig';
 import LDAPConfig from './components/LDAPConfig';
 import FrontendConfig from './components/FrontendConfig';
 import ConnectionConfig from './components/ConnectionConfig';
@@ -190,7 +189,6 @@ const MainContent = (): JSX.Element => {
   const runtimeMenuItems: NavigationMenuItem[] = [
     { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
     { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
-    { text: 'Hooks', icon: <CodeIcon />, path: '/hooks' },
   ];
 
   // Define application menu items
@@ -957,7 +955,6 @@ const MainContent = (): JSX.Element => {
               <Route path="/frontend" element={<FrontendConfig />} />
               <Route path="/monitoring" element={<MonitoringConfig />} />
               <Route path="/lua" element={<LuaConfig />} />
-              <Route path="/hooks" element={<HooksConfig />} />
               <Route path="/ldap" element={<LDAPConfig />} />
               <Route path="/config-preview" element={<ConfigPreview />} />
               <Route path="/licenses" element={<LicensesPage />} />

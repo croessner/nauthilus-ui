@@ -133,13 +133,6 @@ const FeaturesConfigSchema = Yup.object().shape({
   brute_force: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
     return selectedFeatures && selectedFeatures.includes('brute_force')
       ? schema.shape({
-          neural_network: Yup.object().shape({
-            dry_run: Yup.boolean(),
-            max_training_records: Yup.number().min(1000).max(100000),
-            hidden_neurons: Yup.number().min(8).max(20),
-            threshold: Yup.number().min(0).max(1),
-            learning_rate: Yup.number().min(0.001).max(0.1),
-          }),
           ip_whitelist: Yup.array().of(
             Yup.string()
           ),
@@ -262,16 +255,6 @@ const FeaturesConfig: React.FC = () => {
       min_tolerate_percent: config?.brute_force?.min_tolerate_percent || 10,
       max_tolerate_percent: config?.brute_force?.max_tolerate_percent || 50,
       scale_factor: config?.brute_force?.scale_factor || 1.0,
-      neural_network: {
-        dry_run: config?.brute_force?.neural_network?.dry_run || false,
-        max_training_records: config?.brute_force?.neural_network?.max_training_records || 10000,
-        hidden_neurons: config?.brute_force?.neural_network?.hidden_neurons || 10,
-        activation_function: config?.brute_force?.neural_network?.activation_function || 'sigmoid',
-        static_weight: config?.brute_force?.neural_network?.static_weight || 0.4,
-        ml_weight: config?.brute_force?.neural_network?.ml_weight || 0.6,
-        threshold: config?.brute_force?.neural_network?.threshold || 0.7,
-        learning_rate: config?.brute_force?.neural_network?.learning_rate || 0.01,
-      },
     },
     newSoftWhitelistUsername: '',
     newBruteForceWhitelistUsername: '',
@@ -1928,152 +1911,6 @@ const FeaturesConfig: React.FC = () => {
                     </Paper>
                   </Grid>
 
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Neural Network Configuration</Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
-                      <Grid container spacing={2}>
-                        <Grid item xs={12}>
-                          <FormControlLabel
-                            control={
-                              <Switch
-                                name="brute_force.neural_network.dry_run"
-                                checked={values.brute_force.neural_network.dry_run}
-                                onChange={(e) => {
-                                  handleChange(e);
-                                  setHasUnsavedChanges(true);
-                                }}
-                                color="primary"
-                              />
-                            }
-                            label="Dry Run Mode (predictions are made but not enforced)"
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="brute_force.neural_network.max_training_records"
-                            label="Max Training Records"
-                            variant="outlined"
-                            type="number"
-                            InputProps={{ inputProps: { min: 1000, max: 100000 } }}
-                            error={getIn(touched, 'brute_force.neural_network.max_training_records') && Boolean(getIn(errors, 'brute_force.neural_network.max_training_records'))}
-                            helperText={(getIn(touched, 'brute_force.neural_network.max_training_records') && getIn(errors, 'brute_force.neural_network.max_training_records')) || "Maximum number of training records (1000-100000)"}
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="brute_force.neural_network.hidden_neurons"
-                            label="Hidden Neurons"
-                            variant="outlined"
-                            type="number"
-                            InputProps={{ inputProps: { min: 8, max: 20 } }}
-                            error={getIn(touched, 'brute_force.neural_network.hidden_neurons') && Boolean(getIn(errors, 'brute_force.neural_network.hidden_neurons'))}
-                            helperText={(getIn(touched, 'brute_force.neural_network.hidden_neurons') && getIn(errors, 'brute_force.neural_network.hidden_neurons')) || "Number of hidden neurons (8-20)"}
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <FormControl fullWidth>
-                            <InputLabel id="activation-function-select-label">Activation Function</InputLabel>
-                            <Select
-                              labelId="activation-function-select-label"
-                              id="activation-function-select"
-                              value={values.brute_force.neural_network.activation_function}
-                              name="brute_force.neural_network.activation_function"
-                              label="Activation Function"
-                              onChange={(e) => {
-                                handleChange(e);
-                                setHasUnsavedChanges(true);
-                              }}
-                            >
-                              <MenuItem value="sigmoid">Sigmoid</MenuItem>
-                              <MenuItem value="tanh">Tanh</MenuItem>
-                              <MenuItem value="relu">ReLU</MenuItem>
-                              <MenuItem value="leaky_relu">Leaky ReLU</MenuItem>
-                            </Select>
-                          </FormControl>
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="brute_force.neural_network.static_weight"
-                            label="Static Weight"
-                            variant="outlined"
-                            type="number"
-                            InputProps={{ inputProps: { min: 0, max: 1, step: 0.1 } }}
-                            error={getIn(touched, 'brute_force.neural_network.static_weight') && Boolean(getIn(errors, 'brute_force.neural_network.static_weight'))}
-                            helperText={(getIn(touched, 'brute_force.neural_network.static_weight') && getIn(errors, 'brute_force.neural_network.static_weight')) || "Weight for static rules (0-1)"}
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="brute_force.neural_network.ml_weight"
-                            label="ML Weight"
-                            variant="outlined"
-                            type="number"
-                            InputProps={{ inputProps: { min: 0, max: 1, step: 0.1 } }}
-                            error={getIn(touched, 'brute_force.neural_network.ml_weight') && Boolean(getIn(errors, 'brute_force.neural_network.ml_weight'))}
-                            helperText={(getIn(touched, 'brute_force.neural_network.ml_weight') && getIn(errors, 'brute_force.neural_network.ml_weight')) || "Weight for ML (0-1)"}
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="brute_force.neural_network.threshold"
-                            label="Threshold"
-                            variant="outlined"
-                            type="number"
-                            InputProps={{ inputProps: { min: 0, max: 1, step: 0.1 } }}
-                            error={getIn(touched, 'brute_force.neural_network.threshold') && Boolean(getIn(errors, 'brute_force.neural_network.threshold'))}
-                            helperText={(getIn(touched, 'brute_force.neural_network.threshold') && getIn(errors, 'brute_force.neural_network.threshold')) || "Threshold for weighted decision (0-1)"}
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid item xs={12} md={6}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="brute_force.neural_network.learning_rate"
-                            label="Learning Rate"
-                            variant="outlined"
-                            type="number"
-                            InputProps={{ inputProps: { min: 0.001, max: 0.1, step: 0.001 } }}
-                            error={getIn(touched, 'brute_force.neural_network.learning_rate') && Boolean(getIn(errors, 'brute_force.neural_network.learning_rate'))}
-                            helperText={(getIn(touched, 'brute_force.neural_network.learning_rate') && getIn(errors, 'brute_force.neural_network.learning_rate')) || "Learning rate (0.001-0.1)"}
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
-                    </Paper>
-                  </Grid>
                 </Grid>
               </FormSection>
             </TabPanel>

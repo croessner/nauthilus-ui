@@ -1053,10 +1053,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           // Map script filenames to hook names
           const scriptToHookMap: Record<string, keyof LuaHooksConfig> = {
             'distributed-brute-force-admin.lua': 'distributed_brute_force_admin',
-            'distributed-brute-force-test.lua': 'distributed_brute_force_test',
-            'learning-mode.lua': 'learning_mode',
-            'neural-feedback.lua': 'neural_feedback',
-            'train-neural-network.lua': 'train_neural_network'
+            'distributed-brute-force-test.lua': 'distributed_brute_force_test'
           };
 
           // Check each custom hook
