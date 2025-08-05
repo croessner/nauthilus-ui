@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
 import axios from 'axios';
-import { withErrorHandling as apiWithErrorHandling, prepareAuthParams } from '../utils/apiUtils';
+import { withErrorHandling as apiWithErrorHandling, prepareAuthParams, getProxyOrigin } from '../utils/apiUtils';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -961,7 +961,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/config/load', window.location.origin);
+      const proxyUrl = new URL('/proxy/config/load', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
       if (authType && authValue) {

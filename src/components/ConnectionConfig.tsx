@@ -20,7 +20,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
-import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState } from '../utils/apiUtils';
+import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState, getProxyOrigin } from '../utils/apiUtils';
 
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
@@ -132,8 +132,8 @@ const ConnectionConfig: React.FC = () => {
   const fetchJWTToken = async (backendUrl: string, username: string, password: string): Promise<{ token: string, refresh_token: string, expires_at: number } | null> => {
     try {
       // Use the proxy endpoint to make the request server-side
-      // This avoids CORS issues by making the request through Node.js
-      const proxyUrl = new URL('/proxy/jwt-token', window.location.origin);
+      // This avoids CORS issues by making the request through the Go backend
+      const proxyUrl = new URL('/proxy/jwt-token', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
 
       const response = await fetch(proxyUrl.toString(), {

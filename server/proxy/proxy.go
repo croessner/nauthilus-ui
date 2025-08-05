@@ -108,6 +108,18 @@ func copyHeaders(dst http.Header, src http.Header) {
 
 // handleProxyRequest handles the common proxy flow
 func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
+	// Set CORS headers for non-OPTIONS requests
+	origin := c.Request.Header.Get("Origin")
+	if origin == "" {
+		// Default to localhost:3000 for development
+		origin = "http://localhost:3000"
+	}
+
+	c.Header("Access-Control-Allow-Origin", origin)
+	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
+	c.Header("Access-Control-Allow-Credentials", "true")
+
 	// Get and validate target URL if not provided
 	if config.TargetURL == "" {
 		var statusCode int
@@ -227,19 +239,64 @@ func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
 
 // RegisterRoutes registers the proxy routes
 func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
-	router.Any("/proxy/ping", h.PingProxy)
-	router.Any("/proxy/jwt-token", h.JWTTokenProxy)
-	router.Any("/proxy/bruteforce/list", h.BruteforceListProxy)
-	router.Any("/proxy/cache/flush", h.CacheFlushProxy)
-	router.Any("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
-	router.Any("/proxy/config/load", h.ConfigLoadProxy)
+	// Add a middleware to handle CORS for all proxy routes
+	router.Use(func(c *gin.Context) {
+		// Set CORS headers for all requests
+		origin := c.Request.Header.Get("Origin")
+		if origin == "" {
+			// Default to localhost:3000 for development
+			origin = "http://localhost:3000"
+		}
+
+		c.Header("Access-Control-Allow-Origin", origin)
+		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
+		c.Header("Access-Control-Allow-Credentials", "true")
+		c.Header("Access-Control-Max-Age", "86400") // 24 hours
+
+		// Handle preflight OPTIONS requests
+		if c.Request.Method == "OPTIONS" {
+			c.AbortWithStatus(204)
+			return
+		}
+
+		c.Next()
+	})
+
+	// Register the actual route handlers
+	router.GET("/proxy/ping", h.PingProxy)
+	router.POST("/proxy/ping", h.PingProxy)
+
+	router.GET("/proxy/jwt-token", h.JWTTokenProxy)
+	router.POST("/proxy/jwt-token", h.JWTTokenProxy)
+
+	router.GET("/proxy/bruteforce/list", h.BruteforceListProxy)
+	router.POST("/proxy/bruteforce/list", h.BruteforceListProxy)
+
+	router.GET("/proxy/cache/flush", h.CacheFlushProxy)
+	router.POST("/proxy/cache/flush", h.CacheFlushProxy)
+
+	router.GET("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
+	router.POST("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
+
+	router.GET("/proxy/config/load", h.ConfigLoadProxy)
+	router.POST("/proxy/config/load", h.ConfigLoadProxy)
 
 	// Hook proxy routes
-	router.Any("/proxy/hooks/distributed-brute-force-admin", h.DistributedBruteForceAdminProxy)
-	router.Any("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
-	router.Any("/proxy/hooks/learning-mode", h.LearningModeProxy)
-	router.Any("/proxy/hooks/neural-feedback", h.NeuralFeedbackProxy)
-	router.Any("/proxy/hooks/train-neural-network", h.TrainNeuralNetworkProxy)
+	router.GET("/proxy/hooks/distributed-brute-force-admin", h.DistributedBruteForceAdminProxy)
+	router.POST("/proxy/hooks/distributed-brute-force-admin", h.DistributedBruteForceAdminProxy)
+
+	router.GET("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
+	router.POST("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
+
+	router.GET("/proxy/hooks/learning-mode", h.LearningModeProxy)
+	router.POST("/proxy/hooks/learning-mode", h.LearningModeProxy)
+
+	router.GET("/proxy/hooks/neural-feedback", h.NeuralFeedbackProxy)
+	router.POST("/proxy/hooks/neural-feedback", h.NeuralFeedbackProxy)
+
+	router.GET("/proxy/hooks/train-neural-network", h.TrainNeuralNetworkProxy)
+	router.POST("/proxy/hooks/train-neural-network", h.TrainNeuralNetworkProxy)
 }
 
 // PingProxy handles the /proxy/ping endpoint

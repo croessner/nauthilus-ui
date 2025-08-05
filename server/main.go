@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"net/http"
 	"os"
@@ -122,18 +123,50 @@ func registerMiddleware(r *gin.Engine, cfg *config.Config) {
 	staticHandler.RegisterMiddleware(r)
 }
 
-// startServer starts the HTTP server and returns it
-func startServer(cfg *config.Config, router *gin.Engine) *http.Server {
-	srv := &http.Server{
-		Addr:    cfg.Address + ":" + cfg.Port,
-		Handler: router,
+// Server represents an HTTP server
+type Server struct {
+	*http.Server
+	Name string
+}
+
+// startFrontendServer starts the frontend HTTP server and returns it
+func startFrontendServer(cfg *config.Config, router *gin.Engine) *Server {
+	srv := &Server{
+		Server: &http.Server{
+			Addr:    cfg.FrontendAddress + ":" + cfg.FrontendPort,
+			Handler: router,
+		},
+		Name: "Frontend",
 	}
 
 	// Start the server in a goroutine
 	go func() {
-		slog.Info("Server running", "address", cfg.Address, "port", cfg.Port, "version", version)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			slog.Error("Failed to start server", "error", err)
+		slog.Info("Frontend server running", "address", cfg.FrontendAddress, "port", cfg.FrontendPort, "version", version)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Failed to start frontend server", "error", err)
+
+			os.Exit(1)
+		}
+	}()
+
+	return srv
+}
+
+// startProxyServer starts the proxy HTTP server and returns it
+func startProxyServer(cfg *config.Config, proxyRouter *gin.Engine) *Server {
+	srv := &Server{
+		Server: &http.Server{
+			Addr:    cfg.ProxyAddress + ":" + cfg.ProxyPort,
+			Handler: proxyRouter,
+		},
+		Name: "Proxy",
+	}
+
+	// Start the server in a goroutine
+	go func() {
+		slog.Info("Proxy server running", "address", cfg.ProxyAddress, "port", cfg.ProxyPort, "version", version)
+		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			slog.Error("Failed to start proxy server", "error", err)
 
 			os.Exit(1)
 		}
@@ -152,8 +185,8 @@ func waitForShutdownSignal() {
 	slog.Info("Shutting down server...")
 }
 
-// performGracefulShutdown gracefully shuts down the server and disconnects from MongoDB
-func performGracefulShutdown(rootCtx context.Context, srv *http.Server, mongoDB *db.MongoDB) {
+// performGracefulShutdown gracefully shuts down the servers and disconnects from MongoDB
+func performGracefulShutdown(rootCtx context.Context, servers []*Server, mongoDB *db.MongoDB) {
 	// Create a deadline to wait for
 	ctx, cancel := context.WithTimeout(rootCtx, serverShutdownTimeout)
 	defer cancel()
@@ -163,14 +196,39 @@ func performGracefulShutdown(rootCtx context.Context, srv *http.Server, mongoDB 
 		slog.Error("Error disconnecting from MongoDB", "error", err)
 	}
 
-	// Shut down the server
-	if err := srv.Shutdown(ctx); err != nil {
-		slog.Error("Server forced to shutdown", "error", err)
-
-		os.Exit(1)
+	// Shut down all servers
+	for _, srv := range servers {
+		slog.Info("Shutting down server", "name", srv.Name)
+		if err := srv.Shutdown(ctx); err != nil {
+			slog.Error("Server forced to shutdown", "name", srv.Name, "error", err)
+		}
 	}
 
-	slog.Info("Server exiting")
+	slog.Info("All servers exited")
+}
+
+// setupFrontendRouter creates and configures the Gin router for frontend with API routes and middleware
+func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
+	r := gin.Default()
+
+	// Register API handlers
+	registerAPIHandlers(r, mongoDB)
+
+	// Register middleware
+	registerMiddleware(r, cfg)
+
+	return r
+}
+
+// setupProxyRouter creates and configures the Gin router for proxy with proxy routes
+func setupProxyRouter() *gin.Engine {
+	r := gin.Default()
+
+	// Register proxy handlers
+	proxyHandler := proxy.NewProxyHandler()
+	proxyHandler.RegisterRoutes(r)
+
+	return r
 }
 
 func main() {
@@ -189,15 +247,21 @@ func main() {
 	// Setup MongoDB
 	mongoDB := setupMongoDB(rootCtx, cfg)
 
-	// Setup router with all routes and middleware
-	router := setupRouter(cfg, mongoDB)
+	// Setup frontend router with API routes and middleware
+	frontendRouter := setupFrontendRouter(cfg, mongoDB)
 
-	// Start the server
-	srv := startServer(cfg, router)
+	// Setup proxy router with proxy routes
+	proxyRouter := setupProxyRouter()
+
+	// Start the frontend server
+	frontendSrv := startFrontendServer(cfg, frontendRouter)
+
+	// Start the proxy server
+	proxySrv := startProxyServer(cfg, proxyRouter)
 
 	// Wait for shutdown signal
 	waitForShutdownSignal()
 
-	// Perform graceful shutdown
-	performGracefulShutdown(rootCtx, srv, mongoDB)
+	// Perform graceful shutdown for both servers
+	performGracefulShutdown(rootCtx, []*Server{frontendSrv, proxySrv}, mongoDB)
 }

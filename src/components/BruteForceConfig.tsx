@@ -32,7 +32,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil } from '../utils/apiUtils';
+import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin } from '../utils/apiUtils';
 
 // Brute force protection types
 interface BruteForceListItem {
@@ -100,7 +100,7 @@ const BruteForceConfig: React.FC = () => {
       const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/bruteforce/list', window.location.origin);
+      const proxyUrl = new URL('/proxy/bruteforce/list', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
       if (authType && authValue) {
@@ -127,6 +127,7 @@ const BruteForceConfig: React.FC = () => {
       }
 
       const data = await response.json();
+      console.log(data);
       setBruteForceList(data.result);
 
       // Extract unique rule names from the blocked IPs
@@ -195,7 +196,7 @@ const BruteForceConfig: React.FC = () => {
     try {
       // Use the proxy endpoint to make the request server-side
       // This avoids CORS issues by making the request through Node.js
-      const proxyUrl = new URL('/proxy/ping', window.location.origin);
+      const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
       const response = await fetch(proxyUrl.toString(), {
@@ -268,7 +269,7 @@ const BruteForceConfig: React.FC = () => {
       const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/cache/flush', window.location.origin);
+      const proxyUrl = new URL('/proxy/cache/flush', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
       if (authType && authValue) {
@@ -336,7 +337,7 @@ const BruteForceConfig: React.FC = () => {
       const { authType, authValue } = prepareAuthParams(connectionConfig);
 
       // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/bruteforce/flush', window.location.origin);
+      const proxyUrl = new URL('/proxy/bruteforce/flush', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
       if (authType && authValue) {

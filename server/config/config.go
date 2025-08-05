@@ -7,11 +7,17 @@ import (
 
 // Config holds all configuration values for the application.
 type Config struct {
-	// Server configuration
-	// Port is the port number the server will listen on.
-	Port string
-	// Address is the IP address the server will bind to.
-	Address string
+	// Frontend server configuration
+	// FrontendPort is the port number the frontend server will listen on.
+	FrontendPort string
+	// FrontendAddress is the IP address the frontend server will bind to.
+	FrontendAddress string
+
+	// Proxy server configuration
+	// ProxyPort is the port number the proxy server will listen on.
+	ProxyPort string
+	// ProxyAddress is the IP address the proxy server will bind to.
+	ProxyAddress string
 
 	// MongoDB configuration
 	// MongoURI is the connection string for MongoDB.
@@ -38,9 +44,13 @@ type Config struct {
 // It returns a Config struct with values from environment variables or default values.
 func LoadConfig() *Config {
 	config := &Config{
-		// Server configuration
-		Port:    getEnv("API_PORT", "3001"),
-		Address: getEnv("API_ADDRESS", "0.0.0.0"),
+		// Frontend server configuration
+		FrontendPort:    getEnv("FRONTEND_PORT", "3001"),
+		FrontendAddress: getEnv("FRONTEND_ADDRESS", "0.0.0.0"),
+
+		// Proxy server configuration
+		ProxyPort:    getEnv("PROXY_PORT", "3002"),
+		ProxyAddress: getEnv("PROXY_ADDRESS", "0.0.0.0"),
 
 		// MongoDB configuration
 		MongoURI: getEnv("MONGODB_URI", "mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin"),

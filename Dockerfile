@@ -70,7 +70,7 @@ COPY --from=react-build /app/build ./build
 COPY --from=go-build /app/server ./
 
 # Expose the server port
-EXPOSE 3001
+EXPOSE 3001 3002
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -3,6 +3,14 @@
  */
 
 /**
+ * Returns the proxy server origin (protocol, hostname, and port)
+ * @returns The proxy server origin URL
+ */
+export const getProxyOrigin = (): string => {
+  return `${window.location.protocol}//${window.location.hostname}:${process.env.REACT_APP_PROXY_PORT || '3002'}`;
+};
+
+/**
  * Prepares authentication parameters for API requests
  * @param connectionConfig - The connection configuration object containing auth settings
  * @returns An object with authType and authValue properties
@@ -85,7 +93,7 @@ export const checkConnection = async (
 
   try {
     // Use the proxy endpoint to make the request server-side
-    const proxyUrl = new URL('/proxy/ping', window.location.origin);
+    const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
     proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
     const response = await fetch(proxyUrl.toString(), {
