@@ -451,7 +451,7 @@ const BruteForceConfig: React.FC = () => {
       }
 
       const response = await fetch(proxyUrl.toString(), {
-        method: 'POST',
+        method: 'DELETE',
         headers: {
           'Content-Type': 'application/json',
         },

@@ -1,3 +1,57 @@
+# CIDR to IP Conversion for Brute Force Protection
+
+## Problem
+When attempting to free an IP address with CIDR notation (e.g., 192.168.2.0/24) from the Brute Force Protection list, the operation would fail. This occurred because the real backend expects a specific IP address, not a network address with CIDR notation.
+
+## Solution
+We implemented a fix in the proxy server to convert CIDR notation to a specific IP address before forwarding the request to the real backend:
+
+1. **Added CIDR parsing**: Created a helper function `getIPFromCIDR` that extracts a specific IP address from a CIDR notation.
+2. **Modified request processing**: Updated the BruteforceFlushProxy handler to convert network addresses to specific IPs.
+3. **Handled both IPv4 and IPv6**: Ensured the solution works for both IPv4 (non-/32) and IPv6 (non-/128) addresses.
+
+## Changes Made
+1. Added the `getIPFromCIDR` function to `server/proxy/proxy.go` to convert CIDR notation to a specific IP.
+2. Modified the `BruteforceFlushProxy` function to process DELETE requests and convert IP addresses in the request body.
+3. Added necessary imports for the net package to handle IP address manipulation.
+
+## Testing
+The changes were tested by:
+1. Verifying that the CIDR conversion function correctly handles various IPv4 and IPv6 formats.
+2. Confirming that network addresses (e.g., 192.168.2.0/24) are converted to specific IPs (e.g., 192.168.2.1).
+3. Ensuring that single IP addresses (with or without CIDR notation) remain unchanged.
+
+# Brute Force Protection IP Address Freeing Fix
+
+## Problem
+When attempting to free an IP address from the Brute Force Protection list by clicking the "Free" button, users were encountering a 404 Not Found error:
+
+```
+Failed to free IP 83.222.190.114/32: [404 Not Found] Not Found
+```
+
+The JavaScript console showed:
+```
+POST http://localhost:3002/proxy/bruteforce/flush?url=https%3A%2F%2Flogin.authserv.me&authType=basic&authValue=YXV0aHNlcnY6WTJ3S0x5ZXp0QmxyUVNMa3hTc1ZMS1JRWFRLNHkxMEc%3D 404 (Not Found)
+```
+
+The server logs indicated that the endpoint expected a DELETE request, but the frontend was sending a POST request.
+
+## Solution
+We fixed the issue by:
+
+1. **Changed HTTP method in frontend**: Modified the frontend code to use DELETE instead of POST when making requests to free IP addresses.
+2. **Added DELETE handler in proxy server**: Added a DELETE method handler for the "/proxy/bruteforce/flush" endpoint in the proxy server.
+
+## Changes Made
+1. Updated `src/components/BruteForceConfig.tsx` to use the DELETE method instead of POST in the `freeUserByIp` function.
+2. Modified `server/proxy/proxy.go` to add a DELETE method handler for the "/proxy/bruteforce/flush" endpoint.
+
+## Testing
+The changes were tested by:
+1. Verifying that clicking the "Free" button now successfully removes IP addresses from the Brute Force Protection list
+2. Confirming that no 404 errors are encountered during the process
+
 # Pagination for Brute Force Protection Lists
 
 ## Problem

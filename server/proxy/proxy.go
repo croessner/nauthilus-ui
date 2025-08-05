@@ -1,11 +1,14 @@
 package proxy
 
 import (
+	"encoding/json"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -278,6 +281,7 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	router.GET("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
 	router.POST("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
+	router.DELETE("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
 
 	router.GET("/proxy/config/load", h.ConfigLoadProxy)
 	router.POST("/proxy/config/load", h.ConfigLoadProxy)
@@ -345,8 +349,91 @@ func (h *ProxyHandler) CacheFlushProxy(c *gin.Context) {
 	h.handleProxyRequest(c, config)
 }
 
+// getIPFromCIDR extracts a specific IP address from a CIDR notation
+// For IPv4 addresses with mask not equal to /32 and IPv6 addresses with mask not equal to /128,
+// it returns the first usable IP address in the range
+func getIPFromCIDR(ipStr string) string {
+	// Check if the IP contains a CIDR mask
+	if !strings.Contains(ipStr, "/") {
+		return ipStr // Not a CIDR notation, return as is
+	}
+
+	// Parse the CIDR notation
+	ip, ipNet, err := net.ParseCIDR(ipStr)
+	if err != nil {
+		slog.Error("Failed to parse CIDR notation", "ip", ipStr, "error", err)
+
+		return ipStr // Return original if parsing fails
+	}
+
+	// Check if it's a single IP address (/32 for IPv4 or /128 for IPv6)
+	ones, bits := ipNet.Mask.Size()
+	if (bits == 32 && ones == 32) || (bits == 128 && ones == 128) {
+		return ip.String() // It's already a single IP
+	}
+
+	// For IPv4 with mask not /32 or IPv6 with mask not /128,
+	// return the first usable IP in the range (network address + 1)
+	// Convert IP to 4/16 byte representation
+	ipBytes := ip.To4()
+	if ipBytes == nil {
+		ipBytes = ip.To16() // IPv6
+	}
+
+	// Increment the last byte to get the first usable IP
+	// This is a simple approach - for more complex scenarios, a more sophisticated
+	// algorithm might be needed
+	ipBytes[len(ipBytes)-1]++
+
+	return ipBytes.String()
+}
+
 // BruteforceFlushProxy handles the /proxy/bruteforce/flush endpoint
 func (h *ProxyHandler) BruteforceFlushProxy(c *gin.Context) {
+	// For DELETE requests, we need to modify the IP address in the request body
+	if c.Request.Method == "DELETE" {
+		// Read the request body
+		var requestBody map[string]interface{}
+		bodyData, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
+
+			return
+		}
+
+		// Close the original body
+		c.Request.Body.Close()
+
+		// Parse the JSON body
+		if err := json.Unmarshal(bodyData, &requestBody); err != nil {
+			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to parse request body"})
+
+			return
+		}
+
+		// Check if ip_address field exists
+		if ipAddress, ok := requestBody["ip_address"].(string); ok {
+			// Convert CIDR to specific IP if needed
+			requestBody["ip_address"] = getIPFromCIDR(ipAddress)
+
+			// Convert back to JSON
+			modifiedBody, err := json.Marshal(requestBody)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode modified request body"})
+
+				return
+			}
+
+			// Create a new body with the modified data
+			c.Request.Body = io.NopCloser(strings.NewReader(string(modifiedBody)))
+
+			// Update Content-Length header
+			c.Request.ContentLength = int64(len(modifiedBody))
+
+			slog.Info("Modified IP address in request", "original", ipAddress, "modified", requestBody["ip_address"])
+		}
+	}
+
 	config := ProxyConfig{
 		EndpointPath: "/api/v1/bruteforce/flush",
 		LogEndpoint:  "/proxy/bruteforce/flush",
