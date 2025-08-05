@@ -1,3 +1,39 @@
+# Brute Force Protection TTL and Attempts Display Fix
+
+## Problem
+In the Brute Force Protection Management interface, the TTL (Time-To-Live) and attempts values for blocked IP addresses were always displaying as 0, regardless of the actual configuration values.
+
+```
+77.92.153.0/24
+Rule: b_1h_ipv4_24
+TTL: 0 seconds | Attempts: 0
+```
+
+## Solution
+We implemented a fix to correctly display the TTL and attempts values by:
+
+1. **Added a helper function to convert time periods to seconds**: Created a `convertPeriodToSeconds` function that converts time period strings (like "1h", "30m") to seconds.
+
+2. **Lookup rule configuration**: Modified the code to look up the matching bucket configuration in the brute force settings based on the rule name.
+
+3. **Extract TTL and attempts values**: Used the period setting to calculate the TTL in seconds and the failed_requests setting for the attempts value.
+
+## Changes Made
+1. Added a helper function `convertPeriodToSeconds` to convert time period strings to seconds
+2. Modified the code in `src/components/BruteForceConfig.tsx` to:
+   - Look up the matching bucket configuration for each rule
+   - Extract the TTL from the period setting
+   - Extract the attempts from the failed_requests setting
+   - Use these values instead of the default 0 values
+
+## Testing
+The changes were tested by:
+1. Verifying that the TTL and attempts values now correctly display the values from the configuration
+2. Checking that different time period formats (1h, 30m, etc.) are correctly converted to seconds
+
+## Note
+The issue was in the frontend code, not the backend. The backend was correctly storing the configuration, but the frontend wasn't properly displaying the values from the configuration.
+
 # CORS Issue Resolution
 
 ## Problem

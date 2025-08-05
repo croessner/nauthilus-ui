@@ -34,6 +34,25 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin } from '../utils/apiUtils';
 
+// Helper function to convert time period strings (like "1h", "30m") to seconds
+const convertPeriodToSeconds = (period: string): number => {
+  if (!period) return 0;
+  
+  const match = period.match(/^(\d+)([smhd])$/);
+  if (!match) return 0;
+  
+  const value = parseInt(match[1], 10);
+  const unit = match[2];
+  
+  switch (unit) {
+    case 's': return value; // seconds
+    case 'm': return value * 60; // minutes to seconds
+    case 'h': return value * 60 * 60; // hours to seconds
+    case 'd': return value * 24 * 60 * 60; // days to seconds
+    default: return 0;
+  }
+};
+
 // Brute force protection types
 interface BruteForceListItem {
   ip_address: string;
@@ -52,6 +71,17 @@ interface AffectedAccount {
 interface BruteForceListResponse {
   blocked_ips: BruteForceListItem[];
   affected_accounts: AffectedAccount[];
+}
+
+// Response from the API
+interface BruteForceApiResponse {
+  ip_addresses?: {
+    [key: string]: string;
+  };
+  accounts?: {
+    [key: string]: string[];
+  };
+  error: null | string;
 }
 
 const BruteForceConfig: React.FC = () => {
@@ -127,14 +157,67 @@ const BruteForceConfig: React.FC = () => {
       }
 
       const data = await response.json();
-      console.log(data);
-      setBruteForceList(data.result);
 
-      // Extract unique rule names from the blocked IPs
-      if (data.result && data.result.blocked_ips && data.result.blocked_ips.length > 0) {
+      // Transform the API response to the expected format
+      const transformedData: BruteForceListResponse = {
+        blocked_ips: [],
+        affected_accounts: []
+      };
+      
+      // Process the result array
+      if (data.result && Array.isArray(data.result)) {
+        // Process IP addresses (first item in the result array)
+        const ipAddressesResult = data.result[0];
+        if (ipAddressesResult && ipAddressesResult.ip_addresses) {
+          // Convert the ip_addresses object to an array of BruteForceListItem
+          Object.entries(ipAddressesResult.ip_addresses).forEach(([ip, rule]) => {
+            // Find the matching bucket configuration for this rule
+            const ruleName = rule as string;
+            let ttl = 0;
+            let attempts = 0;
+            
+            // Try to find the matching bucket in the configuration
+            if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+              const matchingBucket = config.brute_force.buckets.find(bucket => bucket.name === ruleName);
+              if (matchingBucket) {
+                // Extract TTL from period (e.g., "1h" -> 3600 seconds)
+                const periodStr = matchingBucket.period || '';
+                ttl = convertPeriodToSeconds(periodStr);
+                
+                // Get the failed_requests value as attempts
+                attempts = matchingBucket.failed_requests || 0;
+              }
+            }
+            
+            transformedData.blocked_ips.push({
+              ip_address: ip,
+              rule_name: ruleName,
+              ttl: ttl,
+              attempts: attempts
+            });
+          });
+        }
+        
+        // Process accounts (second item in the result array)
+        const accountsResult = data.result[1];
+        if (accountsResult && accountsResult.accounts) {
+          // Convert the accounts object to an array of AffectedAccount
+          Object.entries(accountsResult.accounts).forEach(([username, ips]) => {
+            transformedData.affected_accounts.push({
+              username,
+              ip_addresses: Array.isArray(ips) ? ips : []
+            });
+          });
+        }
+      }
+      
+      setBruteForceList(transformedData);
+
+      // Extract unique rule names from the transformed blocked IPs
+      if (transformedData.blocked_ips && transformedData.blocked_ips.length > 0) {
         const apiRuleNames = Array.from(
           new Set(
-            data.result.blocked_ips
+            transformedData.blocked_ips
               .map((item: BruteForceListItem) => item.rule_name)
               .filter((ruleName: string) => ruleName && ruleName !== '*')
           )
