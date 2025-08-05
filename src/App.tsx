@@ -46,8 +46,8 @@ import CodeIcon from '@mui/icons-material/Code';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import DownloadIcon from '@mui/icons-material/Download';
 import RestartAltIcon from '@mui/icons-material/RestartAlt';
-import Brightness4Icon from '@mui/icons-material/Brightness4';
-import Brightness7Icon from '@mui/icons-material/Brightness7';
+import DarkModeIcon from '@mui/icons-material/DarkMode';
+import LightModeIcon from '@mui/icons-material/LightMode';
 import DescriptionIcon from '@mui/icons-material/Description';
 import GavelIcon from '@mui/icons-material/Gavel';
 import BuildIcon from '@mui/icons-material/Build';
@@ -875,7 +875,7 @@ const MainContent = (): JSX.Element => {
                 onClick={toggleColorMode}
                 sx={{ ml: { xs: 0, sm: 1 } }}
               >
-                {mode === 'light' ? <Brightness4Icon /> : <Brightness7Icon />}
+                {mode === 'light' ? <DarkModeIcon /> : <LightModeIcon />}
               </IconButton>
             </Tooltip>
           </Box>
