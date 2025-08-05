@@ -300,7 +300,8 @@ const MFAPage = (): React.JSX.Element => {
           onChange={(e, newValue) => setMfaMethod(newValue)}
           indicatorColor="primary"
           textColor="primary"
-          centered
+          variant="scrollable"
+          scrollButtons="auto"
           sx={{ mb: 2 }}
         >
           {currentUser?.totpEnabled && (

@@ -195,7 +195,13 @@ const LuaConfig = (): React.JSX.Element => {
         {({ values, errors, touched, handleChange, setFieldValue }) => (
           <Form>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-              <Tabs value={tabValue} onChange={handleTabChange} aria-label="lua configuration tabs">
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange} 
+                variant="scrollable"
+                scrollButtons="auto"
+                aria-label="lua configuration tabs"
+              >
                 <Tab label="Features" id="lua-tab-0" aria-controls="lua-tabpanel-0" />
                 <Tab label="Filters" id="lua-tab-1" aria-controls="lua-tabpanel-1" />
                 <Tab label="Actions" id="lua-tab-2" aria-controls="lua-tabpanel-2" />

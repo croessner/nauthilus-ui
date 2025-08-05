@@ -171,7 +171,13 @@ const LDAPConfig = (): React.JSX.Element => {
         {({ values, errors, touched, handleChange, setFieldValue }) => (
           <Form>
             <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
-              <Tabs value={tabValue} onChange={handleTabChange} aria-label="ldap configuration tabs">
+              <Tabs 
+                value={tabValue} 
+                onChange={handleTabChange} 
+                variant="scrollable"
+                scrollButtons="auto"
+                aria-label="ldap configuration tabs"
+              >
                 <Tab label="Main Configuration" id="ldap-tab-0" aria-controls="ldap-tabpanel-0" />
                 <Tab label="Optional LDAP Pools" id="ldap-tab-1" aria-controls="ldap-tabpanel-1" />
                 <Tab label="Search Protocols" id="ldap-tab-2" aria-controls="ldap-tabpanel-2" />

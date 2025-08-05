@@ -282,7 +282,8 @@ const MFASettings: React.FC = () => {
           onChange={handleTabChange}
           indicatorColor="primary"
           textColor="primary"
-          centered
+          variant="scrollable"
+          scrollButtons="auto"
         >
           <Tab label="Authenticator App (TOTP)" />
           <Tab label="Security Keys (WebAuthn)" />

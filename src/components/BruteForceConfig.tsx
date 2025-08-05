@@ -623,7 +623,13 @@ const BruteForceConfig: React.FC = () => {
               />
             </Box>
 
-            <Tabs value={tabValue} onChange={handleTabChange} sx={{ borderBottom: 1, borderColor: 'divider' }}>
+            <Tabs 
+              value={tabValue} 
+              onChange={handleTabChange} 
+              variant="scrollable"
+              scrollButtons="auto"
+              sx={{ borderBottom: 1, borderColor: 'divider' }}
+            >
               <Tab label="Blocked IP Addresses" />
               <Tab label="Affected Accounts" />
             </Tabs>

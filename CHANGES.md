@@ -1,3 +1,46 @@
+# Nauthilus UI Changelog
+
+## [Unreleased]
+
+### Added
+- Made tab bars responsive for mobile devices by adding horizontal scrolling and navigation arrows
+    - Updated BruteForceConfig, LDAPConfig, LuaConfig, MFAPage, and MFASettings components
+    - Added `variant="scrollable"` and `scrollButtons="auto"` properties to all tab components
+    - Note: FeaturesConfig component already had responsive tab bars implemented
+
+### Changed
+
+### Fixed
+
+## [1.0.0] - 2023-07-01
+
+### Added
+1. Initial release of the Nauthilus UI
+2. Support for configuring and managing Nauthilus server
+3. Brute force protection management
+4. LDAP configuration
+5. Lua scripting configuration
+6. Multi-factor authentication settings
+7. Pagination for brute force protection lists
+    - Implemented pagination for both blocked IP addresses and affected accounts
+    - Added search functionality to filter results
+    - Ensured pagination resets when switching tabs or changing search terms
+
+### Changed
+1. Improved error handling and user feedback
+2. Enhanced responsive design for better mobile experience
+3. Optimized API requests to reduce server load
+4. Ensuring that pagination state resets appropriately when switching tabs
+
+### Fixed
+1. **Pagination State Reset**: Fixed an issue where pagination state wasn't properly reset when switching between tabs or changing search terms.
+2. **Code Duplication**: The implementation of pagination for the Brute Force Protection lists contained duplicate code, violating the DRY principle.
+3. **Improved Code Organization**: Restructured the code to be more maintainable:
+    1. **Creating reusable components**: Extracted `LoadingIndicator` and `EmptyState` as reusable components
+    2. **Implementing helper functions**: Created functions for filtering data that can be reused across tabs
+    3. **Centralizing pagination logic**: Consolidated pagination state and handlers
+    4. Updated both tabs to use these reusable components and functions
+
 # CIDR to IP Conversion for Brute Force Protection
 
 ## Problem
