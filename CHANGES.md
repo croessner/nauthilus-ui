@@ -1,3 +1,53 @@
+# Pagination for Brute Force Protection Lists
+
+## Problem
+The Brute Force Protection Management interface displays lists of blocked IPs and affected accounts. As these lists could potentially grow very large, there was a need to implement pagination to improve usability and performance.
+
+## Solution
+We implemented pagination for both the blocked IPs and affected accounts lists with the following features:
+1. **Configurable page sizes**: Users can choose to display 10, 25, 50, or 100 items per page
+2. **Separate pagination controls**: Each list (blocked IPs and affected accounts) has its own pagination controls
+3. **Integrated with search functionality**: Pagination works correctly with the existing search functionality
+
+## Changes Made
+1. Added TablePagination component from Material-UI to both lists
+2. Implemented pagination state variables (page, rowsPerPage) and handlers
+3. Modified the lists to display only the current page of items using slice()
+4. Added pagination controls with options for 10, 25, 50, and 100 items per page
+5. Ensured pagination resets when switching tabs or changing search terms
+6. Refactored code to follow DRY principles by creating reusable components and helper functions
+
+## Testing
+The changes were tested by:
+1. Verifying that pagination controls appear when there are items in the lists
+2. Checking that changing page size works correctly
+3. Confirming that pagination works with search filtering
+4. Ensuring that pagination state resets appropriately when switching tabs
+
+# Code Refactoring for DRY Principles
+
+## Problem
+The implementation of pagination for the Brute Force Protection lists contained duplicate code, violating the DRY (Don't Repeat Yourself) principle. Similar filtering logic, loading indicators, and empty state displays were repeated in both the blocked IPs and affected accounts tabs.
+
+## Solution
+We refactored the code to eliminate duplication by:
+1. **Creating reusable components**: Extracted common UI elements into reusable components
+2. **Implementing helper functions**: Created functions for filtering data that can be reused across tabs
+3. **Maintaining the same functionality**: Ensured that all features continue to work as before
+
+## Changes Made
+1. Created a `LoadingIndicator` component for displaying loading states
+2. Created an `EmptyState` component for displaying messages when no data is available
+3. Implemented `filterBlockedIps` and `filterAffectedAccounts` helper functions for search filtering
+4. Updated both tabs to use these reusable components and functions
+5. Removed duplicate code while maintaining the same functionality
+
+## Testing
+The refactored code was tested to ensure:
+1. All functionality works exactly as before
+2. The UI appears identical to the previous implementation
+3. Pagination, filtering, and search features continue to work correctly
+
 # Brute Force Protection TTL and Attempts Display Fix
 
 ## Problem

@@ -25,7 +25,8 @@ import {
   Radio,
   FormControlLabel,
   Alert,
-  Snackbar
+  Snackbar,
+  TablePagination
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -111,6 +112,12 @@ const BruteForceConfig: React.FC = () => {
   const [openSearchDialog, setOpenSearchDialog] = useState<boolean>(false);
   const [searchType, setSearchType] = useState<'ip' | 'user'>('ip');
   const [ruleNames, setRuleNames] = useState<string[]>([]);
+  
+  // Pagination state - controls how many items are displayed per page
+  // and which page is currently being viewed
+  const [page, setPage] = useState<number>(0);
+  const [rowsPerPage, setRowsPerPage] = useState<number>(10);
+  const rowsPerPageOptions = [10, 25, 50, 100]; // Options for items per page
 
   // Function to fetch the brute force list
   const fetchBruteForceList = useCallback(async (connectionConfig: any) => {
@@ -488,7 +495,54 @@ const BruteForceConfig: React.FC = () => {
   // Function to handle tab change
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setTabValue(newValue);
+    setPage(0); // Reset to first page when changing tabs
   };
+  
+  // Pagination handlers
+  const handleChangePage = (_event: unknown, newPage: number) => {
+    setPage(newPage);
+  };
+  
+  const handleChangeRowsPerPage = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setRowsPerPage(parseInt(event.target.value, 10));
+    setPage(0);
+  };
+  
+  // Helper function to filter blocked IPs based on search term
+  const filterBlockedIps = (items: BruteForceListItem[]) => {
+    return items.filter(item => 
+      !searchTerm || 
+      item.ip_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.rule_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.protocol && item.protocol.toLowerCase().includes(searchTerm.toLowerCase())) ||
+      (item.oidc_cid && item.oidc_cid.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  };
+  
+  // Helper function to filter affected accounts based on search term
+  const filterAffectedAccounts = (accounts: AffectedAccount[]) => {
+    return accounts.filter(account => 
+      !searchTerm || 
+      account.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      account.ip_addresses.some(ip => ip.toLowerCase().includes(searchTerm.toLowerCase()))
+    );
+  };
+  
+  // Reusable loading indicator component
+  const LoadingIndicator = () => (
+    <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
+      <CircularProgress />
+    </Box>
+  );
+  
+  // Reusable empty state component
+  const EmptyState = ({ message }: { message: string }) => (
+    <Box sx={{ p: 3, textAlign: 'center' }}>
+      <Typography variant="body1" color="text.secondary">
+        {message}
+      </Typography>
+    </Box>
+  );
 
   // Function to open a user dialog
   const handleOpenUserDialog = (username: string) => {
@@ -578,58 +632,60 @@ const BruteForceConfig: React.FC = () => {
             {tabValue === 0 && (
               <Box sx={{ mt: 2 }}>
                 {isLoadingBruteForceList ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                    <CircularProgress />
-                  </Box>
+                  <LoadingIndicator />
                 ) : bruteForceList && bruteForceList.blocked_ips && bruteForceList.blocked_ips.length > 0 ? (
-                  <List>
-                    {bruteForceList.blocked_ips
-                      .filter(item => 
-                        !searchTerm || 
-                        item.ip_address.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        item.rule_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        (item.protocol && item.protocol.toLowerCase().includes(searchTerm.toLowerCase())) ||
-                        (item.oidc_cid && item.oidc_cid.toLowerCase().includes(searchTerm.toLowerCase()))
-                      )
-                      .map((item, index) => (
-                      <ListItem key={index} divider>
-                        <ListItemText
-                          primary={item.ip_address}
-                          secondary={
-                            <>
-                              <Typography component="span" variant="body2">
-                                Rule: {item.rule_name}
-                                {item.protocol && ` | Protocol: ${item.protocol}`}
-                                {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
-                              </Typography>
-                              <br />
-                              <Typography component="span" variant="body2">
-                                TTL: {item.ttl} seconds | Attempts: {item.attempts}
-                              </Typography>
-                            </>
-                          }
-                        />
-                        <ListItemSecondaryAction>
-                          <Button
-                            variant="outlined"
-                            color="secondary"
-                            onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
-                            startIcon={<DeleteIcon />}
-                          >
-                            Free
-                          </Button>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
-                  </List>
+                  <>
+                    <List>
+                      {filterBlockedIps(bruteForceList.blocked_ips)
+                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                        .map((item, index) => (
+                        <ListItem key={index} divider>
+                          <ListItemText
+                            primary={item.ip_address}
+                            secondary={
+                              <>
+                                <Typography component="span" variant="body2">
+                                  Rule: {item.rule_name}
+                                  {item.protocol && ` | Protocol: ${item.protocol}`}
+                                  {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
+                                </Typography>
+                                <br />
+                                <Typography component="span" variant="body2">
+                                  TTL: {item.ttl} seconds | Attempts: {item.attempts}
+                                </Typography>
+                              </>
+                            }
+                          />
+                          <ListItemSecondaryAction>
+                            <Button
+                              variant="outlined"
+                              color="secondary"
+                              onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
+                              startIcon={<DeleteIcon />}
+                            >
+                              Free
+                            </Button>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      ))}
+                    </List>
+                    <TablePagination
+                      component="div"
+                      count={filterBlockedIps(bruteForceList.blocked_ips).length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      rowsPerPageOptions={rowsPerPageOptions}
+                      labelRowsPerPage="IPs per page:"
+                    />
+                  </>
                 ) : (
-                  <Box sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">
-                      {bruteForceList === null 
-                        ? 'Click "Refresh List" to load blocked IP addresses' 
-                        : 'No blocked IP addresses found'}
-                    </Typography>
-                  </Box>
+                  <EmptyState 
+                    message={bruteForceList === null 
+                      ? 'Click "Refresh List" to load blocked IP addresses' 
+                      : 'No blocked IP addresses found'} 
+                  />
                 )}
               </Box>
             )}
@@ -638,50 +694,54 @@ const BruteForceConfig: React.FC = () => {
             {tabValue === 1 && (
               <Box sx={{ mt: 2 }}>
                 {isLoadingBruteForceList ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
-                    <CircularProgress />
-                  </Box>
+                  <LoadingIndicator />
                 ) : bruteForceList && bruteForceList.affected_accounts && bruteForceList.affected_accounts.length > 0 ? (
-                  <List>
-                    {bruteForceList.affected_accounts
-                      .filter(account => 
-                        !searchTerm || 
-                        account.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                        account.ip_addresses.some(ip => ip.toLowerCase().includes(searchTerm.toLowerCase()))
-                      )
-                      .map((account, index) => (
-                      <ListItem key={index} divider>
-                        <ListItemText
-                          primary={account.username}
-                          secondary={
-                            <>
-                              <Typography component="span" variant="body2">
-                                Associated IP Addresses: {account.ip_addresses.join(', ')}
-                              </Typography>
-                            </>
-                          }
-                        />
-                        <ListItemSecondaryAction>
-                          <Button
-                            variant="outlined"
-                            color="secondary"
-                            onClick={() => handleOpenUserDialog(account.username)}
-                            startIcon={<DeleteIcon />}
-                          >
-                            Free
-                          </Button>
-                        </ListItemSecondaryAction>
-                      </ListItem>
-                    ))}
-                  </List>
+                  <>
+                    <List>
+                      {filterAffectedAccounts(bruteForceList.affected_accounts)
+                        .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
+                        .map((account, index) => (
+                        <ListItem key={index} divider>
+                          <ListItemText
+                            primary={account.username}
+                            secondary={
+                              <>
+                                <Typography component="span" variant="body2">
+                                  Associated IP Addresses: {account.ip_addresses.join(', ')}
+                                </Typography>
+                              </>
+                            }
+                          />
+                          <ListItemSecondaryAction>
+                            <Button
+                              variant="outlined"
+                              color="secondary"
+                              onClick={() => handleOpenUserDialog(account.username)}
+                              startIcon={<DeleteIcon />}
+                            >
+                              Free
+                            </Button>
+                          </ListItemSecondaryAction>
+                        </ListItem>
+                      ))}
+                    </List>
+                    <TablePagination
+                      component="div"
+                      count={filterAffectedAccounts(bruteForceList.affected_accounts).length}
+                      page={page}
+                      onPageChange={handleChangePage}
+                      rowsPerPage={rowsPerPage}
+                      onRowsPerPageChange={handleChangeRowsPerPage}
+                      rowsPerPageOptions={rowsPerPageOptions}
+                      labelRowsPerPage="Accounts per page:"
+                    />
+                  </>
                 ) : (
-                  <Box sx={{ p: 3, textAlign: 'center' }}>
-                    <Typography variant="body1" color="text.secondary">
-                      {bruteForceList === null 
-                        ? 'Click "Refresh List" to load affected accounts' 
-                        : 'No affected accounts found'}
-                    </Typography>
-                  </Box>
+                  <EmptyState 
+                    message={bruteForceList === null 
+                      ? 'Click "Refresh List" to load affected accounts' 
+                      : 'No affected accounts found'} 
+                  />
                 )}
               </Box>
             )}
