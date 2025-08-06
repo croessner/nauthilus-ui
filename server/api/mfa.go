@@ -173,10 +173,10 @@ func convertToModelCredential(cred webauthn.Credential, name string) models.WebA
 }
 
 // GetWebAuthnUser gets a user for WebAuthn operations
-func (h *MFAHandler) GetWebAuthnUser(username string) (*WebAuthnUser, error) {
+func (h *MFAHandler) GetWebAuthnUser(ctx context.Context, username string) (*WebAuthnUser, error) {
 	var user models.User
 	err := h.MongoDB.GetUserCollection().FindOne(
-		context.Background(),
+		ctx,
 		bson.M{"username": username},
 	).Decode(&user)
 
@@ -227,7 +227,7 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	// Find user by username
 	var user models.User
 	err := h.MongoDB.GetUserCollection().FindOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": req.Username},
 	).Decode(&user)
 
@@ -250,7 +250,7 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 
 	// Update user with TOTP secret (but don't enable it yet until verified)
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": req.Username},
 		bson.M{"$set": bson.M{"totpSecret": key.Secret()}},
 	)
@@ -292,7 +292,7 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 	// Find user by username
 	var user models.User
 	err := h.MongoDB.GetUserCollection().FindOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": req.Username},
 	).Decode(&user)
 
@@ -313,7 +313,7 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 	// If this is the first verification, enable TOTP for the user
 	if !user.TOTPEnabled {
 		_, err = h.MongoDB.GetUserCollection().UpdateOne(
-			context.Background(),
+			ctx.Request.Context(),
 			bson.M{"username": req.Username},
 			bson.M{"$set": bson.M{"totpEnabled": true}},
 		)
@@ -351,7 +351,7 @@ func (h *MFAHandler) DisableTOTP(ctx *gin.Context) {
 
 	// Update user to disable TOTP
 	_, err := h.MongoDB.GetUserCollection().UpdateOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": req.Username},
 		bson.M{"$set": bson.M{
 			"totpEnabled": false,
@@ -394,7 +394,7 @@ func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 	}
 
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(username)
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), username)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
@@ -475,7 +475,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 	usernameStr := string(sessionData.UserID)
 
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(usernameStr)
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), usernameStr)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
@@ -503,7 +503,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 
 	// Update user with new credential
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": usernameStr},
 		bson.M{
 			"$push": bson.M{"webAuthnDevices": modelCredential},
@@ -537,7 +537,7 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 	}
 
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(username)
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), username)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
@@ -578,7 +578,7 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	}
 
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(username.(string))
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), username.(string))
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
@@ -605,7 +605,7 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	now := time.Now().Format(time.RFC3339)
 	credentialID := base64.StdEncoding.EncodeToString(credential.ID)
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{
 			"username":           username.(string),
 			"webAuthnDevices.id": credentialID,
@@ -646,7 +646,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 
 	// Remove credential from user
 	result, err := h.MongoDB.GetUserCollection().UpdateOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": username},
 		bson.M{"$pull": bson.M{"webAuthnDevices": bson.M{"id": credentialID}}},
 	)
@@ -666,7 +666,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 	// Check if user has any credentials left
 	var user models.User
 	err = h.MongoDB.GetUserCollection().FindOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": username},
 	).Decode(&user)
 
@@ -679,7 +679,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 	// If no credentials left, disable WebAuthn
 	if len(user.WebAuthnDevices) == 0 {
 		_, err = h.MongoDB.GetUserCollection().UpdateOne(
-			context.Background(),
+			ctx.Request.Context(),
 			bson.M{"username": username},
 			bson.M{"$set": bson.M{"webAuthnEnabled": false}},
 		)

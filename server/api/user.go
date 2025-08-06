@@ -1,7 +1,6 @@
 package api
 
 import (
-	"context"
 	"errors"
 	"net/http"
 	"time"
@@ -47,17 +46,17 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 	}
 
 	// Get all users without passwordHash
-	cursor, err := h.MongoDB.GetUserCollection().Find(context.Background(), bson.M{}, options.Find().SetProjection(bson.M{"passwordHash": 0}))
+	cursor, err := h.MongoDB.GetUserCollection().Find(ctx.Request.Context(), bson.M{}, options.Find().SetProjection(bson.M{"passwordHash": 0}))
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
 
 		return
 	}
 
-	defer cursor.Close(context.Background())
+	defer cursor.Close(ctx.Request.Context())
 
 	var users []models.User
-	if err := cursor.All(context.Background(), &users); err != nil {
+	if err := cursor.All(ctx.Request.Context(), &users); err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
 
 		return
@@ -79,7 +78,7 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 	var user models.User
 
 	err := h.MongoDB.GetUserCollection().FindOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": username},
 		options.FindOne().SetProjection(bson.M{"passwordHash": 0}),
 	).Decode(&user)
@@ -121,7 +120,7 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 
 	// Check if user already exists
 	var existingUser models.User
-	err := h.MongoDB.GetUserCollection().FindOne(context.Background(), bson.M{"username": userRequest.Username}).Decode(&existingUser)
+	err := h.MongoDB.GetUserCollection().FindOne(ctx.Request.Context(), bson.M{"username": userRequest.Username}).Decode(&existingUser)
 	if err == nil {
 		ctx.JSON(http.StatusConflict, models.ErrorResponse{Error: "User already exists"})
 
@@ -157,7 +156,7 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 		user.Roles = []string{"user"}
 	}
 
-	_, err = h.MongoDB.GetUserCollection().InsertOne(context.Background(), user)
+	_, err = h.MongoDB.GetUserCollection().InsertOne(ctx.Request.Context(), user)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create user"})
 
@@ -193,7 +192,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 
 	// Find user
 	var user models.User
-	err := h.MongoDB.GetUserCollection().FindOne(context.Background(), bson.M{"username": username}).Decode(&user)
+	err := h.MongoDB.GetUserCollection().FindOne(ctx.Request.Context(), bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
@@ -246,7 +245,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 
 	// Update user
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": username},
 		bson.M{"$set": update},
 	)
@@ -260,7 +259,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	// Get updated user
 	var updatedUser models.User
 	err = h.MongoDB.GetUserCollection().FindOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"username": username},
 		options.FindOne().SetProjection(bson.M{"passwordHash": 0}),
 	).Decode(&updatedUser)
@@ -286,7 +285,7 @@ func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 	username := ctx.Param("username")
 
 	// Delete user
-	result, err := h.MongoDB.GetUserCollection().DeleteOne(context.Background(), bson.M{"username": username})
+	result, err := h.MongoDB.GetUserCollection().DeleteOne(ctx.Request.Context(), bson.M{"username": username})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete user"})
 
