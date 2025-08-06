@@ -210,16 +210,16 @@ type SetupTOTPResponse struct {
 }
 
 // SetupTOTP handles the POST /api/auth/totp/setup endpoint
-func (h *MFAHandler) SetupTOTP(c *gin.Context) {
+func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	var req SetupTOTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
@@ -232,7 +232,7 @@ func (h *MFAHandler) SetupTOTP(c *gin.Context) {
 	).Decode(&user)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
@@ -243,7 +243,7 @@ func (h *MFAHandler) SetupTOTP(c *gin.Context) {
 		AccountName: req.Username,
 	})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate TOTP key"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate TOTP key"})
 
 		return
 	}
@@ -256,13 +256,13 @@ func (h *MFAHandler) SetupTOTP(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update user"})
 
 		return
 	}
 
 	// Return TOTP secret and QR code URL
-	c.JSON(http.StatusOK, SetupTOTPResponse{
+	ctx.JSON(http.StatusOK, SetupTOTPResponse{
 		Secret: key.Secret(),
 		QRCode: key.URL(),
 	})
@@ -275,17 +275,17 @@ type VerifyTOTPRequest struct {
 }
 
 // VerifyTOTP handles the POST /api/auth/totp/verify endpoint
-func (h *MFAHandler) VerifyTOTP(c *gin.Context) {
+func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 	var req VerifyTOTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 		return
 	}
 
@@ -297,7 +297,7 @@ func (h *MFAHandler) VerifyTOTP(c *gin.Context) {
 	).Decode(&user)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
@@ -305,7 +305,7 @@ func (h *MFAHandler) VerifyTOTP(c *gin.Context) {
 	// Verify TOTP token
 	valid := totp.Validate(req.Token, user.TOTPSecret)
 	if !valid {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid TOTP token"})
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid TOTP token"})
 
 		return
 	}
@@ -319,13 +319,13 @@ func (h *MFAHandler) VerifyTOTP(c *gin.Context) {
 		)
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to enable TOTP"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to enable TOTP"})
 
 			return
 		}
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP verified successfully"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP verified successfully"})
 }
 
 // DisableTOTPRequest represents a request to disable TOTP
@@ -334,17 +334,17 @@ type DisableTOTPRequest struct {
 }
 
 // DisableTOTP handles the POST /api/auth/totp/disable endpoint
-func (h *MFAHandler) DisableTOTP(c *gin.Context) {
+func (h *MFAHandler) DisableTOTP(ctx *gin.Context) {
 	var req DisableTOTPRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
@@ -361,15 +361,15 @@ func (h *MFAHandler) DisableTOTP(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+			ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to disable TOTP"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to disable TOTP"})
 		}
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP disabled successfully"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP disabled successfully"})
 }
 
 // BeginRegistrationRequest represents a request to begin WebAuthn registration
@@ -378,17 +378,17 @@ type BeginRegistrationRequest struct {
 }
 
 // BeginWebAuthnRegistration handles the GET /api/auth/webauthn/begin-registration endpoint
-func (h *MFAHandler) BeginWebAuthnRegistration(c *gin.Context) {
-	username := c.Query("username")
+func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
+	username := ctx.Query("username")
 	if username == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
 
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
@@ -396,7 +396,7 @@ func (h *MFAHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	// Get user for WebAuthn
 	user, err := h.GetWebAuthnUser(username)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
@@ -404,7 +404,7 @@ func (h *MFAHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	// Begin registration
 	options, sessionData, err := h.WebAuthn.BeginRegistration(user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to begin registration: %v", err)})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to begin registration: %v", err)})
 
 		return
 	}
@@ -412,7 +412,7 @@ func (h *MFAHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	// Encode session data to base64 to send to client
 	sessionDataBytes, err := json.Marshal(sessionData)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode session data"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode session data"})
 
 		return
 	}
@@ -420,7 +420,7 @@ func (h *MFAHandler) BeginWebAuthnRegistration(c *gin.Context) {
 	sessionDataBase64 := base64.StdEncoding.EncodeToString(sessionDataBytes)
 
 	// Return registration options with session data
-	c.JSON(http.StatusOK, gin.H{
+	ctx.JSON(http.StatusOK, gin.H{
 		"publicKey":   options,
 		"sessionData": sessionDataBase64,
 	})
@@ -434,23 +434,23 @@ type FinishRegistrationRequest struct {
 }
 
 // FinishWebAuthnRegistration handles the POST /api/auth/webauthn/finish-registration endpoint
-func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
+func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 	// Read the raw request body
-	bodyBytes, err := io.ReadAll(c.Request.Body)
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
 
 		return
 	}
 
 	// Close the original body and replace it with a new reader for later use
-	c.Request.Body.Close()
-	c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+	ctx.Request.Body.Close()
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	// Parse the request to get the name and session data
 	var req FinishRegistrationRequest
 	if err := json.Unmarshal(bodyBytes, &req); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
@@ -458,7 +458,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	// Decode session data from base64
 	sessionDataBytes, err := base64.StdEncoding.DecodeString(req.SessionData)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid session data"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid session data"})
 
 		return
 	}
@@ -466,7 +466,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	// Unmarshal session data
 	var sessionData webauthn.SessionData
 	if err := json.Unmarshal(sessionDataBytes, &sessionData); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to decode session data"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to decode session data"})
 
 		return
 	}
@@ -477,15 +477,15 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	// Get user for WebAuthn
 	user, err := h.GetWebAuthnUser(usernameStr)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
 
 	// Parse response using the original request body
-	response, err := protocol.ParseCredentialCreationResponseBody(c.Request.Body)
+	response, err := protocol.ParseCredentialCreationResponseBody(ctx.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
 
 		return
 	}
@@ -493,7 +493,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	// Finish registration
 	credential, err := h.WebAuthn.CreateCredential(user, sessionData, response)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create credential: %v", err)})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to create credential: %v", err)})
 
 		return
 	}
@@ -512,26 +512,26 @@ func (h *MFAHandler) FinishWebAuthnRegistration(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update user"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn credential registered successfully"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn credential registered successfully"})
 }
 
 // BeginWebAuthnLogin handles the GET /api/auth/webauthn/begin-login endpoint
-func (h *MFAHandler) BeginWebAuthnLogin(c *gin.Context) {
-	username := c.Query("username")
+func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
+	username := ctx.Query("username")
 	if username == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
 
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
@@ -539,7 +539,7 @@ func (h *MFAHandler) BeginWebAuthnLogin(c *gin.Context) {
 	// Get user for WebAuthn
 	user, err := h.GetWebAuthnUser(username)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
@@ -547,32 +547,32 @@ func (h *MFAHandler) BeginWebAuthnLogin(c *gin.Context) {
 	// Begin login
 	options, sessionData, err := h.WebAuthn.BeginLogin(user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to begin login: %v", err)})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to begin login: %v", err)})
 
 		return
 	}
 
 	// Store session data in context
-	c.Set("webauthnSessionData", sessionData)
-	c.Set("webauthnUsername", username)
+	ctx.Set("webauthnSessionData", sessionData)
+	ctx.Set("webauthnUsername", username)
 
 	// Return login options
-	c.JSON(http.StatusOK, options)
+	ctx.JSON(http.StatusOK, options)
 }
 
 // FinishWebAuthnLogin handles the POST /api/auth/webauthn/finish-login endpoint
-func (h *MFAHandler) FinishWebAuthnLogin(c *gin.Context) {
+func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	// Get session data from context
-	sessionData, exists := c.Get("webauthnSessionData")
+	sessionData, exists := ctx.Get("webauthnSessionData")
 	if !exists {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No session data found"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No session data found"})
 
 		return
 	}
 
-	username, exists := c.Get("webauthnUsername")
+	username, exists := ctx.Get("webauthnUsername")
 	if !exists {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No username found"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No username found"})
 
 		return
 	}
@@ -580,15 +580,15 @@ func (h *MFAHandler) FinishWebAuthnLogin(c *gin.Context) {
 	// Get user for WebAuthn
 	user, err := h.GetWebAuthnUser(username.(string))
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
 
 	// Parse response
-	response, err := protocol.ParseCredentialRequestResponseBody(c.Request.Body)
+	response, err := protocol.ParseCredentialRequestResponseBody(ctx.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
 
 		return
 	}
@@ -596,7 +596,7 @@ func (h *MFAHandler) FinishWebAuthnLogin(c *gin.Context) {
 	// Finish login
 	credential, err := h.WebAuthn.ValidateLogin(user, sessionData.(webauthn.SessionData), response)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
 
 		return
 	}
@@ -618,28 +618,28 @@ func (h *MFAHandler) FinishWebAuthnLogin(c *gin.Context) {
 		fmt.Printf("Failed to update credential last used: %v\n", err)
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn login successful"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn login successful"})
 }
 
 // RemoveWebAuthnCredential handles the DELETE /api/auth/webauthn/credential/:id endpoint
-func (h *MFAHandler) RemoveWebAuthnCredential(c *gin.Context) {
-	username := c.Query("username")
+func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
+	username := ctx.Query("username")
 	if username == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
 
 		return
 	}
 
-	credentialID := c.Param("id")
+	credentialID := ctx.Param("id")
 	if credentialID == "" {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Credential ID is required"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Credential ID is required"})
 
 		return
 	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
@@ -652,13 +652,13 @@ func (h *MFAHandler) RemoveWebAuthnCredential(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to remove credential"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to remove credential"})
 
 		return
 	}
 
 	if result.ModifiedCount == 0 {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Credential not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Credential not found"})
 
 		return
 	}
@@ -671,7 +671,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(c *gin.Context) {
 	).Decode(&user)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to get user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to get user"})
 
 		return
 	}
@@ -690,5 +690,5 @@ func (h *MFAHandler) RemoveWebAuthnCredential(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn credential removed successfully"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn credential removed successfully"})
 }

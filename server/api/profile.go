@@ -31,10 +31,10 @@ func (h *ProfileHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 // GetProfiles handles the GET /api/profiles/:userId endpoint
-func (h *ProfileHandler) GetProfiles(c *gin.Context) {
+func (h *ProfileHandler) GetProfiles(ctx *gin.Context) {
 	// If MongoDB is not connected, return default profile
 	if !h.MongoDB.IsConnected {
-		c.JSON(http.StatusOK, models.ProfileResponse{
+		ctx.JSON(http.StatusOK, models.ProfileResponse{
 			Profiles: []models.ProfileData{
 				{
 					Name: "Default",
@@ -73,41 +73,41 @@ func (h *ProfileHandler) GetProfiles(c *gin.Context) {
 		return
 	}
 
-	userID := c.Param("userId")
+	userID := ctx.Param("userId")
 	var profile models.Profile
 
 	err := h.MongoDB.ProfileColl.FindOne(context.Background(), bson.M{"userId": userID}).Decode(&profile)
 	if err != nil {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Profiles not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Profiles not found"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.ProfileResponse{
+	ctx.JSON(http.StatusOK, models.ProfileResponse{
 		Profiles:           profile.Profiles,
 		CurrentProfileName: profile.CurrentProfileName,
 	})
 }
 
 // SaveProfiles handles the POST /api/profiles/:userId endpoint
-func (h *ProfileHandler) SaveProfiles(c *gin.Context) {
+func (h *ProfileHandler) SaveProfiles(ctx *gin.Context) {
 	// If MongoDB is not connected, return success but log warning
 	if !h.MongoDB.IsConnected {
 		var profileResponse models.ProfileResponse
-		if err := c.ShouldBindJSON(&profileResponse); err != nil {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		if err := ctx.ShouldBindJSON(&profileResponse); err != nil {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 			return
 		}
 
-		c.JSON(http.StatusOK, profileResponse)
+		ctx.JSON(http.StatusOK, profileResponse)
 
 		return
 	}
 
-	userID := c.Param("userId")
+	userID := ctx.Param("userId")
 	var profileResponse models.ProfileResponse
-	if err := c.ShouldBindJSON(&profileResponse); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&profileResponse); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
@@ -132,12 +132,12 @@ func (h *ProfileHandler) SaveProfiles(c *gin.Context) {
 	).Decode(&profile)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to save profiles"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to save profiles"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.ProfileResponse{
+	ctx.JSON(http.StatusOK, models.ProfileResponse{
 		Profiles:           profile.Profiles,
 		CurrentProfileName: profile.CurrentProfileName,
 	})

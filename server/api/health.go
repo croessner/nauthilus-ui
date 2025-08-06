@@ -26,15 +26,15 @@ func (h *HealthHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 // MongoDBHealth handles the MongoDB health check endpoint
-func (h *HealthHandler) MongoDBHealth(c *gin.Context) {
+func (h *HealthHandler) MongoDBHealth(ctx *gin.Context) {
 	if h.MongoDB.IsConnected {
-		c.JSON(http.StatusOK, models.HealthResponse{
+		ctx.JSON(http.StatusOK, models.HealthResponse{
 			Status: "connected",
 		})
 	} else {
 		// Try to reconnect if not connected
-		go h.MongoDB.RetryConnection(c.Request.Context(), true)
-		c.JSON(http.StatusOK, models.HealthResponse{
+		go h.MongoDB.RetryConnection(ctx.Request.Context(), true)
+		ctx.JSON(http.StatusOK, models.HealthResponse{
 			Status:  "disconnected",
 			Message: "Reconnection attempt triggered",
 		})

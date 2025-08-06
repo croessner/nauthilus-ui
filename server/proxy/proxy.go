@@ -38,11 +38,11 @@ func NewProxyHandler() *ProxyHandler {
 // getTargetURL extracts and validates the target URL from the request
 // Returns the target URL and a boolean indicating success
 // If unsuccessful, also returns an HTTP status code and error message
-func getTargetURL(c *gin.Context) (string, int, string, bool) {
+func getTargetURL(ctx *gin.Context) (string, int, string, bool) {
 	// Get target URL from query parameter or header
-	targetURL := c.GetHeader("x-target-url")
+	targetURL := ctx.GetHeader("x-target-url")
 	if targetURL == "" {
-		targetURL = c.Query("url")
+		targetURL = ctx.Query("url")
 	}
 
 	if targetURL == "" {
@@ -61,11 +61,11 @@ func getTargetURL(c *gin.Context) (string, int, string, bool) {
 // getEndpointPath extracts the endpoint path from the request
 // Returns the endpoint path and a boolean indicating success
 // If unsuccessful, also returns an HTTP status code and error message
-func getEndpointPath(c *gin.Context) (string, int, string, bool) {
+func getEndpointPath(ctx *gin.Context) (string, int, string, bool) {
 	// Get endpoint path from query parameter or header
-	endpointPath := c.GetHeader("x-endpoint-path")
+	endpointPath := ctx.GetHeader("x-endpoint-path")
 	if endpointPath == "" {
-		endpointPath = c.Query("endpoint_path")
+		endpointPath = ctx.Query("endpoint_path")
 	}
 
 	if endpointPath == "" {
@@ -76,25 +76,25 @@ func getEndpointPath(c *gin.Context) (string, int, string, bool) {
 }
 
 // getOperation extracts the operation from the request
-func getOperation(c *gin.Context) string {
+func getOperation(ctx *gin.Context) string {
 	// Get operation parameter from query parameter or header
-	operation := c.GetHeader("x-operation")
+	operation := ctx.GetHeader("x-operation")
 	if operation == "" {
-		operation = c.Query("operation")
+		operation = ctx.Query("operation")
 	}
 
 	return operation
 }
 
 // getAuthParams extracts authentication parameters from the request
-func getAuthParams(c *gin.Context) (string, string) {
+func getAuthParams(ctx *gin.Context) (string, string) {
 	// Get auth parameters from headers or query parameters
-	authType := c.GetHeader("x-auth-type")
-	authValue := c.GetHeader("x-auth-value")
+	authType := ctx.GetHeader("x-auth-type")
+	authValue := ctx.GetHeader("x-auth-value")
 
 	// If not in headers, try query parameters
 	if authType == "" || authValue == "" {
-		authType, authValue = utils.GetAuthorizationFromQuery(c.Request)
+		authType, authValue = utils.GetAuthorizationFromQuery(ctx.Request)
 	}
 
 	return authType, authValue
@@ -110,18 +110,18 @@ func copyHeaders(dst http.Header, src http.Header) {
 }
 
 // handleProxyRequest handles the common proxy flow
-func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
+func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) {
 	// Set CORS headers for non-OPTIONS requests
-	origin := c.Request.Header.Get("Origin")
+	origin := ctx.Request.Header.Get("Origin")
 	if origin == "" {
 		// Default to localhost:3000 for development
 		origin = "http://localhost:3000"
 	}
 
-	c.Header("Access-Control-Allow-Origin", origin)
-	c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
-	c.Header("Access-Control-Allow-Credentials", "true")
+	ctx.Header("Access-Control-Allow-Origin", origin)
+	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+	ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
+	ctx.Header("Access-Control-Allow-Credentials", "true")
 
 	// Get and validate target URL if not provided
 	if config.TargetURL == "" {
@@ -129,9 +129,9 @@ func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
 		var errMsg string
 		var ok bool
 
-		config.TargetURL, statusCode, errMsg, ok = getTargetURL(c)
+		config.TargetURL, statusCode, errMsg, ok = getTargetURL(ctx)
 		if !ok {
-			c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+			ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 			return
 		}
@@ -140,16 +140,16 @@ func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
 	// Log the request
 	if config.EndpointPath == "" {
 		// Simple endpoint with a fixed path
-		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", c.Request.Method, "target", config.TargetURL)
+		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", config.TargetURL)
 	} else {
 		// For endpoints with dynamic path
-		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", c.Request.Method, "target", config.TargetURL, "endpoint_path", config.EndpointPath)
+		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", config.TargetURL, "endpoint_path", config.EndpointPath)
 	}
 
 	// Parse the target URL
 	target, err := url.Parse(config.TargetURL)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
 
 		return
 	}
@@ -179,38 +179,38 @@ func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
 
 			// Add authentication headers if required
 			if config.RequiresAuth {
-				authType, authValue := getAuthParams(c)
+				authType, authValue := getAuthParams(ctx)
 				utils.AddAuthorizationHeader(req, authType, authValue)
 			}
 		}
 
 		// Handle errors
 		proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, err error) {
-			c.JSON(http.StatusBadGateway, models.ErrorResponse{
+			ctx.JSON(http.StatusBadGateway, models.ErrorResponse{
 				Error: "Failed to connect to backend server: " + err.Error(),
 			})
 		}
 
 		// Serve the request
-		proxy.ServeHTTP(c.Writer, c.Request)
+		proxy.ServeHTTP(ctx.Writer, ctx.Request)
 
 		return
 	}
 
 	// Create the proxy request
-	req, err := http.NewRequest(c.Request.Method, target.String(), c.Request.Body)
+	req, err := http.NewRequest(ctx.Request.Method, target.String(), ctx.Request.Body)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create proxy request"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create proxy request"})
 
 		return
 	}
 
 	// Copy headers from the original request
-	copyHeaders(req.Header, c.Request.Header)
+	copyHeaders(req.Header, ctx.Request.Header)
 
 	// Add authentication headers if required
 	if config.RequiresAuth {
-		authType, authValue := getAuthParams(c)
+		authType, authValue := getAuthParams(ctx)
 		utils.AddAuthorizationHeader(req, authType, authValue)
 	}
 
@@ -223,7 +223,7 @@ func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to connect to backend server: " + err.Error()})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to connect to backend server: " + err.Error()})
 
 		return
 	}
@@ -231,39 +231,39 @@ func (h *ProxyHandler) handleProxyRequest(c *gin.Context, config ProxyConfig) {
 	defer resp.Body.Close()
 
 	// Copy the response headers
-	copyHeaders(c.Writer.Header(), resp.Header)
+	copyHeaders(ctx.Writer.Header(), resp.Header)
 
 	// Set the status code
-	c.Writer.WriteHeader(resp.StatusCode)
+	ctx.Writer.WriteHeader(resp.StatusCode)
 
 	// Copy the response body
-	io.Copy(c.Writer, resp.Body)
+	io.Copy(ctx.Writer, resp.Body)
 }
 
 // RegisterRoutes registers the proxy routes
 func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 	// Add a middleware to handle CORS for all proxy routes
-	router.Use(func(c *gin.Context) {
+	router.Use(func(ctx *gin.Context) {
 		// Set CORS headers for all requests
-		origin := c.Request.Header.Get("Origin")
+		origin := ctx.Request.Header.Get("Origin")
 		if origin == "" {
 			// Default to localhost:3000 for development
 			origin = "http://localhost:3000"
 		}
 
-		c.Header("Access-Control-Allow-Origin", origin)
-		c.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
-		c.Header("Access-Control-Allow-Credentials", "true")
-		c.Header("Access-Control-Max-Age", "86400") // 24 hours
+		ctx.Header("Access-Control-Allow-Origin", origin)
+		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
+		ctx.Header("Access-Control-Allow-Credentials", "true")
+		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
 
 		// Handle preflight OPTIONS requests
-		if c.Request.Method == "OPTIONS" {
-			c.AbortWithStatus(204)
+		if ctx.Request.Method == "OPTIONS" {
+			ctx.AbortWithStatus(204)
 			return
 		}
 
-		c.Next()
+		ctx.Next()
 	})
 
 	// Register the actual route handlers
@@ -304,18 +304,18 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 // PingProxy handles the /proxy/ping endpoint
-func (h *ProxyHandler) PingProxy(c *gin.Context) {
+func (h *ProxyHandler) PingProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath: "/ping",
 		LogEndpoint:  "/proxy/ping",
 		RequiresAuth: false,
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // JWTTokenProxy handles the /proxy/jwt-token endpoint
-func (h *ProxyHandler) JWTTokenProxy(c *gin.Context) {
+func (h *ProxyHandler) JWTTokenProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath: "/api/v1/jwt/token",
 		LogEndpoint:  "/proxy/jwt-token",
@@ -323,22 +323,22 @@ func (h *ProxyHandler) JWTTokenProxy(c *gin.Context) {
 		ContentType:  "application/json",
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // BruteforceListProxy handles the /proxy/bruteforce/list endpoint
-func (h *ProxyHandler) BruteforceListProxy(c *gin.Context) {
+func (h *ProxyHandler) BruteforceListProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath: "/api/v1/bruteforce/list",
 		LogEndpoint:  "/proxy/bruteforce/list",
 		RequiresAuth: true,
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // CacheFlushProxy handles the /proxy/cache/flush endpoint
-func (h *ProxyHandler) CacheFlushProxy(c *gin.Context) {
+func (h *ProxyHandler) CacheFlushProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath: "/api/v1/cache/flush",
 		LogEndpoint:  "/proxy/cache/flush",
@@ -346,7 +346,7 @@ func (h *ProxyHandler) CacheFlushProxy(c *gin.Context) {
 		ContentType:  "application/json",
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // getIPFromCIDR extracts a specific IP address from a CIDR notation
@@ -389,24 +389,24 @@ func getIPFromCIDR(ipStr string) string {
 }
 
 // BruteforceFlushProxy handles the /proxy/bruteforce/flush endpoint
-func (h *ProxyHandler) BruteforceFlushProxy(c *gin.Context) {
+func (h *ProxyHandler) BruteforceFlushProxy(ctx *gin.Context) {
 	// For DELETE requests, we need to modify the IP address in the request body
-	if c.Request.Method == "DELETE" {
+	if ctx.Request.Method == "DELETE" {
 		// Read the request body
 		var requestBody map[string]interface{}
-		bodyData, err := io.ReadAll(c.Request.Body)
+		bodyData, err := io.ReadAll(ctx.Request.Body)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
 
 			return
 		}
 
 		// Close the original body
-		c.Request.Body.Close()
+		ctx.Request.Body.Close()
 
 		// Parse the JSON body
 		if err := json.Unmarshal(bodyData, &requestBody); err != nil {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to parse request body"})
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to parse request body"})
 
 			return
 		}
@@ -419,16 +419,16 @@ func (h *ProxyHandler) BruteforceFlushProxy(c *gin.Context) {
 			// Convert back to JSON
 			modifiedBody, err := json.Marshal(requestBody)
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode modified request body"})
+				ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode modified request body"})
 
 				return
 			}
 
 			// Create a new body with the modified data
-			c.Request.Body = io.NopCloser(strings.NewReader(string(modifiedBody)))
+			ctx.Request.Body = io.NopCloser(strings.NewReader(string(modifiedBody)))
 
 			// Update Content-Length header
-			c.Request.ContentLength = int64(len(modifiedBody))
+			ctx.Request.ContentLength = int64(len(modifiedBody))
 
 			slog.Info("Modified IP address in request", "original", ipAddress, "modified", requestBody["ip_address"])
 		}
@@ -441,11 +441,11 @@ func (h *ProxyHandler) BruteforceFlushProxy(c *gin.Context) {
 		ContentType:  "application/json",
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // ConfigLoadProxy handles the /proxy/config/load endpoint
-func (h *ProxyHandler) ConfigLoadProxy(c *gin.Context) {
+func (h *ProxyHandler) ConfigLoadProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath:    "/api/v1/config/load",
 		LogEndpoint:     "/proxy/config/load",
@@ -453,15 +453,15 @@ func (h *ProxyHandler) ConfigLoadProxy(c *gin.Context) {
 		UseReverseProxy: true,
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // DistributedBruteForceAdminProxy handles the /proxy/hooks/distributed-brute-force-admin endpoint
-func (h *ProxyHandler) DistributedBruteForceAdminProxy(c *gin.Context) {
+func (h *ProxyHandler) DistributedBruteForceAdminProxy(ctx *gin.Context) {
 	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(c)
+	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
 	if !ok {
-		c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 		return
 	}
@@ -471,18 +471,18 @@ func (h *ProxyHandler) DistributedBruteForceAdminProxy(c *gin.Context) {
 		LogEndpoint:  "/proxy/hooks/distributed-brute-force-admin",
 		RequiresAuth: true,
 		ContentType:  "application/json",
-		Operation:    getOperation(c),
+		Operation:    getOperation(ctx),
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // DistributedBruteForceTestProxy handles the /proxy/hooks/distributed-brute-force-test endpoint
-func (h *ProxyHandler) DistributedBruteForceTestProxy(c *gin.Context) {
+func (h *ProxyHandler) DistributedBruteForceTestProxy(ctx *gin.Context) {
 	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(c)
+	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
 	if !ok {
-		c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 		return
 	}
@@ -492,27 +492,27 @@ func (h *ProxyHandler) DistributedBruteForceTestProxy(c *gin.Context) {
 		LogEndpoint:  "/proxy/hooks/distributed-brute-force-test",
 		RequiresAuth: true,
 		ContentType:  "application/json",
-		Operation:    getOperation(c),
+		Operation:    getOperation(ctx),
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // LearningModeProxy handles the /proxy/hooks/learning-mode endpoint
-func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
+func (h *ProxyHandler) LearningModeProxy(ctx *gin.Context) {
 	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(c)
+	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
 	if !ok {
-		c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 		return
 	}
 
 	// Create a custom handler for learning-mode that always uses GET method
 	// Parse the target URL
-	targetURL, statusCode, errMsg, ok := getTargetURL(c)
+	targetURL, statusCode, errMsg, ok := getTargetURL(ctx)
 	if !ok {
-		c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 		return
 	}
@@ -523,7 +523,7 @@ func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
 	// Parse the target URL
 	target, err := url.Parse(targetURL)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
 
 		return
 	}
@@ -532,7 +532,7 @@ func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
 	target.Path = endpointPath
 
 	// If operation is provided, append it as a query parameter
-	operation := getOperation(c)
+	operation := getOperation(ctx)
 	if operation != "" {
 		// For learning-mode, we need to set the enabled parameter based on the operation
 		if operation == "enable" || operation == "disable" {
@@ -561,16 +561,16 @@ func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
 	// Create the proxy request - always use GET method for learning-mode
 	req, err := http.NewRequest("GET", target.String(), nil)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create proxy request"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create proxy request"})
 
 		return
 	}
 
 	// Copy headers from the original request
-	copyHeaders(req.Header, c.Request.Header)
+	copyHeaders(req.Header, ctx.Request.Header)
 
 	// Add authentication headers
-	authType, authValue := getAuthParams(c)
+	authType, authValue := getAuthParams(ctx)
 	utils.AddAuthorizationHeader(req, authType, authValue)
 
 	// Set content type
@@ -580,7 +580,7 @@ func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to connect to backend server: " + err.Error()})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to connect to backend server: " + err.Error()})
 
 		return
 	}
@@ -588,21 +588,21 @@ func (h *ProxyHandler) LearningModeProxy(c *gin.Context) {
 	defer resp.Body.Close()
 
 	// Copy the response headers
-	copyHeaders(c.Writer.Header(), resp.Header)
+	copyHeaders(ctx.Writer.Header(), resp.Header)
 
 	// Set the status code
-	c.Writer.WriteHeader(resp.StatusCode)
+	ctx.Writer.WriteHeader(resp.StatusCode)
 
 	// Copy the response body
-	io.Copy(c.Writer, resp.Body)
+	io.Copy(ctx.Writer, resp.Body)
 }
 
 // NeuralFeedbackProxy handles the /proxy/hooks/neural-feedback endpoint
-func (h *ProxyHandler) NeuralFeedbackProxy(c *gin.Context) {
+func (h *ProxyHandler) NeuralFeedbackProxy(ctx *gin.Context) {
 	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(c)
+	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
 	if !ok {
-		c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 		return
 	}
@@ -612,18 +612,18 @@ func (h *ProxyHandler) NeuralFeedbackProxy(c *gin.Context) {
 		LogEndpoint:  "/proxy/hooks/neural-feedback",
 		RequiresAuth: true,
 		ContentType:  "application/json",
-		Operation:    getOperation(c),
+		Operation:    getOperation(ctx),
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }
 
 // TrainNeuralNetworkProxy handles the /proxy/hooks/train-neural-network endpoint
-func (h *ProxyHandler) TrainNeuralNetworkProxy(c *gin.Context) {
+func (h *ProxyHandler) TrainNeuralNetworkProxy(ctx *gin.Context) {
 	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(c)
+	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
 	if !ok {
-		c.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 		return
 	}
@@ -633,8 +633,8 @@ func (h *ProxyHandler) TrainNeuralNetworkProxy(c *gin.Context) {
 		LogEndpoint:  "/proxy/hooks/train-neural-network",
 		RequiresAuth: true,
 		ContentType:  "application/json",
-		Operation:    c.Query("operation"), // This endpoint only uses query parameters
+		Operation:    ctx.Query("operation"), // This endpoint only uses query parameters
 	}
 
-	h.handleProxyRequest(c, config)
+	h.handleProxyRequest(ctx, config)
 }

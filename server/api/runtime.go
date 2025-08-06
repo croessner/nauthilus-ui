@@ -32,10 +32,10 @@ func (h *RuntimeHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 // GetRuntimeSettings handles the GET /api/runtime/:userId/:profileName endpoint
-func (h *RuntimeHandler) GetRuntimeSettings(c *gin.Context) {
+func (h *RuntimeHandler) GetRuntimeSettings(ctx *gin.Context) {
 	// If MongoDB is not connected, return empty runtime settings
 	if !h.MongoDB.IsConnected {
-		c.JSON(http.StatusOK, models.RuntimeSettingsResponse{
+		ctx.JSON(http.StatusOK, models.RuntimeSettingsResponse{
 			Connection: map[string]interface{}{},
 			Hooks:      map[string]interface{}{},
 		})
@@ -43,8 +43,8 @@ func (h *RuntimeHandler) GetRuntimeSettings(c *gin.Context) {
 		return
 	}
 
-	userID := c.Param("userId")
-	profileName := c.Param("profileName")
+	userID := ctx.Param("userId")
+	profileName := ctx.Param("profileName")
 	var runtimeSettings models.RuntimeSettings
 
 	err := h.MongoDB.RuntimeColl.FindOne(
@@ -54,7 +54,7 @@ func (h *RuntimeHandler) GetRuntimeSettings(c *gin.Context) {
 
 	if err != nil {
 		// If no runtime settings found, return empty settings
-		c.JSON(http.StatusOK, models.RuntimeSettingsResponse{
+		ctx.JSON(http.StatusOK, models.RuntimeSettingsResponse{
 			Connection: map[string]interface{}{},
 			Hooks:      map[string]interface{}{},
 		})
@@ -62,33 +62,33 @@ func (h *RuntimeHandler) GetRuntimeSettings(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, models.RuntimeSettingsResponse{
+	ctx.JSON(http.StatusOK, models.RuntimeSettingsResponse{
 		Connection: runtimeSettings.Connection,
 		Hooks:      runtimeSettings.Hooks,
 	})
 }
 
 // SaveRuntimeSettings handles the POST /api/runtime/:userId/:profileName endpoint
-func (h *RuntimeHandler) SaveRuntimeSettings(c *gin.Context) {
+func (h *RuntimeHandler) SaveRuntimeSettings(ctx *gin.Context) {
 	// If MongoDB is not connected, return success but log warning
 	if !h.MongoDB.IsConnected {
 		var runtimeResponse models.RuntimeSettingsResponse
-		if err := c.ShouldBindJSON(&runtimeResponse); err != nil {
-			c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		if err := ctx.ShouldBindJSON(&runtimeResponse); err != nil {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 			return
 		}
 
-		c.JSON(http.StatusOK, runtimeResponse)
+		ctx.JSON(http.StatusOK, runtimeResponse)
 
 		return
 	}
 
-	userID := c.Param("userId")
-	profileName := c.Param("profileName")
+	userID := ctx.Param("userId")
+	profileName := ctx.Param("profileName")
 	var runtimeResponse models.RuntimeSettingsResponse
-	if err := c.ShouldBindJSON(&runtimeResponse); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&runtimeResponse); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
@@ -114,41 +114,41 @@ func (h *RuntimeHandler) SaveRuntimeSettings(c *gin.Context) {
 	).Decode(&runtimeSettings)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to save runtime settings"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to save runtime settings"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.RuntimeSettingsResponse{
+	ctx.JSON(http.StatusOK, models.RuntimeSettingsResponse{
 		Connection: runtimeSettings.Connection,
 		Hooks:      runtimeSettings.Hooks,
 	})
 }
 
 // DeleteRuntimeSettings handles the DELETE /api/runtime/:userId/:profileName endpoint
-func (h *RuntimeHandler) DeleteRuntimeSettings(c *gin.Context) {
+func (h *RuntimeHandler) DeleteRuntimeSettings(ctx *gin.Context) {
 	// If MongoDB is not connected, return success
 	if !h.MongoDB.IsConnected {
-		c.JSON(http.StatusOK, models.MessageResponse{Message: "Runtime settings deleted successfully"})
+		ctx.JSON(http.StatusOK, models.MessageResponse{Message: "Runtime settings deleted successfully"})
 		return
 	}
 
-	userID := c.Param("userId")
-	profileName := c.Param("profileName")
+	userID := ctx.Param("userId")
+	profileName := ctx.Param("profileName")
 
 	// Delete runtime settings
 	filter := bson.M{"userId": userID, "profileName": profileName}
 	result, err := h.MongoDB.RuntimeColl.DeleteOne(context.Background(), filter)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete runtime settings"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete runtime settings"})
 		return
 	}
 
 	if result.DeletedCount == 0 {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Runtime settings not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Runtime settings not found"})
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "Runtime settings deleted successfully"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "Runtime settings deleted successfully"})
 }

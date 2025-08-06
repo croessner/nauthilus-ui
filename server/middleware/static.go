@@ -44,7 +44,7 @@ func (h *StaticHandler) RegisterMiddleware(router *gin.Engine) {
 }
 
 // EnvConfigHandler handles the /env-config.js endpoint
-func (h *StaticHandler) EnvConfigHandler(c *gin.Context) {
+func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 	// Create a JavaScript file that sets window._env_
 	envConfig := map[string]string{
 		"REACT_APP_JWT_SECRET":           h.Config.JWTSecret,
@@ -56,17 +56,17 @@ func (h *StaticHandler) EnvConfigHandler(c *gin.Context) {
 	// Convert to JSON
 	envConfigJSON, err := json.Marshal(envConfig)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Error generating environment configuration")
+		ctx.String(http.StatusInternalServerError, "Error generating environment configuration")
 
 		return
 	}
 
-	c.Header("Content-Type", "application/javascript")
-	c.String(http.StatusOK, "window._env_ = %s;", string(envConfigJSON))
+	ctx.Header("Content-Type", "application/javascript")
+	ctx.String(http.StatusOK, "window._env_ = %s;", string(envConfigJSON))
 }
 
 // IndexHandler handles all other requests by serving index.html with injected env-config.js script
-func (h *StaticHandler) IndexHandler(c *gin.Context) {
+func (h *StaticHandler) IndexHandler(ctx *gin.Context) {
 	// Check if the index.html file exists in the current directory's build folder (for Docker)
 	indexPath := filepath.Join(".", "build", "index.html")
 	if _, err := os.Stat(indexPath); err != nil {
@@ -77,7 +77,7 @@ func (h *StaticHandler) IndexHandler(c *gin.Context) {
 	// Read the HTML file
 	indexData, err := os.ReadFile(indexPath)
 	if err != nil {
-		c.String(http.StatusInternalServerError, "Error loading application")
+		ctx.String(http.StatusInternalServerError, "Error loading application")
 
 		return
 	}
@@ -86,8 +86,8 @@ func (h *StaticHandler) IndexHandler(c *gin.Context) {
 	indexHTML := string(indexData)
 	modifiedHTML := injectScript(indexHTML, "</head>", "<script src=\"/env-config.js\"></script></head>")
 
-	c.Header("Content-Type", "text/html")
-	c.String(http.StatusOK, modifiedHTML)
+	ctx.Header("Content-Type", "text/html")
+	ctx.String(http.StatusOK, modifiedHTML)
 }
 
 // injectScript is a helper function to inject a script into HTML before the target string.

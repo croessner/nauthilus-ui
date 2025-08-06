@@ -72,13 +72,13 @@ type LoginRequest struct {
 }
 
 // Login handles the POST /api/auth/login endpoint
-func (h *AuthHandler) Login(c *gin.Context) {
-	slog.Info("Login attempt", "path", c.Request.URL.Path, "method", c.Request.Method)
+func (h *AuthHandler) Login(ctx *gin.Context) {
+	slog.Info("Login attempt", "path", ctx.Request.URL.Path, "method", ctx.Request.Method)
 
 	var loginRequest LoginRequest
-	if err := c.ShouldBindJSON(&loginRequest); err != nil {
+	if err := ctx.ShouldBindJSON(&loginRequest); err != nil {
 		slog.Warn("Invalid login request body", "error", err)
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
 		slog.Error("MongoDB not connected during login attempt")
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 		return
 	}
 
@@ -100,7 +100,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 
 	if err != nil {
 		slog.Warn("User not found during login", "username", loginRequest.Username, "error", err)
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
 
@@ -110,7 +110,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	err = bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(loginRequest.Password))
 	if err != nil {
 		slog.Warn("Invalid password during login", "username", loginRequest.Username, "error", err)
-		c.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
 
@@ -119,7 +119,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	// Check if TOTP or WebAuthn is enabled for the user
 	if user.TOTPEnabled {
 		// TOTP is enabled, so we need to require MFA verification
-		c.JSON(http.StatusOK, models.MFARequiredResponse{
+		ctx.JSON(http.StatusOK, models.MFARequiredResponse{
 			MFARequired: true,
 			MFAType:     "totp",
 			Username:    user.Username,
@@ -127,7 +127,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		return
 	} else if user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0 {
 		// WebAuthn is enabled, so we need to require MFA verification
-		c.JSON(http.StatusOK, models.MFARequiredResponse{
+		ctx.JSON(http.StatusOK, models.MFARequiredResponse{
 			MFARequired: true,
 			MFAType:     "webauthn",
 			Username:    user.Username,
@@ -139,7 +139,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	jwtConfig, err := h.MongoDB.GetJWTConfig()
 	if err != nil {
 		slog.Error("Failed to get JWT config", "error", err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})
 		return
 	}
 
@@ -149,7 +149,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	token, expiresAt, err := h.generateToken(&user, jwtConfig.TokenExpiry)
 	if err != nil {
 		slog.Error("Failed to generate token", "error", err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})
 		return
 	}
 
@@ -159,7 +159,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	refreshToken, refreshExpiresAt, err := h.generateToken(&user, jwtConfig.RefreshTokenExpiry)
 	if err != nil {
 		slog.Error("Failed to generate refresh token", "error", err)
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate refresh token"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate refresh token"})
 		return
 	}
 
@@ -179,5 +179,5 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	slog.Info("Sending login response", "username", user.Username, "token_present", token != "", "refresh_token_present", refreshToken != "")
 
 	// Send response
-	c.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, response)
 }

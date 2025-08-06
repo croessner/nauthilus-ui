@@ -32,10 +32,10 @@ func (h *JWTConfigHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 // GetJWTConfig handles the GET /api/jwtconfig endpoint
-func (h *JWTConfigHandler) GetJWTConfig(c *gin.Context) {
+func (h *JWTConfigHandler) GetJWTConfig(ctx *gin.Context) {
 	// If MongoDB is not connected, return default JWT config
 	if !h.MongoDB.IsConnected {
-		c.JSON(http.StatusOK, models.JWTConfigResponse{
+		ctx.JSON(http.StatusOK, models.JWTConfigResponse{
 			JWTConfig: models.JWTConfig{
 				JWTSecret:          h.MongoDB.Config.JWTSecret,
 				TokenExpiry:        h.MongoDB.Config.TokenExpiry,
@@ -52,29 +52,29 @@ func (h *JWTConfigHandler) GetJWTConfig(c *gin.Context) {
 	err := h.MongoDB.JWTConfigColl.FindOne(context.Background(), bson.M{}).Decode(&jwtConfig)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "JWT configuration not found"})
+			ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "JWT configuration not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch JWT configuration"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch JWT configuration"})
 		}
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: jwtConfig})
+	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: jwtConfig})
 }
 
 // UpdateJWTConfig handles the PUT /api/jwtconfig endpoint
-func (h *JWTConfigHandler) UpdateJWTConfig(c *gin.Context) {
+func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnected {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
 
 	var jwtConfigRequest models.JWTConfig
-	if err := c.ShouldBindJSON(&jwtConfigRequest); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&jwtConfigRequest); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
@@ -84,7 +84,7 @@ func (h *JWTConfigHandler) UpdateJWTConfig(c *gin.Context) {
 	err := h.MongoDB.JWTConfigColl.FindOne(context.Background(), bson.M{}).Decode(&jwtConfig)
 
 	if err != nil && !errors.Is(err, mongo.ErrNoDocuments) {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch JWT configuration"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch JWT configuration"})
 
 		return
 	}
@@ -114,12 +114,12 @@ func (h *JWTConfigHandler) UpdateJWTConfig(c *gin.Context) {
 
 		_, err = h.MongoDB.JWTConfigColl.InsertOne(context.Background(), newJWTConfig)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create JWT configuration"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create JWT configuration"})
 
 			return
 		}
 
-		c.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: newJWTConfig})
+		ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: newJWTConfig})
 
 		return
 	}
@@ -147,7 +147,7 @@ func (h *JWTConfigHandler) UpdateJWTConfig(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update JWT configuration"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update JWT configuration"})
 
 		return
 	}
@@ -156,10 +156,10 @@ func (h *JWTConfigHandler) UpdateJWTConfig(c *gin.Context) {
 	var updatedJWTConfig models.JWTConfig
 	err = h.MongoDB.JWTConfigColl.FindOne(context.Background(), bson.M{}).Decode(&updatedJWTConfig)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated JWT configuration"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated JWT configuration"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: updatedJWTConfig})
+	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: updatedJWTConfig})
 }

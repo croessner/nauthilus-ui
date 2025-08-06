@@ -29,10 +29,10 @@ func NewUserHandler(mongoDB db.UserDatabase) *UserHandler {
 }
 
 // GetUsers handles the GET /api/users endpoint
-func (h *UserHandler) GetUsers(c *gin.Context) {
+func (h *UserHandler) GetUsers(ctx *gin.Context) {
 	// If MongoDB is not connected, return default users
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusOK, models.UsersResponse{
+		ctx.JSON(http.StatusOK, models.UsersResponse{
 			Users: []models.User{
 				{
 					Username:     "admin",
@@ -49,33 +49,33 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 	// Get all users without passwordHash
 	cursor, err := h.MongoDB.GetUserCollection().Find(context.Background(), bson.M{}, options.Find().SetProjection(bson.M{"passwordHash": 0}))
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
 
 		return
 	}
 
-	defer cursor.Close(c)
+	defer cursor.Close(context.Background())
 
 	var users []models.User
 	if err := cursor.All(context.Background(), &users); err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.UsersResponse{Users: users})
+	ctx.JSON(http.StatusOK, models.UsersResponse{Users: users})
 }
 
 // GetUser handles the GET /api/users/:username endpoint
-func (h *UserHandler) GetUser(c *gin.Context) {
+func (h *UserHandler) GetUser(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
 
-	username := c.Param("username")
+	username := ctx.Param("username")
 	var user models.User
 
 	err := h.MongoDB.GetUserCollection().FindOne(
@@ -86,22 +86,22 @@ func (h *UserHandler) GetUser(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+			ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch user"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch user"})
 		}
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.UserResponse{User: user})
+	ctx.JSON(http.StatusOK, models.UserResponse{User: user})
 }
 
 // CreateUser handles the POST /api/users endpoint
-func (h *UserHandler) CreateUser(c *gin.Context) {
+func (h *UserHandler) CreateUser(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
@@ -113,8 +113,8 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		models.User
 	}
 
-	if err := c.ShouldBindJSON(&userRequest); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
@@ -123,11 +123,11 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	var existingUser models.User
 	err := h.MongoDB.GetUserCollection().FindOne(context.Background(), bson.M{"username": userRequest.Username}).Decode(&existingUser)
 	if err == nil {
-		c.JSON(http.StatusConflict, models.ErrorResponse{Error: "User already exists"})
+		ctx.JSON(http.StatusConflict, models.ErrorResponse{Error: "User already exists"})
 
 		return
 	} else if !errors.Is(err, mongo.ErrNoDocuments) {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to check user existence"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to check user existence"})
 
 		return
 	}
@@ -135,7 +135,7 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 	// Hash password
 	passwordHash, err := bcrypt.GenerateFromPassword([]byte(userRequest.Password), 12)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to hash password"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to hash password"})
 
 		return
 	}
@@ -159,34 +159,34 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 
 	_, err = h.MongoDB.GetUserCollection().InsertOne(context.Background(), user)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create user"})
 
 		return
 	}
 
 	// Return user without passwordHash
 	user.PasswordHash = ""
-	c.JSON(http.StatusCreated, models.UserResponse{User: user})
+	ctx.JSON(http.StatusCreated, models.UserResponse{User: user})
 }
 
 // UpdateUser handles the PUT /api/users/:username endpoint
-func (h *UserHandler) UpdateUser(c *gin.Context) {
+func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
 
-	username := c.Param("username")
+	username := ctx.Param("username")
 	var userRequest struct {
 		Password string   `json:"password"`
 		Roles    []string `json:"roles"`
 		models.User
 	}
 
-	if err := c.ShouldBindJSON(&userRequest); err != nil {
-		c.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+	if err := ctx.ShouldBindJSON(&userRequest); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
 		return
 	}
@@ -196,9 +196,9 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	err := h.MongoDB.GetUserCollection().FindOne(context.Background(), bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+			ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 		} else {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch user"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch user"})
 		}
 
 		return
@@ -210,7 +210,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	if userRequest.Password != "" {
 		passwordHash, err := bcrypt.GenerateFromPassword([]byte(userRequest.Password), 12)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to hash password"})
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to hash password"})
 
 			return
 		}
@@ -252,7 +252,7 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to update user"})
 
 		return
 	}
@@ -266,38 +266,38 @@ func (h *UserHandler) UpdateUser(c *gin.Context) {
 	).Decode(&updatedUser)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch updated user"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.UserResponse{User: updatedUser})
+	ctx.JSON(http.StatusOK, models.UserResponse{User: updatedUser})
 }
 
 // DeleteUser handles the DELETE /api/users/:username endpoint
-func (h *UserHandler) DeleteUser(c *gin.Context) {
+func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
-		c.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
 		return
 	}
 
-	username := c.Param("username")
+	username := ctx.Param("username")
 
 	// Delete user
 	result, err := h.MongoDB.GetUserCollection().DeleteOne(context.Background(), bson.M{"username": username})
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete user"})
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to delete user"})
 
 		return
 	}
 
 	if result.DeletedCount == 0 {
-		c.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
 		return
 	}
 
-	c.JSON(http.StatusOK, models.MessageResponse{Message: "User deleted successfully"})
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "User deleted successfully"})
 }

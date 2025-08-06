@@ -16,10 +16,10 @@ import (
 // JWTAuthMiddleware creates a middleware for JWT authentication
 // It verifies the JWT token signature using the secret from the database
 func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
-	return func(c *gin.Context) {
+	return func(ctx *gin.Context) {
 		// Skip authentication for excluded paths
-		path := c.Request.URL.Path
-		method := c.Request.Method
+		path := ctx.Request.URL.Path
+		method := ctx.Request.Method
 
 		// Log the request path for debugging
 		slog.Info("JWT Middleware: Processing request", "path", path, "method", method)
@@ -27,7 +27,7 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Always allow access to authentication endpoints
 		if strings.HasPrefix(path, "/api/auth/") {
 			slog.Info("JWT Middleware: Skipping auth for auth endpoint", "path", path)
-			c.Next()
+			ctx.Next()
 
 			return
 		}
@@ -35,7 +35,7 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Skip authentication for static files
 		if strings.HasPrefix(path, "/static/") || path == "/" || strings.HasPrefix(path, "/env-config.js") {
 			slog.Info("JWT Middleware: Skipping auth for static file", "path", path)
-			c.Next()
+			ctx.Next()
 
 			return
 		}
@@ -43,7 +43,7 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Skip authentication for proxy endpoints
 		if strings.HasPrefix(path, "/proxy/") {
 			slog.Info("JWT Middleware: Skipping auth for proxy endpoint", "path", path)
-			c.Next()
+			ctx.Next()
 
 			return
 		}
@@ -51,7 +51,7 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Skip authentication for health endpoint
 		if strings.HasPrefix(path, "/api/health") {
 			slog.Info("JWT Middleware: Skipping auth for health endpoint", "path", path)
-			c.Next()
+			ctx.Next()
 
 			return
 		}
@@ -59,7 +59,7 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Only enforce authentication for API endpoints
 		if !strings.HasPrefix(path, "/api/") {
 			slog.Info("JWT Middleware: Skipping auth for non-API endpoint", "path", path)
-			c.Next()
+			ctx.Next()
 
 			return
 		}
@@ -68,17 +68,17 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		slog.Info("JWT Middleware: Strictly enforcing authentication for API endpoint", "path", path)
 
 		// For debugging: log all headers
-		headers := c.Request.Header
+		headers := ctx.Request.Header
 		slog.Info("JWT Middleware: Request headers", "headers", headers)
 
 		// Get token from Authorization header
-		authHeader := c.GetHeader("Authorization")
+		authHeader := ctx.GetHeader("Authorization")
 		slog.Info("JWT Middleware: Authorization header", "header", authHeader)
 
 		if authHeader == "" {
 			slog.Warn("JWT Middleware: Missing Authorization header")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			ctx.Abort()
 
 			return
 		}
@@ -89,8 +89,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		parts := strings.Split(authHeader, " ")
 		if len(parts) != 2 || parts[0] != "Bearer" {
 			slog.Warn("JWT Middleware: Invalid Authorization header format", "header", authHeader)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
+			ctx.Abort()
 
 			return
 		}
@@ -100,8 +100,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Check for null token (common issue with frontend tests)
 		if tokenString == "null" || tokenString == "" {
 			slog.Warn("JWT Middleware: Token is null or empty")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
+			ctx.Abort()
 
 			return
 		}
@@ -110,8 +110,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		jwtConfig, err := mongoDB.GetJWTConfig()
 		if err != nil {
 			slog.Error("JWT Middleware: Failed to get JWT config", "error", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
-			c.Abort()
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
+			ctx.Abort()
 
 			return
 		}
@@ -129,8 +129,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 
 		if err != nil {
 			slog.Warn("JWT Middleware: Invalid token", "error", err)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
+			ctx.Abort()
 
 			return
 		}
@@ -138,8 +138,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Verify token is valid
 		if !token.Valid {
 			slog.Warn("JWT Middleware: Token is invalid")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			ctx.Abort()
 
 			return
 		}
@@ -148,8 +148,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		claims, ok := token.Claims.(jwt.MapClaims)
 		if !ok {
 			slog.Warn("JWT Middleware: Failed to extract claims")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
+			ctx.Abort()
 
 			return
 		}
@@ -158,8 +158,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		exp, ok := claims["exp"]
 		if !ok {
 			slog.Warn("JWT Middleware: Token missing expiration")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token missing expiration"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Token missing expiration"})
+			ctx.Abort()
 
 			return
 		}
@@ -173,16 +173,16 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 			expTime, _ = v.Int64()
 		default:
 			slog.Warn("JWT Middleware: Invalid expiration format")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token expiration format"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token expiration format"})
+			ctx.Abort()
 
 			return
 		}
 
 		if time.Now().Unix() > expTime {
 			slog.Warn("JWT Middleware: Token has expired")
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
+			ctx.Abort()
 
 			return
 		}
@@ -192,14 +192,14 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Store user information in the context
 		username, ok := claims["sub"].(string)
 		if !ok {
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token missing subject claim"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Token missing subject claim"})
+			ctx.Abort()
 
 			return
 		}
 
 		// Set user information in the context
-		c.Set("username", username)
+		ctx.Set("username", username)
 
 		// Extract roles if available
 		if rolesInterface, ok := claims["roles"]; ok {
@@ -212,10 +212,10 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 					}
 				}
 
-				c.Set("roles", roleStrings)
+				ctx.Set("roles", roleStrings)
 			}
 		}
 
-		c.Next()
+		ctx.Next()
 	}
 }

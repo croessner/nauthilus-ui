@@ -65,27 +65,27 @@ func setupMongoDB(rootCtx context.Context, cfg *config.Config) *db.MongoDB {
 // registerAPIHandlers registers all API handlers with the router
 func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Create a custom middleware that strictly enforces JWT authentication
-	strictJWTMiddleware := func(c *gin.Context) {
+	strictJWTMiddleware := func(ctx *gin.Context) {
 		// Skip authentication for auth and health endpoints
-		path := c.Request.URL.Path
+		path := ctx.Request.URL.Path
 		if strings.HasPrefix(path, "/api/auth/") || strings.HasPrefix(path, "/api/health") {
-			c.Next()
+			ctx.Next()
 
 			return
 		}
 
 		// For all other API endpoints, require JWT authentication
-		authHeader := c.GetHeader("Authorization")
+		authHeader := ctx.GetHeader("Authorization")
 		if authHeader == "" {
 			slog.Warn("Missing Authorization header for protected endpoint", "path", path)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			c.Abort()
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			ctx.Abort()
 
 			return
 		}
 
 		// Continue with the standard JWT middleware
-		middleware.JWTAuthMiddleware(mongoDB)(c)
+		middleware.JWTAuthMiddleware(mongoDB)(ctx)
 	}
 
 	// Apply the strict JWT middleware to all API routes
