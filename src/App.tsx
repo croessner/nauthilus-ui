@@ -56,6 +56,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
 import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
+import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
@@ -385,22 +386,16 @@ const MainContent = (): JSX.Element => {
 
       {/* Menu Display Options */}
       <Box sx={{ px: 2, py: 1, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <FormControlLabel
-          control={
-            <Switch
-              checked={iconOnly}
-              onChange={toggleIconOnly}
-              size="small"
-            />
-          }
-          label={
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-              <MenuIcon fontSize="small" />
-              <KeyboardDoubleArrowLeftIcon fontSize="small" />
-            </Box>
-          }
+        <IconButton 
+          onClick={toggleIconOnly} 
+          size="small"
           sx={{ mr: 0 }}
-        />
+        >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+            <MenuIcon fontSize="small" />
+            {iconOnly ? <KeyboardDoubleArrowRightIcon fontSize="small" /> : <KeyboardDoubleArrowLeftIcon fontSize="small" />}
+          </Box>
+        </IconButton>
       </Box>
       <Divider />
 

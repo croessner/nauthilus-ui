@@ -9,6 +9,8 @@
     - Note: FeaturesConfig component already had responsive tab bars implemented
 
 ### Changed
+- Improved sidebar toggle UI by removing the slider switch and keeping only the burger menu and double arrow icons for a cleaner interface
+- Enhanced sidebar toggle functionality to show a right-pointing double arrow when the menu is collapsed
 
 ### Fixed
 
