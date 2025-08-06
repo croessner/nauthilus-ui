@@ -8,7 +8,15 @@ import Cookies from 'js-cookie';
  * @returns The proxy server origin URL
  */
 export const getProxyOrigin = (): string => {
-  return `${window.location.protocol}//${window.location.hostname}:${process.env.REACT_APP_PROXY_PORT || '3002'}`;
+  // Check window._env_ first, then fall back to process.env, then default to '3002'
+  const port = (window._env_ && window._env_['REACT_APP_PROXY_PORT']) || 
+               process.env.REACT_APP_PROXY_PORT || 
+               '3002';
+  
+  // If we're using HTTPS on port 443, don't include the port in the URL
+  return port === '443' && window.location.protocol === 'https:' 
+    ? `${window.location.protocol}//${window.location.hostname}`
+    : `${window.location.protocol}//${window.location.hostname}:${port}`;
 };
 
 /**

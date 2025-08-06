@@ -13,6 +13,8 @@
 - Enhanced sidebar toggle functionality to show a right-pointing double arrow when the menu is collapsed
 
 ### Fixed
+- Fixed an issue where the application was trying to connect to port 3002 instead of using the configured REACT_APP_PROXY_PORT environment variable. When using HTTPS on port 443, the port is now omitted from the URL as per standard convention.
+- Enhanced environment variable handling to properly use runtime environment variables by injecting them into the React application through window._env_, ensuring that Docker environment variables are correctly applied.
 
 ## [1.0.0] - 2023-07-01
 

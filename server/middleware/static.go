@@ -51,6 +51,7 @@ func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 		"REACT_APP_TOKEN_EXPIRY":         fmt.Sprintf("%d", h.Config.TokenExpiry),
 		"REACT_APP_REFRESH_TOKEN_EXPIRY": fmt.Sprintf("%d", h.Config.RefreshTokenExpiry),
 		"REACT_APP_REMEMBER_ME_EXPIRY":   fmt.Sprintf("%d", h.Config.RememberMeExpiry),
+		"REACT_APP_PROXY_PORT":           h.Config.ProxyPort,
 	}
 
 	// Convert to JSON
