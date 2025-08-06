@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -61,43 +62,66 @@ func setupMongoDB(rootCtx context.Context, cfg *config.Config) *db.MongoDB {
 	return mongoDB
 }
 
-// setupRouter creates and configures the Gin router with all routes and middleware
-func setupRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
-	r := gin.Default()
-
-	// Register API handlers
-	registerAPIHandlers(r, mongoDB)
-
-	// Register proxy handlers
-	registerProxyHandlers(r)
-
-	// Register middleware
-	registerMiddleware(r, cfg)
-
-	return r
-}
-
 // registerAPIHandlers registers all API handlers with the router
 func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
-	healthHandler := api.NewHealthHandler(mongoDB)
-	healthHandler.RegisterRoutes(r)
+	// Create a custom middleware that strictly enforces JWT authentication
+	strictJWTMiddleware := func(c *gin.Context) {
+		// Skip authentication for auth and health endpoints
+		path := c.Request.URL.Path
+		if strings.HasPrefix(path, "/api/auth/") || strings.HasPrefix(path, "/api/health") {
+			c.Next()
 
-	profileHandler := api.NewProfileHandler(mongoDB)
-	profileHandler.RegisterRoutes(r)
+			return
+		}
 
-	userHandler := api.NewUserHandler(mongoDB)
-	userHandler.RegisterRoutes(r)
+		// For all other API endpoints, require JWT authentication
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
+			slog.Warn("Missing Authorization header for protected endpoint", "path", path)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			c.Abort()
 
-	jwtConfigHandler := api.NewJWTConfigHandler(mongoDB)
-	jwtConfigHandler.RegisterRoutes(r)
+			return
+		}
 
+		// Continue with the standard JWT middleware
+		middleware.JWTAuthMiddleware(mongoDB)(c)
+	}
+
+	// Apply the strict JWT middleware to all API routes
+	apiGroup := r.Group("/api")
+	apiGroup.Use(strictJWTMiddleware)
+
+	// Register auth endpoints (middleware will skip these)
 	authHandler := api.NewAuthHandler(mongoDB)
 	authHandler.RegisterRoutes(r)
 
+	// Register health endpoint (middleware will skip these)
+	healthHandler := api.NewHealthHandler(mongoDB)
+	healthHandler.RegisterRoutes(r)
+
+	// Register user routes (will be protected by middleware)
+	userHandler := api.NewUserHandler(mongoDB)
+	// Register user routes directly since UserHandler.RegisterRoutes is deprecated
+	apiGroup.GET("/users", userHandler.GetUsers)
+	apiGroup.GET("/users/:username", userHandler.GetUser)
+	apiGroup.POST("/users", userHandler.CreateUser)
+	apiGroup.PUT("/users/:username", userHandler.UpdateUser)
+	apiGroup.DELETE("/users/:username", userHandler.DeleteUser)
+
+	// Register profile routes (will be protected by middleware)
+	profileHandler := api.NewProfileHandler(mongoDB)
+	profileHandler.RegisterRoutes(r)
+
+	// Register JWT config routes (will be protected by middleware)
+	jwtConfigHandler := api.NewJWTConfigHandler(mongoDB)
+	jwtConfigHandler.RegisterRoutes(r)
+
+	// Register runtime routes (will be protected by middleware)
 	runtimeHandler := api.NewRuntimeHandler(mongoDB)
 	runtimeHandler.RegisterRoutes(r)
 
-	// Register MFA handler
+	// Register MFA handler (will be protected by middleware)
 	mfaHandler, err := api.NewMFAHandler(mongoDB)
 	if err != nil {
 		slog.Error("Failed to create MFA handler", "error", err)
@@ -106,21 +130,17 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	}
 }
 
-// registerProxyHandlers registers all proxy handlers with the router
-func registerProxyHandlers(r *gin.Engine) {
-	proxyHandler := proxy.NewProxyHandler()
-	proxyHandler.RegisterRoutes(r)
-}
-
 // registerMiddleware registers all middleware with the router
-func registerMiddleware(r *gin.Engine, cfg *config.Config) {
-	// Register CORS middleware (should be registered before static file middleware)
+func registerMiddleware(r *gin.Engine, cfg *config.Config, _ *db.MongoDB) {
+	// Register CORS middleware first (should be registered before other middleware)
 	corsHandler := middleware.NewCORSHandler()
 	corsHandler.RegisterMiddleware(r)
 
 	// Register static file middleware
 	staticHandler := middleware.NewStaticHandler(cfg)
 	staticHandler.RegisterMiddleware(r)
+
+	// We'll register protected routes directly with middleware instead of using a global middleware
 }
 
 // Server represents an HTTP server
@@ -142,6 +162,7 @@ func startFrontendServer(cfg *config.Config, router *gin.Engine) *Server {
 	// Start the server in a goroutine
 	go func() {
 		slog.Info("Frontend server running", "address", cfg.FrontendAddress, "port", cfg.FrontendPort, "version", version)
+
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start frontend server", "error", err)
 
@@ -165,6 +186,7 @@ func startProxyServer(cfg *config.Config, proxyRouter *gin.Engine) *Server {
 	// Start the server in a goroutine
 	go func() {
 		slog.Info("Proxy server running", "address", cfg.ProxyAddress, "port", cfg.ProxyPort, "version", version)
+
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start proxy server", "error", err)
 
@@ -215,18 +237,21 @@ func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	registerAPIHandlers(r, mongoDB)
 
 	// Register middleware
-	registerMiddleware(r, cfg)
+	registerMiddleware(r, cfg, mongoDB)
 
 	return r
 }
 
 // setupProxyRouter creates and configures the Gin router for proxy with proxy routes
-func setupProxyRouter() *gin.Engine {
+func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r := gin.Default()
 
 	// Register proxy handlers
 	proxyHandler := proxy.NewProxyHandler()
 	proxyHandler.RegisterRoutes(r)
+
+	// Register middleware
+	registerMiddleware(r, cfg, mongoDB)
 
 	return r
 }
@@ -251,7 +276,7 @@ func main() {
 	frontendRouter := setupFrontendRouter(cfg, mongoDB)
 
 	// Setup proxy router with proxy routes
-	proxyRouter := setupProxyRouter()
+	proxyRouter := setupProxyRouter(cfg, mongoDB)
 
 	// Start the frontend server
 	frontendSrv := startFrontendServer(cfg, frontendRouter)

@@ -4,6 +4,8 @@ import { BrowserRouter } from 'react-router-dom';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import App from './App';
+// Import axios config to set up interceptors
+import './utils/axiosConfig';
 
 // Create a theme instance
 const theme = createTheme({

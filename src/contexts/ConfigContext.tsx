@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
 import axios from 'axios';
-import { withErrorHandling as apiWithErrorHandling, prepareAuthParams, getProxyOrigin } from '../utils/apiUtils';
+import { withErrorHandling as apiWithErrorHandling, prepareAuthParams, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -969,11 +969,8 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         proxyUrl.searchParams.append('authValue', authValue);
       }
 
-      const response = await fetch(proxyUrl.toString(), {
+      const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       if (!response.ok) {

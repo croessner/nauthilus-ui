@@ -1,6 +1,7 @@
 /**
  * Utility functions for API operations
  */
+import Cookies from 'js-cookie';
 
 /**
  * Returns the proxy server origin (protocol, hostname, and port)
@@ -8,6 +9,17 @@
  */
 export const getProxyOrigin = (): string => {
   return `${window.location.protocol}//${window.location.hostname}:${process.env.REACT_APP_PROXY_PORT || '3002'}`;
+};
+
+/**
+ * Gets the current JWT token from cookies
+ * @returns The JWT token or null if not found
+ */
+export const getAuthToken = (): string | null => {
+  // Get token from cookie (TOKEN_COOKIE_NAME from userManager.ts is 'nauthilus_token')
+  const token = Cookies.get('nauthilus_token');
+  
+  return token || null;
 };
 
 /**
@@ -96,11 +108,9 @@ export const checkConnection = async (
     const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
     proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
-    const response = await fetch(proxyUrl.toString(), {
+    // Use the authenticatedFetch helper
+    const response = await authenticatedFetch(proxyUrl.toString(), {
       method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-      },
     });
 
     if (response.ok) {
@@ -153,6 +163,42 @@ export const resetSettingsState = () => {
     window.__settingsState.loaded = false;
   }
   console.log('Settings state reset, next call to loadSettings will reload settings');
+};
+
+/**
+ * Performs an authenticated fetch request with JWT token
+ * @param url - The URL to fetch
+ * @param options - Fetch options
+ * @returns The fetch response
+ */
+export const authenticatedFetch = async (
+  url: string,
+  options: RequestInit = {}
+): Promise<Response> => {
+  // Get the JWT token
+  const token = getAuthToken();
+  
+  // Prepare headers
+  const headers = new Headers(options.headers || {});
+  
+  // Set default content type if not already set
+  if (!headers.has('Content-Type')) {
+    headers.set('Content-Type', 'application/json');
+  }
+  
+  // Add Authorization header if token exists
+  if (token) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+  
+  // Merge options with headers
+  const fetchOptions: RequestInit = {
+    ...options,
+    headers
+  };
+  
+  // Perform the fetch
+  return fetch(url, fetchOptions);
 };
 
 /**

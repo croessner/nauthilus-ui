@@ -20,7 +20,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
-import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState, getProxyOrigin } from '../utils/apiUtils';
+import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
@@ -136,11 +136,8 @@ const ConnectionConfig: React.FC = () => {
       const proxyUrl = new URL('/proxy/jwt-token', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
 
-      const response = await fetch(proxyUrl.toString(), {
+      const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ username, password }),
       });
 

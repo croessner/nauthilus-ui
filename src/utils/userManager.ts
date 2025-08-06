@@ -3,9 +3,9 @@
 
 import { jwtDecode } from 'jwt-decode';
 import CryptoJS from 'crypto-js';
-import axios from 'axios';
 import * as bcrypt from 'bcryptjs';
 import Cookies from 'js-cookie';
+import axios from './axiosConfig';
 
 // Cookie names for token storage
 const TOKEN_COOKIE_NAME = 'nauthilus_token';
@@ -101,7 +101,16 @@ let cachedJwtConfig: { jwtSecret: string, tokenExpiry: number, refreshTokenExpir
 // Helper function to fetch data from API endpoints
 const fetchConfigData = async (): Promise<void> => {
   try {
-    // Load users
+    // Check if we have a valid token before making requests to protected endpoints
+    const token = Cookies.get(TOKEN_COOKIE_NAME);
+    if (!token || !validateToken(token)) {
+      console.log('No valid token available, skipping loading of protected resources');
+      cachedUsers = [];
+      cachedJwtConfig = null;
+      return;
+    }
+
+    // Load users only if we have a valid token
     const usersResponse = await axios.get('/api/users');
     if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
       cachedUsers = usersResponse.data.users;
@@ -120,7 +129,9 @@ const fetchConfigData = async (): Promise<void> => {
     }
   } catch (error) {
     console.error('Error fetching configuration data:', error);
-    throw error;
+    // Don't throw the error, just set empty values
+    cachedUsers = [];
+    cachedJwtConfig = null;
   }
 };
 
@@ -141,26 +152,43 @@ const constructConfigObject = (): UserManagerConfig => {
 };
 
 // Helper function to create default config in MongoDB
+// This should only be called after successful authentication
 const createDefaultConfig = async (): Promise<UserManagerConfig> => {
-  // Create default admin user
-  await axios.post('/api/users', {
-    username: 'admin',
-    password: 'admin',
-    roles: ['admin'],
-    lastLogin: null,
-    lastModified: new Date().toISOString()
-  });
+  // Check if we have a valid token before trying to create default config
+  const token = Cookies.get(TOKEN_COOKIE_NAME);
+  if (!token || !validateToken(token)) {
+    console.log('No valid token available, cannot create default config');
+    // Return default config without trying to save it (will be saved after authentication)
+    cachedConfig = DEFAULT_CONFIG;
+    return { ...DEFAULT_CONFIG };
+  }
 
-  // Create default JWT config
-  await axios.put('/api/jwtconfig', {
-    jwtSecret: DEFAULT_CONFIG.jwtSecret,
-    tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
-    refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
-    rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
-  });
+  try {
+    // Create default admin user
+    await axios.post('/api/users', {
+      username: 'admin',
+      password: 'admin',
+      roles: ['admin'],
+      lastLogin: null,
+      lastModified: new Date().toISOString()
+    });
 
-  cachedConfig = DEFAULT_CONFIG;
-  return DEFAULT_CONFIG;
+    // Create default JWT config
+    await axios.put('/api/jwtconfig', {
+      jwtSecret: DEFAULT_CONFIG.jwtSecret,
+      tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
+      refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
+      rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
+    });
+
+    cachedConfig = DEFAULT_CONFIG;
+    return DEFAULT_CONFIG;
+  } catch (error) {
+    console.error('Failed to create default config:', error);
+    // Return default config without saving
+    cachedConfig = DEFAULT_CONFIG;
+    return { ...DEFAULT_CONFIG };
+  }
 };
 
 // Load configuration from MongoDB
@@ -171,21 +199,26 @@ export const loadConfig = async (): Promise<UserManagerConfig> => {
   }
 
   try {
+    // Check if we have a valid token before trying to fetch data
+    const token = Cookies.get(TOKEN_COOKIE_NAME);
+    if (!token || !validateToken(token)) {
+      console.log('No valid token available, returning default config');
+      // Return default config without trying to save it (will be saved after authentication)
+      cachedConfig = DEFAULT_CONFIG;
+      return { ...DEFAULT_CONFIG };
+    }
+
     await fetchConfigData();
 
     const config = constructConfigObject();
     cachedConfig = config;
     return config;
   } catch (error) {
-    console.log('Failed to load user config from API, creating default config:', error);
+    console.log('Failed to load user config from API, using default config:', error);
 
-    // If API fails, create default config in MongoDB
-    try {
-      return await createDefaultConfig();
-    } catch (saveError) {
-      console.error('Failed to save default user config to API:', saveError);
-      throw new Error('Failed to initialize user configuration');
-    }
+    // Return default config without trying to save it (will be saved after authentication)
+    cachedConfig = DEFAULT_CONFIG;
+    return { ...DEFAULT_CONFIG };
   }
 };
 
@@ -618,9 +651,72 @@ export const authenticate = async (username: string, password: string, rememberM
           mfaType: response.data.mfaType,
           username: response.data.username
         };
-      } else if (response.data && response.data.user) {
-        user = response.data.user;
+      } else if (response.data && response.data.user && response.data.token) {
+        // Use the tokens provided by the server
+        const token = response.data.token;
+        const refreshToken = response.data.refreshToken || token; // Fallback to token if refreshToken is not provided
+        
+        // Store tokens in cookies
+        const tokenExpiry = response.data.expiresAt ? 
+          new Date(response.data.expiresAt * 1000) : 
+          new Date(Date.now() + (rememberMe ? config.rememberMeExpiry : config.tokenExpiry) * 1000);
+          
+        Cookies.set(TOKEN_COOKIE_NAME, token, {
+          ...COOKIE_OPTIONS,
+          expires: tokenExpiry
+        });
+        
+        Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+          ...COOKIE_OPTIONS,
+          expires: new Date(Date.now() + config.refreshTokenExpiry * 1000)
+        });
+        
+        // Store credentials securely for token refresh (only if rememberMe is true)
+        if (rememberMe) {
+          try {
+            // Store credentials in sessionStorage for token refresh
+            // This is a security trade-off - we need to store credentials to enable token refresh
+            // but we'll only do it if the user has explicitly chosen to be remembered
+            sessionStorage.setItem('auth_credentials', JSON.stringify({
+              username,
+              password
+            }));
+            console.log('Stored credentials for token refresh');
+          } catch (storageError) {
+            console.error('Failed to store credentials for token refresh:', storageError);
+            // Continue even if storage fails
+          }
+        }
+        
+        // Update lastLogin timestamp
+        const now = new Date().toISOString();
+        
+        // Update user profile with lastLogin only, but preserve lastModified
+        try {
+          // Get the current user to preserve the lastModified timestamp
+          const users = await getUsers();
+          const currentUser = users.find(u => u.username === username);
+          
+          if (currentUser) {
+            await updateUserProfile(username, { 
+              lastLogin: now,
+              lastModified: currentUser.lastModified // Explicitly preserve the existing lastModified value
+            });
+          } else {
+            // Fallback if we can't find the current user
+            await updateUserProfile(username, { 
+              lastLogin: now
+            });
+          }
+        } catch (updateError) {
+          // Log the error but continue with authentication
+          console.error('Failed to update lastLogin timestamp:', updateError);
+          // Don't return null here, continue with the authentication process
+        }
+        
+        return { token, refreshToken };
       } else {
+        console.error('Invalid response format from server:', response.data);
         return null;
       }
     } catch (error) {
@@ -631,53 +727,6 @@ export const authenticate = async (username: string, password: string, rememberM
     console.error('Failed to authenticate user:', error);
     return null;
   }
-
-  // Update lastLogin timestamp
-  const now = new Date().toISOString();
-
-  // Update user profile with lastLogin only, but preserve lastModified
-  try {
-    // Get the current user to preserve the lastModified timestamp
-    const users = await getUsers();
-    const currentUser = users.find(u => u.username === username);
-
-    if (currentUser) {
-      await updateUserProfile(username, { 
-        lastLogin: now,
-        lastModified: currentUser.lastModified // Explicitly preserve the existing lastModified value
-      });
-    } else {
-      // Fallback if we can't find the current user
-      await updateUserProfile(username, { 
-        lastLogin: now
-      });
-    }
-  } catch (error) {
-    // Log the error but continue with authentication
-    console.error('Failed to update lastLogin timestamp:', error);
-    // Don't return null here, continue with the authentication process
-  }
-
-  // Use rememberMeExpiry if rememberMe is true, otherwise use regular tokenExpiry
-  const tokenExpiryTime = rememberMe ? config.rememberMeExpiry : config.tokenExpiry;
-  // Always use the longer expiry for refresh token
-  const refreshTokenExpiryTime = Math.max(config.refreshTokenExpiry, tokenExpiryTime);
-
-  const token = generateToken(user, tokenExpiryTime);
-  const refreshToken = generateToken(user, refreshTokenExpiryTime);
-
-  // Store tokens in cookies
-  Cookies.set(TOKEN_COOKIE_NAME, token, {
-    ...COOKIE_OPTIONS,
-    expires: new Date(Date.now() + tokenExpiryTime * 1000)
-  });
-
-  Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-    ...COOKIE_OPTIONS,
-    expires: new Date(Date.now() + refreshTokenExpiryTime * 1000)
-  });
-
-  return { token, refreshToken };
 };
 
 // Refresh a token
@@ -689,86 +738,102 @@ export const completeMfaLogin = async (username: string, rememberMe: boolean = f
     return null;
   }
 
-  let config;
   try {
-    config = cachedConfig || await loadConfig();
-    console.log('Config loaded successfully:', config ? 'Config exists' : 'Config is null');
-  } catch (error) {
-    console.error('Failed to load config during MFA completion:', error);
-    return null;
-  }
-
-  // Get user data
-  const users = await getUsers();
-  console.log('Users retrieved during MFA completion:', users ? `${users.length} users found` : 'No users found');
-  const user = users.find(u => u.username === username);
-
-  if (!user) {
-    console.error('User not found during MFA completion');
-    return null;
-  }
-
-  console.log('User found during MFA completion:', user);
-
-  // Check if user has required properties
-  if (!user.roles) {
-    console.error('User does not have roles property:', user);
-    // Add default roles if missing
-    user.roles = ['user'];
-    console.log('Added default roles to user:', user);
-  }
-
-  // Update lastLogin timestamp
-  const now = new Date().toISOString();
-  console.log('Updating lastLogin timestamp to:', now);
-
-  try {
-    await updateUserProfile(username, { 
-      lastLogin: now,
-      lastModified: user.lastModified // Preserve the existing lastModified value
+    // Since there's no dedicated MFA verification endpoint, we need to use the stored credentials
+    // to re-authenticate with the server
+    const storedCredentials = sessionStorage.getItem('auth_credentials');
+    
+    if (!storedCredentials) {
+      console.error('No stored credentials found for MFA completion');
+      return null;
+    }
+    
+    const { username: storedUsername, password } = JSON.parse(storedCredentials);
+    
+    // Only proceed if the stored username matches the MFA username
+    if (storedUsername !== username) {
+      console.error('Stored username does not match MFA username');
+      return null;
+    }
+    
+    console.log('Found stored credentials, attempting to authenticate with MFA');
+    
+    // Re-authenticate with the server
+    const response = await axios.post('/api/auth/login', {
+      username: storedUsername,
+      password,
+      // Add MFA verification data if needed
+      // mfaVerified: true,
+      // mfaToken: mfaToken
     });
-    console.log('LastLogin timestamp updated successfully');
+    
+    if (response.data && response.data.token) {
+      const token = response.data.token;
+      const refreshToken = response.data.refreshToken || token;
+      
+      // Store tokens in cookies
+      const tokenExpiry = response.data.expiresAt ? 
+        new Date(response.data.expiresAt * 1000) : 
+        new Date(Date.now() + 3600 * 1000); // Default 1 hour
+        
+      Cookies.set(TOKEN_COOKIE_NAME, token, {
+        ...COOKIE_OPTIONS,
+        expires: tokenExpiry
+      });
+      
+      Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+        ...COOKIE_OPTIONS,
+        expires: new Date(Date.now() + 86400 * 1000) // Default 24 hours
+      });
+      
+      // Store credentials securely for token refresh (only if rememberMe is true)
+      if (rememberMe) {
+        try {
+          // Store credentials in sessionStorage for token refresh
+          sessionStorage.setItem('auth_credentials', JSON.stringify({
+            username,
+            password
+          }));
+          console.log('Stored credentials for token refresh');
+        } catch (storageError) {
+          console.error('Failed to store credentials for token refresh:', storageError);
+          // Continue even if storage fails
+        }
+      }
+      
+      // Update lastLogin timestamp
+      const now = new Date().toISOString();
+      
+      try {
+        // Get the current user to preserve the lastModified timestamp
+        const users = await getUsers();
+        const currentUser = users.find(u => u.username === username);
+        
+        if (currentUser) {
+          await updateUserProfile(username, { 
+            lastLogin: now,
+            lastModified: currentUser.lastModified // Explicitly preserve the existing lastModified value
+          });
+        } else {
+          // Fallback if we can't find the current user
+          await updateUserProfile(username, { 
+            lastLogin: now
+          });
+        }
+        console.log('LastLogin timestamp updated successfully');
+      } catch (updateError) {
+        // Log the error but continue with authentication
+        console.error('Failed to update lastLogin timestamp:', updateError);
+      }
+      
+      console.log('MFA authentication successful, returning tokens');
+      return { token, refreshToken };
+    } else {
+      console.error('Invalid response format from server during MFA completion:', response.data);
+      return null;
+    }
   } catch (error) {
-    // Log the error but continue with authentication
-    console.error('Failed to update lastLogin timestamp:', error);
-  }
-
-  // Use rememberMeExpiry if rememberMe is true, otherwise use regular tokenExpiry
-  const tokenExpiryTime = rememberMe ? config.rememberMeExpiry : config.tokenExpiry;
-  // Always use the longer expiry for refresh token
-  const refreshTokenExpiryTime = Math.max(config.refreshTokenExpiry, tokenExpiryTime);
-
-  console.log('Token expiry time:', tokenExpiryTime);
-  console.log('Refresh token expiry time:', refreshTokenExpiryTime);
-
-  let token, refreshToken;
-
-  try {
-    console.log('Generating token with user:', { username: user.username, roles: user.roles });
-    token = generateToken(user, tokenExpiryTime);
-    console.log('Token generated successfully:', token ? 'Token exists' : 'Token is null');
-
-    refreshToken = generateToken(user, refreshTokenExpiryTime);
-    console.log('Refresh token generated successfully:', refreshToken ? 'Refresh token exists' : 'Refresh token is null');
-
-    // Store tokens in cookies
-    Cookies.set(TOKEN_COOKIE_NAME, token, {
-      ...COOKIE_OPTIONS,
-      expires: new Date(Date.now() + tokenExpiryTime * 1000)
-    });
-    console.log('Token cookie set successfully');
-
-    Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-      ...COOKIE_OPTIONS,
-      expires: new Date(Date.now() + refreshTokenExpiryTime * 1000)
-    });
-    console.log('Refresh token cookie set successfully');
-
-    const result = { token, refreshToken };
-    console.log('Returning result:', result ? 'Result object exists' : 'Result is null');
-    return result;
-  } catch (error) {
-    console.error('Error during token generation or cookie setting:', error);
+    console.error('Error during MFA completion:', error);
     return null;
   }
 };
@@ -777,6 +842,7 @@ export const refreshToken = async (): Promise<{ token: string, refreshToken: str
   // Use refresh token from cookie
   const currentRefreshToken = Cookies.get(REFRESH_TOKEN_COOKIE_NAME);
   if (!currentRefreshToken || !validateToken(currentRefreshToken)) {
+    console.log('No valid refresh token found, cannot refresh');
     return null;
   }
 
@@ -789,36 +855,61 @@ export const refreshToken = async (): Promise<{ token: string, refreshToken: str
       return null;
     }
 
-    const user = {
-      username: decoded.sub,
-      passwordHash: '', // Not needed for token generation
-      roles: decoded.roles
-    };
-
-    let config;
+    // Get the username from the token
+    const username = decoded.sub;
+    
+    // Since there's no dedicated refresh endpoint, we need to re-authenticate
+    // We'll use a special header to indicate this is a token refresh request
     try {
-      config = await loadConfig();
+      // Try to get the stored credentials from sessionStorage (if available)
+      const storedCredentials = sessionStorage.getItem('auth_credentials');
+      
+      if (storedCredentials) {
+        const { username: storedUsername, password } = JSON.parse(storedCredentials);
+        
+        // Only proceed if the stored username matches the token username
+        if (storedUsername === username) {
+          console.log('Found stored credentials, attempting to re-authenticate');
+          
+          // Re-authenticate with the server
+          const response = await axios.post('/api/auth/login', {
+            username: storedUsername,
+            password
+          });
+          
+          if (response.data && response.data.token) {
+            const token = response.data.token;
+            const refreshToken = response.data.refreshToken || token;
+            
+            // Store tokens in cookies
+            const tokenExpiry = response.data.expiresAt ? 
+              new Date(response.data.expiresAt * 1000) : 
+              new Date(Date.now() + 3600 * 1000); // Default 1 hour
+              
+            Cookies.set(TOKEN_COOKIE_NAME, token, {
+              ...COOKIE_OPTIONS,
+              expires: tokenExpiry
+            });
+            
+            Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+              ...COOKIE_OPTIONS,
+              expires: new Date(Date.now() + 86400 * 1000) // Default 24 hours
+            });
+            
+            console.log('Successfully refreshed tokens via re-authentication');
+            return { token, refreshToken };
+          }
+        }
+      }
+      
+      console.log('No stored credentials or re-authentication failed');
+      return null;
     } catch (error) {
-      console.error('Failed to load config during token refresh:', error);
+      console.error('Error during token refresh via re-authentication:', error);
       return null;
     }
-
-    const newToken = generateToken(user, config.tokenExpiry);
-    const newRefreshToken = generateToken(user, config.refreshTokenExpiry);
-
-    // Store tokens in cookies
-    Cookies.set(TOKEN_COOKIE_NAME, newToken, {
-      ...COOKIE_OPTIONS,
-      expires: new Date(Date.now() + config.tokenExpiry * 1000)
-    });
-
-    Cookies.set(REFRESH_TOKEN_COOKIE_NAME, newRefreshToken, {
-      ...COOKIE_OPTIONS,
-      expires: new Date(Date.now() + config.refreshTokenExpiry * 1000)
-    });
-
-    return { token: newToken, refreshToken: newRefreshToken };
   } catch (error) {
+    console.error('Error parsing refresh token:', error);
     return null;
   }
 };
@@ -829,6 +920,14 @@ export const logout = async (): Promise<void> => {
     // Clear tokens from cookies
     Cookies.remove(TOKEN_COOKIE_NAME, { path: '/' });
     Cookies.remove(REFRESH_TOKEN_COOKIE_NAME, { path: '/' });
+
+    // Clear stored credentials from sessionStorage
+    try {
+      sessionStorage.removeItem('auth_credentials');
+    } catch (storageError) {
+      console.error('Failed to clear stored credentials:', storageError);
+      // Continue even if this fails
+    }
 
     // Clear cached data to ensure fresh data is loaded on next login
     cachedConfig = null;
@@ -932,7 +1031,18 @@ export const getCurrentUser = async (): Promise<Omit<User, 'passwordHash'> | nul
 // Initialize with default configuration if none exists
 export const initialize = async (): Promise<void> => {
   try {
-    // Try to load existing configuration
+    // Check if we have a valid token before trying to fetch data
+    const token = Cookies.get(TOKEN_COOKIE_NAME);
+    if (!token || !validateToken(token)) {
+      console.log('No valid token available during initialization, using default config');
+      // Set default config without trying to save it (will be saved after authentication)
+      cachedConfig = DEFAULT_CONFIG;
+      cachedUsers = [];
+      cachedJwtConfig = null;
+      return;
+    }
+
+    // Try to load existing configuration only if we have a valid token
     try {
       await fetchConfigData();
 
@@ -972,20 +1082,18 @@ export const initialize = async (): Promise<void> => {
         }
       }
     } catch (error) {
-      console.log('Failed to load configuration, initializing with defaults:', error);
-
-      // Create default configuration
-      try {
-        await createDefaultConfig();
-        console.log('Default configuration created successfully');
-      } catch (saveError) {
-        console.error('Failed to create default configuration:', saveError);
-        throw new Error('Failed to initialize configuration');
-      }
+      console.log('Failed to load configuration, using defaults:', error);
+      // Set default config without trying to save it (will be saved after authentication)
+      cachedConfig = DEFAULT_CONFIG;
+      cachedUsers = [];
+      cachedJwtConfig = null;
     }
   } catch (error) {
     console.error('Error during initialization:', error);
-    throw error;
+    // Don't throw the error, just use default values
+    cachedConfig = DEFAULT_CONFIG;
+    cachedUsers = [];
+    cachedJwtConfig = null;
   }
 };
 

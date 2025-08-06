@@ -107,3 +107,11 @@ type MFARequiredResponse struct {
 	MFAType     string `json:"mfaType"`
 	Username    string `json:"username"`
 }
+
+// LoginResponse represents a successful login response with JWT token
+type LoginResponse struct {
+	User         User   `json:"user"`
+	Token        string `json:"token"`
+	RefreshToken string `json:"refreshToken,omitempty"`
+	ExpiresAt    int64  `json:"expiresAt,omitempty"`
+}

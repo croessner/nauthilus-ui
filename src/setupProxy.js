@@ -4,8 +4,8 @@ const { addAuthorizationHeader } = require('./utils/authUtils');
 
 module.exports = function(app) {
   // Get API server address and port from environment variables
-  const API_ADDRESS = process.env.API_ADDRESS || '0.0.0.0';
-  const API_PORT = process.env.API_PORT || '3001';
+  const API_ADDRESS = process.env.FRONTEND_ADDRESS || '0.0.0.0';
+  const API_PORT = process.env.FRONTEND_PORT || '3001';
   const API_TARGET = `http://${API_ADDRESS === '0.0.0.0' ? 'localhost' : API_ADDRESS}:${API_PORT}`;
 
   // Proxy for API requests to the Go API server

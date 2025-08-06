@@ -33,7 +33,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin } from '../utils/apiUtils';
+import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 
 // Helper function to convert time period strings (like "1h", "30m") to seconds
 const convertPeriodToSeconds = (period: string): number => {
@@ -145,11 +145,8 @@ const BruteForceConfig: React.FC = () => {
         proxyUrl.searchParams.append('authValue', authValue);
       }
 
-      const response = await fetch(proxyUrl.toString(), {
+      const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       if (!response.ok) {
@@ -289,11 +286,8 @@ const BruteForceConfig: React.FC = () => {
       const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
-      const response = await fetch(proxyUrl.toString(), {
+      const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
-        headers: {
-          'Content-Type': 'application/json',
-        },
       });
 
       if (response.ok) {
@@ -367,11 +361,8 @@ const BruteForceConfig: React.FC = () => {
         proxyUrl.searchParams.append('authValue', authValue);
       }
 
-      const response = await fetch(proxyUrl.toString(), {
+      const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({ user: username }),
       });
 
@@ -450,11 +441,8 @@ const BruteForceConfig: React.FC = () => {
         requestBody.oidc_cid = oidcCid;
       }
 
-      const response = await fetch(proxyUrl.toString(), {
+      const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify(requestBody),
       });
 

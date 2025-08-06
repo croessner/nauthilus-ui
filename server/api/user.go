@@ -28,15 +28,6 @@ func NewUserHandler(mongoDB db.UserDatabase) *UserHandler {
 	}
 }
 
-// RegisterRoutes registers the user routes
-func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
-	router.GET("/api/users", h.GetUsers)
-	router.GET("/api/users/:username", h.GetUser)
-	router.POST("/api/users", h.CreateUser)
-	router.PUT("/api/users/:username", h.UpdateUser)
-	router.DELETE("/api/users/:username", h.DeleteUser)
-}
-
 // GetUsers handles the GET /api/users endpoint
 func (h *UserHandler) GetUsers(c *gin.Context) {
 	// If MongoDB is not connected, return default users
@@ -51,6 +42,7 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 				},
 			},
 		})
+
 		return
 	}
 
@@ -58,8 +50,10 @@ func (h *UserHandler) GetUsers(c *gin.Context) {
 	cursor, err := h.MongoDB.GetUserCollection().Find(context.Background(), bson.M{}, options.Find().SetProjection(bson.M{"passwordHash": 0}))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
+
 		return
 	}
+
 	defer cursor.Close(c)
 
 	var users []models.User
