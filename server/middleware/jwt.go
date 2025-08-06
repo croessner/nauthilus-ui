@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	"encoding/base64"
 	"encoding/json"
 	"log/slog"
 	"net/http"
@@ -9,12 +8,14 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
 
 	"nauthilus-ui/server/db"
 )
 
 // JWTAuthMiddleware creates a middleware for JWT authentication
-func JWTAuthMiddleware(_ *db.MongoDB) gin.HandlerFunc {
+// It verifies the JWT token signature using the secret from the database
+func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Skip authentication for excluded paths
 		path := c.Request.URL.Path
@@ -105,44 +106,56 @@ func JWTAuthMiddleware(_ *db.MongoDB) gin.HandlerFunc {
 			return
 		}
 
-		// Simple JWT validation - split the token into parts
-		tokenParts := strings.Split(tokenString, ".")
-		if len(tokenParts) != 3 {
-			slog.Warn("JWT Middleware: Invalid token format", "token", tokenString)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token format"})
-			c.Abort()
-
-			return
-		}
-
-		// Decode the payload
-		payloadBase64 := tokenParts[1]
-		// Add padding if needed
-		if len(payloadBase64)%4 != 0 {
-			payloadBase64 += strings.Repeat("=", 4-len(payloadBase64)%4)
-		}
-
-		payloadBytes, err := base64.StdEncoding.DecodeString(payloadBase64)
+		// Get JWT config to access the secret
+		jwtConfig, err := mongoDB.GetJWTConfig()
 		if err != nil {
-			slog.Warn("JWT Middleware: Failed to decode token payload", "error", err)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to decode token payload"})
+			slog.Error("JWT Middleware: Failed to get JWT config", "error", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Internal server error"})
 			c.Abort()
 
 			return
 		}
 
-		// Parse the payload
-		var payload map[string]interface{}
-		if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-			slog.Warn("JWT Middleware: Failed to parse token payload", "error", err)
-			c.JSON(http.StatusUnauthorized, gin.H{"error": "Failed to parse token payload"})
+		// Parse and verify the JWT token
+		token, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) {
+			// Validate the signing algorithm
+			if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+				return nil, jwt.ErrSignatureInvalid
+			}
+
+			// Return the secret key used for signing
+			return []byte(jwtConfig.Secret), nil
+		})
+
+		if err != nil {
+			slog.Warn("JWT Middleware: Invalid token", "error", err)
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token: " + err.Error()})
+			c.Abort()
+
+			return
+		}
+
+		// Verify token is valid
+		if !token.Valid {
+			slog.Warn("JWT Middleware: Token is invalid")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token"})
+			c.Abort()
+
+			return
+		}
+
+		// Extract claims from the token
+		claims, ok := token.Claims.(jwt.MapClaims)
+		if !ok {
+			slog.Warn("JWT Middleware: Failed to extract claims")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token claims"})
 			c.Abort()
 
 			return
 		}
 
 		// Check token expiration
-		expFloat, ok := payload["exp"].(float64)
+		exp, ok := claims["exp"]
 		if !ok {
 			slog.Warn("JWT Middleware: Token missing expiration")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token missing expiration"})
@@ -151,7 +164,22 @@ func JWTAuthMiddleware(_ *db.MongoDB) gin.HandlerFunc {
 			return
 		}
 
-		if time.Now().Unix() > int64(expFloat) {
+		// Convert exp to int64
+		var expTime int64
+		switch v := exp.(type) {
+		case float64:
+			expTime = int64(v)
+		case json.Number:
+			expTime, _ = v.Int64()
+		default:
+			slog.Warn("JWT Middleware: Invalid expiration format")
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid token expiration format"})
+			c.Abort()
+
+			return
+		}
+
+		if time.Now().Unix() > expTime {
 			slog.Warn("JWT Middleware: Token has expired")
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token has expired"})
 			c.Abort()
@@ -159,10 +187,10 @@ func JWTAuthMiddleware(_ *db.MongoDB) gin.HandlerFunc {
 			return
 		}
 
-		slog.Info("JWT Middleware: Token validation successful", "username", payload["sub"])
+		slog.Info("JWT Middleware: Token validation successful", "username", claims["sub"])
 
 		// Store user information in the context
-		username, ok := payload["sub"].(string)
+		username, ok := claims["sub"].(string)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "Token missing subject claim"})
 			c.Abort()
@@ -174,7 +202,7 @@ func JWTAuthMiddleware(_ *db.MongoDB) gin.HandlerFunc {
 		c.Set("username", username)
 
 		// Extract roles if available
-		if rolesInterface, ok := payload["roles"]; ok {
+		if rolesInterface, ok := claims["roles"]; ok {
 			if roles, ok := rolesInterface.([]interface{}); ok {
 				roleStrings := make([]string, 0, len(roles))
 
