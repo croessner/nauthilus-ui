@@ -51,7 +51,6 @@ export interface User {
 // Configuration interface
 export interface UserManagerConfig {
   users: User[];
-  jwtSecret: string;
   tokenExpiry: number; // in seconds
   refreshTokenExpiry: number; // in seconds
   rememberMeExpiry: number; // in seconds
@@ -87,7 +86,6 @@ const DEFAULT_CONFIG: UserManagerConfig = {
       lastModified: new Date().toISOString() // Set lastModified to current time
     }
   ],
-  jwtSecret: getEnvVar('JWT_SECRET', 'nauthilus-ui-default-secret-key-change-in-production'),
   tokenExpiry: parseInt(getEnvVar('TOKEN_EXPIRY', '3600')), // 1 hour
   refreshTokenExpiry: parseInt(getEnvVar('REFRESH_TOKEN_EXPIRY', '86400')), // 24 hours
   rememberMeExpiry: parseInt(getEnvVar('REMEMBER_ME_EXPIRY', '86400')) // Default: 1 day
@@ -96,7 +94,7 @@ const DEFAULT_CONFIG: UserManagerConfig = {
 // Cache for config to reduce API calls
 let cachedConfig: UserManagerConfig | null = null;
 let cachedUsers: User[] | null = null;
-let cachedJwtConfig: { jwtSecret: string, tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
+let cachedJwtConfig: { tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
 
 // Helper function to fetch data from API endpoints
 const fetchConfigData = async (): Promise<void> => {
@@ -142,7 +140,6 @@ const constructConfigObject = (): UserManagerConfig => {
 
   const config: UserManagerConfig = {
     users,
-    jwtSecret: cachedJwtConfig?.jwtSecret || DEFAULT_CONFIG.jwtSecret,
     tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
     refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
     rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
@@ -175,7 +172,6 @@ const createDefaultConfig = async (): Promise<UserManagerConfig> => {
 
     // Create default JWT config
     await axios.put('/api/jwtconfig', {
-      jwtSecret: DEFAULT_CONFIG.jwtSecret,
       tokenExpiry: DEFAULT_CONFIG.tokenExpiry,
       refreshTokenExpiry: DEFAULT_CONFIG.refreshTokenExpiry,
       rememberMeExpiry: DEFAULT_CONFIG.rememberMeExpiry
@@ -237,7 +233,6 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
   try {
     // Save JWT config
     await axios.put('/api/jwtconfig', {
-      jwtSecret: configToSave.jwtSecret,
       tokenExpiry: configToSave.tokenExpiry,
       refreshTokenExpiry: configToSave.refreshTokenExpiry,
       rememberMeExpiry: configToSave.rememberMeExpiry
@@ -250,7 +245,6 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
     // Update cache
     cachedConfig = configToSave;
     cachedJwtConfig = {
-      jwtSecret: configToSave.jwtSecret,
       tokenExpiry: configToSave.tokenExpiry,
       refreshTokenExpiry: configToSave.refreshTokenExpiry,
       rememberMeExpiry: configToSave.rememberMeExpiry
@@ -421,94 +415,6 @@ export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
   }
 };
 
-// Update JWT secret
-export const updateJwtSecret = async (secret: string): Promise<void> => {
-  // Validate input parameters
-  if (!secret || typeof secret !== 'string') {
-    throw new Error('JWT secret is required and must be a string');
-  }
-
-  try {
-    // Get current JWT config
-    const response = await axios.get('/api/jwtconfig');
-
-    // Validate response data
-    if (!response.data || !response.data.jwtConfig) {
-      throw new Error('Invalid JWT config data received from API');
-    }
-
-    const jwtConfig = response.data.jwtConfig;
-
-    // Update JWT secret
-    await axios.put('/api/jwtconfig', {
-      jwtSecret: secret,
-      tokenExpiry: jwtConfig.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
-      refreshTokenExpiry: jwtConfig.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
-      rememberMeExpiry: jwtConfig.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
-    });
-
-    // Update cached JWT config
-    if (cachedJwtConfig) {
-      cachedJwtConfig.jwtSecret = secret;
-    }
-
-    // Update cachedConfig
-    if (cachedConfig) {
-      cachedConfig.jwtSecret = secret;
-    }
-  } catch (error) {
-    console.error('Failed to update JWT secret:', error);
-    throw error;
-  }
-};
-
-// Update token expiry times
-export const updateTokenExpiry = async (tokenExpiry: number, refreshTokenExpiry: number): Promise<void> => {
-  // Validate input parameters
-  if (typeof tokenExpiry !== 'number' || tokenExpiry <= 0) {
-    throw new Error('Token expiry must be a positive number');
-  }
-
-  if (typeof refreshTokenExpiry !== 'number' || refreshTokenExpiry <= 0) {
-    throw new Error('Refresh token expiry must be a positive number');
-  }
-
-  try {
-    // Get current JWT config
-    const response = await axios.get('/api/jwtconfig');
-
-    // Validate response data
-    if (!response.data || !response.data.jwtConfig) {
-      throw new Error('Invalid JWT config data received from API');
-    }
-
-    const jwtConfig = response.data.jwtConfig;
-
-    // Update token expiry times
-    await axios.put('/api/jwtconfig', {
-      jwtSecret: jwtConfig.jwtSecret || DEFAULT_CONFIG.jwtSecret,
-      tokenExpiry,
-      refreshTokenExpiry,
-      rememberMeExpiry: jwtConfig.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
-    });
-
-    // Update cached JWT config
-    if (cachedJwtConfig) {
-      cachedJwtConfig.tokenExpiry = tokenExpiry;
-      cachedJwtConfig.refreshTokenExpiry = refreshTokenExpiry;
-    }
-
-    // Update cachedConfig
-    if (cachedConfig) {
-      cachedConfig.tokenExpiry = tokenExpiry;
-      cachedConfig.refreshTokenExpiry = refreshTokenExpiry;
-    }
-  } catch (error) {
-    console.error('Failed to update token expiry times:', error);
-    throw error;
-  }
-};
-
 // Update user profile
 export const updateUserProfile = async (
   username: string, 
@@ -568,35 +474,6 @@ export const updateUserProfile = async (
   }
 };
 
-// Generate a JWT token
-const generateToken = (user: Omit<User, 'passwordHash'> & { passwordHash?: string }, expiry: number): string => {
-  // Ensure we have a valid config
-  const config = cachedConfig ? { ...cachedConfig } : { ...DEFAULT_CONFIG };
-
-  const header = {
-    alg: 'HS256',
-    typ: 'JWT'
-  };
-
-  const now = Math.floor(Date.now() / 1000);
-  const payload = {
-    sub: user.username,
-    roles: user.roles,
-    iat: now,
-    exp: now + expiry
-  };
-
-  const headerBase64 = btoa(JSON.stringify(header));
-  const payloadBase64 = btoa(JSON.stringify(payload));
-
-  const signature = CryptoJS.HmacSHA256(
-    `${headerBase64}.${payloadBase64}`,
-    config.jwtSecret
-  ).toString(CryptoJS.enc.Base64);
-
-  return `${headerBase64}.${payloadBase64}.${signature}`;
-};
-
 // Validate a token
 export const validateToken = (token: string): boolean => {
   // Check if token is provided and is a string
@@ -633,8 +510,6 @@ export const authenticate = async (username: string, password: string, rememberM
     console.error('Failed to load config during authentication:', error);
     return null;
   }
-
-  let user;
 
   try {
     // Authenticate with backend using the dedicated authentication endpoint

@@ -4,20 +4,44 @@
 import Cookies from 'js-cookie';
 
 /**
- * Returns the proxy server origin (protocol, hostname, and port)
- * @returns The proxy server origin URL
+ * Retrieves the proxy origin URL based on the current environment configuration.
+ *
+ * The function checks the following sources in order of priority:
+ * 1. `window._env_?.REACT_APP_PROXY_PORT` - If available, this port value is used.
+ * 2. `process.env.REACT_APP_PROXY_PORT` - If running in a Node.js-like environment, this port value is used.
+ * 3. Fallback to the default port `3002` if neither of the above are defined.
+ *
+ * A debug message is logged for each source used to determine the port.
+ *
+ * @returns {string} The generated proxy origin URL based on the chosen port.
  */
 export const getProxyOrigin = (): string => {
-  // Check window._env_ first, then fall back to process.env, then default to '3002'
-  const port = (window._env_ && window._env_['REACT_APP_PROXY_PORT']) || 
-               process.env.REACT_APP_PROXY_PORT || 
-               '3002';
-  
-  // If we're using HTTPS on port 443, don't include the port in the URL
-  return port === '443' && window.location.protocol === 'https:' 
-    ? `${window.location.protocol}//${window.location.hostname}`
-    : `${window.location.protocol}//${window.location.hostname}:${port}`;
+  if (window._env_?.REACT_APP_PROXY_PORT) {
+    console.debug('[getProxyOrigin] Source: window._env_, Port:', window._env_.REACT_APP_PROXY_PORT);
+    return buildUrl(window._env_.REACT_APP_PROXY_PORT);
+  }
+
+  if (typeof process !== 'undefined' && process.env.REACT_APP_PROXY_PORT) {
+    console.debug('[getProxyOrigin] Source: process.env, Port:', process.env.REACT_APP_PROXY_PORT);
+    return buildUrl(process.env.REACT_APP_PROXY_PORT);
+  }
+
+  console.debug('[getProxyOrigin] Source: Fallback, Port: 3002');
+  return buildUrl('3002');
 };
+
+/**
+ * Constructs a URL based on the provided port and current window location details.
+ *
+ * @param {string} port - The port to use when building the URL. If the port is "443" and the protocol is "https:", the port is omitted from the URL.
+ * @return {string} The constructed URL as a string.
+ */
+function buildUrl(port: string): string {
+  const { protocol, hostname } = window.location;
+  return port === '443' && protocol === 'https:'
+      ? `${protocol}//${hostname}`
+      : `${protocol}//${hostname}:${port}`;
+}
 
 /**
  * Gets the current JWT token from cookies

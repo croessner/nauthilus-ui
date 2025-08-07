@@ -37,21 +37,21 @@ func (h *StaticHandler) RegisterMiddleware(router *gin.Engine) {
 	}
 
 	// Middleware to inject environment variables into window._env_
-	router.GET("/env-config.js", h.EnvConfigHandler)
+	router.GET("/env-config.json", h.EnvConfigHandler)
 
-	// Handle all other requests by serving index.html with injected env-config.js script
+	// Handle all other requests by serving index.html with injected env-config.json script
 	router.NoRoute(h.IndexHandler)
 }
 
-// EnvConfigHandler handles the /env-config.js endpoint
+// EnvConfigHandler handles the /env-config.json endpoint
 func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
-	// Create a JavaScript file that sets window._env_
+	// Create a JSON object with environment variables
+	// Note: JWT secret is not exposed to the frontend for security reasons
 	envConfig := map[string]string{
-		"REACT_APP_JWT_SECRET":           h.Config.JWTSecret,
 		"REACT_APP_TOKEN_EXPIRY":         fmt.Sprintf("%d", h.Config.TokenExpiry),
 		"REACT_APP_REFRESH_TOKEN_EXPIRY": fmt.Sprintf("%d", h.Config.RefreshTokenExpiry),
 		"REACT_APP_REMEMBER_ME_EXPIRY":   fmt.Sprintf("%d", h.Config.RememberMeExpiry),
-		"REACT_APP_PROXY_PORT":           h.Config.ProxyPort,
+		"REACT_APP_PROXY_PORT":           h.Config.ReactProxyPort,
 	}
 
 	// Convert to JSON
@@ -62,8 +62,9 @@ func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 		return
 	}
 
-	ctx.Header("Content-Type", "application/javascript")
-	ctx.String(http.StatusOK, "window._env_ = %s;", string(envConfigJSON))
+	// Serve as JSON instead of JavaScript
+	ctx.Header("Content-Type", "application/json")
+	ctx.String(http.StatusOK, string(envConfigJSON))
 }
 
 // IndexHandler handles all other requests by serving index.html with injected env-config.js script
@@ -83,9 +84,9 @@ func (h *StaticHandler) IndexHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Inject the env-config.js script before the closing head tag
+	// Inject the env-config.json script before the closing head tag
 	indexHTML := string(indexData)
-	modifiedHTML := injectScript(indexHTML, "</head>", "<script src=\"/env-config.js\"></script></head>")
+	modifiedHTML := injectScript(indexHTML, "</head>", "<script src=\"/env-config.json\"></script></head>")
 
 	ctx.Header("Content-Type", "text/html")
 	ctx.String(http.StatusOK, modifiedHTML)
@@ -93,7 +94,7 @@ func (h *StaticHandler) IndexHandler(ctx *gin.Context) {
 
 // injectScript is a helper function to inject a script into HTML before the target string.
 // It replaces the last occurrence of the target string with the replacement string.
-// This is used to inject the env-config.js script before the closing head tag.
+// This is used to inject the env-config.json script before the closing head tag.
 func injectScript(html, target, replacement string) string {
 	// Find the last occurrence of the target string
 	pos := len(html) - len(target)

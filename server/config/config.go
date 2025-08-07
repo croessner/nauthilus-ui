@@ -18,6 +18,8 @@ type Config struct {
 	ProxyPort string
 	// ProxyAddress is the IP address the proxy server will bind to.
 	ProxyAddress string
+	// ReactProxyPort is the port number the React application will use to connect to the proxy server.
+	ReactProxyPort string
 
 	// MongoDB configuration
 	// MongoURI is the connection string for MongoDB.
@@ -51,6 +53,8 @@ func LoadConfig() *Config {
 		// Proxy server configuration
 		ProxyPort:    getEnv("PROXY_PORT", "3002"),
 		ProxyAddress: getEnv("PROXY_ADDRESS", "0.0.0.0"),
+		// Use REACT_APP_PROXY_PORT if set, otherwise default to ProxyPort
+		ReactProxyPort: getEnv("REACT_APP_PROXY_PORT", getEnv("PROXY_PORT", "3002")),
 
 		// MongoDB configuration
 		MongoURI: getEnv("MONGODB_URI", "mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin"),

@@ -42,9 +42,18 @@ func setupLogger() {
 
 // loadEnvironment loads environment variables from .env file
 func loadEnvironment() {
-	if err := godotenv.Load("../.env"); err != nil {
-		slog.Warn("Warning: .env file not found, using environment variables")
+	// Try to load from .env file in the current directory (for Docker)
+	if err := godotenv.Load(".env"); err != nil {
+		// Try to load from .env file in the parent directory (for development)
+		if err := godotenv.Load("../.env"); err != nil {
+			slog.Warn("Warning: .env file not found, using environment variables")
+		}
 	}
+
+	// Log the environment variables for debugging
+	slog.Info("Environment variables loaded",
+		"REACT_APP_PROXY_PORT", os.Getenv("REACT_APP_PROXY_PORT"),
+		"PROXY_PORT", os.Getenv("PROXY_PORT"))
 }
 
 // setupMongoDB initializes and connects to MongoDB
