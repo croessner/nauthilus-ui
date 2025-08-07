@@ -2,7 +2,6 @@
 // This module provides user management and authentication independently of the Nauthilus service
 
 import { jwtDecode } from 'jwt-decode';
-import CryptoJS from 'crypto-js';
 import * as bcrypt from 'bcryptjs';
 import Cookies from 'js-cookie';
 import axios from './axiosConfig';
@@ -17,33 +16,6 @@ const COOKIE_OPTIONS = {
   sameSite: 'strict' as const,
   path: '/'
 };
-
-// Helper function to manage credentials in sessionStorage
-const manageCredentialsStorage = (
-  username: string, 
-  password: string, 
-  rememberMe: boolean = false, 
-  operation: 'store' | 'manage' = 'manage'
-): void => {
-  try {
-    if (operation === 'store' || rememberMe) {
-      // Store credentials in sessionStorage
-      sessionStorage.setItem('auth_credentials', JSON.stringify({
-        username,
-        password
-      }));
-      console.log(`Stored credentials for ${operation === 'store' ? 'MFA completion' : 'token refresh'}`);
-    } else {
-      // Clean up stored credentials if rememberMe is false
-      sessionStorage.removeItem('auth_credentials');
-      console.log('Removed stored credentials after successful authentication');
-    }
-  } catch (storageError) {
-    console.error(`Failed to ${(operation === 'store' || rememberMe) ? 'store' : 'remove'} credentials:`, storageError);
-    // Continue even if storage operation fails
-  }
-};
-
 
 // WebAuthnCredential interface
 export interface WebAuthnCredential {
@@ -547,9 +519,6 @@ export const authenticate = async (username: string, password: string, rememberM
 
       // Check if MFA is required
       if (response.data && response.data.mfaRequired) {
-        // Store credentials in sessionStorage for MFA completion
-        manageCredentialsStorage(username, password, false, 'store');
-        
         return {
           mfaRequired: response.data.mfaRequired,
           mfaType: response.data.mfaType,
@@ -575,9 +544,22 @@ export const authenticate = async (username: string, password: string, rememberM
           expires: new Date(Date.now() + config.refreshTokenExpiry * 1000)
         });
         
-        // If rememberMe is true, keep the credentials for token refresh
-        // If false, remove them after successful authentication
-        manageCredentialsStorage(username, password, rememberMe);
+        // Store credentials securely for token refresh (only if rememberMe is true)
+        if (rememberMe) {
+          try {
+            // Store credentials in sessionStorage for token refresh
+            // This is a security trade-off - we need to store credentials to enable token refresh
+            // but we'll only do it if the user has explicitly chosen to be remembered
+            sessionStorage.setItem('auth_credentials', JSON.stringify({
+              username,
+              password
+            }));
+            console.log('Stored credentials for token refresh');
+          } catch (storageError) {
+            console.error('Failed to store credentials for token refresh:', storageError);
+            // Continue even if storage fails
+          }
+        }
         
         // Update lastLogin timestamp
         const now = new Date().toISOString();
@@ -677,9 +659,20 @@ export const completeMfaLogin = async (username: string, rememberMe: boolean = f
         expires: new Date(Date.now() + 86400 * 1000) // Default 24 hours
       });
       
-      // If rememberMe is true, keep the credentials for token refresh
-      // If false, remove them after successful authentication
-      manageCredentialsStorage(username, password, rememberMe);
+      // Store credentials securely for token refresh (only if rememberMe is true)
+      if (rememberMe) {
+        try {
+          // Store credentials in sessionStorage for token refresh
+          sessionStorage.setItem('auth_credentials', JSON.stringify({
+            username,
+            password
+          }));
+          console.log('Stored credentials for token refresh');
+        } catch (storageError) {
+          console.error('Failed to store credentials for token refresh:', storageError);
+          // Continue even if storage fails
+        }
+      }
       
       // Update lastLogin timestamp
       const now = new Date().toISOString();
