@@ -233,10 +233,18 @@ const MFAPage = (): React.JSX.Element => {
     if (digits.length > 0) {
       // Create a new array with the pasted digits
       const newDigits = [...totpDigits];
-
-      // Fill in the digits starting from the current index
-      for (let i = 0; i < digits.length && index + i < 6; i++) {
-        newDigits[index + i] = digits[i];
+      
+      // If we have a complete or nearly complete code (5-6 digits), always distribute across all fields
+      if (digits.length >= 5) {
+        // Fill all fields with the pasted digits, starting from index 0
+        for (let i = 0; i < digits.length && i < 6; i++) {
+          newDigits[i] = digits[i];
+        }
+      } else {
+        // For shorter sequences, keep the current behavior of filling from current index
+        for (let i = 0; i < digits.length && index + i < 6; i++) {
+          newDigits[index + i] = digits[i];
+        }
       }
 
       setTotpDigits(newDigits);
@@ -254,7 +262,7 @@ const MFAPage = (): React.JSX.Element => {
         }
       } else {
         // If all fields are filled or no empty field after current index, focus the last field
-        const lastFilledIndex = Math.min(index + digits.length - 1, 5);
+        const lastFilledIndex = Math.min(5, digits.length >= 5 ? digits.length - 1 : index + digits.length - 1);
         const lastInput = document.getElementById(`totp-digit-${lastFilledIndex}`);
         if (lastInput) {
           lastInput.focus();
