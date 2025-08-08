@@ -519,6 +519,20 @@ export const authenticate = async (username: string, password: string, rememberM
 
       // Check if MFA is required
       if (response.data && response.data.mfaRequired) {
+        // Store credentials in sessionStorage for MFA completion
+        // This is necessary regardless of rememberMe setting because we need these credentials
+        // to complete the MFA process
+        try {
+          sessionStorage.setItem('auth_credentials', JSON.stringify({
+            username,
+            password
+          }));
+          console.log('Stored credentials for MFA completion');
+        } catch (storageError) {
+          console.error('Failed to store credentials for MFA completion:', storageError);
+          // Continue even if storage fails
+        }
+        
         return {
           mfaRequired: response.data.mfaRequired,
           mfaType: response.data.mfaType,

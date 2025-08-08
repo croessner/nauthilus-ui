@@ -219,6 +219,11 @@ const MFAPage = (): React.JSX.Element => {
       if (nextInput) {
         nextInput.focus();
       }
+    } else if (e.key === 'Enter' || e.key === 'Return') {
+      // Submit the form when Enter/Return is pressed and all digits are filled
+      if (totpToken.length === 6 && !mfaLoading) {
+        handleTotpVerify();
+      }
     }
   };
 
@@ -234,17 +239,10 @@ const MFAPage = (): React.JSX.Element => {
       // Create a new array with the pasted digits
       const newDigits = [...totpDigits];
       
-      // If we have a complete or nearly complete code (5-6 digits), always distribute across all fields
-      if (digits.length >= 5) {
-        // Fill all fields with the pasted digits, starting from index 0
-        for (let i = 0; i < digits.length && i < 6; i++) {
-          newDigits[i] = digits[i];
-        }
-      } else {
-        // For shorter sequences, keep the current behavior of filling from current index
-        for (let i = 0; i < digits.length && index + i < 6; i++) {
-          newDigits[index + i] = digits[i];
-        }
+      // Always distribute digits across all fields, regardless of where the paste happened
+      // This fixes issues with password managers like EnPass that automatically copy TOTP codes
+      for (let i = 0; i < digits.length && i < 6; i++) {
+        newDigits[i] = digits[i];
       }
 
       setTotpDigits(newDigits);
@@ -253,19 +251,26 @@ const MFAPage = (): React.JSX.Element => {
       const newToken = newDigits.join('');
       setTotpToken(newToken);
 
-      // Focus the next empty field or the last field if all are filled
-      const nextEmptyIndex = newDigits.findIndex((digit, idx) => digit === '' && idx >= index);
-      if (nextEmptyIndex !== -1 && nextEmptyIndex < 6) {
-        const nextInput = document.getElementById(`totp-digit-${nextEmptyIndex}`);
-        if (nextInput) {
-          nextInput.focus();
-        }
-      } else {
-        // If all fields are filled or no empty field after current index, focus the last field
-        const lastFilledIndex = Math.min(5, digits.length >= 5 ? digits.length - 1 : index + digits.length - 1);
-        const lastInput = document.getElementById(`totp-digit-${lastFilledIndex}`);
+      // If we have all 6 digits, focus the last field
+      if (digits.length === 6) {
+        const lastInput = document.getElementById(`totp-digit-5`);
         if (lastInput) {
           lastInput.focus();
+        }
+      } else {
+        // Otherwise, focus the next empty field
+        const nextEmptyIndex = newDigits.findIndex(digit => digit === '');
+        if (nextEmptyIndex !== -1 && nextEmptyIndex < 6) {
+          const nextInput = document.getElementById(`totp-digit-${nextEmptyIndex}`);
+          if (nextInput) {
+            nextInput.focus();
+          }
+        } else {
+          // If all fields are filled, focus the last field
+          const lastInput = document.getElementById(`totp-digit-5`);
+          if (lastInput) {
+            lastInput.focus();
+          }
         }
       }
     }

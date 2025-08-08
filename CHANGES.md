@@ -1,5 +1,51 @@
 # Changes
 
+## 2025-08-08: Fix TOTP Authentication Credential Storage Issue
+
+### Issue
+TOTP authentication was failing with the error "No stored credentials found for MFA completion" after successful TOTP code verification. This prevented users from completing the MFA login process even when they entered the correct TOTP code.
+
+### Root Cause
+When MFA was required during login, the application was not storing the user's credentials in sessionStorage. The completeMfaLogin function requires these stored credentials to re-authenticate with the server after successful TOTP verification.
+
+### Changes Made
+Modified the authenticate function in userManager.ts to store credentials in sessionStorage when MFA is required:
+```typescript
+// Store credentials in sessionStorage for MFA completion
+// This is necessary regardless of rememberMe setting because we need these credentials
+// to complete the MFA process
+try {
+  sessionStorage.setItem('auth_credentials', JSON.stringify({
+    username,
+    password
+  }));
+  console.log('Stored credentials for MFA completion');
+} catch (storageError) {
+  console.error('Failed to store credentials for MFA completion:', storageError);
+  // Continue even if storage fails
+}
+```
+
+### Benefits
+- Fixed the TOTP authentication flow, allowing users to successfully complete MFA login
+- Improved reliability of the authentication system
+- Enhanced user experience by eliminating authentication errors
+
+## 2025-08-08: Fix TOTP Authentication Input Issues
+
+### Issues Fixed:
+1. **TOTP Code Paste Functionality**: Fixed an issue where pasting a TOTP code from password managers like EnPass would paste all digits into the first input field instead of distributing them across all fields.
+2. **Keyboard Submission Support**: Added support for submitting the TOTP form using the Enter/Return key after entering all 6 digits, eliminating the need to use the mouse to click the submit button.
+
+### Changes Made:
+1. Modified the `handleTotpDigitPaste` function in `MFAPage.tsx` to always distribute pasted digits across all fields, regardless of where the paste happened.
+2. Added Enter/Return key handling to the `handleTotpDigitKeyDown` function to submit the form when all 6 digits are filled.
+
+### Benefits:
+- Improved user experience with password managers that automatically copy TOTP codes
+- Enhanced keyboard accessibility by allowing form submission with Enter key
+- Streamlined authentication workflow for users with TOTP enabled
+
 ## 2025-08-08: Fix TOTP Authentication Issue
 
 ### Issue
