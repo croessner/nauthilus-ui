@@ -161,7 +161,9 @@ const MFAPage = (): React.JSX.Element => {
       // Create a minimal user object for MFA verification
       const mfaUser = {
         username: auth.username,
-        mfaType: auth.mfaType
+        mfaType: auth.mfaType,
+        totpEnabled: auth.totpEnabled,
+        webAuthnEnabled: auth.webAuthnEnabled,
       };
 
       // Store the user for MFA verification only if it changed
@@ -171,7 +173,8 @@ const MFAPage = (): React.JSX.Element => {
       }
 
       // Determine which MFA method to show based on the auth state
-      if (auth.mfaType === 'webauthn') {
+      if (auth.mfaType === 'webauthn' && auth.webAuthnEnabled && !auth.totpEnabled) {
+        // Only WebAuthn available: select and auto-trigger
         setMfaMethod('webauthn');
 
         // Store a flag in sessionStorage to track if we've already attempted WebAuthn
@@ -208,7 +211,8 @@ const MFAPage = (): React.JSX.Element => {
             sessionStorage.removeItem('webauthn_attempted');
           }
         };
-      } else if (auth.mfaType === 'totp') {
+      } else if (auth.mfaType === 'totp' || auth.mfaType === 'choice') {
+        // Default to TOTP when specified or when user should choose
         setMfaMethod('totp');
       }
     }
@@ -219,7 +223,7 @@ const MFAPage = (): React.JSX.Element => {
         sessionStorage.removeItem('webauthn_attempted');
       }
     };
-  }, [auth.mfaRequired, auth.mfaType, auth.username, auth.isAuthenticated, handleWebAuthnLogin]);
+  }, [auth.mfaRequired, auth.mfaType, auth.username, auth.isAuthenticated, auth.totpEnabled, auth.webAuthnEnabled, handleWebAuthnLogin]);
 
   // Handle TOTP verification
   const handleTotpVerify = useCallback(async () => {

@@ -496,7 +496,7 @@ export const validateToken = (token: string): boolean => {
 };
 
 // Authenticate a user and generate tokens
-export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | { mfaRequired: boolean, mfaType: string, username: string } | null> => {
+export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | { mfaRequired: boolean, mfaType: string, username: string, totpEnabled?: boolean, webAuthnEnabled?: boolean } | null> => {
   if (!username || !password) {
     return null;
   }
@@ -536,7 +536,9 @@ export const authenticate = async (username: string, password: string, rememberM
         return {
           mfaRequired: response.data.mfaRequired,
           mfaType: response.data.mfaType,
-          username: response.data.username
+          username: response.data.username,
+          totpEnabled: response.data.totpEnabled,
+          webAuthnEnabled: response.data.webAuthnEnabled,
         };
       } else if (response.data && response.data.user && response.data.token) {
         // Use the tokens provided by the server

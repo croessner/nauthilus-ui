@@ -119,21 +119,38 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	// Check if MFA is required and not already verified
 	if !loginRequest.MfaVerified {
-		// Check if TOTP or WebAuthn is enabled for the user
-		if user.TOTPEnabled {
-			// TOTP is enabled, so we need to require MFA verification
+		// Determine enabled MFA methods
+		hasTOTP := user.TOTPEnabled
+		hasWebAuthn := user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0
+
+		if hasTOTP && hasWebAuthn {
+			// Both methods available: let the client choose
 			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-				MFARequired: true,
-				MFAType:     "totp",
-				Username:    user.Username,
+				MFARequired:     true,
+				MFAType:         "choice",
+				Username:        user.Username,
+				TotpEnabled:     true,
+				WebAuthnEnabled: true,
 			})
 			return
-		} else if user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0 {
-			// WebAuthn is enabled, so we need to require MFA verification
+		} else if hasTOTP {
+			// Only TOTP available
 			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-				MFARequired: true,
-				MFAType:     "webauthn",
-				Username:    user.Username,
+				MFARequired:     true,
+				MFAType:         "totp",
+				Username:        user.Username,
+				TotpEnabled:     true,
+				WebAuthnEnabled: false,
+			})
+			return
+		} else if hasWebAuthn {
+			// Only WebAuthn available
+			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
+				MFARequired:     true,
+				MFAType:         "webauthn",
+				Username:        user.Username,
+				TotpEnabled:     false,
+				WebAuthnEnabled: true,
 			})
 			return
 		}

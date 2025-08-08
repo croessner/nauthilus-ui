@@ -9,6 +9,8 @@ interface AuthState {
   error: string | null;
   mfaRequired?: boolean;
   mfaType?: string;
+  totpEnabled?: boolean;
+  webAuthnEnabled?: boolean;
 }
 
 // Define the context type
@@ -93,6 +95,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             mfaRequired: result.mfaRequired,
             mfaType: result.mfaType,
             username: result.username,
+            totpEnabled: (result as any).totpEnabled,
+            webAuthnEnabled: (result as any).webAuthnEnabled,
           }));
 
           // We don't redirect to MFA pages, instead we let the UI components

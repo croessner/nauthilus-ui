@@ -104,10 +104,13 @@ type RuntimeSettingsResponse struct {
 }
 
 // MFARequiredResponse represents a response indicating that MFA is required
+// When both methods are available, MFAType may be "choice" to let the client decide.
 type MFARequiredResponse struct {
-	MFARequired bool   `json:"mfaRequired"`
-	MFAType     string `json:"mfaType"`
-	Username    string `json:"username"`
+	MFARequired     bool   `json:"mfaRequired"`
+	MFAType         string `json:"mfaType"`
+	Username        string `json:"username"`
+	TotpEnabled     bool   `json:"totpEnabled"`
+	WebAuthnEnabled bool   `json:"webAuthnEnabled"`
 }
 
 // LoginResponse represents a successful login response with JWT token
