@@ -30,6 +30,7 @@ import {
 } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
+import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PasswordField from './common/PasswordField';
 
 // Interface for tab panel props
@@ -515,60 +516,60 @@ const FeaturesConfig: React.FC = () => {
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Whitelist</Typography>
-                    <FieldArray name="realtime_blackhole_lists.ip_whitelist">
-                      {({ push, remove }) => (
-                        <div>
-                          {values.realtime_blackhole_lists?.ip_whitelist && values.realtime_blackhole_lists.ip_whitelist.length > 0 ? (
-                            values.realtime_blackhole_lists.ip_whitelist.map((_ip: string, index: number) => (
-                              <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                                <Field
-                                  as={TextField}
-                                  fullWidth
-                                  name={`realtime_blackhole_lists.ip_whitelist[${index}]`}
-                                  label={`IP Address/CIDR ${index + 1}`}
-                                  variant="outlined"
-                                  error={getIn(touched, `realtime_blackhole_lists.ip_whitelist[${index}]`) && Boolean(getIn(errors, `realtime_blackhole_lists.ip_whitelist[${index}]`))}
-                                  helperText={(getIn(touched, `realtime_blackhole_lists.ip_whitelist[${index}]`) && getIn(errors, `realtime_blackhole_lists.ip_whitelist[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
-                                  onChange={(e: React.ChangeEvent<any>) => {
-                                    handleChange(e);
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                />
-                                <IconButton 
-                                  onClick={() => {
-                                    remove(index);
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                  sx={{ ml: 1 }}
-                                  color="error"
-                                  aria-label="Remove IP"
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </Box>
-                            ))
-                          ) : (
-                            <Typography color="textSecondary" sx={{ mb: 2 }}>No IP addresses added yet.</Typography>
-                          )}
-                          <Button
-                            startIcon={<AddIcon />}
-                            variant="outlined"
-                            color="primary"
-                            onClick={() => {
-                              push('');
-                              setHasUnsavedChanges(true);
-                            }}
-                          >
-                            Add IP Address
-                          </Button>
-                        </div>
-                      )}
-                    </FieldArray>
+                    <CollapsibleFormSection title="IP Whitelist" defaultExpanded>
+                      <FieldArray name="realtime_blackhole_lists.ip_whitelist">
+                        {({ push, remove }) => (
+                          <div>
+                            {values.realtime_blackhole_lists?.ip_whitelist && values.realtime_blackhole_lists.ip_whitelist.length > 0 ? (
+                              values.realtime_blackhole_lists.ip_whitelist.map((_ip: string, index: number) => (
+                                <Box key={index} sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                                  <Field
+                                    as={TextField}
+                                    fullWidth
+                                    name={`realtime_blackhole_lists.ip_whitelist[${index}]`}
+                                    label={`IP Address/CIDR ${index + 1}`}
+                                    variant="outlined"
+                                    error={getIn(touched, `realtime_blackhole_lists.ip_whitelist[${index}]`) && Boolean(getIn(errors, `realtime_blackhole_lists.ip_whitelist[${index}]`))}
+                                    helperText={(getIn(touched, `realtime_blackhole_lists.ip_whitelist[${index}]`) && getIn(errors, `realtime_blackhole_lists.ip_whitelist[${index}]`)) || "IP address or CIDR notation (e.g., 192.168.1.0/24)"}
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  />
+                                  <IconButton 
+                                    onClick={() => {
+                                      remove(index);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                    sx={{ ml: 1 }}
+                                    color="error"
+                                    aria-label="Remove IP"
+                                  >
+                                    <DeleteIcon />
+                                  </IconButton>
+                                </Box>
+                              ))
+                            ) : (
+                              <Typography color="textSecondary" sx={{ mb: 2 }}>No IP addresses added yet.</Typography>
+                            )}
+                            <Button
+                              startIcon={<AddIcon />}
+                              variant="outlined"
+                              color="primary"
+                              onClick={() => {
+                                push('');
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              Add IP Address
+                            </Button>
+                          </div>
+                        )}
+                      </FieldArray>
+                    </CollapsibleFormSection>
                   </Grid>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Soft Whitelist</Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
+                    <CollapsibleFormSection title="Soft Whitelist">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         The soft whitelist allows you to specify which usernames are allowed to bypass RBL checks from specific IP addresses or networks.
                       </Typography>
@@ -714,11 +715,11 @@ const FeaturesConfig: React.FC = () => {
                           </div>
                         )}
                       </FieldArray>
-                    </Paper>
+                    </CollapsibleFormSection>
                   </Grid>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>RBL Lists</Typography>
-                    <FieldArray name="realtime_blackhole_lists.lists">
+                    <CollapsibleFormSection title="RBL Lists">
+                      <FieldArray name="realtime_blackhole_lists.lists">
                       {({ push, remove }) => (
                         <div>
                           {values.realtime_blackhole_lists?.lists && values.realtime_blackhole_lists.lists.length > 0 ? (
@@ -901,6 +902,7 @@ const FeaturesConfig: React.FC = () => {
                         </div>
                       )}
                     </FieldArray>
+                    </CollapsibleFormSection>
                   </Grid>
                 </Grid>
               </FormSection>
@@ -1194,8 +1196,8 @@ const FeaturesConfig: React.FC = () => {
               <FormSection title="Brute Force Configuration">
                 <Grid container spacing={3}>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Whitelist</Typography>
-                    <FieldArray name="brute_force.ip_whitelist">
+                    <CollapsibleFormSection title="IP Whitelist" defaultExpanded>
+                      <FieldArray name="brute_force.ip_whitelist">
                       {({ push, remove }) => (
                         <div>
                           {values.brute_force?.ip_whitelist && values.brute_force.ip_whitelist.length > 0 ? (
@@ -1244,10 +1246,10 @@ const FeaturesConfig: React.FC = () => {
                         </div>
                       )}
                     </FieldArray>
+                    </CollapsibleFormSection>
                   </Grid>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Soft Whitelist</Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
+                    <CollapsibleFormSection title="Soft Whitelist">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         The soft whitelist allows you to specify which usernames are allowed to bypass brute force checks from specific IP addresses or networks.
                       </Typography>
@@ -1393,11 +1395,10 @@ const FeaturesConfig: React.FC = () => {
                           </div>
                         )}
                       </FieldArray>
-                    </Paper>
+                    </CollapsibleFormSection>
                   </Grid>
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Tolerations</Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
+                    <CollapsibleFormSection title="Tolerations">
                       <Grid container spacing={2}>
                         <Grid item xs={12} md={6}>
                           <Field
@@ -1498,12 +1499,11 @@ const FeaturesConfig: React.FC = () => {
                           />
                         </Grid>
                       </Grid>
-                    </Paper>
+                    </CollapsibleFormSection>
                   </Grid>
 
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Custom Tolerations</Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
+                    <CollapsibleFormSection title="Custom Tolerations">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         Custom tolerations allow you to specify different toleration settings for specific IP addresses or networks.
                       </Typography>
@@ -1667,12 +1667,11 @@ const FeaturesConfig: React.FC = () => {
                           </div>
                         )}
                       </FieldArray>
-                    </Paper>
+                    </CollapsibleFormSection>
                   </Grid>
 
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Buckets</Typography>
-                    <Paper sx={{ p: 2, mb: 2 }}>
+                    <CollapsibleFormSection title="Buckets">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         Buckets define rules for detecting brute force attacks based on the number of failed requests within a specific time period.
                       </Typography>
@@ -1908,7 +1907,7 @@ const FeaturesConfig: React.FC = () => {
                           </div>
                         )}
                       </FieldArray>
-                    </Paper>
+                    </CollapsibleFormSection>
                   </Grid>
 
                 </Grid>
