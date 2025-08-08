@@ -221,11 +221,29 @@ const MFASettings: React.FC = () => {
         }
       } catch (credentialError) {
         console.error('Error creating credential:', credentialError);
-        setWebAuthnError('Failed to create credential. Please try again or use a different security key.');
+        if (credentialError instanceof Error) {
+          if (credentialError.message.includes('challenge')) {
+            setWebAuthnError('Server configuration issue: Invalid challenge. Please contact your administrator.');
+          } else if (credentialError.message.includes('already registered')) {
+            setWebAuthnError('This security key is already registered. Please use a different one.');
+          } else {
+            setWebAuthnError(`Failed to create credential: ${credentialError.message}`);
+          }
+        } else {
+          setWebAuthnError('Failed to create credential. Please try again or use a different security key.');
+        }
       }
     } catch (error) {
-      setWebAuthnError('Failed to register security key. Please try again.');
       console.error('WebAuthn registration error:', error);
+      if (error instanceof Error) {
+        if (error.message.includes('Missing challenge')) {
+          setWebAuthnError('Server configuration issue: Missing challenge in response. Please contact your administrator.');
+        } else {
+          setWebAuthnError(`Failed to register security key: ${error.message}`);
+        }
+      } else {
+        setWebAuthnError('Failed to register security key. Please try again.');
+      }
     } finally {
       setWebAuthnLoading(false);
       setDeviceName('');

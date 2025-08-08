@@ -94,7 +94,19 @@ const MFAPage = (): React.JSX.Element => {
       }
     } catch (error) {
       console.error('WebAuthn login error:', error);
-      setWebAuthnError('Authentication failed. Please try again.');
+      if (error instanceof Error) {
+        if (error.message.includes('Missing challenge')) {
+          setWebAuthnError('Server configuration issue: Missing challenge in response. Please contact your administrator.');
+        } else if (error.message.includes('challenge')) {
+          setWebAuthnError('Server configuration issue: Invalid challenge. Please contact your administrator.');
+        } else if (error.message.includes('abort')) {
+          setWebAuthnError('Authentication was aborted. Please try again.');
+        } else {
+          setWebAuthnError(`Authentication failed: ${error.message}`);
+        }
+      } else {
+        setWebAuthnError('Authentication failed. Please try again.');
+      }
     } finally {
       setMfaLoading(false);
     }

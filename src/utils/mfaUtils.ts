@@ -50,7 +50,8 @@ export const beginWebAuthnRegistration = async (username: string): Promise<{ pub
     if (publicKeyCredentialCreationOptions.challenge) {
       publicKeyCredentialCreationOptions.challenge = base64ToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
     } else {
-      console.warn('WebAuthn registration: Missing challenge in server response');
+      console.error('WebAuthn registration: Missing challenge in server response');
+      throw new Error('Missing challenge in server response for WebAuthn registration');
     }
 
     // Convert user.id from base64 to ArrayBuffer
@@ -126,7 +127,8 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
     if (publicKeyCredentialRequestOptions.challenge) {
       publicKeyCredentialRequestOptions.challenge = base64ToArrayBuffer(publicKeyCredentialRequestOptions.challenge);
     } else {
-      console.warn('WebAuthn login: Missing challenge in server response');
+      console.error('WebAuthn login: Missing challenge in server response');
+      throw new Error('Missing challenge in server response for WebAuthn login');
     }
 
     // Convert allowCredentials.id from base64 to ArrayBuffer

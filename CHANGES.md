@@ -1,5 +1,82 @@
 # Changes
 
+## 2025-08-08: Fix Environment Configuration Loading Issue
+
+### Issue
+WebAuthn registration was failing due to incorrect loading of environment configuration. The browser console showed: "Refused to execute script from 'https://adm.nauthilus.net/env-config.json' because its MIME type ('application/json') is not executable, and strict MIME type checking is enabled."
+
+### Root Cause
+The application was trying to load env-config.json as a JavaScript script via a script tag, but it was being served with Content-Type: application/json. JSON files cannot be executed as scripts, causing the environment configuration to fail to load, which in turn caused WebAuthn registration to fail.
+
+### Changes Made
+1. Modified `server/middleware/static.go` to serve environment configuration as JavaScript instead of JSON:
+   ```
+   // Serve as JavaScript that sets window._env_
+   ctx.Header("Content-Type", "application/javascript")
+   ctx.String(http.StatusOK, fmt.Sprintf("window._env_ = %s;", string(envConfigJSON)))
+   ```
+
+2. Changed the endpoint from `/env-config.json` to `/env-config.js` to match the content type:
+   ```
+   router.GET("/env-config.js", h.EnvConfigHandler)
+   ```
+
+3. Updated the script tag in the HTML to reference the new JavaScript file:
+   ```
+   modifiedHTML := injectScript(indexHTML, "</head>", "<script src=\"/env-config.js\"></script></head>")
+   ```
+
+4. Modified the frontend code in `src/index.tsx` to handle the JavaScript response:
+   ```
+   // For JavaScript response, we need to evaluate it instead of parsing as JSON
+   const scriptText = await response.text();
+   
+   // Create a function from the script text and execute it in the current context
+   new Function(scriptText)();
+   ```
+
+### Benefits
+- Fixed WebAuthn registration by ensuring environment configuration loads correctly
+- Improved browser compatibility by using the correct MIME type for scripts
+- Eliminated console errors related to MIME type checking
+- Ensured proper communication between frontend and backend
+
+## 2025-08-08: Fix WebAuthn Registration Challenge Issue
+
+### Issue
+WebAuthn (passkey) registration in the frontend was failing with 'Missing challenge in server response' error, preventing users from registering security keys.
+
+### Root Cause
+The frontend code was not properly handling the case when the challenge field was missing in the server response. Instead of throwing an error, it was only logging a warning and continuing, which led to a failure when trying to create the credential.
+
+### Changes Made
+1. Modified `src/utils/mfaUtils.ts` to throw an error when challenge is missing in both registration and login flows:
+   ```typescript
+   if (publicKeyCredentialCreationOptions.challenge) {
+     publicKeyCredentialCreationOptions.challenge = base64ToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
+   } else {
+     console.error('WebAuthn registration: Missing challenge in server response');
+     throw new Error('Missing challenge in server response for WebAuthn registration');
+   }
+   ```
+
+2. Improved error handling in `src/components/MFASettings.tsx` and `src/components/MFAPage.tsx` to show more specific error messages for WebAuthn operations:
+   ```typescript
+   if (error instanceof Error) {
+     if (error.message.includes('Missing challenge')) {
+       setWebAuthnError('Server configuration issue: Missing challenge in response. Please contact your administrator.');
+     } else {
+       setWebAuthnError(`Failed to register security key: ${error.message}`);
+     }
+   }
+   ```
+
+### Benefits
+- Users now see more helpful error messages when WebAuthn operations fail
+- Administrators can more easily identify and fix server configuration issues
+- Improved error handling prevents confusing generic error messages
+- Better user experience with clearer feedback on what went wrong
+
 ## 2025-08-08: Fix TypeScript Error in MFAPage Component
 
 ### Issue
@@ -107,7 +184,7 @@ The issue was identified in the MFA authentication flow:
    ```
 
 2. Updated the server-side `LoginRequest` struct in `auth.go` to include the `MfaVerified` field:
-   ```go
+   ```
    // LoginRequest represents a login request
    type LoginRequest struct {
        Username    string `json:"username" binding:"required"`
@@ -117,7 +194,7 @@ The issue was identified in the MFA authentication flow:
    ```
 
 3. Modified the `Login` handler in `auth.go` to check for the `mfaVerified` flag and bypass MFA verification if it's set to true:
-   ```go
+   ```
    // Check if MFA is required and not already verified
    if !loginRequest.MfaVerified {
        // Check if TOTP or WebAuthn is enabled for the user

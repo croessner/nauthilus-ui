@@ -32,7 +32,7 @@ declare global {
 }
 
 /**
- * Resolves the port used to download env-config.json.
+ * Resolves the port used to download env-config.js.
  * Priority:
  *   1. Explicit port in the current URL (window.location.port)
  *   2. Runtime / build-time variable REACT_APP_PROXY_PORT
@@ -59,7 +59,7 @@ const resolveEnvConfigPort = (): string | undefined => {
 };
 
 /**
- * Fetches env-config.json and injects the variables into window._env_.
+ * Fetches env-config.js and injects the variables into window._env_.
  */
 const fetchEnvConfig = async (): Promise<void> => {
   try {
@@ -78,18 +78,23 @@ const fetchEnvConfig = async (): Promise<void> => {
         (protocol === 'http:' && port === '80');
     const portSegment = omitPort || !port ? '' : `:${port}`;
 
-    const envConfigUrl = `${protocol}//${hostname}${portSegment}/env-config.json`;
+    const envConfigUrl = `${protocol}//${hostname}${portSegment}/env-config.js`;
 
     const response = await fetch(envConfigUrl);
     if (!response.ok) {
       console.error(
-          `Failed to load env-config.json (status ${response.status})`
+          `Failed to load env-config.js (status ${response.status})`
       );
       return;
     }
 
-    // Assign the parsed JSON to window._env_
-    window._env_ = await response.json();
+    // For JavaScript response, we need to evaluate it instead of parsing as JSON
+    // The script will set window._env_ directly, so we don't need to assign it here
+    const scriptText = await response.text();
+    
+    // Create a function from the script text and execute it in the current context
+    // This is safer than using eval() directly
+    new Function(scriptText)();
     
     console.log('Environment variables loaded dynamically');
   } catch (err) {
