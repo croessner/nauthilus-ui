@@ -1,5 +1,39 @@
 # Changes
 
+## 2025-08-08: Fix TypeScript Error in MFAPage Component
+
+### Issue
+TypeScript error TS2448: Block-scoped variable 'handleWebAuthnLogin' used before its declaration in MFAPage.tsx.
+
+### Root Cause
+The handleWebAuthnLogin function was defined after it was referenced in a useEffect dependency array, which violates TypeScript's block-scoped variable rules.
+
+### Changes Made
+Reorganized the code in MFAPage.tsx to:
+1. Move the handleWebAuthnLogin function declaration before the useEffect that references it
+2. Remove the duplicate function declaration that was no longer needed
+
+### Benefits
+- Fixed TypeScript compilation error
+- Improved code organization and maintainability
+- Ensured proper function hoisting behavior
+
+## 2025-08-08: Improve TOTP Input for Password Managers
+
+### Issue
+The TOTP code input using 6 separate fields was not working well with password managers. Users were having difficulty when password managers tried to auto-fill the TOTP code.
+
+### Changes Made
+Modified the TOTP input in `MFAPage.tsx` to use a single input field instead of 6 separate fields:
+1. Removed the `totpDigits` state array and related handlers for individual digit inputs
+2. Replaced the 6 separate TextField components with a single TextField for the entire TOTP code
+3. Updated the input handlers to work with the single input field
+
+### Benefits
+- Improved compatibility with password managers that can now auto-fill the TOTP code
+- Simplified user experience when entering TOTP codes
+- Enhanced accessibility by making the TOTP input process more straightforward
+
 ## 2025-08-08: Fix TOTP Authentication Credential Storage Issue
 
 ### Issue
