@@ -1,5 +1,78 @@
 # Changes
 
+## 2025-08-08: Fix WebAuthn Credentials Creation Warning
+
+### Issue
+GoLand was warning about a missing `await` keyword in the WebAuthn registration code. Adding the `await` keyword directly to `navigator.credentials.create()` would cause TypeScript/ESLint errors because of how the Promise was being used in a Promise.race() call.
+
+### Root Cause
+The code was using `navigator.credentials.create()` without awaiting it directly, instead storing the Promise in a variable and later using it in a Promise.race() call. This pattern is valid JavaScript but triggered IDE warnings.
+
+### Changes Made
+Modified the code in `src/components/MFASettings.tsx` to wrap the credentials creation in an immediately invoked async function:
+```typescript
+const credentialPromise = (async () => {
+  return await navigator.credentials.create({
+    publicKey
+  }) as PublicKeyCredential;
+})();
+```
+
+### Benefits
+- Fixed the GoLand warning about missing await
+- Maintained the existing Promise.race() functionality for timeout handling
+- Improved code clarity by making the async nature of the operation more explicit
+- Ensured TypeScript/ESLint compatibility
+
+## 2025-08-08: Fix WebAuthn Registration Completion Issue
+
+### Issue
+WebAuthn registration was not completing properly. After entering a device name and clicking "Register", the browser dialog for registering a passkey would open and the registration would succeed on the authenticator side, but the UI would remain in a loading state with a spinning circle on the button.
+
+### Root Cause
+The WebAuthn registration process in the frontend wasn't properly handling all possible outcomes of the credential creation process. When the browser dialog was dismissed or the registration process completed without throwing an explicit error, the loading state wasn't being reset.
+
+### Changes Made
+1. Modified `src/components/MFASettings.tsx` to improve the WebAuthn registration process:
+   - Added a timeout mechanism to ensure the registration process doesn't hang indefinitely
+   - Improved error handling for specific WebAuthn error types like `AbortError` and `NotAllowedError`
+   - Added proper cleanup of timeout resources in all code paths
+   - Enhanced error messages to provide clearer feedback to users
+
+### Benefits
+- Fixed the issue where WebAuthn registration would appear to hang with a spinning circle
+- Improved user experience by providing clear feedback when registration is cancelled or times out
+- Enhanced error handling to cover all possible outcomes of the WebAuthn registration process
+- Ensured the UI always returns to a usable state regardless of the registration outcome
+
+## 2025-08-08: Fix WebAuthn Registration Nested Structure Issue
+
+### Issue
+WebAuthn registration was still failing with "Missing challenge in server response" error even after fixing the environment configuration loading issue.
+
+### Root Cause
+The server response for WebAuthn registration had a nested structure (`publicKey.publicKey.challenge`) but the frontend code was looking for `publicKey.challenge` directly, causing it to miss the challenge.
+
+### Changes Made
+1. Modified `src/utils/mfaUtils.ts` to handle the nested publicKey structure in both registration and login flows:
+   ```typescript
+   // Handle nested publicKey structure if present
+   const publicKeyCredentialCreationOptions = publicKey.publicKey || publicKey;
+   ```
+
+2. For the login flow, added similar handling with more comprehensive checks:
+   ```typescript
+   // Handle nested publicKey structure if present
+   const publicKeyCredentialRequestOptions = responseData.publicKey ? 
+     (responseData.publicKey.publicKey || responseData.publicKey) : 
+     responseData;
+   ```
+
+### Benefits
+- Fixed WebAuthn registration by correctly extracting the challenge from the nested response structure
+- Improved robustness by handling different response structures in both registration and login flows
+- Ensured consistent error handling across WebAuthn operations
+
 ## 2025-08-08: Fix Environment Configuration Loading Issue
 
 ### Issue

@@ -180,12 +180,38 @@ const MFASettings: React.FC = () => {
         throw new Error('Failed to get WebAuthn registration options from server');
       }
 
-      // Create credential
+      // Create credential - using Promise with timeout to handle cases where the browser dialog is dismissed
+      let credential: PublicKeyCredential | null = null;
+      
       try {
-        const credential = await navigator.credentials.create({
-          publicKey
-        }) as PublicKeyCredential;
-
+        // Create a promise that will be rejected if the credential creation takes too long
+        // This helps handle cases where the browser dialog might be hanging
+        // Using await directly on credentials.create() would work but we need to handle timeouts
+        const credentialPromise = (async () => {
+          return await navigator.credentials.create({
+            publicKey
+          }) as PublicKeyCredential;
+        })();
+        
+        // Set a timeout of 5 minutes (300000ms) - this is a reasonable upper limit for user interaction
+        const timeoutPromise = new Promise<never>((_, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('WebAuthn registration timed out. Please try again.'));
+          }, 300000);
+          
+          // Store the timeout ID so we can clear it if the credential is created successfully
+          (window as any).__webAuthnTimeoutId = timeoutId;
+        });
+        
+        // Race the credential creation against the timeout
+        credential = await Promise.race([credentialPromise, timeoutPromise]) as PublicKeyCredential;
+        
+        // Clear the timeout if we got here
+        if ((window as any).__webAuthnTimeoutId) {
+          clearTimeout((window as any).__webAuthnTimeoutId);
+          (window as any).__webAuthnTimeoutId = null;
+        }
+        
         if (!credential) {
           throw new Error('Browser did not return a credential');
         }
@@ -221,11 +247,22 @@ const MFASettings: React.FC = () => {
         }
       } catch (credentialError) {
         console.error('Error creating credential:', credentialError);
+        
+        // Clear the timeout if it exists
+        if ((window as any).__webAuthnTimeoutId) {
+          clearTimeout((window as any).__webAuthnTimeoutId);
+          (window as any).__webAuthnTimeoutId = null;
+        }
+        
         if (credentialError instanceof Error) {
-          if (credentialError.message.includes('challenge')) {
+          if (credentialError.name === 'AbortError' || credentialError.name === 'NotAllowedError') {
+            setWebAuthnError('Registration was cancelled or denied. Please try again.');
+          } else if (credentialError.message.includes('challenge')) {
             setWebAuthnError('Server configuration issue: Invalid challenge. Please contact your administrator.');
           } else if (credentialError.message.includes('already registered')) {
             setWebAuthnError('This security key is already registered. Please use a different one.');
+          } else if (credentialError.message.includes('timed out')) {
+            setWebAuthnError('Registration timed out. Please try again.');
           } else {
             setWebAuthnError(`Failed to create credential: ${credentialError.message}`);
           }

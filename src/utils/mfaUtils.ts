@@ -43,8 +43,8 @@ export const beginWebAuthnRegistration = async (username: string): Promise<{ pub
       throw new Error('Server response missing publicKey data');
     }
 
-    // Convert base64 strings to ArrayBuffer
-    const publicKeyCredentialCreationOptions = publicKey;
+    // Handle nested publicKey structure if present
+    const publicKeyCredentialCreationOptions = publicKey.publicKey || publicKey;
 
     // Convert challenge from base64 to ArrayBuffer
     if (publicKeyCredentialCreationOptions.challenge) {
@@ -116,12 +116,17 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
   try {
     const response = await axios.get(`/api/auth/webauthn/begin-login?username=${encodeURIComponent(username)}`);
 
-    // Convert base64 strings to ArrayBuffer
-    const publicKeyCredentialRequestOptions = response.data;
+    // Extract the response data
+    const responseData = response.data;
 
-    if (!publicKeyCredentialRequestOptions) {
-      throw new Error('Server response missing publicKey data for login');
+    if (!responseData) {
+      throw new Error('Server response missing data for login');
     }
+
+    // Handle nested publicKey structure if present
+    const publicKeyCredentialRequestOptions = responseData.publicKey ? 
+      (responseData.publicKey.publicKey || responseData.publicKey) : 
+      responseData;
 
     // Convert challenge from base64 to ArrayBuffer
     if (publicKeyCredentialRequestOptions.challenge) {
