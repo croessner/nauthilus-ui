@@ -1,5 +1,47 @@
 # Changes
 
+## 2025-08-08: Fix Missing Promise Handling in WebAuthn Authentication
+
+### Issue
+In the MFAPage.tsx file, the WebAuthn authentication function was being called without properly handling the returned Promise, potentially causing unhandled Promise rejections.
+
+### Root Cause
+Line 169 in MFAPage.tsx was calling the async function `handleWebAuthnLogin()` without using `await`, `.then()`, or `.catch()` to handle the Promise it returns. The same issue was present in the manual authentication button's onClick handler.
+
+### Changes Made
+1. Added proper `.catch()` handlers to both instances where `handleWebAuthnLogin()` is called:
+   - In the automatic trigger within the setTimeout callback
+   - In the manual authentication button's onClick handler
+2. Added error logging and user-friendly error messages in both catch handlers
+
+### Benefits
+- Fixed potential unhandled Promise rejections
+- Improved error handling and user feedback
+- Enhanced code quality by properly handling all asynchronous operations
+- Prevented silent failures that could confuse users
+
+## 2025-08-08: Fix WebAuthn Authentication Page Reload Issue
+
+### Issue
+During WebAuthn authentication, the page was reloading too rapidly when the user attempted to use their fingerprint sensor or security key, preventing successful authentication.
+
+### Root Cause
+The WebAuthn authentication process was being triggered automatically with a short timeout (500ms), and there was no mechanism to prevent repeated authentication attempts if the page reloaded. This caused a rapid cycle of authentication attempts and page reloads.
+
+### Changes Made
+1. Increased the timeout for automatic WebAuthn authentication from 500ms to 2000ms to give users more time to interact with their security key or fingerprint sensor
+2. Added sessionStorage tracking to prevent repeated automatic authentication attempts if the page reloads
+3. Improved error handling in the WebAuthn authentication process, particularly for credential retrieval
+4. Added a cleanup function to properly clear timeouts and sessionStorage when the component unmounts
+5. Enhanced the UI with clearer instructions and improved the manual authentication button
+6. Added specific error handling for user cancellation and browser issues
+
+### Benefits
+- Fixed the issue where the page would reload too rapidly during WebAuthn authentication
+- Improved user experience by giving users more time to interact with their security key
+- Prevented authentication loops by tracking authentication attempts across page reloads
+- Enhanced error handling and user feedback for a more robust authentication process
+
 ## 2025-08-08: Improve Error Handling in WebAuthn Functions
 
 ### Issue
@@ -319,3 +361,123 @@ A test script (`test-totp-auth.sh`) was created to verify the complete TOTP auth
 3. Completing MFA login with the `mfaVerified` flag
 
 The changes ensure that after successful TOTP verification, the user can complete the MFA login process and receive valid authentication tokens.
+
+
+## 2025-08-08: Fix WebAuthn PassKey Loop After Logout/Login
+
+### Issue
+After successfully authenticating with a PassKey (WebAuthn), logging out and then logging in again triggered the WebAuthn dialog but the page appeared to reload continuously, and the JavaScript console output was extremely noisy, making it hard to copy.
+
+### Root Cause
+The WebAuthn helper module (mfaUtils.ts) imported the bare axios package instead of the configured axios instance used by the rest of the app. As a result, requests to the WebAuthn begin/finish endpoints did not include axios defaults (notably withCredentials and auth header interceptors), which can break the required server session continuity between begin and finish steps. This caused the login finish step to fail and kept the UI stuck in an MFA-required state, leading to repeated attempts and a perceived reload loop.
+
+### Changes Made
+- Switched mfaUtils.ts to import the app-configured axios instance:
+  - From: `import axios from 'axios';`
+  - To:   `import axios from './axiosConfig';`
+- This ensures withCredentials and token interceptor behavior are consistently applied to WebAuthn calls.
+
+### Outcome
+- WebAuthn begin/finish share the same session/cookies and headers.
+- MFA completion now succeeds, eliminating the endless reload behavior after logout/login re-attempts with PassKey.
+- Improved stability and consistency across authentication flows.
+
+
+## 2025-08-08: Prevent WebAuthn Auto-Login Loop and Console Spam
+
+### Issue
+After starting the PassKey dialog and completing fingerprint verification, the page appeared to reload repeatedly and the console filled with thousands of lines like:
+
+MFAPage.tsx:165 Setting up automatic WebAuthn login with delay
+
+### Root Cause
+- The MFA initialization effect in MFAPage.tsx both set currentUser state and depended on a callback that (indirectly) depended on currentUser.
+- The session flag webauthn_attempted was set only inside the delayed setTimeout callback. If the component re-rendered before the timeout fired, the effect would schedule another timeout and log the same message again, causing spam.
+
+### Fixes
+- Introduced a stable ref (currentUserRef) synchronized with currentUser.
+- Refactored handleWebAuthnLogin to read the user from currentUserRef and removed currentUser from its dependency array, stabilizing the callback.
+- Guarded setCurrentUser so it only runs when values actually change.
+- Set the webauthn_attempted flag immediately before scheduling the automatic attempt (instead of inside the timeout) to prevent repeated scheduling across re-renders.
+- Also assigned currentUserRef.current synchronously when setting currentUser to avoid timing edge cases relative to the timeout.
+
+### Outcome
+- Automatic WebAuthn attempt is scheduled exactly once per page visit.
+- The console spam is eliminated.
+- Manual retry remains available: the button clears the webauthn_attempted flag and triggers login again.
+
+
+## 2025-08-08: Fix WebAuthn Login 400 by Passing Session Data
+
+### Issue
+WebAuthn login failed at the final step with HTTP 400 from /api/auth/webauthn/finish-login, even though the browser returned a credential. Console logs showed the finish request failing.
+
+### Root Cause
+- The server stored WebAuthn sessionData only in Gin context during begin-login and expected to read it again during finish-login. Since begin and finish are separate HTTP requests, the context is not shared, resulting in missing sessionData and a 400 error.
+- The begin-login endpoint returned only the publicKey options, while the registration flow correctly returned both publicKey and sessionData. The frontend did not capture or send sessionData for login.
+
+### Changes Made
+- Server (server/api/mfa.go):
+  - BeginWebAuthnLogin now returns both fields like registration:
+    - { publicKey: options, sessionData: base64(JSON(sessionData)) }
+  - FinishWebAuthnLogin now accepts sessionData in the request body (base64 JSON), decodes it, and uses it to validate login. It still falls back to the previous Gin-context method for backwards compatibility.
+- Frontend (src/utils/mfaUtils.ts):
+  - beginWebAuthnLogin now stores sessionData from the server response in sessionStorage ('webauthn_session_data').
+  - finishWebAuthnLogin now includes sessionData in the POST body (if available) and clears it afterwards.
+
+### Outcome
+- The finish-login step can validate the assertion using the correct sessionData, resolving the 400 error.
+- WebAuthn MFA login completes successfully and proceeds to completeMfaLogin.
+
+### Notes
+- This change aligns the login flow with the already working registration flow and makes it resilient to re-renders/reloads since sessionData is passed explicitly.
+
+
+## 2025-08-08: Tidy Permissions-Policy and Devtools Script; Harden WebAuthn Flow
+
+### Issues
+- Browser warning: "Error with Permissions-Policy header: Unrecognized feature: 'vr'".
+- Console error: `GET http://localhost:8097/ net::ERR_BLOCKED_BY_CLIENT`.
+- Intermittent WebAuthn 401 during finish-login on some environments.
+
+### Changes Made
+- Added a small header middleware to set a safe Permissions-Policy without deprecated features (vr):
+  - Permissions-Policy: `geolocation=(), camera=(), microphone=(), usb=()`
+  - Implemented in `server/middleware/static.go` so it applies to all responses served by the UI.
+- Removed development-only devtools script from `public/index.html` referencing `http://localhost:8097` to avoid the blocked-by-client noise in production.
+- Adjusted `src/utils/axiosConfig.ts` so Authorization headers are not injected into unauthenticated MFA endpoints (`/api/auth/webauthn/*` and `/api/auth/totp/*`), keeping those strictly cookie/session-based as intended by the server.
+- Made WebAuthn credential reconstruction more robust by attempting to decode AAGUID from base64 if present (fallback to empty if not). This helps compatibility with varying stored formats.
+
+### Outcome
+- The Permissions-Policy warning disappears as we no longer send an unrecognized 'vr' directive.
+- The 8097 network error no longer appears.
+- WebAuthn finish-login validation becomes more resilient across environments.
+
+### Additional
+- Server now logs effective WebAuthn configuration (RP ID and origins) at startup to ease diagnosing 401 issues due to RP/origin mismatches.
+
+## 2025-08-08: Add Detailed Diagnostics for WebAuthn Finish-Login Failures
+
+### Issue
+In some environments, WebAuthn finish-login returned 401 (Unauthorized), and it wasn’t clear from logs whether the cause was an RP/origin mismatch (misconfigured WEBAUTHN_RP_ID/WEBAUTHN_RP_ORIGINS) or something else.
+
+### Changes Made
+- Enhanced server-side logging in `FinishWebAuthnLogin`:
+  - Logs configured `rpID` and `rpOrigins`.
+  - Logs HTTP `Origin`, `Referer`, and `Host` headers for the request, plus the username.
+  - If the error is a `protocol.Error`, logs its `DevInfo` for precise cause messages from the WebAuthn library.
+- Client response remains generic (401) to avoid leaking sensitive details.
+
+### How to Use the New Diagnostics
+- On a 401 during `/api/auth/webauthn/finish-login`, check the server log entry `WebAuthn finish-login validation failed`.
+- Compare:
+  - `rpOrigins`: must include the browser origin (e.g., `https://adm.nauthilus.net`).
+  - `rpID`: must match the RP ID used in challenges (typically the effective domain like `adm.nauthilus.net`).
+  - `requestOrigin` and `referer`: helpful hints of what the browser sent, useful when behind proxies.
+- If `DevInfo` or the error mentions origin/rpId mismatch, set:
+  - `WEBAUTHN_RP_ID=adm.nauthilus.net`
+  - `WEBAUTHN_RP_ORIGINS=https://adm.nauthilus.net`
+  Then restart the server and retry.
+
+### Outcome
+- Clear, actionable diagnostics to quickly determine whether `WEBAUTHN_RP_ORIGINS` (or RP ID) is the cause of WebAuthn 401 failures.

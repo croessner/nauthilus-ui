@@ -1,4 +1,4 @@
-import axios from 'axios';
+import axios from './axiosConfig';
 
 // TOTP API functions
 export const setupTOTP = async (username: string): Promise<{ secret: string, qrCode: string }> => {
@@ -125,7 +125,6 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
 
     if (!responseData) {
       console.error('WebAuthn login: Server response missing data');
-      // Let the catch block handle this error
       return Promise.reject(new Error('Server response missing data for login'));
     }
 
@@ -137,7 +136,6 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
     // Convert challenge from base64 to ArrayBuffer
     if (!publicKeyCredentialRequestOptions.challenge) {
       console.error('WebAuthn login: Missing challenge in server response');
-      // Let the catch block handle this error
       return Promise.reject(new Error('Missing challenge in server response for WebAuthn login'));
     }
     
@@ -151,6 +149,16 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
           id: credential.id ? base64ToArrayBuffer(credential.id) : new ArrayBuffer(0),
         };
       });
+    }
+
+    // Store session data for use in finish-login
+    try {
+      const sessionData: string | undefined = responseData.sessionData || undefined;
+      if (sessionData) {
+        sessionStorage.setItem('webauthn_session_data', sessionData);
+      }
+    } catch (e) {
+      console.error('Failed to store WebAuthn session data:', e);
     }
 
     return publicKeyCredentialRequestOptions;
@@ -176,8 +184,16 @@ export const finishWebAuthnLogin = async (credential: PublicKeyCredential): Prom
       return false;
     }
 
+    // Retrieve session data stored during begin-login
+    let sessionData: string | null = null;
+    try {
+      sessionData = sessionStorage.getItem('webauthn_session_data');
+    } catch (e) {
+      console.error('Failed to retrieve WebAuthn session data:', e);
+    }
+
     // Convert ArrayBuffer to base64
-    const credentialResponse = {
+    const credentialResponse: Record<string, any> = {
       id: credential.id,
       type: credential.type,
       rawId: arrayBufferToBase64((credential.rawId as ArrayBuffer)),
@@ -191,7 +207,19 @@ export const finishWebAuthnLogin = async (credential: PublicKeyCredential): Prom
       },
     };
 
+    if (sessionData) {
+      credentialResponse.sessionData = sessionData;
+    }
+
     const response = await axios.post('/api/auth/webauthn/finish-login', credentialResponse);
+
+    // Clear stored session data after attempt
+    try {
+      sessionStorage.removeItem('webauthn_session_data');
+    } catch (e) {
+      // ignore
+    }
+
     return response.status === 200;
   } catch (error) {
     console.error('Error finishing WebAuthn login:', error);

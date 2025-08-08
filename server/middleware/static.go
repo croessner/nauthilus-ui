@@ -27,6 +27,13 @@ func NewStaticHandler(cfg *config.Config) *StaticHandler {
 
 // RegisterMiddleware registers the static file middleware
 func (h *StaticHandler) RegisterMiddleware(router *gin.Engine) {
+	// Security headers (override any upstream invalid directives)
+	router.Use(func(ctx *gin.Context) {
+		// Set a minimal, valid Permissions-Policy without deprecated features like 'vr'
+		ctx.Header("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
+		ctx.Next()
+	})
+
 	// Check if the build directory exists in the current directory (for Docker)
 	if _, err := os.Stat("./build"); err == nil {
 		// Serve static files from the React build in the current directory (for Docker)

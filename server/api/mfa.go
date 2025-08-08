@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"os"
 	"strings"
@@ -88,6 +89,9 @@ func NewMFAHandler(mongoDB db.UserDatabase) (*MFAHandler, error) {
 		return nil, fmt.Errorf("failed to create WebAuthn: %v", err)
 	}
 
+	// Log effective WebAuthn configuration for troubleshooting RP/Origin mismatches
+	slog.Info("WebAuthn configured", "rpID", rpID, "rpDisplayName", rpDisplayName, "rpOrigins", origins)
+
 	return &MFAHandler{
 		MongoDB:  mongoDB,
 		WebAuthn: webAuthn,
@@ -145,14 +149,31 @@ func (u WebAuthnUser) WebAuthnCredentials() []webauthn.Credential {
 // Convert models.WebAuthnCredential to webauthn.Credential
 func convertToWebAuthnCredential(cred models.WebAuthnCredential) webauthn.Credential {
 	id, _ := base64.StdEncoding.DecodeString(cred.ID)
+
+	// Decode AAGUID if it was stored base64-encoded; otherwise leave empty
+	var aaguidBytes []byte
+	if cred.AAGUID != "" {
+		if decoded, err := base64.StdEncoding.DecodeString(cred.AAGUID); err == nil && len(decoded) == 16 {
+			aaguidBytes = decoded
+		}
+	}
+
+	flags := webauthn.CredentialFlags{}
+	if cred.BackupEligible != nil {
+		flags.BackupEligible = *cred.BackupEligible
+	}
+	if cred.BackupState != nil {
+		flags.BackupState = *cred.BackupState
+	}
+
 	return webauthn.Credential{
 		ID:              id,
 		PublicKey:       cred.PublicKey,
 		AttestationType: "",
 		Transport:       nil,
-		Flags:           webauthn.CredentialFlags{},
+		Flags:           flags,
 		Authenticator: webauthn.Authenticator{
-			AAGUID:    []byte(cred.AAGUID),
+			AAGUID:    aaguidBytes,
 			SignCount: 0,
 		},
 	}
@@ -161,14 +182,18 @@ func convertToWebAuthnCredential(cred models.WebAuthnCredential) webauthn.Creden
 // Convert webauthn.Credential to models.WebAuthnCredential
 func convertToModelCredential(cred webauthn.Credential, name string) models.WebAuthnCredential {
 	now := time.Now().Format(time.RFC3339)
+	be := cred.Flags.BackupEligible
+	bs := cred.Flags.BackupState
 	return models.WebAuthnCredential{
-		ID:            base64.StdEncoding.EncodeToString(cred.ID),
-		PublicKey:     cred.PublicKey,
-		Name:          name,
-		CreatedAt:     now,
-		LastUsed:      now,
-		AAGUID:        string(cred.Authenticator.AAGUID),
-		Authenticator: "WebAuthn Device",
+		ID:             base64.StdEncoding.EncodeToString(cred.ID),
+		PublicKey:      cred.PublicKey,
+		Name:           name,
+		CreatedAt:      now,
+		LastUsed:       now,
+		AAGUID:         base64.StdEncoding.EncodeToString(cred.Authenticator.AAGUID),
+		Authenticator:  "WebAuthn Device",
+		BackupEligible: &be,
+		BackupState:    &bs,
 	}
 }
 
@@ -552,54 +577,166 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 		return
 	}
 
-	// Store session data in context
+	// Store session data in context (for completeness)
 	ctx.Set("webauthnSessionData", sessionData)
 	ctx.Set("webauthnUsername", username)
 
-	// Return login options
-	ctx.JSON(http.StatusOK, options)
+	// Encode session data to base64 to send to client (align with registration)
+	sessionDataBytes, err := json.Marshal(sessionData)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to encode session data"})
+
+		return
+	}
+	sessionDataBase64 := base64.StdEncoding.EncodeToString(sessionDataBytes)
+
+	// Return login options with session data
+	ctx.JSON(http.StatusOK, gin.H{
+		"publicKey":   options,
+		"sessionData": sessionDataBase64,
+	})
 }
 
 // FinishWebAuthnLogin handles the POST /api/auth/webauthn/finish-login endpoint
 func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
-	// Get session data from context
-	sessionData, exists := ctx.Get("webauthnSessionData")
-	if !exists {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No session data found"})
-
+	// Read the raw request body
+	bodyBytes, err := io.ReadAll(ctx.Request.Body)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
 		return
 	}
 
-	username, exists := ctx.Get("webauthnUsername")
-	if !exists {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No username found"})
+	// Close the original body and replace it with a new reader for later use
+	ctx.Request.Body.Close()
+	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
-		return
+	// Try to parse the request to get the session data
+	type FinishLoginRequest struct {
+		SessionData string `json:"sessionData"`
+	}
+	var req FinishLoginRequest
+	_ = json.Unmarshal(bodyBytes, &req)
+
+	var sessionData webauthn.SessionData
+	var usernameStr string
+
+	if req.SessionData != "" {
+		// Decode session data from base64
+		sessionDataBytes, err := base64.StdEncoding.DecodeString(req.SessionData)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid session data"})
+			return
+		}
+
+		// Unmarshal session data
+		if err := json.Unmarshal(sessionDataBytes, &sessionData); err != nil {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to decode session data"})
+			return
+		}
+
+		// Extract username from session data
+		usernameStr = string(sessionData.UserID)
+	} else {
+		// Fallback to context (backward compatibility)
+		sd, exists := ctx.Get("webauthnSessionData")
+		if !exists {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No session data found"})
+			return
+		}
+		sessionData = sd.(webauthn.SessionData)
+
+		if un, ok := ctx.Get("webauthnUsername"); ok {
+			usernameStr = un.(string)
+		} else {
+			usernameStr = string(sessionData.UserID)
+		}
 	}
 
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(ctx.Request.Context(), username.(string))
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), usernameStr)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
-
 		return
 	}
 
-	// Parse response
+	// Parse response using the original request body
 	response, err := protocol.ParseCredentialRequestResponseBody(ctx.Request.Body)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
-
 		return
 	}
 
 	// Finish login
-	credential, err := h.WebAuthn.ValidateLogin(user, sessionData.(webauthn.SessionData), response)
+	credential, err := h.WebAuthn.ValidateLogin(user, sessionData, response)
 	if err != nil {
-		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
+		// Attempt a targeted recovery for BackupEligible flag mismatches from older records
+		if strings.Contains(err.Error(), "BackupEligible") {
+			// Identify the credential by RawID from the response
+			rawIDB64 := base64.StdEncoding.EncodeToString(response.RawID)
+			// Try toggling the stored BackupEligible flag in-memory and validating again
+			for idx := range user.Credentials {
+				if base64.StdEncoding.EncodeToString(user.Credentials[idx].ID) == rawIDB64 {
+					// Try with BackupEligible=true
+					userTry := *user
+					userTry.Credentials = make([]webauthn.Credential, len(user.Credentials))
+					copy(userTry.Credentials, user.Credentials)
+					userTry.Credentials[idx].Flags.BackupEligible = true
+					if cred2, err2 := h.WebAuthn.ValidateLogin(&userTry, sessionData, response); err2 == nil {
+						// Persist resolved flag to DB
+						_, _ = h.MongoDB.GetUserCollection().UpdateOne(
+							ctx.Request.Context(),
+							bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
+							bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": true}},
+						)
+						credential = cred2
+						goto VALIDATE_SUCCESS
+					}
+					// Try with BackupEligible=false
+					userTry2 := *user
+					userTry2.Credentials = make([]webauthn.Credential, len(user.Credentials))
+					copy(userTry2.Credentials, user.Credentials)
+					userTry2.Credentials[idx].Flags.BackupEligible = false
+					if cred3, err3 := h.WebAuthn.ValidateLogin(&userTry2, sessionData, response); err3 == nil {
+						// Persist resolved flag to DB
+						_, _ = h.MongoDB.GetUserCollection().UpdateOne(
+							ctx.Request.Context(),
+							bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
+							bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": false}},
+						)
+						credential = cred3
+						goto VALIDATE_SUCCESS
+					}
+					break
+				}
+			}
+		}
 
+		// Enhance diagnostics for RP/Origin issues while keeping client response generic
+		rpID := h.WebAuthn.Config.RPID
+		rpOrigins := h.WebAuthn.Config.RPOrigins
+		requestOrigin := ctx.Request.Header.Get("Origin")
+		requestReferer := ctx.Request.Referer()
+		host := ctx.Request.Host
+		// Attempt to extract additional info from protocol.Error if available
+		var devInfo any
+		if perr, ok := err.(*protocol.Error); ok {
+			devInfo = perr.DevInfo
+		}
+		slog.Error("WebAuthn finish-login validation failed",
+			"username", usernameStr,
+			"rpID", rpID,
+			"rpOrigins", rpOrigins,
+			"requestOrigin", requestOrigin,
+			"referer", requestReferer,
+			"host", host,
+			"error", err,
+			"devInfo", devInfo,
+		)
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
 		return
 	}
+
+VALIDATE_SUCCESS:
 
 	// Update last used timestamp for the credential
 	now := time.Now().Format(time.RFC3339)
@@ -607,12 +744,11 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
 		ctx.Request.Context(),
 		bson.M{
-			"username":           username.(string),
+			"username":           usernameStr,
 			"webAuthnDevices.id": credentialID,
 		},
 		bson.M{"$set": bson.M{"webAuthnDevices.$.lastUsed": now}},
 	)
-
 	if err != nil {
 		// Log error but don't fail the login
 		fmt.Printf("Failed to update credential last used: %v\n", err)

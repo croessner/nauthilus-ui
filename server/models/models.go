@@ -2,13 +2,15 @@ package models
 
 // WebAuthnCredential represents a WebAuthn credential for a user
 type WebAuthnCredential struct {
-	ID            string `bson:"id" json:"id"`
-	PublicKey     []byte `bson:"publicKey" json:"publicKey"`
-	Name          string `bson:"name" json:"name"`
-	CreatedAt     string `bson:"createdAt" json:"createdAt"`
-	LastUsed      string `bson:"lastUsed" json:"lastUsed"`
-	AAGUID        string `bson:"aaguid" json:"aaguid"`
-	Authenticator string `bson:"authenticator" json:"authenticator"`
+	ID             string `bson:"id" json:"id"`
+	PublicKey      []byte `bson:"publicKey" json:"publicKey"`
+	Name           string `bson:"name" json:"name"`
+	CreatedAt      string `bson:"createdAt" json:"createdAt"`
+	LastUsed       string `bson:"lastUsed" json:"lastUsed"`
+	AAGUID         string `bson:"aaguid" json:"aaguid"`
+	Authenticator  string `bson:"authenticator" json:"authenticator"`
+	BackupEligible *bool  `bson:"backupEligible,omitempty" json:"backupEligible,omitempty"`
+	BackupState    *bool  `bson:"backupState,omitempty" json:"backupState,omitempty"`
 }
 
 // User represents a user in the system

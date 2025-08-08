@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { 
   Box, 
   Button, 
@@ -28,6 +28,11 @@ const MFAPage = (): React.JSX.Element => {
   const [webAuthnError, setWebAuthnError] = useState('');
   const [mfaLoading, setMfaLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const currentUserRef = useRef<any>(null);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   // Redirect to login if MFA is not required
   useEffect(() => {
@@ -45,27 +50,48 @@ const MFAPage = (): React.JSX.Element => {
 
   // Handle WebAuthn login
   const handleWebAuthnLogin = useCallback(async () => {
-    if (!currentUser) {
+    const user = currentUserRef.current;
+    if (!user) {
       console.log('Missing currentUser for WebAuthn login');
       return;
     }
 
-    console.log('Starting WebAuthn login for user:', currentUser.username);
+    console.log('Starting WebAuthn login for user:', user.username);
     setMfaLoading(true);
     setWebAuthnError('');
 
     try {
       // Start WebAuthn login
       console.log('Calling beginWebAuthnLogin');
-      const options = await mfaUtils.beginWebAuthnLogin(currentUser.username);
+      const options = await mfaUtils.beginWebAuthnLogin(user.username);
       console.log('WebAuthn options received:', options);
 
-      // Get credential
+      // Get credential - wrap in a try/catch to handle user cancellation better
       console.log('Requesting credential from browser');
-      const credential = await navigator.credentials.get({
-        publicKey: options
-      }) as PublicKeyCredential;
-      console.log('Credential received from browser');
+      let credential;
+      try {
+        credential = await navigator.credentials.get({
+          publicKey: options
+        }) as PublicKeyCredential;
+        console.log('Credential received from browser');
+      } catch (credentialError) {
+        console.error('Error getting credential:', credentialError);
+        // Handle user cancellation or browser issues specifically
+        if (credentialError instanceof Error) {
+          if (credentialError.name === 'NotAllowedError') {
+            throw new Error('Authentication was cancelled. Please try again.');
+          } else if (credentialError.name === 'AbortError') {
+            throw new Error('Authentication was aborted. Please try again.');
+          } else {
+            throw credentialError; // Re-throw for the outer catch block
+          }
+        }
+        throw new Error('Failed to get credential from browser');
+      }
+
+      if (!credential) {
+        throw new Error('No credential returned from browser');
+      }
 
       // Finish WebAuthn login
       console.log('Calling finishWebAuthnLogin');
@@ -74,14 +100,17 @@ const MFAPage = (): React.JSX.Element => {
 
       if (success) {
         console.log('WebAuthn verification successful, completing MFA login');
+        // Clear the attempted flag on successful verification
+        sessionStorage.removeItem('webauthn_attempted');
+        
         // Complete the login process using the completeMfaLogin method
-        const result = await completeMfaLogin(currentUser.username, rememberMe);
+        const result = await completeMfaLogin(user.username, rememberMe);
         console.log('completeMfaLogin result:', result);
 
         // Only navigate if we got a valid result
         if (result) {
           // Also update UserContext to ensure both contexts are in sync
-          await loginAfterMfa(currentUser.username);
+          await loginAfterMfa(user.username);
           console.log('Valid result from completeMfaLogin, navigating to home page');
           navigate('/');
         } else {
@@ -99,8 +128,10 @@ const MFAPage = (): React.JSX.Element => {
           setWebAuthnError('Server configuration issue: Missing challenge in response. Please contact your administrator.');
         } else if (error.message.includes('challenge')) {
           setWebAuthnError('Server configuration issue: Invalid challenge. Please contact your administrator.');
-        } else if (error.message.includes('abort')) {
+        } else if (error.message.includes('abort') || error.message.includes('aborted')) {
           setWebAuthnError('Authentication was aborted. Please try again.');
+        } else if (error.message.includes('cancel') || error.message.includes('cancelled')) {
+          setWebAuthnError('Authentication was cancelled. Please try again.');
         } else {
           setWebAuthnError(`Authentication failed: ${error.message}`);
         }
@@ -110,7 +141,7 @@ const MFAPage = (): React.JSX.Element => {
     } finally {
       setMfaLoading(false);
     }
-  }, [currentUser, completeMfaLogin, rememberMe, loginAfterMfa, navigate]);
+  }, [completeMfaLogin, rememberMe, loginAfterMfa, navigate]);
 
   // Initialize MFA when component mounts
   useEffect(() => {
@@ -121,22 +152,62 @@ const MFAPage = (): React.JSX.Element => {
         mfaType: auth.mfaType
       };
 
-      // Store the user for MFA verification
-      setCurrentUser(mfaUser);
+      // Store the user for MFA verification only if it changed
+      if (!currentUserRef.current || currentUserRef.current.username !== mfaUser.username || currentUserRef.current.mfaType !== mfaUser.mfaType) {
+        currentUserRef.current = mfaUser;
+        setCurrentUser(mfaUser);
+      }
 
       // Determine which MFA method to show based on the auth state
       if (auth.mfaType === 'webauthn') {
         setMfaMethod('webauthn');
 
-        // If WebAuthn is enabled, trigger it automatically
-        setTimeout(() => {
-          handleWebAuthnLogin();
-        }, 500);
+        // Store a flag in sessionStorage to track if we've already attempted WebAuthn
+        // This prevents repeated automatic attempts if the page reloads or re-renders
+        const hasAttemptedWebAuthn = sessionStorage.getItem('webauthn_attempted') === 'true';
+        
+        let timeoutId: number;
+        
+        if (!hasAttemptedWebAuthn) {
+          // If WebAuthn is enabled and we haven't attempted it yet, trigger it automatically
+          // Use a longer timeout to give the user time to prepare
+          console.log('Setting up automatic WebAuthn login with delay');
+          // Set the attempted flag immediately to prevent repeated scheduling on re-renders
+          sessionStorage.setItem('webauthn_attempted', 'true');
+          timeoutId = window.setTimeout(() => {
+            console.log('Automatically triggering WebAuthn login');
+            handleWebAuthnLogin().catch(error => {
+              console.error('Error in automatic WebAuthn login:', error);
+              setWebAuthnError('Authentication failed. Please try again manually.');
+            });
+          }, 2000);
+        } else {
+          console.log('WebAuthn was already attempted, waiting for manual trigger');
+        }
+        
+        // Cleanup function to clear timeout and sessionStorage when component unmounts
+        return () => {
+          if (timeoutId) {
+            window.clearTimeout(timeoutId);
+          }
+          // Only clear the flag if we're navigating away from the MFA page
+          // (e.g., successful login or user manually navigating away)
+          if (auth.isAuthenticated) {
+            sessionStorage.removeItem('webauthn_attempted');
+          }
+        };
       } else if (auth.mfaType === 'totp') {
         setMfaMethod('totp');
       }
     }
-  }, [auth.mfaRequired, auth.mfaType, auth.username, handleWebAuthnLogin]);
+    
+    // Cleanup function for non-WebAuthn cases
+    return () => {
+      if (auth.isAuthenticated) {
+        sessionStorage.removeItem('webauthn_attempted');
+      }
+    };
+  }, [auth.mfaRequired, auth.mfaType, auth.username, auth.isAuthenticated, handleWebAuthnLogin]);
 
   // Handle TOTP verification
   const handleTotpVerify = useCallback(async () => {
@@ -316,17 +387,33 @@ const MFAPage = (): React.JSX.Element => {
             <Typography variant="body1" paragraph align="center">
               Please insert your security key and follow your browser's instructions.
             </Typography>
+            
             {webAuthnError && (
               <Alert severity="error" sx={{ mt: 2, mb: 2 }}>
                 {webAuthnError}
               </Alert>
             )}
+            
             <Box sx={{ display: 'flex', justifyContent: 'center', mt: 2, mb: 2 }}>
               {mfaLoading && <CircularProgress />}
             </Box>
 
+            {!mfaLoading && (
+              <Typography variant="body2" color="textSecondary" align="center" sx={{ mb: 2 }}>
+                If the authentication dialog doesn't appear automatically or was dismissed,
+                click the button below to try again.
+              </Typography>
+            )}
+
             <Button
-              onClick={handleWebAuthnLogin}
+              onClick={() => {
+                // Clear the attempted flag when manually triggering
+                sessionStorage.removeItem('webauthn_attempted');
+                handleWebAuthnLogin().catch(error => {
+                  console.error('Error in manual WebAuthn login:', error);
+                  setWebAuthnError('Authentication failed. Please try again.');
+                });
+              }}
               color="primary"
               variant="contained"
               fullWidth
@@ -334,7 +421,7 @@ const MFAPage = (): React.JSX.Element => {
               disabled={mfaLoading}
               sx={{ mt: 2 }}
             >
-              Try Again
+              {mfaLoading ? <CircularProgress size={24} /> : 'Authenticate with Security Key'}
             </Button>
           </Box>
         )}
