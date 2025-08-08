@@ -635,9 +635,8 @@ export const completeMfaLogin = async (username: string, rememberMe: boolean = f
     const response = await axios.post('/api/auth/login', {
       username: storedUsername,
       password,
-      // Add MFA verification data if needed
-      // mfaVerified: true,
-      // mfaToken: mfaToken
+      // Add MFA verification data
+      mfaVerified: true
     });
     
     if (response.data && response.data.token) {

@@ -67,8 +67,9 @@ func (h *AuthHandler) RegisterRoutes(router *gin.Engine) {
 
 // LoginRequest represents a login request
 type LoginRequest struct {
-	Username string `json:"username" binding:"required"`
-	Password string `json:"password" binding:"required"`
+	Username    string `json:"username" binding:"required"`
+	Password    string `json:"password" binding:"required"`
+	MfaVerified bool   `json:"mfaVerified"`
 }
 
 // Login handles the POST /api/auth/login endpoint
@@ -116,23 +117,28 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	slog.Info("Password verified successfully", "username", loginRequest.Username)
 
-	// Check if TOTP or WebAuthn is enabled for the user
-	if user.TOTPEnabled {
-		// TOTP is enabled, so we need to require MFA verification
-		ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-			MFARequired: true,
-			MFAType:     "totp",
-			Username:    user.Username,
-		})
-		return
-	} else if user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0 {
-		// WebAuthn is enabled, so we need to require MFA verification
-		ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-			MFARequired: true,
-			MFAType:     "webauthn",
-			Username:    user.Username,
-		})
-		return
+	// Check if MFA is required and not already verified
+	if !loginRequest.MfaVerified {
+		// Check if TOTP or WebAuthn is enabled for the user
+		if user.TOTPEnabled {
+			// TOTP is enabled, so we need to require MFA verification
+			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
+				MFARequired: true,
+				MFAType:     "totp",
+				Username:    user.Username,
+			})
+			return
+		} else if user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0 {
+			// WebAuthn is enabled, so we need to require MFA verification
+			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
+				MFARequired: true,
+				MFAType:     "webauthn",
+				Username:    user.Username,
+			})
+			return
+		}
+	} else {
+		slog.Info("MFA verification bypassed due to mfaVerified flag", "username", loginRequest.Username)
 	}
 
 	// Get JWT config for token expiry times
