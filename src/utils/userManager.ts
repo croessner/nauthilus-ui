@@ -249,7 +249,7 @@ export const saveConfig = async (config: UserManagerConfig): Promise<void> => {
     };
   } catch (error) {
     console.error('Failed to save user config to API:', error);
-    throw new Error('Failed to save user configuration to MongoDB');
+    return Promise.reject(new Error('Failed to save user configuration to MongoDB'));
   }
 };
 

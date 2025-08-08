@@ -39,20 +39,24 @@ export const beginWebAuthnRegistration = async (username: string): Promise<{ pub
     // Extract the publicKey and sessionData from the response
     const { publicKey, sessionData } = response.data || {};
 
+    // Check for required data outside the try block
     if (!publicKey) {
-      throw new Error('Server response missing publicKey data');
+      console.error('WebAuthn registration: Server response missing publicKey data');
+      // Let the catch block handle this error
+      return Promise.reject(new Error('Server response missing publicKey data'));
     }
 
     // Handle nested publicKey structure if present
     const publicKeyCredentialCreationOptions = publicKey.publicKey || publicKey;
 
     // Convert challenge from base64 to ArrayBuffer
-    if (publicKeyCredentialCreationOptions.challenge) {
-      publicKeyCredentialCreationOptions.challenge = base64ToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
-    } else {
+    if (!publicKeyCredentialCreationOptions.challenge) {
       console.error('WebAuthn registration: Missing challenge in server response');
-      throw new Error('Missing challenge in server response for WebAuthn registration');
+      // Let the catch block handle this error
+      return Promise.reject(new Error('Missing challenge in server response for WebAuthn registration'));
     }
+    
+    publicKeyCredentialCreationOptions.challenge = base64ToArrayBuffer(publicKeyCredentialCreationOptions.challenge);
 
     // Convert user.id from base64 to ArrayBuffer
     if (publicKeyCredentialCreationOptions.user && publicKeyCredentialCreationOptions.user.id) {
@@ -120,7 +124,9 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
     const responseData = response.data;
 
     if (!responseData) {
-      throw new Error('Server response missing data for login');
+      console.error('WebAuthn login: Server response missing data');
+      // Let the catch block handle this error
+      return Promise.reject(new Error('Server response missing data for login'));
     }
 
     // Handle nested publicKey structure if present
@@ -129,12 +135,13 @@ export const beginWebAuthnLogin = async (username: string): Promise<PublicKeyCre
       responseData;
 
     // Convert challenge from base64 to ArrayBuffer
-    if (publicKeyCredentialRequestOptions.challenge) {
-      publicKeyCredentialRequestOptions.challenge = base64ToArrayBuffer(publicKeyCredentialRequestOptions.challenge);
-    } else {
+    if (!publicKeyCredentialRequestOptions.challenge) {
       console.error('WebAuthn login: Missing challenge in server response');
-      throw new Error('Missing challenge in server response for WebAuthn login');
+      // Let the catch block handle this error
+      return Promise.reject(new Error('Missing challenge in server response for WebAuthn login'));
     }
+    
+    publicKeyCredentialRequestOptions.challenge = base64ToArrayBuffer(publicKeyCredentialRequestOptions.challenge);
 
     // Convert allowCredentials.id from base64 to ArrayBuffer
     if (publicKeyCredentialRequestOptions.allowCredentials) {

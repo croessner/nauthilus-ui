@@ -1,5 +1,24 @@
 # Changes
 
+## 2025-08-08: Improve Error Handling in WebAuthn Functions
+
+### Issue
+The codebase contained instances where errors were thrown inside try blocks, particularly in the WebAuthn registration and login functions. This pattern can lead to confusing error handling as the errors are caught by the same try-catch block that threw them.
+
+### Root Cause
+The error handling pattern in several utility functions was using `throw new Error()` inside try blocks, which is problematic because these errors are immediately caught by the surrounding catch block rather than propagating to the caller.
+
+### Changes Made
+1. Refactored `beginWebAuthnRegistration` in `mfaUtils.ts` to use `Promise.reject()` instead of throwing errors inside try blocks
+2. Refactored `beginWebAuthnLogin` in `mfaUtils.ts` to use the same improved error handling pattern
+3. Applied the same pattern to `saveConfig` in `userManager.ts`
+
+### Benefits
+- Improved error propagation that correctly communicates errors to calling functions
+- More consistent error handling throughout the codebase
+- Better separation between validation logic and exception handling
+- Clearer code that avoids the anti-pattern of throwing errors that are immediately caught
+
 ## 2025-08-08: Fix WebAuthn Credentials Creation Warning
 
 ### Issue
