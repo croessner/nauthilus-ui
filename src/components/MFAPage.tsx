@@ -29,6 +29,10 @@ const MFAPage = (): React.JSX.Element => {
   const [mfaLoading, setMfaLoading] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
   const currentUserRef = useRef<any>(null);
+  // Ref to prevent concurrent WebAuthn attempts
+  const webAuthnInProgressRef = useRef<boolean>(false);
+  // Ref to track a scheduled automatic WebAuthn timeout to avoid double-scheduling
+  const autoTriggerTimeoutRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -50,6 +54,12 @@ const MFAPage = (): React.JSX.Element => {
 
   // Handle WebAuthn login
   const handleWebAuthnLogin = useCallback(async () => {
+    // Prevent concurrent WebAuthn requests which can break the browser API and server challenge
+    if (webAuthnInProgressRef.current) {
+      console.log('WebAuthn login already in progress, ignoring new request');
+      return;
+    }
+
     const user = currentUserRef.current;
     if (!user) {
       console.log('Missing currentUser for WebAuthn login');
@@ -57,6 +67,7 @@ const MFAPage = (): React.JSX.Element => {
     }
 
     console.log('Starting WebAuthn login for user:', user.username);
+    webAuthnInProgressRef.current = true;
     setMfaLoading(true);
     setWebAuthnError('');
 
@@ -79,18 +90,18 @@ const MFAPage = (): React.JSX.Element => {
         // Handle user cancellation or browser issues specifically
         if (credentialError instanceof Error) {
           if (credentialError.name === 'NotAllowedError') {
-            throw new Error('Authentication was cancelled. Please try again.');
+            return Promise.reject(new Error('Authentication was cancelled. Please try again.'));
           } else if (credentialError.name === 'AbortError') {
-            throw new Error('Authentication was aborted. Please try again.');
+            return Promise.reject(new Error('Authentication was aborted. Please try again.'));
           } else {
-            throw credentialError; // Re-throw for the outer catch block
+            return Promise.reject(credentialError); // Propagate to outer catch block
           }
         }
-        throw new Error('Failed to get credential from browser');
+        return Promise.reject(new Error('Failed to get credential from browser'));
       }
 
       if (!credential) {
-        throw new Error('No credential returned from browser');
+        return Promise.reject(new Error('No credential returned from browser'));
       }
 
       // Finish WebAuthn login
@@ -140,6 +151,7 @@ const MFAPage = (): React.JSX.Element => {
       }
     } finally {
       setMfaLoading(false);
+      webAuthnInProgressRef.current = false;
     }
   }, [completeMfaLogin, rememberMe, loginAfterMfa, navigate]);
 
@@ -165,30 +177,30 @@ const MFAPage = (): React.JSX.Element => {
         // Store a flag in sessionStorage to track if we've already attempted WebAuthn
         // This prevents repeated automatic attempts if the page reloads or re-renders
         const hasAttemptedWebAuthn = sessionStorage.getItem('webauthn_attempted') === 'true';
-        
-        let timeoutId: number;
-        
-        if (!hasAttemptedWebAuthn) {
-          // If WebAuthn is enabled and we haven't attempted it yet, trigger it automatically
-          // Use a longer timeout to give the user time to prepare
+
+        // Schedule automatic WebAuthn only once, and only if not already attempted and no timeout pending
+        if (!hasAttemptedWebAuthn && autoTriggerTimeoutRef.current === undefined) {
           console.log('Setting up automatic WebAuthn login with delay');
-          // Set the attempted flag immediately to prevent repeated scheduling on re-renders
+          // Mark as attempted immediately to avoid rescheduling on re-renders
           sessionStorage.setItem('webauthn_attempted', 'true');
-          timeoutId = window.setTimeout(() => {
+          autoTriggerTimeoutRef.current = window.setTimeout(() => {
+            // Clear our timeout ref since it has fired
+            autoTriggerTimeoutRef.current = undefined;
             console.log('Automatically triggering WebAuthn login');
             handleWebAuthnLogin().catch(error => {
               console.error('Error in automatic WebAuthn login:', error);
               setWebAuthnError('Authentication failed. Please try again manually.');
             });
           }, 2000);
-        } else {
+        } else if (hasAttemptedWebAuthn) {
           console.log('WebAuthn was already attempted, waiting for manual trigger');
         }
-        
+
         // Cleanup function to clear timeout and sessionStorage when component unmounts
         return () => {
-          if (timeoutId) {
-            window.clearTimeout(timeoutId);
+          if (autoTriggerTimeoutRef.current !== undefined) {
+            window.clearTimeout(autoTriggerTimeoutRef.current);
+            autoTriggerTimeoutRef.current = undefined;
           }
           // Only clear the flag if we're navigating away from the MFA page
           // (e.g., successful login or user manually navigating away)
@@ -407,7 +419,12 @@ const MFAPage = (): React.JSX.Element => {
 
             <Button
               onClick={() => {
-                // Clear the attempted flag when manually triggering
+                // Prevent re-entrancy if a WebAuthn flow is already running
+                if (webAuthnInProgressRef.current) {
+                  console.log('Manual WebAuthn trigger ignored: already in progress');
+                  return;
+                }
+                // Clear the attempted flag when manually triggering to allow retry scheduling if needed
                 sessionStorage.removeItem('webauthn_attempted');
                 handleWebAuthnLogin().catch(error => {
                   console.error('Error in manual WebAuthn login:', error);
