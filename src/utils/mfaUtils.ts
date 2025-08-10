@@ -73,6 +73,18 @@ export const beginWebAuthnRegistration = async (username: string): Promise<{ pub
       });
     }
 
+    // Ensure authenticatorAttachment does not restrict platform vs cross-platform
+    // Some servers/libraries may set authenticatorSelection.authenticatorAttachment (e.g., "cross-platform"),
+    // which can prevent use of platform authenticators like Face ID on iOS. Removing it allows both.
+    try {
+      const sel: any = (publicKeyCredentialCreationOptions as any).authenticatorSelection;
+      if (sel && Object.prototype.hasOwnProperty.call(sel, 'authenticatorAttachment')) {
+        delete sel.authenticatorAttachment; // let the browser choose platform or cross-platform
+      }
+    } catch (e) {
+      // non-fatal; proceed without modification
+    }
+
     return { publicKey: publicKeyCredentialCreationOptions, sessionData: sessionData || '' };
   } catch (error) {
     console.error('Error beginning WebAuthn registration:', error);
