@@ -308,32 +308,38 @@ const BruteForceConfig: React.FC = () => {
     }
   }, [setConnectionStatus, setStatusMessage, fetchBruteForceList]);
 
-  // Memoize the function that returns runtimeConnection to avoid infinite loops
-  const getRuntimeConnection = useCallback(() => runtimeConnection, [runtimeConnection]);
+  // Keep a ref with latest runtimeConnection and provide a stable getter
+  const connectionRef = React.useRef(runtimeConnection);
+  useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
+  const getRuntimeConnection = useCallback(() => connectionRef.current, []);
 
-  // Check connection status and load runtime settings when the component mounts
+  // Load runtime settings once per profile and then handle local setup
+  const didRunRef = React.useRef<string | null>(null);
   useEffect(() => {
     (async () => {
-      await loadSettingsUtil(
-        getCurrentUserId,
-        loadRuntimeSettings,
-        currentProfileName,
-        checkConnection,
-        getRuntimeConnection
-      );
-    })();
-
-    // Extract rule names from brute force buckets in the configuration
-    if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
-      const configRuleNames = config.brute_force.buckets
-        .map(bucket => bucket.name)
-        .filter(name => name && name.trim() !== '');
-
-      if (configRuleNames.length > 0) {
-        setRuleNames(configRuleNames);
+      if (didRunRef.current !== currentProfileName) {
+        didRunRef.current = currentProfileName;
+        await loadSettingsUtil(
+          getCurrentUserId,
+          loadRuntimeSettings,
+          currentProfileName,
+          checkConnection,
+          getRuntimeConnection
+        );
       }
-    }
-  }, [config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
+
+      // Extract rule names from brute force buckets in the configuration
+      if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
+        const configRuleNames = config.brute_force.buckets
+          .map(bucket => bucket.name)
+          .filter(name => name && name.trim() !== '');
+
+        if (configRuleNames.length > 0) {
+          setRuleNames(configRuleNames);
+        }
+      }
+    })();
+  }, [config, currentProfileName, loadRuntimeSettings, checkConnection, getRuntimeConnection]);
 
   // Function to free user by account
   const freeUserByAccount = async (connectionConfig: any, username: string) => {

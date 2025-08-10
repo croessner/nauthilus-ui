@@ -249,28 +249,29 @@ export const loadSettings = async (
   getConnection: () => any
 ) => {
   try {
-    // Get current connection data
+    // Get current connection data (may be empty on first render)
     const currentConnection = getConnection();
     const currentConnectionUrl = currentConnection?.backend_url || '';
 
-    // Initialize settings state if it doesn't exist
+    // Initialize settings state singleton on window
     if (!window.__settingsState) {
       window.__settingsState = {
         loaded: false,
         profileName: '',
         connectionUrl: '',
         lastCheckedUrl: '',
-        lastCheckedAt: 0
-      };
+        lastCheckedAt: 0,
+        inFlightKey: '',
+        inFlightPromise: undefined as Promise<void> | undefined,
+      } as any;
     }
 
-    // Grab a non-null reference for type narrowing
-    const state = window.__settingsState!;
+    const state: any = window.__settingsState!;
 
     // Helper: decide whether we should run a connection check right now
     const shouldCheckNow = (url: string): boolean => {
       if (!url) return false; // nothing to check
-      // Avoid immediate repeats in React StrictMode (effects mount twice in DEV)
+      // Avoid immediate repeats (e.g., React StrictMode double effects in DEV)
       const now = Date.now();
       const lastUrl = state.lastCheckedUrl || '';
       const lastAt = state.lastCheckedAt || 0;
@@ -279,15 +280,28 @@ export const loadSettings = async (
       return !(isSameUrl && withinDebounce);
     };
 
-    // Check if we need to reload settings
-    const needsReload = !state.loaded || 
-                        state.profileName !== currentProfileName ||
-                        state.connectionUrl !== currentConnectionUrl;
+    // Compute a key for the current desired load
+    const desiredKey = `${currentProfileName}|${currentConnectionUrl}`;
+
+    // If a matching load is already in-flight, await it instead of starting another
+    if (state.inFlightPromise && state.inFlightKey === desiredKey) {
+      await state.inFlightPromise;
+      // After in-flight finishes, do a debounced ping if needed and exit
+      if (shouldCheckNow(currentConnectionUrl)) {
+        await checkConnection(getConnection());
+        state.lastCheckedUrl = currentConnectionUrl;
+        state.lastCheckedAt = Date.now();
+      }
+      return;
+    }
+
+    // Check if we actually need to reload
+    const needsReload = !state.loaded ||
+      state.profileName !== currentProfileName ||
+      state.connectionUrl !== currentConnectionUrl;
 
     if (!needsReload) {
-      console.log('Settings already loaded for current profile and connection, skipping reload');
-
-      // Still check connection with current connection data, but debounce to avoid duplicates
+      // Already up-to-date, just do a debounced connection check
       if (shouldCheckNow(currentConnectionUrl)) {
         await checkConnection(currentConnection);
         state.lastCheckedUrl = currentConnectionUrl;
@@ -296,29 +310,41 @@ export const loadSettings = async (
       return;
     }
 
-    console.log(`Loading settings for profile: ${currentProfileName}, connection: ${currentConnectionUrl}`);
+    // Start a new in-flight load for this key
+    state.inFlightKey = desiredKey;
+    state.inFlightPromise = (async () => {
+      console.log(`Loading settings for profile: ${currentProfileName}, preload connection: ${currentConnectionUrl || '(none)'}`);
+      const userId = await getCurrentUserId();
+      await loadRuntimeSettings(userId, currentProfileName);
 
-    const userId = await getCurrentUserId();
-    await loadRuntimeSettings(userId, currentProfileName);
+      // Give React state a tick to propagate (RuntimeContext updates connection asynchronously)
+      await new Promise(resolve => setTimeout(resolve, 0));
 
-    // Check connection status after loading runtime settings
-    // This ensures we have the latest connection data
-    // Get the connection AFTER loadRuntimeSettings has completed
-    const connectionToCheck = getConnection();
-    const urlToCheck = connectionToCheck?.backend_url || '';
-    if (shouldCheckNow(urlToCheck)) {
-      await checkConnection(connectionToCheck);
-      state.lastCheckedUrl = urlToCheck;
-      state.lastCheckedAt = Date.now();
+      // After load, re-read connection and ping (debounced)
+      const connectionToCheck = getConnection();
+      const urlToCheck = connectionToCheck?.backend_url || '';
+      console.log(`Runtime settings loaded for profile: ${currentProfileName}, effective connection: ${urlToCheck || '(none)'}`);
+      if (shouldCheckNow(urlToCheck)) {
+        await checkConnection(connectionToCheck);
+        state.lastCheckedUrl = urlToCheck;
+        state.lastCheckedAt = Date.now();
+      }
+
+      // Mark as loaded
+      state.loaded = true;
+      state.profileName = currentProfileName;
+      state.connectionUrl = urlToCheck;
+    })();
+
+    try {
+      await state.inFlightPromise;
+    } finally {
+      // Clear in-flight markers only if they correspond to this key
+      if (state.inFlightKey === desiredKey) {
+        state.inFlightPromise = undefined;
+        state.inFlightKey = '';
+      }
     }
-
-    // Update settings state
-    window.__settingsState = {
-      ...window.__settingsState,
-      loaded: true,
-      profileName: currentProfileName,
-      connectionUrl: urlToCheck
-    };
   } catch (error) {
     console.error('Failed to load runtime settings:', error);
   }

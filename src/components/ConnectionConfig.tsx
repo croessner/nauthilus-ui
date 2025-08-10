@@ -84,24 +84,32 @@ const ConnectionConfig: React.FC = () => {
     await checkConnectionUtil(connectionConfig, setConnectionStatus, setStatusMessage);
   }, [setConnectionStatus, setStatusMessage]);
 
-  // Memoize the function that returns runtimeConnection to avoid infinite loops
-  const getRuntimeConnection = useCallback(() => runtimeConnection, [runtimeConnection]);
+  // Keep a ref with latest runtimeConnection and provide a stable getter
+  const connectionRef = React.useRef(runtimeConnection);
+  useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
+  const getRuntimeConnection = useCallback(() => connectionRef.current, []);
 
-  // Reset unsaved changes flag and load runtime settings when the component mounts
+  // Reset unsaved changes flag and load runtime settings once per profile change
+  const didRunRef = React.useRef<string | null>(null);
   useEffect(() => {
     setHasUnsavedChanges(false);
+
+    if (didRunRef.current === currentProfileName) {
+      return; // already executed for this profile
+    }
+    didRunRef.current = currentProfileName;
 
     // Load runtime settings using a utility function
     (async () => {
       await loadSettingsUtil(
-          getCurrentUserId,
-          loadRuntimeSettings,
-          currentProfileName,
-          checkConnection,
-          getRuntimeConnection
+        getCurrentUserId,
+        loadRuntimeSettings,
+        currentProfileName,
+        checkConnection,
+        getRuntimeConnection
       );
     })();
-  }, [setHasUnsavedChanges, config, checkConnection, loadRuntimeSettings, currentProfileName, getRuntimeConnection]);
+  }, [setHasUnsavedChanges, currentProfileName, loadRuntimeSettings, checkConnection, getRuntimeConnection]);
 
   if (!config) {
     return null;

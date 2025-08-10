@@ -1,5 +1,35 @@
 # Changes
 
+## 2025-08-10: Optimize Runtime/Connection Loading and Ping Flow
+
+### Summary
+- Eliminated redundant runtime settings reloads and repeated connection pings during initial render and on profile changes.
+- Added debounced pinging and an in-flight guard to prevent concurrent duplicate loads.
+- Ensured effects run once per profile via a didRunRef sentinel.
+- Stabilized access to the latest connection using a useRef-backed getter to avoid dependency-triggered loops.
+
+### Details
+- src/utils/apiUtils.ts:
+  - loadSettings now uses a singleton state on window (__settingsState) tracking loaded/profileName/connectionUrl/lastChecked and inFlightKey/inFlightPromise.
+  - Added a 1.5s debounce for ping checks to avoid rapid repeats for the same URL.
+  - Prevents duplicate loads by awaiting an existing in-flight promise for the same profile+URL key.
+- src/components/ConnectionConfig.tsx:
+  - Replaced direct dependencies with a useRef for runtimeConnection and exposed a stable getter.
+  - Gated initial settings load to run once per profile using didRunRef; trimmed effect deps to avoid re-runs.
+- src/components/BruteForceConfig.tsx:
+  - Applied the same useRef + stable getter pattern and once-per-profile gating.
+  - Ensured rule names are initialized after settings are available.
+
+### Behavioral Improvements
+- Console/log output no longer shows repeated "Loading settings ..." and duplicate runtime load messages on initial mount.
+- Connection ping occurs at logical points (after settings load or manual trigger) and is debounced to prevent bursts.
+- Connection page now performs an automatic initial connection test after runtime settings have loaded (no more persistent "Not checked").
+- Clarified logging: first message shows preload URL (may be empty), followed by the effective connection URL after settings load.
+
+### Notes
+- No breaking API changes.
+- When connection settings change, resetSettingsState() still forces a fresh reload on the next mount.
+
 ## 2025-08-10: Implement Remember-Me Persistence and Configurable Duration
 
 ### Summary
