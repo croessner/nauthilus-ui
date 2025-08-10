@@ -30,9 +30,7 @@ import {
   FormControl,
   InputLabel,
   TextField,
-  SelectChangeEvent,
-  Switch,
-  FormControlLabel
+  SelectChangeEvent
 } from '@mui/material';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
@@ -234,6 +232,7 @@ const MainContent = (): JSX.Element => {
       window.removeEventListener('resize', updateAppBarHeight);
     };
   }, []);
+
 
   // Compute current drawer width based on display mode
   const drawerWidth = iconOnly ? iconOnlyDrawerWidth : fullDrawerWidth;
@@ -686,12 +685,13 @@ const MainContent = (): JSX.Element => {
   );
 
   return (
-    <Box sx={{ display: 'flex' }}>
+    <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
       <CssBaseline />
       <AppBar
         ref={appBarRef}
-        position="fixed"
+        position="sticky"
         sx={{
+          top: 0,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
         }}
@@ -948,8 +948,8 @@ const MainContent = (): JSX.Element => {
       {error && (
         <Container 
           sx={{ 
-            position: 'fixed', 
-            top: { xs: 56, sm: 64 }, // Position right below the AppBar
+            position: 'sticky', 
+            top: `${appBarHeight}px`, // Stick right below the AppBar
             left: { sm: drawerWidth }, 
             right: 0,
             zIndex: 1100,
@@ -960,46 +960,50 @@ const MainContent = (): JSX.Element => {
           <ValidationErrors error={error} />
         </Container>
       )}
-      <Box
-        component="nav"
-        sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
-        aria-label="configuration sections"
-      >
-        <Drawer
-          variant="temporary"
-          open={mobileOpen}
-          onClose={handleDrawerToggle}
-          ModalProps={{
-            keepMounted: true, // Better open performance on mobile.
-          }}
-          sx={{
-            display: { xs: 'block', sm: 'none' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+      <Box sx={{ display: 'flex', flex: 1, width: '100%' }}>
+        <Box
+          component="nav"
+          sx={{ width: { sm: drawerWidth }, flexShrink: { sm: 0 } }}
+          aria-label="configuration sections"
+        >
+          <Drawer
+            variant="temporary"
+            open={mobileOpen}
+            onClose={handleDrawerToggle}
+            ModalProps={{
+              keepMounted: true, // Better open performance on mobile.
+            }}
+            sx={{
+              display: { xs: 'block', sm: 'none' },
+              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            }}
+          >
+            {drawer}
+          </Drawer>
+          <Drawer
+            variant="permanent"
+            sx={{
+              display: { xs: 'none', sm: 'block' },
+              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+            }}
+            open
+          >
+            {drawer}
+          </Drawer>
+        </Box>
+        <Box
+          component="main"
+          sx={{ 
+            flexGrow: 1, 
+            p: { xs: 2, sm: 3 }, 
+            width: { sm: `calc(100% - ${drawerWidth}px)` },
+            // With sticky AppBar, no extra top padding is needed
+            // Ensure content doesn't overflow on small screens
+            overflowX: 'auto',
+            maxWidth: '100%',
+            minWidth: 0
           }}
         >
-          {drawer}
-        </Drawer>
-        <Drawer
-          variant="permanent"
-          sx={{
-            display: { xs: 'none', sm: 'block' },
-            '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
-          }}
-          open
-        >
-          {drawer}
-        </Drawer>
-      </Box>
-      <Box
-        component="main"
-        sx={{ 
-          flexGrow: 1, 
-          p: { xs: 2, sm: 3 }, 
-          width: { sm: `calc(100% - ${drawerWidth}px)` },
-          // Add dynamic top padding based on AppBar height
-          pt: `calc(${appBarHeight}px + 24px)` // 24px is the default padding (3 * 8px)
-        }}
-      >
         {loading ? (
           <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
             <CircularProgress />
@@ -1028,6 +1032,7 @@ const MainContent = (): JSX.Element => {
           </>
         )}
       </Box>
+    </Box>
 
       {/* Reset Confirmation Dialog */}
       <Dialog
