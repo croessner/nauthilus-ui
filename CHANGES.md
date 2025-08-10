@@ -1,5 +1,25 @@
 # Changes
 
+## 2025-08-10: Persist UI Preferences (Per User) for Collapsible Menus and Sections
+
+### Summary
+- The UI now remembers whether menus or sections are expanded/collapsed on a per-user basis. This includes the left navigation “Configuration” and “Runtime” groups, the icon-only drawer toggle, and all form sections using the common CollapsibleFormSection component.
+
+### Details
+- src/components/common/CollapsibleFormSection.tsx:
+    - Added localStorage-based persistence for expanded/collapsed state.
+    - Keys are namespaced per user (from JWT cookie), per page (pathname), and per section (title slug): `ui:collapsible:<username>:<pathname>:<sectionId>`.
+    - Respects the existing defaultExpanded prop if no stored preference exists.
+- src/App.tsx:
+    - Persisted the expanded/collapsed state of the left nav “Configuration” and “Runtime” sections and the icon-only mode per user.
+    - Keys: `ui:menu:<username>:configExpanded`, `ui:menu:<username>:runtimeExpanded`, `ui:menu:<username>:iconOnly`.
+    - When the active user changes (login/logout), the stored preferences for that user are loaded.
+
+### Notes
+- Storage uses localStorage (preferred over cookies for this purpose).
+- If a user is not authenticated, preferences are stored under the username "anon".
+- No server changes required; this is fully client-side.
+
 ## 2025-08-10: Optimize Runtime/Connection Loading and Ping Flow
 
 ### Summary

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Routes, Route, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 
@@ -121,10 +121,78 @@ const MainContent = (): JSX.Element => {
   // State to track AppBar height
   const [appBarHeight, setAppBarHeight] = useState(64); // Default height
 
-  // Menu display states
-  const [configMenuExpanded, setConfigMenuExpanded] = useState(true);
-  const [runtimeMenuExpanded, setRuntimeMenuExpanded] = useState(true);
-  const [iconOnly, setIconOnly] = useState(false);
+  // User context needed for per-user persistence keys
+  const { user, logout } = useUser();
+
+  // Menu display states with per-user persistence
+  const username = useMemo(() => user?.username || 'anon', [user]);
+  const configMenuKey = useMemo(() => `ui:menu:${username}:configExpanded`, [username]);
+  const runtimeMenuKey = useMemo(() => `ui:menu:${username}:runtimeExpanded`, [username]);
+  const iconOnlyKey = useMemo(() => `ui:menu:${username}:iconOnly`, [username]);
+
+  const [configMenuExpanded, setConfigMenuExpanded] = useState<boolean>(() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.localStorage.getItem(configMenuKey) : null;
+      return v === null ? true : v === 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [runtimeMenuExpanded, setRuntimeMenuExpanded] = useState<boolean>(() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.localStorage.getItem(runtimeMenuKey) : null;
+      return v === null ? true : v === 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [iconOnly, setIconOnly] = useState<boolean>(() => {
+    try {
+      const v = typeof window !== 'undefined' ? window.localStorage.getItem(iconOnlyKey) : null;
+      return v === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  // When username changes (login/logout), load stored preferences for that user
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        const v1 = window.localStorage.getItem(configMenuKey);
+        setConfigMenuExpanded(v1 === null ? true : v1 === 'true');
+        const v2 = window.localStorage.getItem(runtimeMenuKey);
+        setRuntimeMenuExpanded(v2 === null ? true : v2 === 'true');
+        const v3 = window.localStorage.getItem(iconOnlyKey);
+        setIconOnly(v3 === 'true');
+      }
+    } catch {
+      // ignore
+    }
+  }, [configMenuKey, runtimeMenuKey, iconOnlyKey]);
+
+  // Persist when values change
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(configMenuKey, configMenuExpanded ? 'true' : 'false');
+      }
+    } catch {}
+  }, [configMenuExpanded, configMenuKey]);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(runtimeMenuKey, runtimeMenuExpanded ? 'true' : 'false');
+      }
+    } catch {}
+  }, [runtimeMenuExpanded, runtimeMenuKey]);
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem(iconOnlyKey, iconOnly ? 'true' : 'false');
+      }
+    } catch {}
+  }, [iconOnly, iconOnlyKey]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadWithProfileRef = useRef<HTMLInputElement>(null);
   const appBarRef = useRef<HTMLDivElement>(null);
@@ -146,7 +214,6 @@ const MainContent = (): JSX.Element => {
     deleteProfile
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
-  const { user, logout } = useUser();
 
   // Effect to measure and update AppBar height
   useEffect(() => {
