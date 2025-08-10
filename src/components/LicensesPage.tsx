@@ -63,7 +63,7 @@ const LicensesPage = (): React.JSX.Element => {
       <Typography variant="body2" color="text.secondary" paragraph>
         This page lists all the open source software used in this application along with their licenses.
       </Typography>
-      <TableContainer component={Paper} sx={{ mt: 2 }}>
+      <TableContainer component={Paper} sx={{ mt: 2, width: '100%', overflowX: 'auto' }}>
         <Table>
           <TableHead>
             <TableRow>
@@ -81,7 +81,7 @@ const LicensesPage = (): React.JSX.Element => {
                 <TableCell>{item.license}</TableCell>
                 <TableCell>
                   {item.website && (
-                    <Link href={item.website} target="_blank" rel="noopener noreferrer">
+                    <Link href={item.website} target="_blank" rel="noopener noreferrer" sx={{ wordBreak: 'break-all' }}>
                       {item.website}
                     </Link>
                   )}

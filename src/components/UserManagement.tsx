@@ -289,7 +289,7 @@ const UserManagement = (): React.JSX.Element => {
               <CircularProgress />
             </Box>
           ) : (
-            <TableContainer component={Paper}>
+            <TableContainer component={Paper} sx={{ width: '100%', overflowX: 'auto' }}>
               <Table>
                 <TableHead>
                   <TableRow>
@@ -320,7 +320,7 @@ const UserManagement = (): React.JSX.Element => {
                         </Box>
                       </TableCell>
                       <TableCell>{user.displayName || '-'}</TableCell>
-                      <TableCell>{user.email || '-'}</TableCell>
+                      <TableCell sx={{ wordBreak: 'break-all' }}>{user.email || '-'}</TableCell>
                       <TableCell>
                         {user.roles.map(role => (
                           <Chip 

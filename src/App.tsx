@@ -927,7 +927,7 @@ const MainContent = (): JSX.Element => {
         component="main"
         sx={{ 
           flexGrow: 1, 
-          p: 3, 
+          p: { xs: 2, sm: 3 }, 
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           // Add dynamic top padding based on AppBar height
           pt: `calc(${appBarHeight}px + 24px)` // 24px is the default padding (3 * 8px)
