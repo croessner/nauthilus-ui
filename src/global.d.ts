@@ -4,5 +4,8 @@ interface Window {
     loaded: boolean;
     profileName: string;
     connectionUrl: string;
+    // Debounce helpers to prevent duplicate connection checks
+    lastCheckedUrl?: string;
+    lastCheckedAt?: number;
   };
 }

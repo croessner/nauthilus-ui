@@ -16,9 +16,10 @@ const defaultTimeout = 10 * time.Second
 
 // JWTConfig represents the JWT configuration stored in the database
 type JWTConfig struct {
-	Secret             string `bson:"secret" json:"secret"`
+	Secret             string `bson:"jwtSecret" json:"jwtSecret"`
 	TokenExpiry        int    `bson:"tokenExpiry" json:"tokenExpiry"`
 	RefreshTokenExpiry int    `bson:"refreshTokenExpiry" json:"refreshTokenExpiry"`
+	RememberMeExpiry   int    `bson:"rememberMeExpiry" json:"rememberMeExpiry"`
 }
 
 // GetJWTConfig retrieves the JWT configuration from the database
@@ -34,11 +35,12 @@ func (m *MongoDB) GetJWTConfig() (*JWTConfig, error) {
 	err := m.JWTConfigColl.FindOne(ctx, bson.M{}).Decode(&jwtConfig)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			// If no JWT config is found, create a default one
+			// If no JWT config is found, create a default one from runtime config
 			defaultConfig := JWTConfig{
-				Secret:             "default-jwt-secret-please-change-in-production",
-				TokenExpiry:        3600,  // 1 hour
-				RefreshTokenExpiry: 86400, // 24 hours
+				Secret:             m.Config.JWTSecret,
+				TokenExpiry:        m.Config.TokenExpiry,
+				RefreshTokenExpiry: m.Config.RefreshTokenExpiry,
+				RememberMeExpiry:   m.Config.RememberMeExpiry,
 			}
 
 			_, err = m.JWTConfigColl.InsertOne(ctx, defaultConfig)

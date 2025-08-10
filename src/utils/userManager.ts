@@ -6,6 +6,69 @@ import * as bcrypt from 'bcryptjs';
 import Cookies from 'js-cookie';
 import axios from './axiosConfig';
 
+// Helper to set auth cookies from server response in a DRY manner
+const setCookiesFromResponse = (
+  data: any,
+  defaultTokenSeconds: number = 3600,
+  defaultRefreshSeconds: number = 86400
+): { token: string; refreshToken: string } | null => {
+  if (!data || !data.token) {
+    return null;
+  }
+
+  const token: string = data.token;
+  const refreshToken: string = data.refreshToken || token;
+
+  const tokenExpiry: Date = data.expiresAt
+    ? new Date(data.expiresAt * 1000)
+    : new Date(Date.now() + defaultTokenSeconds * 1000);
+
+  Cookies.set(TOKEN_COOKIE_NAME, token, {
+    ...COOKIE_OPTIONS,
+    expires: tokenExpiry,
+  });
+
+  Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
+    ...COOKIE_OPTIONS,
+    expires: new Date(Date.now() + defaultRefreshSeconds * 1000),
+  });
+
+  return { token, refreshToken };
+};
+
+// Helper to update user's lastLogin while preserving lastModified
+const updateUserLastLogin = async (username: string): Promise<void> => {
+  const now = new Date().toISOString();
+  try {
+    const users = await getUsers();
+    const currentUser = users.find(u => u.username === username);
+
+    if (currentUser) {
+      await updateUserProfile(username, {
+        lastLogin: now,
+        lastModified: currentUser.lastModified,
+      });
+    } else {
+      await updateUserProfile(username, {
+        lastLogin: now,
+      });
+    }
+    console.log('LastLogin timestamp updated successfully');
+  } catch (updateError) {
+    console.error('Failed to update lastLogin timestamp:', updateError);
+  }
+};
+
+// Helper to store credentials for token refresh (sessionStorage)
+const storeCredentialsForTokenRefresh = (username: string, password: string): void => {
+  try {
+    sessionStorage.setItem('auth_credentials', JSON.stringify({ username, password }));
+    console.log('Stored credentials for token refresh');
+  } catch (storageError) {
+    console.error('Failed to store credentials for token refresh:', storageError);
+  }
+};
+
 // Cookie names for token storage
 const TOKEN_COOKIE_NAME = 'nauthilus_token';
 const REFRESH_TOKEN_COOKIE_NAME = 'nauthilus_refresh_token';
@@ -514,7 +577,8 @@ export const authenticate = async (username: string, password: string, rememberM
     try {
       const response = await axios.post('/api/auth/login', {
         username,
-        password
+        password,
+        rememberMe
       });
 
       // Check if MFA is required
@@ -562,46 +626,11 @@ export const authenticate = async (username: string, password: string, rememberM
         
         // Store credentials securely for token refresh (only if rememberMe is true)
         if (rememberMe) {
-          try {
-            // Store credentials in sessionStorage for token refresh
-            // This is a security trade-off - we need to store credentials to enable token refresh
-            // but we'll only do it if the user has explicitly chosen to be remembered
-            sessionStorage.setItem('auth_credentials', JSON.stringify({
-              username,
-              password
-            }));
-            console.log('Stored credentials for token refresh');
-          } catch (storageError) {
-            console.error('Failed to store credentials for token refresh:', storageError);
-            // Continue even if storage fails
-          }
+          storeCredentialsForTokenRefresh(username, password);
         }
         
         // Update lastLogin timestamp
-        const now = new Date().toISOString();
-        
-        // Update user profile with lastLogin only, but preserve lastModified
-        try {
-          // Get the current user to preserve the lastModified timestamp
-          const users = await getUsers();
-          const currentUser = users.find(u => u.username === username);
-          
-          if (currentUser) {
-            await updateUserProfile(username, { 
-              lastLogin: now,
-              lastModified: currentUser.lastModified // Explicitly preserve the existing lastModified value
-            });
-          } else {
-            // Fallback if we can't find the current user
-            await updateUserProfile(username, { 
-              lastLogin: now
-            });
-          }
-        } catch (updateError) {
-          // Log the error but continue with authentication
-          console.error('Failed to update lastLogin timestamp:', updateError);
-          // Don't return null here, continue with the authentication process
-        }
+        await updateUserLastLogin(username);
         
         return { token, refreshToken };
       } else {
@@ -652,70 +681,27 @@ export const completeMfaLogin = async (username: string, rememberMe: boolean = f
       username: storedUsername,
       password,
       // Add MFA verification data
-      mfaVerified: true
+      mfaVerified: true,
+      rememberMe
     });
     
     if (response.data && response.data.token) {
-      const token = response.data.token;
-      const refreshToken = response.data.refreshToken || token;
-      
-      // Store tokens in cookies
-      const tokenExpiry = response.data.expiresAt ? 
-        new Date(response.data.expiresAt * 1000) : 
-        new Date(Date.now() + 3600 * 1000); // Default 1 hour
-        
-      Cookies.set(TOKEN_COOKIE_NAME, token, {
-        ...COOKIE_OPTIONS,
-        expires: tokenExpiry
-      });
-      
-      Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-        ...COOKIE_OPTIONS,
-        expires: new Date(Date.now() + 86400 * 1000) // Default 24 hours
-      });
-      
+      const cookiesResult = setCookiesFromResponse(response.data, 3600, 86400);
+      if (!cookiesResult) {
+        console.error('Invalid response format from server during MFA completion:', response.data);
+        return null;
+      }
+
       // Store credentials securely for token refresh (only if rememberMe is true)
       if (rememberMe) {
-        try {
-          // Store credentials in sessionStorage for token refresh
-          sessionStorage.setItem('auth_credentials', JSON.stringify({
-            username,
-            password
-          }));
-          console.log('Stored credentials for token refresh');
-        } catch (storageError) {
-          console.error('Failed to store credentials for token refresh:', storageError);
-          // Continue even if storage fails
-        }
+        storeCredentialsForTokenRefresh(username, password);
       }
-      
+
       // Update lastLogin timestamp
-      const now = new Date().toISOString();
-      
-      try {
-        // Get the current user to preserve the lastModified timestamp
-        const users = await getUsers();
-        const currentUser = users.find(u => u.username === username);
-        
-        if (currentUser) {
-          await updateUserProfile(username, { 
-            lastLogin: now,
-            lastModified: currentUser.lastModified // Explicitly preserve the existing lastModified value
-          });
-        } else {
-          // Fallback if we can't find the current user
-          await updateUserProfile(username, { 
-            lastLogin: now
-          });
-        }
-        console.log('LastLogin timestamp updated successfully');
-      } catch (updateError) {
-        // Log the error but continue with authentication
-        console.error('Failed to update lastLogin timestamp:', updateError);
-      }
-      
+      await updateUserLastLogin(username);
+
       console.log('MFA authentication successful, returning tokens');
-      return { token, refreshToken };
+      return cookiesResult;
     } else {
       console.error('Invalid response format from server during MFA completion:', response.data);
       return null;
@@ -766,26 +752,14 @@ export const refreshToken = async (): Promise<{ token: string, refreshToken: str
           });
           
           if (response.data && response.data.token) {
-            const token = response.data.token;
-            const refreshToken = response.data.refreshToken || token;
-            
-            // Store tokens in cookies
-            const tokenExpiry = response.data.expiresAt ? 
-              new Date(response.data.expiresAt * 1000) : 
-              new Date(Date.now() + 3600 * 1000); // Default 1 hour
-              
-            Cookies.set(TOKEN_COOKIE_NAME, token, {
-              ...COOKIE_OPTIONS,
-              expires: tokenExpiry
-            });
-            
-            Cookies.set(REFRESH_TOKEN_COOKIE_NAME, refreshToken, {
-              ...COOKIE_OPTIONS,
-              expires: new Date(Date.now() + 86400 * 1000) // Default 24 hours
-            });
-            
+            const cookiesResult = setCookiesFromResponse(response.data, 3600, 86400);
+            if (!cookiesResult) {
+              console.error('Invalid response format during token refresh:', response.data);
+              return null;
+            }
+
             console.log('Successfully refreshed tokens via re-authentication');
-            return { token, refreshToken };
+            return cookiesResult;
           }
         }
       }

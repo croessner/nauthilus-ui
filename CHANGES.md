@@ -1,5 +1,41 @@
 # Changes
 
+## 2025-08-10: Implement Remember-Me Persistence and Configurable Duration
+
+### Summary
+- Implemented proper remember-me support across browser restarts and aligned JWT lifetime with server configuration.
+- The frontend now passes the rememberMe flag to the backend during both initial login and MFA completion. The backend issues a longer-lived access token when rememberMe is true.
+- The remember-me duration is configurable via environment variables and is exposed to the frontend through env-config.js.
+
+### Details
+- Frontend (src/utils/userManager.ts):
+  - Added rememberMe to POST /api/auth/login in authenticate(...).
+  - Added rememberMe to POST /api/auth/login in completeMfaLogin(...) (together with mfaVerified: true) so that long-lived tokens are only issued after successful MFA.
+  - When the server returns expiresAt, we use it to set the token cookie expiry. This ensures the cookie lifetime matches the token lifetime. If expiresAt is missing, we fall back to REACT_APP_REMEMBER_ME_EXPIRY when rememberMe is true, otherwise REACT_APP_TOKEN_EXPIRY.
+- Backend:
+  - server/api/auth.go:
+    - Extended LoginRequest with RememberMe bool `json:"rememberMe"`.
+    - When RememberMe is true, access token expiry is taken from JWTConfig.RememberMeExpiry; otherwise, JWTConfig.TokenExpiry is used. Refresh token expiry remains JWTConfig.RefreshTokenExpiry.
+  - server/db/jwt.go:
+    - Unified JWT config schema with the rest of the codebase and added RememberMeExpiry.
+    - The struct now uses bson/json tags `jwtSecret`, `tokenExpiry`, `refreshTokenExpiry`, `rememberMeExpiry`.
+    - Default creation now pulls values from runtime config (server/config/config.go), including RememberMeExpiry.
+  - server/middleware/static.go and server/config/config.go already expose REACT_APP_REMEMBER_ME_EXPIRY via /env-config.js; no changes required there.
+
+### MFA Considerations
+- Remember-me is applied only after MFA is successfully completed. The completeMfaLogin call includes mfaVerified: true and rememberMe: true (if selected). This prevents bypassing MFA while still granting a longer session after verification.
+
+### Configuration
+- Environment variables (read by the server, forwarded to the client via /env-config.js):
+  - REACT_APP_TOKEN_EXPIRY (seconds; default 3600)
+  - REACT_APP_REFRESH_TOKEN_EXPIRY (seconds; default 86400)
+  - REACT_APP_REMEMBER_ME_EXPIRY (seconds; default 86400)
+- The frontend additionally reads these via window._env_ to set sane fallbacks when the server doesn’t return expiresAt.
+
+### Notes
+- The refresh flow still prefers the existing tokens. There is no separate refresh endpoint; if the access token expires and a valid refresh token exists, the UI attempts to re-authenticate using stored credentials when available. With rememberMe enabled, the access token lifetime is long enough to persist typical browser restarts without relying on refresh.
+- Security: We kept current behavior around sessionStorage for temporary credential storage used only for MFA completion and optional token refresh. These credentials are not persisted across browser restarts.
+
 ## 2025-08-08: Fix Missing Promise Handling in WebAuthn Authentication
 
 ### Issue

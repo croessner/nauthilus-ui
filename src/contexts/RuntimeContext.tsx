@@ -4,7 +4,7 @@ import { ConnectionConfig, LuaHooksConfig } from '../types/config';
 import { withErrorHandling as apiWithErrorHandling } from '../utils/apiUtils';
 
 const DEFAULT_CONFIG: ConnectionConfig = {
-  backend_url: 'http://127.0.0.1:8080',
+  backend_url: '',
   basic_auth: {
     enabled: false,
     username: '',

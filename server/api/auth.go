@@ -70,6 +70,7 @@ type LoginRequest struct {
 	Username    string `json:"username" binding:"required"`
 	Password    string `json:"password" binding:"required"`
 	MfaVerified bool   `json:"mfaVerified"`
+	RememberMe  bool   `json:"rememberMe"`
 }
 
 // Login handles the POST /api/auth/login endpoint
@@ -168,8 +169,14 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	slog.Info("JWT config retrieved", "secret_length", len(jwtConfig.Secret), "token_expiry", jwtConfig.TokenExpiry, "refresh_token_expiry", jwtConfig.RefreshTokenExpiry)
 
+	// Determine access token expiry based on rememberMe flag
+	accessExpiry := jwtConfig.TokenExpiry
+	if loginRequest.RememberMe && jwtConfig.RememberMeExpiry > 0 {
+		accessExpiry = jwtConfig.RememberMeExpiry
+	}
+
 	// Generate access token
-	token, expiresAt, err := h.generateToken(&user, jwtConfig.TokenExpiry)
+	token, expiresAt, err := h.generateToken(&user, accessExpiry)
 	if err != nil {
 		slog.Error("Failed to generate token", "error", err)
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})

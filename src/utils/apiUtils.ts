@@ -258,21 +258,40 @@ export const loadSettings = async (
       window.__settingsState = {
         loaded: false,
         profileName: '',
-        connectionUrl: ''
+        connectionUrl: '',
+        lastCheckedUrl: '',
+        lastCheckedAt: 0
       };
     }
 
+    // Grab a non-null reference for type narrowing
+    const state = window.__settingsState!;
+
+    // Helper: decide whether we should run a connection check right now
+    const shouldCheckNow = (url: string): boolean => {
+      if (!url) return false; // nothing to check
+      // Avoid immediate repeats in React StrictMode (effects mount twice in DEV)
+      const now = Date.now();
+      const lastUrl = state.lastCheckedUrl || '';
+      const lastAt = state.lastCheckedAt || 0;
+      const isSameUrl = lastUrl === url;
+      const withinDebounce = now - lastAt < 1500; // 1.5s debounce window
+      return !(isSameUrl && withinDebounce);
+    };
+
     // Check if we need to reload settings
-    const needsReload = !window.__settingsState.loaded || 
-                        window.__settingsState.profileName !== currentProfileName ||
-                        window.__settingsState.connectionUrl !== currentConnectionUrl;
+    const needsReload = !state.loaded || 
+                        state.profileName !== currentProfileName ||
+                        state.connectionUrl !== currentConnectionUrl;
 
     if (!needsReload) {
       console.log('Settings already loaded for current profile and connection, skipping reload');
 
-      // Still check connection with current connection data
-      if (currentConnectionUrl) {
+      // Still check connection with current connection data, but debounce to avoid duplicates
+      if (shouldCheckNow(currentConnectionUrl)) {
         await checkConnection(currentConnection);
+        state.lastCheckedUrl = currentConnectionUrl;
+        state.lastCheckedAt = Date.now();
       }
       return;
     }
@@ -286,15 +305,19 @@ export const loadSettings = async (
     // This ensures we have the latest connection data
     // Get the connection AFTER loadRuntimeSettings has completed
     const connectionToCheck = getConnection();
-    if (connectionToCheck?.backend_url) {
+    const urlToCheck = connectionToCheck?.backend_url || '';
+    if (shouldCheckNow(urlToCheck)) {
       await checkConnection(connectionToCheck);
+      state.lastCheckedUrl = urlToCheck;
+      state.lastCheckedAt = Date.now();
     }
 
     // Update settings state
     window.__settingsState = {
+      ...window.__settingsState,
       loaded: true,
       profileName: currentProfileName,
-      connectionUrl: connectionToCheck?.backend_url || ''
+      connectionUrl: urlToCheck
     };
   } catch (error) {
     console.error('Failed to load runtime settings:', error);
