@@ -43,7 +43,7 @@ const resolveEnvConfigPort = (): string | undefined => {
 
   if (currentPort && currentPort !== '3000') return currentPort;
 
-  const buildTimePort = process.env.REACT_APP_PROXY_PORT;
+  const buildTimePort = (typeof process !== 'undefined' && (process as any).env && (process as any).env.REACT_APP_PROXY_PORT) as string | undefined;
   if (buildTimePort) return buildTimePort;
 
   // For development environment

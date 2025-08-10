@@ -1,5 +1,20 @@
 # Changes
 
+## 2025-08-10: Migrate frontend build from CRA/Webpack to Vite
+
+- Replaced react-scripts/react-app-rewired with Vite + @vitejs/plugin-react.
+- Added vite.config.ts:
+  - server.port=3000; dev proxy rules for `/api` and `/proxy/*` forwarding to the Go backend (FRONTEND_ADDRESS/FRONTEND_PORT).
+  - For `/proxy/*`, injects headers similar to previous setupProxy.js (x-target-url, x-auth-type, x-auth-value, Authorization) and ensures JSON Content-Type for POST/PUT/PATCH.
+  - build.outDir set to `build` to match the Go server static handler.
+- Added root index.html for Vite; public assets (favicon, manifest, logos) continue to work.
+- package.json:
+  - Scripts: `dev/start/build/preview` now use Vite; `test` placeholder updated.
+  - Removed react-scripts and react-app-rewired; added vite and @vitejs/plugin-react.
+  - Bumped @types/node to ^20 to satisfy Vite peer requirement.
+- Build verified with `vite build` producing output in build/.
+- README updated to reflect Vite usage and dev proxy location.
+
 ## 2025-08-10: Persist UI Preferences (Per User) for Collapsible Menus and Sections
 
 ### Summary
@@ -567,3 +582,20 @@ In some environments, WebAuthn finish-login returned 401 (Unauthorized), and it 
 
 ### Outcome
 - Clear, actionable diagnostics to quickly determine whether `WEBAUTHN_RP_ORIGINS` (or RP ID) is the cause of WebAuthn 401 failures.
+
+
+## 2025-08-10: Remove obsolete shell scripts and outdated dependencies doc
+
+- Removed unused developer helper scripts no longer referenced by build or docs:
+  - test-cors.sh
+  - test-endpoints.sh
+  - test-frontend-request.sh
+- Removed dependency maintenance scripts that are outdated post-Vite migration and only referenced by an outdated doc:
+  - fix_npm.sh
+  - update_dependencies.sh
+- Deleted README_DEPENDENCIES.md which documented the above scripts and referenced CRA/React Scripts-era tooling. With Vite in place and current dependencies, these scripts are not part of the recommended workflow anymore.
+- Kept check-quality.sh as it is still used via npm script "quality-check" to run ESLint and TypeScript checks.
+
+Notes:
+- No changes to package.json were necessary.
+- If you still need ad-hoc endpoint/CORS checks, consider adding short, documented curl commands in README.md instead of keeping scripts in the repo.

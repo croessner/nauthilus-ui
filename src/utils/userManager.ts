@@ -2,7 +2,6 @@
 // This module provides user management and authentication independently of the Nauthilus service
 
 import { jwtDecode } from 'jwt-decode';
-import * as bcrypt from 'bcryptjs';
 import Cookies from 'js-cookie';
 import axios from './axiosConfig';
 
@@ -126,13 +125,27 @@ declare global {
 
 // Get environment variables or use defaults
 const getEnvVar = (name: string, defaultValue: string): string => {
-  // In a browser environment, environment variables must be exposed via process.env.REACT_APP_*
-  // or via window._env_
   const fullName = `REACT_APP_${name}`;
+
+  // 1) Prefer runtime-injected variables
   if (typeof window !== 'undefined' && window._env_ && fullName in window._env_) {
     return window._env_[fullName] || defaultValue;
   }
-  return (process.env[fullName] || defaultValue);
+
+  // 2) Vite build-time variables. Support both legacy REACT_APP_* and VITE_* names.
+  try {
+    const viteEnv: any = (typeof import.meta !== 'undefined' && (import.meta as any).env) || undefined;
+    if (viteEnv) {
+      if (fullName in viteEnv && viteEnv[fullName]) return viteEnv[fullName] as string;
+      const viteName = `VITE_${name}`;
+      if (viteName in viteEnv && viteEnv[viteName]) return viteEnv[viteName] as string;
+    }
+  } catch (_) {
+    // ignore
+  }
+
+  // 3) Fallback default (do not access process.env in the browser)
+  return defaultValue;
 };
 
 // Default configuration
@@ -140,8 +153,8 @@ const DEFAULT_CONFIG: UserManagerConfig = {
   users: [
     {
       username: 'admin',
-      // Default password hash using bcrypt (password: 'admin')
-      passwordHash: bcrypt.hashSync('admin', 12),
+      // Placeholder: UI does not store password hashes; authentication is handled by backend
+      passwordHash: '',
       roles: ['admin'],
       lastLogin: null, // Explicitly set lastLogin to null
       lastModified: new Date().toISOString() // Set lastModified to current time
@@ -965,7 +978,8 @@ try {
   initialize().catch(error => {
     console.error('Error during initialization:', error);
     // Log additional information that might help with debugging
-    console.error('Current environment:', process.env.NODE_ENV);
+    const env = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.MODE) || (typeof process !== 'undefined' && (process as any).env && (process as any).env.NODE_ENV) || 'unknown';
+    console.error('Current environment:', env);
   });
 } catch (error) {
   console.error('Critical error during initialization setup:', error);

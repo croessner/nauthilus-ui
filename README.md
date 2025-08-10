@@ -60,6 +60,8 @@ ui/
    npm install
    ```
 
+> Note: The frontend now uses Vite for development/build instead of Create React App.
+
 3. The UI now uses the Nauthilus logo from the `/img` directory. If you want to use custom logo files, you can:
    - Create or copy a favicon.ico file to `public/favicon.ico`
    - Add logo192.png (192x192 pixels) to `public/logo192.png`
@@ -74,9 +76,9 @@ ui/
 
 5. For development:
 
-   a. Start the React development server:
+   a. Start the Vite development server:
    ```
-   npm start
+   npm run dev
    ```
 
    b. In a separate terminal, start the Go API server:
@@ -85,14 +87,13 @@ ui/
    go run .
    ```
 
-   The React frontend will run on port 3000 and the Go API server on port 3001.
+   The Vite dev server runs on port 3000 and proxies requests to the Go API server on port 3001 (configurable via FRONTEND_ADDRESS/FRONTEND_PORT in your .env).
 
    c. Development Mode Architecture:
-   - In development mode, the React development server proxies API requests to the Go backend
-   - The proxy configuration is in `src/setupProxy.js`
+   - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
+   - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
    - The Go backend has CORS enabled in development mode to allow cross-origin requests
-   - This setup allows you to work on both the frontend and backend simultaneously
-   - In production, the Go server serves the static React files directly, so no proxy or CORS is needed
+   - In production, the Go server serves the built static files from the `build/` directory and injects `/env-config.js` automatically
 
 6. For production deployment, use Docker Compose:
    ```
