@@ -26,7 +26,8 @@ import {
   FormControlLabel,
   Alert,
   Snackbar,
-  TablePagination
+  TablePagination,
+  Divider
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -573,16 +574,16 @@ const BruteForceConfig: React.FC = () => {
 
         {connectionStatus === 'connected' ? (
           <>
-            <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, justifyContent: 'space-between', alignItems: { xs: 'stretch', sm: 'center' }, gap: 1, mb: 2 }}>
               <Typography variant="body1">
                 Manage brute force protection for users and IP addresses.
               </Typography>
-              <Box>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, justifyContent: { xs: 'flex-start', sm: 'flex-end' } }}>
                 <Button 
                   variant="outlined" 
                   color="secondary"
                   onClick={() => setOpenSearchDialog(true)}
-                  sx={{ mr: 1 }}
+                  size="small"
                 >
                   Search & Free
                 </Button>
@@ -592,6 +593,7 @@ const BruteForceConfig: React.FC = () => {
                   onClick={() => fetchBruteForceList(runtimeConnection)}
                   disabled={isLoadingBruteForceList}
                   startIcon={isLoadingBruteForceList ? <CircularProgress size={20} /> : <RefreshIcon />}
+                  size="small"
                 >
                   {isLoadingBruteForceList ? 'Loading...' : 'Refresh List'}
                 </Button>
@@ -639,34 +641,38 @@ const BruteForceConfig: React.FC = () => {
                       {filterBlockedIps(bruteForceList.blocked_ips)
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((item, index) => (
-                        <ListItem key={index} divider>
-                          <ListItemText
-                            primary={item.ip_address}
-                            secondary={
-                              <>
-                                <Typography component="span" variant="body2">
-                                  Rule: {item.rule_name}
-                                  {item.protocol && ` | Protocol: ${item.protocol}`}
-                                  {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
-                                </Typography>
-                                <br />
-                                <Typography component="span" variant="body2">
-                                  TTL: {item.ttl} seconds | Attempts: {item.attempts}
-                                </Typography>
-                              </>
-                            }
-                          />
-                          <ListItemSecondaryAction>
-                            <Button
-                              variant="outlined"
-                              color="secondary"
-                              onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
-                              startIcon={<DeleteIcon />}
-                            >
-                              Free
-                            </Button>
-                          </ListItemSecondaryAction>
-                        </ListItem>
+                        <React.Fragment key={index}>
+                          <ListItem>
+                            <ListItemText
+                              primary={item.ip_address}
+                              secondary={
+                                <>
+                                  <Typography component="span" variant="body2">
+                                    Rule: {item.rule_name}
+                                    {item.protocol && ` | Protocol: ${item.protocol}`}
+                                    {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
+                                  </Typography>
+                                  <br />
+                                  <Typography component="span" variant="body2">
+                                    TTL: {item.ttl} seconds | Attempts: {item.attempts}
+                                  </Typography>
+                                </>
+                              }
+                            />
+                            <ListItemSecondaryAction sx={{ position: { xs: 'static', sm: 'absolute' }, mt: { xs: 1, sm: 0 } }}>
+                              <Button
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
+                                startIcon={<DeleteIcon />}
+                                size="small"
+                              >
+                                Free
+                              </Button>
+                            </ListItemSecondaryAction>
+                          </ListItem>
+                          <Divider />
+                        </React.Fragment>
                       ))}
                     </List>
                     <TablePagination
@@ -701,28 +707,32 @@ const BruteForceConfig: React.FC = () => {
                       {filterAffectedAccounts(bruteForceList.affected_accounts)
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((account, index) => (
-                        <ListItem key={index} divider>
-                          <ListItemText
-                            primary={account.username}
-                            secondary={
-                              <>
-                                <Typography component="span" variant="body2">
-                                  Associated IP Addresses: {account.ip_addresses.join(', ')}
-                                </Typography>
-                              </>
-                            }
-                          />
-                          <ListItemSecondaryAction>
-                            <Button
-                              variant="outlined"
-                              color="secondary"
-                              onClick={() => handleOpenUserDialog(account.username)}
-                              startIcon={<DeleteIcon />}
-                            >
-                              Free
-                            </Button>
-                          </ListItemSecondaryAction>
-                        </ListItem>
+                        <React.Fragment key={index}>
+                          <ListItem>
+                            <ListItemText
+                              primary={account.username}
+                              secondary={
+                                <>
+                                  <Typography component="span" variant="body2">
+                                    Associated IP Addresses: {account.ip_addresses.join(', ')}
+                                  </Typography>
+                                </>
+                              }
+                            />
+                            <ListItemSecondaryAction sx={{ position: { xs: 'static', sm: 'absolute' }, mt: { xs: 1, sm: 0 } }}>
+                              <Button
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => handleOpenUserDialog(account.username)}
+                                startIcon={<DeleteIcon />}
+                                size="small"
+                              >
+                                Free
+                              </Button>
+                            </ListItemSecondaryAction>
+                          </ListItem>
+                          <Divider />
+                        </React.Fragment>
                       ))}
                     </List>
                     <TablePagination
