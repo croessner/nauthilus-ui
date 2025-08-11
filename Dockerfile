@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies
-RUN npm ci
+# Install dependencies (use install to align updated semver across Emotion packages)
+RUN npm install
 
 # Copy the rest of the code
 COPY . .

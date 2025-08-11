@@ -6,8 +6,8 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies (prefer reproducible ci, but fall back to install if lock is out of sync)
-RUN npm ci || npm install
+# Install dependencies (use install to align updated semver across Emotion packages)
+RUN npm install
 
 # Copy the rest of the code
 COPY . .
@@ -21,12 +21,16 @@ FROM golang:1.24-alpine AS go-build
 # Add build arguments for multi-architecture support
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
-RUN echo "Building on $BUILDPLATFORM for $TARGETPLATFORM"
+RUN echo "[go-build] Building on $BUILDPLATFORM for $TARGETPLATFORM"
 
 # Install UPX for compression and Git for version info
 RUN apk --no-cache add upx git
 
 WORKDIR /app
+
+# Ensure React assets are built before starting Go build (prevents interleaved logs; Go build runs once)
+# We copy a tiny file as a build marker to serialize stages without bloating layers
+COPY --from=react-build /app/build/index.html /tmp/react-built-marker
 
 # Copy the Go source code
 COPY server/ ./
@@ -46,8 +50,11 @@ RUN GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") && \
       "linux/386") GOARCH=386 ;; \
       *) GOARCH=amd64 ;; \
     esac && \
+    echo "[go-build] Starting go build for linux/${GOARCH}" && \
     CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH go build -trimpath -mod=vendor -ldflags="-s -w -X main.version=$VERSION" -o server . && \
-    upx --best server
+    echo "[go-build] Compressing binary with upx" && \
+    upx --best server && \
+    echo "[go-build] Build complete: version=${VERSION}, arch=${GOARCH}"
 
 # Production stage
 FROM alpine:latest

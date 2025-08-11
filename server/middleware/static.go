@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -29,8 +30,10 @@ func NewStaticHandler(cfg *config.Config) *StaticHandler {
 func (h *StaticHandler) RegisterMiddleware(router *gin.Engine) {
 	// Security headers (override any upstream invalid directives)
 	router.Use(func(ctx *gin.Context) {
-		// Set a minimal, valid Permissions-Policy without deprecated features like 'vr'
-		ctx.Header("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
+		// Remove any existing Permissions-Policy header and set a minimal, valid one (no deprecated 'vr')
+		h := ctx.Writer.Header()
+		h.Del("Permissions-Policy")
+		h.Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
 		ctx.Next()
 	})
 
@@ -103,15 +106,13 @@ func (h *StaticHandler) IndexHandler(ctx *gin.Context) {
 // It replaces the last occurrence of the target string with the replacement string.
 // This is used to inject the env-config.js script before the closing head tag.
 func injectScript(html, target, replacement string) string {
-	// Find the last occurrence of the target string
-	pos := len(html) - len(target)
-	if pos < 0 {
+	// Find the last occurrence of the target string safely
+	idx := strings.LastIndex(html, target)
+	if idx == -1 {
 		// Target string not found, return original HTML
-
 		return html
 	}
 
 	// Replace the last occurrence of the target string
-
-	return html[:pos] + replacement + html[pos+len(target):]
+	return html[:idx] + replacement + html[idx+len(target):]
 }
