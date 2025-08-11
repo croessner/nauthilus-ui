@@ -82,6 +82,12 @@ func NewMFAHandler(mongoDB db.UserDatabase) (*MFAHandler, error) {
 		RPID:                  rpID,
 		RPOrigins:             origins,
 		AttestationPreference: protocol.PreferNoAttestation,
+		// Important for iOS Face ID: request discoverable credentials and user verification.
+		// Do NOT set AuthenticatorAttachment, so both platform (Face ID/Touch ID) and cross‑platform keys remain eligible.
+		AuthenticatorSelection: protocol.AuthenticatorSelection{
+			ResidentKey:      protocol.ResidentKeyRequirementPreferred,
+			UserVerification: protocol.VerificationPreferred,
+		},
 	}
 
 	webAuthn, err := webauthn.New(webAuthnConfig)

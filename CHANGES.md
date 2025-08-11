@@ -235,6 +235,24 @@ The server response for WebAuthn registration had a nested structure (`publicKey
 - Improved robustness by handling different response structures in both registration and login flows
 - Ensured consistent error handling across WebAuthn operations
 
+## 2025-08-11: Enable Face ID (Platform Passkey) Registration on iPhone
+
+### Issue
+On iPhone, Safari did not offer the "Dieses iPhone"/Face ID option during WebAuthn registration. Only cross‑device (QR code) and external security key flows were shown.
+
+### Root Cause
+The server's WebAuthn configuration did not request discoverable credentials and user verification explicitly. Some platforms, particularly iOS/Safari, are more likely to offer the on‑device platform authenticator (Face ID/Touch ID) when Resident Key is preferred/required and User Verification is not discouraged.
+
+### Changes Made
+- Updated server/api/mfa.go WebAuthn configuration to set AuthenticatorSelection with:
+  - ResidentKey: preferred
+  - UserVerification: preferred
+- Left authenticatorAttachment unset so both platform and cross‑platform authenticators remain eligible.
+- Added explanatory comments in code.
+
+### Result
+Safari on iPhone now presents the Face ID option for registering a passkey on the device, while still allowing security keys and cross‑device registration.
+
 ## 2025-08-08: Fix Environment Configuration Loading Issue
 
 ### Issue
