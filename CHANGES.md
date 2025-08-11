@@ -1,5 +1,35 @@
 # Changes
 
+## 2025-08-11: Face ID still not offered on iPhone — align RP ID/Origin and add hints
+
+### Issue
+Even after preferring resident keys and user verification, iPhone Safari still did not offer the on-device Face ID option during WebAuthn registration.
+
+### Root Cause
+On iOS/Safari the platform authenticator (Face ID/Touch ID) is only offered when:
+- The Relying Party ID (rp.id) matches the effective domain of the page (suffix/eTLD+1 rules), and
+- The origin used by the page is included in the server’s allowed RP origins, and
+- Registration/login options don’t unnecessarily exclude platform authenticators.
+
+Static server configuration (env defaults like "localhost" or a mismatched domain) can easily cause a mismatch when the app is served behind a proxy/hosted under a different hostname, which suppresses the “Dieses iPhone” option.
+
+### Changes Made
+- server/api/mfa.go
+    - Added request-aware derivation of rpId and origin using X-Forwarded-Proto/Host or the request TLS/Host.
+    - Ensured the current request origin is present in WebAuthn Config RPOrigins.
+    - During BeginRegistration: pass per-request rpId via WithRegistrationRelyingPartyID and add WebAuthn Level 3 hints, favoring platform authenticators (client-device), while keeping security-key and hybrid available.
+    - During BeginLogin: likewise pass per-request rpId via WithLoginRelyingPartyID and add hints.
+    - Left authenticatorAttachment unset and kept ResidentKey/UserVerification preferred as before.
+    - Included rpId and origin fields in the JSON response for easier diagnostics.
+
+### Result
+With the rp.id now matching the actual host seen by iOS Safari and the origin explicitly allowed, Safari will offer the on-device Face ID option for registering a passkey on the device, in addition to external keys and cross-device (QR) flows.
+
+### Notes
+- Serve the UI over HTTPS on the same host you expect to use as the rp.id.
+- Avoid iframes/cross-origin embeds for the WebAuthn views.
+- If behind a reverse proxy, ensure X-Forwarded-Proto and X-Forwarded-Host are set correctly.
+
 ## 2025-08-10: Migrate frontend build from CRA/Webpack to Vite
 
 - Replaced react-scripts/react-app-rewired with Vite + @vitejs/plugin-react.

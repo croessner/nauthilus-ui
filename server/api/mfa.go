@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -168,6 +169,7 @@ func convertToWebAuthnCredential(cred models.WebAuthnCredential) webauthn.Creden
 	if cred.BackupEligible != nil {
 		flags.BackupEligible = *cred.BackupEligible
 	}
+
 	if cred.BackupState != nil {
 		flags.BackupState = *cred.BackupState
 	}
@@ -190,6 +192,7 @@ func convertToModelCredential(cred webauthn.Credential, name string) models.WebA
 	now := time.Now().Format(time.RFC3339)
 	be := cred.Flags.BackupEligible
 	bs := cred.Flags.BackupState
+
 	return models.WebAuthnCredential{
 		ID:             base64.StdEncoding.EncodeToString(cred.ID),
 		PublicKey:      cred.PublicKey,
@@ -245,6 +248,7 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	var req SetupTOTPRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+
 		return
 	}
 
@@ -317,6 +321,7 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
 		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
+
 		return
 	}
 
@@ -408,6 +413,46 @@ type BeginRegistrationRequest struct {
 	Username string `json:"username" binding:"required"`
 }
 
+// helper to derive scheme and host (optionally using X-Forwarded headers)
+func deriveSchemeAndHost(r *http.Request) (string, string) {
+	// Scheme
+	scheme := r.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		if r.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
+	// Host
+	host := r.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = r.Host
+	}
+
+	return scheme, host
+}
+
+func stripPort(hostport string) string {
+	if h, _, err := net.SplitHostPort(hostport); err == nil {
+		return h
+	}
+
+	// If it doesn't include a port, return as-is
+	return hostport
+}
+
+func ensureOriginAllowed(cfg *webauthn.Config, origin string) {
+	for _, o := range cfg.RPOrigins {
+		if o == origin {
+			return
+		}
+	}
+
+	cfg.RPOrigins = append(cfg.RPOrigins, origin)
+}
+
 // BeginWebAuthnRegistration handles the GET /api/auth/webauthn/begin-registration endpoint
 func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 	username := ctx.Query("username")
@@ -432,8 +477,25 @@ func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 		return
 	}
 
-	// Begin registration
-	options, sessionData, err := h.WebAuthn.BeginRegistration(user)
+	// Derive rpId and origin from request to satisfy Safari/iOS matching rules
+	scheme, host := deriveSchemeAndHost(ctx.Request)
+	rpID := stripPort(host)
+	origin := fmt.Sprintf("%s://%s", scheme, host)
+
+	// Ensure current origin is allowed
+	ensureOriginAllowed(h.WebAuthn.Config, origin)
+
+	// Begin registration with per-request overrides and platform-friendly hints
+	options, sessionData, err := h.WebAuthn.BeginRegistration(
+		user,
+		webauthn.WithRegistrationRelyingPartyID(rpID),
+		webauthn.WithPublicKeyCredentialHints([]protocol.PublicKeyCredentialHints{
+			protocol.PublicKeyCredentialHintClientDevice,
+			protocol.PublicKeyCredentialHintSecurityKey,
+			protocol.PublicKeyCredentialHintHybrid,
+		}),
+	)
+
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to begin registration: %v", err)})
 
@@ -454,6 +516,8 @@ func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{
 		"publicKey":   options,
 		"sessionData": sessionDataBase64,
+		"rpId":        rpID,
+		"origin":      origin,
 	})
 }
 
@@ -475,7 +539,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 	}
 
 	// Close the original body and replace it with a new reader for later use
-	ctx.Request.Body.Close()
+	_ = ctx.Request.Body.Close()
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	// Parse the request to get the name and session data
@@ -575,8 +639,24 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 		return
 	}
 
-	// Begin login
-	options, sessionData, err := h.WebAuthn.BeginLogin(user)
+	// Derive rpId and origin from request and ensure origin is allowed
+	scheme, host := deriveSchemeAndHost(ctx.Request)
+	rpID := stripPort(host)
+	origin := fmt.Sprintf("%s://%s", scheme, host)
+
+	ensureOriginAllowed(h.WebAuthn.Config, origin)
+
+	// Begin login with per-request rpId and platform-friendly hints
+	options, sessionData, err := h.WebAuthn.BeginLogin(
+		user,
+		webauthn.WithLoginRelyingPartyID(rpID),
+		webauthn.WithAssertionPublicKeyCredentialHints([]protocol.PublicKeyCredentialHints{
+			protocol.PublicKeyCredentialHintClientDevice,
+			protocol.PublicKeyCredentialHintSecurityKey,
+			protocol.PublicKeyCredentialHintHybrid,
+		}),
+	)
+
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: fmt.Sprintf("Failed to begin login: %v", err)})
 
@@ -594,12 +674,15 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 
 		return
 	}
+
 	sessionDataBase64 := base64.StdEncoding.EncodeToString(sessionDataBytes)
 
 	// Return login options with session data
 	ctx.JSON(http.StatusOK, gin.H{
 		"publicKey":   options,
 		"sessionData": sessionDataBase64,
+		"rpId":        rpID,
+		"origin":      origin,
 	})
 }
 
@@ -609,17 +692,19 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	bodyBytes, err := io.ReadAll(ctx.Request.Body)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to read request body"})
+
 		return
 	}
 
 	// Close the original body and replace it with a new reader for later use
-	ctx.Request.Body.Close()
+	_ = ctx.Request.Body.Close()
 	ctx.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 
 	// Try to parse the request to get the session data
 	type FinishLoginRequest struct {
 		SessionData string `json:"sessionData"`
 	}
+
 	var req FinishLoginRequest
 	_ = json.Unmarshal(bodyBytes, &req)
 
@@ -631,12 +716,14 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		sessionDataBytes, err := base64.StdEncoding.DecodeString(req.SessionData)
 		if err != nil {
 			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid session data"})
+
 			return
 		}
 
 		// Unmarshal session data
 		if err := json.Unmarshal(sessionDataBytes, &sessionData); err != nil {
 			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Failed to decode session data"})
+
 			return
 		}
 
@@ -647,8 +734,10 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		sd, exists := ctx.Get("webauthnSessionData")
 		if !exists {
 			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "No session data found"})
+
 			return
 		}
+
 		sessionData = sd.(webauthn.SessionData)
 
 		if un, ok := ctx.Get("webauthnUsername"); ok {
@@ -662,6 +751,7 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	user, err := h.GetWebAuthnUser(ctx.Request.Context(), usernameStr)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+
 		return
 	}
 
@@ -669,6 +759,7 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	response, err := protocol.ParseCredentialRequestResponseBody(ctx.Request.Body)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: fmt.Sprintf("Failed to parse response: %v", err)})
+
 		return
 	}
 
@@ -685,8 +776,11 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 					// Try with BackupEligible=true
 					userTry := *user
 					userTry.Credentials = make([]webauthn.Credential, len(user.Credentials))
+
 					copy(userTry.Credentials, user.Credentials)
+
 					userTry.Credentials[idx].Flags.BackupEligible = true
+
 					if cred2, err2 := h.WebAuthn.ValidateLogin(&userTry, sessionData, response); err2 == nil {
 						// Persist resolved flag to DB
 						_, _ = h.MongoDB.GetUserCollection().UpdateOne(
@@ -694,14 +788,20 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 							bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
 							bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": true}},
 						)
+
 						credential = cred2
-						goto VALIDATE_SUCCESS
+
+						goto ValidateSuccess
 					}
+
 					// Try with BackupEligible=false
 					userTry2 := *user
 					userTry2.Credentials = make([]webauthn.Credential, len(user.Credentials))
+
 					copy(userTry2.Credentials, user.Credentials)
+
 					userTry2.Credentials[idx].Flags.BackupEligible = false
+
 					if cred3, err3 := h.WebAuthn.ValidateLogin(&userTry2, sessionData, response); err3 == nil {
 						// Persist resolved flag to DB
 						_, _ = h.MongoDB.GetUserCollection().UpdateOne(
@@ -709,9 +809,12 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 							bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
 							bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": false}},
 						)
+
 						credential = cred3
-						goto VALIDATE_SUCCESS
+
+						goto ValidateSuccess
 					}
+
 					break
 				}
 			}
@@ -723,11 +826,15 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		requestOrigin := ctx.Request.Header.Get("Origin")
 		requestReferer := ctx.Request.Referer()
 		host := ctx.Request.Host
+
 		// Attempt to extract additional info from protocol.Error if available
 		var devInfo any
-		if perr, ok := err.(*protocol.Error); ok {
+
+		var perr *protocol.Error
+		if errors.As(err, &perr) {
 			devInfo = perr.DevInfo
 		}
+
 		slog.Error("WebAuthn finish-login validation failed",
 			"username", usernameStr,
 			"rpID", rpID,
@@ -739,14 +846,16 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 			"devInfo", devInfo,
 		)
 		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
+
 		return
 	}
 
-VALIDATE_SUCCESS:
+ValidateSuccess:
 
 	// Update last used timestamp for the credential
 	now := time.Now().Format(time.RFC3339)
 	credentialID := base64.StdEncoding.EncodeToString(credential.ID)
+
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
 		ctx.Request.Context(),
 		bson.M{
@@ -755,6 +864,7 @@ VALIDATE_SUCCESS:
 		},
 		bson.M{"$set": bson.M{"webAuthnDevices.$.lastUsed": now}},
 	)
+
 	if err != nil {
 		// Log error but don't fail the login
 		fmt.Printf("Failed to update credential last used: %v\n", err)
