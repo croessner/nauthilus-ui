@@ -240,7 +240,10 @@ func performGracefulShutdown(rootCtx context.Context, servers []*Server, mongoDB
 
 // setupFrontendRouter creates and configures the Gin router for frontend with API routes and middleware
 func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	// Use recovery and our custom slog-based logger to replace Gin's default logger
+	r.Use(gin.Recovery())
+	r.Use(middleware.Logger())
 
 	// Register API handlers
 	registerAPIHandlers(r, mongoDB)
@@ -253,7 +256,10 @@ func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 
 // setupProxyRouter creates and configures the Gin router for proxy with proxy routes
 func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
-	r := gin.Default()
+	r := gin.New()
+	// Use recovery and our custom slog-based logger to replace Gin's default logger
+	r.Use(gin.Recovery())
+	r.Use(middleware.Logger())
 
 	// Register proxy handlers
 	proxyHandler := proxy.NewProxyHandler()
