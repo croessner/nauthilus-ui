@@ -686,6 +686,55 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 	})
 }
 
+// tryValidateWithBackupEligibleRecovery attempts to recover BackupEligible flag mismatches for a given response
+// by retrying validation with both true and false values and persisting the resolved flag.
+func (h *MFAHandler) tryValidateWithBackupEligibleRecovery(ctx *gin.Context, user *WebAuthnUser, sessionData webauthn.SessionData, response *protocol.ParsedCredentialAssertionData, usernameStr string) (*webauthn.Credential, bool) {
+	// Identify the credential by RawID from the response
+	rawIDB64 := base64.StdEncoding.EncodeToString(response.RawID)
+	// Try toggling the stored BackupEligible flag in-memory and validating again
+	for idx := range user.Credentials {
+		if base64.StdEncoding.EncodeToString(user.Credentials[idx].ID) == rawIDB64 {
+			// Try with BackupEligible=true
+			userTry := *user
+			userTry.Credentials = make([]webauthn.Credential, len(user.Credentials))
+			copy(userTry.Credentials, user.Credentials)
+			userTry.Credentials[idx].Flags.BackupEligible = true
+
+			if cred2, err2 := h.WebAuthn.ValidateLogin(&userTry, sessionData, response); err2 == nil {
+				// Persist resolved flag to DB (best-effort)
+				_, _ = h.MongoDB.GetUserCollection().UpdateOne(
+					ctx.Request.Context(),
+					bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
+					bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": true}},
+				)
+
+				return cred2, true
+			}
+
+			// Try with BackupEligible=false
+			userTry2 := *user
+			userTry2.Credentials = make([]webauthn.Credential, len(user.Credentials))
+			copy(userTry2.Credentials, user.Credentials)
+			userTry2.Credentials[idx].Flags.BackupEligible = false
+
+			if cred3, err3 := h.WebAuthn.ValidateLogin(&userTry2, sessionData, response); err3 == nil {
+				// Persist resolved flag to DB (best-effort)
+				_, _ = h.MongoDB.GetUserCollection().UpdateOne(
+					ctx.Request.Context(),
+					bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
+					bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": false}},
+				)
+
+				return cred3, true
+			}
+
+			break
+		}
+	}
+
+	return nil, false
+}
+
 // FinishWebAuthnLogin handles the POST /api/auth/webauthn/finish-login endpoint
 func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	// Read the raw request body
@@ -768,89 +817,43 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	if err != nil {
 		// Attempt a targeted recovery for BackupEligible flag mismatches from older records
 		if strings.Contains(err.Error(), "BackupEligible") {
-			// Identify the credential by RawID from the response
-			rawIDB64 := base64.StdEncoding.EncodeToString(response.RawID)
-			// Try toggling the stored BackupEligible flag in-memory and validating again
-			for idx := range user.Credentials {
-				if base64.StdEncoding.EncodeToString(user.Credentials[idx].ID) == rawIDB64 {
-					// Try with BackupEligible=true
-					userTry := *user
-					userTry.Credentials = make([]webauthn.Credential, len(user.Credentials))
-
-					copy(userTry.Credentials, user.Credentials)
-
-					userTry.Credentials[idx].Flags.BackupEligible = true
-
-					if cred2, err2 := h.WebAuthn.ValidateLogin(&userTry, sessionData, response); err2 == nil {
-						// Persist resolved flag to DB
-						_, _ = h.MongoDB.GetUserCollection().UpdateOne(
-							ctx.Request.Context(),
-							bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
-							bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": true}},
-						)
-
-						credential = cred2
-
-						goto ValidateSuccess
-					}
-
-					// Try with BackupEligible=false
-					userTry2 := *user
-					userTry2.Credentials = make([]webauthn.Credential, len(user.Credentials))
-
-					copy(userTry2.Credentials, user.Credentials)
-
-					userTry2.Credentials[idx].Flags.BackupEligible = false
-
-					if cred3, err3 := h.WebAuthn.ValidateLogin(&userTry2, sessionData, response); err3 == nil {
-						// Persist resolved flag to DB
-						_, _ = h.MongoDB.GetUserCollection().UpdateOne(
-							ctx.Request.Context(),
-							bson.M{"username": usernameStr, "webAuthnDevices.id": rawIDB64},
-							bson.M{"$set": bson.M{"webAuthnDevices.$.backupEligible": false}},
-						)
-
-						credential = cred3
-
-						goto ValidateSuccess
-					}
-
-					break
-				}
+			if credRecovered, ok := h.tryValidateWithBackupEligibleRecovery(ctx, user, sessionData, response, usernameStr); ok {
+				credential = credRecovered
+				err = nil
 			}
 		}
 
-		// Enhance diagnostics for RP/Origin issues while keeping client response generic
-		rpID := h.WebAuthn.Config.RPID
-		rpOrigins := h.WebAuthn.Config.RPOrigins
-		requestOrigin := ctx.Request.Header.Get("Origin")
-		requestReferer := ctx.Request.Referer()
-		host := ctx.Request.Host
+		if err != nil {
+			// Enhance diagnostics for RP/Origin issues while keeping client response generic
+			rpID := h.WebAuthn.Config.RPID
+			rpOrigins := h.WebAuthn.Config.RPOrigins
+			requestOrigin := ctx.Request.Header.Get("Origin")
+			requestReferer := ctx.Request.Referer()
+			host := ctx.Request.Host
 
-		// Attempt to extract additional info from protocol.Error if available
-		var devInfo any
+			// Attempt to extract additional info from protocol.Error if available
+			var devInfo any
 
-		var perr *protocol.Error
-		if errors.As(err, &perr) {
-			devInfo = perr.DevInfo
+			var perr *protocol.Error
+			if errors.As(err, &perr) {
+				devInfo = perr.DevInfo
+			}
+
+			slog.Error("WebAuthn finish-login validation failed",
+				"username", usernameStr,
+				"rpID", rpID,
+				"rpOrigins", rpOrigins,
+				"requestOrigin", requestOrigin,
+				"referer", requestReferer,
+				"host", host,
+				"error", err,
+				"devInfo", devInfo,
+			)
+			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
+
+			return
 		}
-
-		slog.Error("WebAuthn finish-login validation failed",
-			"username", usernameStr,
-			"rpID", rpID,
-			"rpOrigins", rpOrigins,
-			"requestOrigin", requestOrigin,
-			"referer", requestReferer,
-			"host", host,
-			"error", err,
-			"devInfo", devInfo,
-		)
-		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
-
-		return
 	}
-
-ValidateSuccess:
 
 	// Update last used timestamp for the credential
 	now := time.Now().Format(time.RFC3339)
