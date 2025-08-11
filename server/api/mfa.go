@@ -46,8 +46,8 @@ func NewMFAHandler(mongoDB db.UserDatabase) (*MFAHandler, error) {
 
 	// Auto-detect RPID if not explicitly set
 	if rpID == "" {
-		// Get server address from environment
-		address := os.Getenv("API_ADDRESS")
+		// Get server address from environment (prefer new var, fallback to deprecated)
+		address := os.Getenv("FRONTEND_ADDRESS")
 
 		// Default to the server's address if it's not a wildcard address
 		if address != "" && address != "0.0.0.0" && address != "::" {

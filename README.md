@@ -219,7 +219,7 @@ WEBAUTHN_RP_DISPLAY_NAME=Your Application Name
 WEBAUTHN_RP_ORIGINS=https://your_domain.com
 ```
 
-- `WEBAUTHN_RP_ID`: The Relying Party ID for WebAuthn (usually your domain name). If not set, the application will try to auto-detect it from the `API_ADDRESS` environment variable, falling back to "localhost" if it can't determine the domain.
+- `WEBAUTHN_RP_ID`: The Relying Party ID for WebAuthn (usually your domain name). If not set, the application will try to auto-detect it from the `FRONTEND_ADDRESS` environment variable, falling back to "localhost" if it can't determine the domain.
 - `WEBAUTHN_RP_DISPLAY_NAME`: The display name for your application shown during WebAuthn registration. Defaults to "Nauthilus UI" if not set.
 - `WEBAUTHN_RP_ORIGINS`: The allowed origins for WebAuthn operations (comma-separated list). If not set, the application will use default origins based on the RPID: for "localhost", it will use "http://localhost:3000" and "http://localhost:3001"; for other domains, it will use "https://<domain>".
 
