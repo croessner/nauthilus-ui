@@ -434,6 +434,7 @@ func deriveSchemeAndHost(r *http.Request) (string, string) {
 	return scheme, host
 }
 
+// stripPort removes the port from a host:port string and returns only the host. If no port is present, returns input as-is.
 func stripPort(hostport string) string {
 	if h, _, err := net.SplitHostPort(hostport); err == nil {
 		return h
@@ -443,6 +444,7 @@ func stripPort(hostport string) string {
 	return hostport
 }
 
+// ensureOriginAllowed ensures the provided origin is added to the list of allowed origins in the WebAuthn configuration.
 func ensureOriginAllowed(cfg *webauthn.Config, origin string) {
 	for _, o := range cfg.RPOrigins {
 		if o == origin {
@@ -451,6 +453,36 @@ func ensureOriginAllowed(cfg *webauthn.Config, origin string) {
 	}
 
 	cfg.RPOrigins = append(cfg.RPOrigins, origin)
+}
+
+// logWebAuthnContext logs minimal, non-sensitive info about how rpID and origin were derived
+// and which X-Forwarded-* headers influenced the decision. It avoids over-logging by emitting
+// a single concise line per relevant request phase.
+func logWebAuthnContext(r *http.Request, phase, rpID, origin string) {
+	xfp := r.Header.Get("X-Forwarded-Proto")
+	xfh := r.Header.Get("X-Forwarded-Host")
+	xfport := r.Header.Get("X-Forwarded-Port")
+	xff := r.Header.Get("X-Forwarded-For")
+
+	// Compute effective scheme/host similar to how we derive rpID/origin
+	scheme, _ := deriveSchemeAndHost(r)
+	effectiveTLS := (scheme == "https") || (r.TLS != nil)
+
+	slog.Info("WebAuthn context",
+		"phase", phase,
+		"method", r.Method,
+		"path", r.URL.Path,
+		"rpID", rpID,
+		"origin", origin,
+		"scheme", scheme,
+		"x-forwarded-proto", xfp,
+		"x-forwarded-host", xfh,
+		"x-forwarded-port", xfport,
+		"x-forwarded-for-present", xff != "",
+		"host", r.Host,
+		"tls", r.TLS != nil,
+		"tls-effective", effectiveTLS,
+	)
 }
 
 // BeginWebAuthnRegistration handles the GET /api/auth/webauthn/begin-registration endpoint
@@ -484,6 +516,9 @@ func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 
 	// Ensure current origin is allowed
 	ensureOriginAllowed(h.WebAuthn.Config, origin)
+
+	// Minimal server-side visibility into effective rpID/origin and proxy headers
+	logWebAuthnContext(ctx.Request, "begin-registration", rpID, origin)
 
 	// Begin registration with per-request overrides and platform-friendly hints
 	options, sessionData, err := h.WebAuthn.BeginRegistration(
@@ -645,6 +680,9 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 	origin := fmt.Sprintf("%s://%s", scheme, host)
 
 	ensureOriginAllowed(h.WebAuthn.Config, origin)
+
+	// Minimal server-side visibility into effective rpID/origin and proxy headers
+	logWebAuthnContext(ctx.Request, "begin-login", rpID, origin)
 
 	// Begin login with per-request rpId and platform-friendly hints
 	options, sessionData, err := h.WebAuthn.BeginLogin(
