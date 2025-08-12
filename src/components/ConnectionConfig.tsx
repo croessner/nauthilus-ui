@@ -223,6 +223,9 @@ const ConnectionConfig: React.FC = () => {
         message: 'Connection settings saved successfully',
         severity: 'success'
       });
+
+      // Mark form as clean since changes have been saved
+      setHasUnsavedChanges(false);
     } catch (error) {
       console.error('Error updating connection configuration:', error);
       setNotification({
