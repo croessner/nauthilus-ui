@@ -133,9 +133,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
     try {
       setAuth(prev => ({ ...prev, loading: true, error: null }));
 
-      // Redirect to OIDC provider
-      // This is a placeholder - actual implementation will depend on the OIDC provider
-      window.location.href = '/api/v1/oidc/login';
+      // Redirect to OIDC provider via backend endpoint
+      window.location.href = '/api/auth/oidc/login';
 
       // The rest of the flow will be handled by the OIDC callback
       // which should set the token and redirect back to the app

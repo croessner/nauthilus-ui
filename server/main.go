@@ -105,6 +105,10 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	authHandler := api.NewAuthHandler(mongoDB)
 	authHandler.RegisterRoutes(r)
 
+	// Register OIDC endpoints (optional; middleware will skip these)
+	oidcHandler := api.NewOIDCHandler(mongoDB)
+	oidcHandler.RegisterRoutes(r)
+
 	// Register health endpoint (middleware will skip these)
 	healthHandler := api.NewHealthHandler(mongoDB)
 	healthHandler.RegisterRoutes(r)

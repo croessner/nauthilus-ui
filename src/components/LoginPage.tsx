@@ -11,11 +11,25 @@ import {
   FormControlLabel,
 } from '@mui/material';
 import { useAuth } from '../contexts/AuthContext';
+
+const isOIDCEnabled = (): boolean => {
+  try {
+    if (typeof window !== 'undefined' && window._env_ && typeof window._env_.REACT_APP_OIDC_ENABLED === 'string') {
+      return window._env_.REACT_APP_OIDC_ENABLED === 'true';
+    }
+    // Vite env
+    // @ts-ignore
+    const env = (typeof import.meta !== 'undefined' && (import.meta as any).env) || {};
+    if (typeof env.REACT_APP_OIDC_ENABLED === 'string') return env.REACT_APP_OIDC_ENABLED === 'true';
+    if (typeof env.VITE_OIDC_ENABLED === 'string') return env.VITE_OIDC_ENABLED === 'true';
+  } catch {}
+  return false;
+};
 import { useUser } from '../contexts/UserContext';
 import { useNavigate } from 'react-router-dom';
 
 const LoginPage = (): React.JSX.Element => {
-  const { auth, login: authLogin } = useAuth();
+  const { auth, login: authLogin, loginWithOIDC } = useAuth();
   const { login: userLogin } = useUser();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
@@ -176,6 +190,21 @@ const LoginPage = (): React.JSX.Element => {
             {auth.loading ? <CircularProgress size={24} /> : 'Login'}
           </Button>
         </form>
+
+        {isOIDCEnabled() && (
+          <Box sx={{ mt: 2 }}>
+            <Button
+              variant="outlined"
+              color="primary"
+              fullWidth
+              size="large"
+              onClick={() => loginWithOIDC()}
+              disabled={auth.loading}
+            >
+              Login with Single Sign-On (OIDC)
+            </Button>
+          </Box>
+        )}
       </Paper>
     </Box>
   );

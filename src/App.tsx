@@ -66,6 +66,7 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import ValidationErrors from './components/common/ValidationErrors';
 import LoginPage from './components/LoginPage';
 import MFAPage from './components/MFAPage';
+import OIDCCallback from './components/OIDCCallback';
 
 // Import configuration components
 import ServerConfig from './components/ServerConfig';
@@ -1202,6 +1203,11 @@ const AppContent = (): JSX.Element => {
           <Route path="/mfa" element={
             <Box sx={{ height: '100vh', bgcolor: 'background.default' }}>
               <MFAPage />
+            </Box>
+          } />
+          <Route path="/oidc/callback" element={
+            <Box sx={{ height: '100vh', bgcolor: 'background.default' }}>
+              <OIDCCallback />
             </Box>
           } />
           <Route path="*" element={

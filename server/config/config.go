@@ -40,6 +40,16 @@ type Config struct {
 	WebAuthnRPID string
 	// WebAuthnRPDisplayName is the Relying Party display name for WebAuthn.
 	WebAuthnRPDisplayName string
+
+	// OIDC configuration (optional)
+	OIDCEnabled       bool
+	OIDCIssuer        string
+	OIDCClientID      string
+	OIDCClientSecret  string
+	OIDCRedirectURL   string
+	OIDCScopes        string // space-separated scopes, default: "openid profile email"
+	OIDCRoleClaim     string // claim to extract roles from, e.g., "roles" or "realm_access.roles"
+	OIDCUsernameClaim string // preferred_username, email, or sub
 }
 
 // LoadConfig loads configuration from environment variables.
@@ -68,6 +78,16 @@ func LoadConfig() *Config {
 		// WebAuthn configuration
 		WebAuthnRPID:          getEnv("WEBAUTHN_RP_ID", ""),
 		WebAuthnRPDisplayName: getEnv("WEBAUTHN_RP_DISPLAY_NAME", "Nauthilus UI"),
+
+		// OIDC configuration (optional)
+		OIDCEnabled:       getEnv("REACT_APP_OIDC_ENABLED", "false") == "true",
+		OIDCIssuer:        getEnv("REACT_APP_OIDC_ISSUER", ""),
+		OIDCClientID:      getEnv("REACT_APP_OIDC_CLIENT_ID", ""),
+		OIDCClientSecret:  getEnv("REACT_APP_OIDC_CLIENT_SECRET", ""),
+		OIDCRedirectURL:   getEnv("REACT_APP_OIDC_REDIRECT_URL", ""),
+		OIDCScopes:        getEnv("REACT_APP_OIDC_SCOPES", "openid profile email"),
+		OIDCRoleClaim:     getEnv("REACT_APP_OIDC_ROLE_CLAIM", "roles"),
+		OIDCUsernameClaim: getEnv("REACT_APP_OIDC_USERNAME_CLAIM", "preferred_username"),
 	}
 
 	return config
