@@ -146,6 +146,14 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	slog.Info("Password verified successfully", "username", loginRequest.Username)
 
+	// Block login for disabled users
+	if !user.Enabled {
+		slog.Warn("Login attempt for disabled user", "username", loginRequest.Username)
+		ctx.JSON(http.StatusForbidden, models.ErrorResponse{Error: "User account is disabled"})
+
+		return
+	}
+
 	// Check if MFA is required and not already verified
 	if !loginRequest.MfaVerified {
 		// Determine enabled MFA methods
