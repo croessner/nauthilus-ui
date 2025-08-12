@@ -12,6 +12,11 @@ import {
   CircularProgress,
   Tooltip,
   IconButton,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogContentText,
+  DialogActions,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -78,6 +83,37 @@ const ConnectionConfig: React.FC = () => {
     message: '',
     severity: 'info'
   });
+
+  // Confirmation dialog state for loading configuration
+  const [loadConfirmOpen, setLoadConfirmOpen] = useState(false);
+  const pendingLoadValuesRef = React.useRef<any>(null);
+
+  const performLoadConfiguration = useCallback((values: any) => {
+    setNotification({
+      open: true,
+      message: 'Loading configuration from backend...',
+      severity: 'info'
+    });
+    setStatusMessage('Loading configuration from backend...');
+
+    // Reset settings state to force a reload after configuration is loaded
+    resetSettingsState();
+
+    loadConfigFromBackend(values)
+      .then(() => {
+        setNotification({
+          open: true,
+          message: 'Configuration loaded successfully from backend',
+          severity: 'success'
+        });
+        setStatusMessage('Connected to Nauthilus backend (ping successful)');
+      })
+      .catch((error) => {
+        // Display the error in the status message area
+        setStatusMessage(`Failed to load configuration: ${error.message}`);
+        console.error('Configuration loading failed:', error.message);
+      });
+  }, [loadConfigFromBackend, setNotification, setStatusMessage]);
 
   // Function to check connection to the backend
   const checkConnection = useCallback(async (connectionConfig: any) => {
@@ -532,30 +568,9 @@ const ConnectionConfig: React.FC = () => {
                     }
                   }}
                   onClick={() => {
-                    setNotification({
-                      open: true,
-                      message: 'Loading configuration from backend...',
-                      severity: 'info'
-                    });
-                    setStatusMessage('Loading configuration from backend...');
-
-                    // Reset settings state to force a reload after configuration is loaded
-                    resetSettingsState();
-
-                    loadConfigFromBackend(values)
-                      .then(() => {
-                        setNotification({
-                          open: true,
-                          message: 'Configuration loaded successfully from backend',
-                          severity: 'success'
-                        });
-                        setStatusMessage('Connected to Nauthilus backend (ping successful)');
-                      })
-                      .catch((error) => {
-                        // Display the error in the status message area
-                        setStatusMessage(`Failed to load configuration: ${error.message}`);
-                        console.error('Configuration loading failed:', error.message);
-                      });
+                    // Open confirmation dialog before loading configuration
+                    pendingLoadValuesRef.current = values;
+                    setLoadConfirmOpen(true);
                   }}
                   startIcon={<RefreshIcon />}
                 >
@@ -575,6 +590,34 @@ const ConnectionConfig: React.FC = () => {
         )}
       </Formik>
 
+      {/* Load Configuration Confirmation Dialog */}
+      <Dialog
+        open={loadConfirmOpen}
+        onClose={() => setLoadConfirmOpen(false)}
+      >
+        <DialogTitle>Load Configuration</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            This action will completely replace your current configuration with the configuration from the backend. Do you want to continue?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setLoadConfirmOpen(false)}>Cancel</Button>
+          <Button
+            onClick={() => {
+              const vals = pendingLoadValuesRef.current;
+              setLoadConfirmOpen(false);
+              if (vals) {
+                performLoadConfiguration(vals);
+              }
+            }}
+            color="primary"
+            autoFocus
+          >
+            Load Configuration
+          </Button>
+        </DialogActions>
+      </Dialog>
 
     </>
   );
