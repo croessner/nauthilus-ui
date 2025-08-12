@@ -369,7 +369,7 @@ const BruteForceConfig: React.FC = () => {
       }
 
       const response = await authenticatedFetch(proxyUrl.toString(), {
-        method: 'POST',
+        method: 'DELETE',
         body: JSON.stringify({ user: username }),
       });
 

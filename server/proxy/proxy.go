@@ -278,6 +278,7 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	router.GET("/proxy/cache/flush", h.CacheFlushProxy)
 	router.POST("/proxy/cache/flush", h.CacheFlushProxy)
+	router.DELETE("/proxy/cache/flush", h.CacheFlushProxy)
 
 	router.GET("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
 	router.POST("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
