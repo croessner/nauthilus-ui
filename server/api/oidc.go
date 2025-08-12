@@ -32,6 +32,26 @@ func (h *OIDCHandler) RegisterRoutes(router *gin.Engine) {
 	router.GET("/api/auth/oidc/callback", h.Callback)
 }
 
+// computeOIDCCallbackURL builds the absolute redirect URI to the backend callback endpoint
+// using request information and common reverse-proxy headers.
+func computeOIDCCallbackURL(ctx *gin.Context) string {
+	scheme := ctx.Request.Header.Get("X-Forwarded-Proto")
+	if scheme == "" {
+		if ctx.Request.TLS != nil {
+			scheme = "https"
+		} else {
+			scheme = "http"
+		}
+	}
+
+	host := ctx.Request.Header.Get("X-Forwarded-Host")
+	if host == "" {
+		host = ctx.Request.Host
+	}
+
+	return fmt.Sprintf("%s://%s/api/auth/oidc/callback", scheme, host)
+}
+
 // StartLogin begins the OIDC authorization code flow
 func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 	cfg := h.MongoDB.Config
@@ -42,8 +62,8 @@ func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 		return
 	}
 
-	if cfg.OIDCIssuer == "" || cfg.OIDCClientID == "" || cfg.OIDCRedirectURL == "" {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "OIDC not configured: issuer, clientID and redirectURL are required"})
+	if cfg.OIDCIssuer == "" || cfg.OIDCClientID == "" {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "OIDC not configured: issuer and clientID are required"})
 
 		return
 	}
@@ -61,11 +81,12 @@ func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 		scopes = strings.Fields(cfg.OIDCScopes)
 	}
 
+	callbackURL := computeOIDCCallbackURL(ctx)
 	oauth2Config := oauth2.Config{
 		ClientID:     cfg.OIDCClientID,
 		ClientSecret: cfg.OIDCClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  cfg.OIDCRedirectURL,
+		RedirectURL:  callbackURL,
 		Scopes:       scopes,
 	}
 
@@ -127,11 +148,12 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 		scopes = strings.Fields(cfg.OIDCScopes)
 	}
 
+	callbackURL := computeOIDCCallbackURL(ctx)
 	oauth2Config := oauth2.Config{
 		ClientID:     cfg.OIDCClientID,
 		ClientSecret: cfg.OIDCClientSecret,
 		Endpoint:     provider.Endpoint(),
-		RedirectURL:  cfg.OIDCRedirectURL,
+		RedirectURL:  callbackURL,
 		Scopes:       scopes,
 	}
 

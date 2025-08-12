@@ -228,7 +228,9 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		return
 	}
 
-	defer resp.Body.Close()
+	defer func(Body io.ReadCloser) {
+		_ = Body.Close()
+	}(resp.Body)
 
 	// Copy the response headers
 	copyHeaders(ctx.Writer.Header(), resp.Header)
@@ -237,7 +239,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	ctx.Writer.WriteHeader(resp.StatusCode)
 
 	// Copy the response body
-	io.Copy(ctx.Writer, resp.Body)
+	_, _ = io.Copy(ctx.Writer, resp.Body)
 }
 
 // RegisterRoutes registers the proxy routes
@@ -293,15 +295,6 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	router.GET("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
 	router.POST("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
-
-	router.GET("/proxy/hooks/learning-mode", h.LearningModeProxy)
-	router.POST("/proxy/hooks/learning-mode", h.LearningModeProxy)
-
-	router.GET("/proxy/hooks/neural-feedback", h.NeuralFeedbackProxy)
-	router.POST("/proxy/hooks/neural-feedback", h.NeuralFeedbackProxy)
-
-	router.GET("/proxy/hooks/train-neural-network", h.TrainNeuralNetworkProxy)
-	router.POST("/proxy/hooks/train-neural-network", h.TrainNeuralNetworkProxy)
 }
 
 // PingProxy handles the /proxy/ping endpoint
@@ -403,7 +396,7 @@ func (h *ProxyHandler) BruteforceFlushProxy(ctx *gin.Context) {
 		}
 
 		// Close the original body
-		ctx.Request.Body.Close()
+		_ = ctx.Request.Body.Close()
 
 		// Parse the JSON body
 		if err := json.Unmarshal(bodyData, &requestBody); err != nil {
@@ -494,147 +487,6 @@ func (h *ProxyHandler) DistributedBruteForceTestProxy(ctx *gin.Context) {
 		RequiresAuth: true,
 		ContentType:  "application/json",
 		Operation:    getOperation(ctx),
-	}
-
-	h.handleProxyRequest(ctx, config)
-}
-
-// LearningModeProxy handles the /proxy/hooks/learning-mode endpoint
-func (h *ProxyHandler) LearningModeProxy(ctx *gin.Context) {
-	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
-	if !ok {
-		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
-
-		return
-	}
-
-	// Create a custom handler for learning-mode that always uses GET method
-	// Parse the target URL
-	targetURL, statusCode, errMsg, ok := getTargetURL(ctx)
-	if !ok {
-		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
-
-		return
-	}
-
-	// Log the request
-	slog.Info("Handling proxy request", "endpoint", "/proxy/hooks/learning-mode", "method", "GET", "target", targetURL, "endpoint_path", endpointPath)
-
-	// Parse the target URL
-	target, err := url.Parse(targetURL)
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
-
-		return
-	}
-
-	// Set the path
-	target.Path = endpointPath
-
-	// If operation is provided, append it as a query parameter
-	operation := getOperation(ctx)
-	if operation != "" {
-		// For learning-mode, we need to set the enabled parameter based on the operation
-		if operation == "enable" || operation == "disable" {
-			// Set the enabled parameter based on the operation
-			enabledValue := "true"
-			if operation == "disable" {
-				enabledValue = "false"
-			}
-
-			// Check if the endpoint path already has query parameters
-			if target.RawQuery != "" {
-				target.RawQuery += "&enabled=" + enabledValue
-			} else {
-				target.RawQuery = "enabled=" + enabledValue
-			}
-		}
-
-		// Check if the endpoint path already has query parameters
-		if target.RawQuery != "" {
-			target.RawQuery += "&operation=" + operation
-		} else {
-			target.RawQuery = "operation=" + operation
-		}
-	}
-
-	// Create the proxy request - always use GET method for learning-mode
-	req, err := http.NewRequest("GET", target.String(), nil)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create proxy request"})
-
-		return
-	}
-
-	// Copy headers from the original request
-	copyHeaders(req.Header, ctx.Request.Header)
-
-	// Add authentication headers
-	authType, authValue := getAuthParams(ctx)
-	utils.AddAuthorizationHeader(req, authType, authValue)
-
-	// Set content type
-	req.Header.Set("Content-Type", "application/json")
-
-	// Send the proxy request
-	client := &http.Client{}
-	resp, err := client.Do(req)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to connect to backend server: " + err.Error()})
-
-		return
-	}
-
-	defer resp.Body.Close()
-
-	// Copy the response headers
-	copyHeaders(ctx.Writer.Header(), resp.Header)
-
-	// Set the status code
-	ctx.Writer.WriteHeader(resp.StatusCode)
-
-	// Copy the response body
-	io.Copy(ctx.Writer, resp.Body)
-}
-
-// NeuralFeedbackProxy handles the /proxy/hooks/neural-feedback endpoint
-func (h *ProxyHandler) NeuralFeedbackProxy(ctx *gin.Context) {
-	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
-	if !ok {
-		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
-
-		return
-	}
-
-	config := ProxyConfig{
-		EndpointPath: endpointPath,
-		LogEndpoint:  "/proxy/hooks/neural-feedback",
-		RequiresAuth: true,
-		ContentType:  "application/json",
-		Operation:    getOperation(ctx),
-	}
-
-	h.handleProxyRequest(ctx, config)
-}
-
-// TrainNeuralNetworkProxy handles the /proxy/hooks/train-neural-network endpoint
-func (h *ProxyHandler) TrainNeuralNetworkProxy(ctx *gin.Context) {
-	// Get endpoint path
-	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
-	if !ok {
-		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
-
-		return
-	}
-
-	config := ProxyConfig{
-		EndpointPath: endpointPath,
-		LogEndpoint:  "/proxy/hooks/train-neural-network",
-		RequiresAuth: true,
-		ContentType:  "application/json",
-		Operation:    ctx.Query("operation"), // This endpoint only uses query parameters
 	}
 
 	h.handleProxyRequest(ctx, config)
