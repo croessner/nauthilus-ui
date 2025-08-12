@@ -93,17 +93,45 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		return
 	}
 
-	// Find user by username
-	var user models.User
+	// Find user by username (decode with pointer enabled for backward compatibility)
+	type dbUser struct {
+		Username     string   `bson:"username"`
+		PasswordHash string   `bson:"passwordHash"`
+		Roles        []string `bson:"roles"`
+		Enabled      *bool    `bson:"enabled"`
+		DisplayName  string   `bson:"displayName,omitempty"`
+		Email        string   `bson:"email,omitempty"`
+		Avatar       string   `bson:"avatar,omitempty"`
+		LastLogin    *string  `bson:"lastLogin"`
+		LastModified string   `bson:"lastModified"`
+	}
+
+	var du dbUser
 	err := h.MongoDB.GetUserCollection().FindOne(
 		context.Background(),
 		bson.M{"username": loginRequest.Username},
-	).Decode(&user)
+	).Decode(&du)
 
 	if err != nil {
 		slog.Warn("User not found during login", "username", loginRequest.Username, "error", err)
 		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
+	}
+
+	enabled := true
+	if du.Enabled != nil {
+		enabled = *du.Enabled
+	}
+	user := models.User{
+		Username:     du.Username,
+		PasswordHash: du.PasswordHash,
+		Roles:        du.Roles,
+		DisplayName:  du.DisplayName,
+		Email:        du.Email,
+		Avatar:       du.Avatar,
+		Enabled:      enabled,
+		LastLogin:    du.LastLogin,
+		LastModified: du.LastModified,
 	}
 
 	slog.Info("User found during login", "username", user.Username, "roles", user.Roles)

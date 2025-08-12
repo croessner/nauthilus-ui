@@ -21,6 +21,7 @@ func Logger() gin.HandlerFunc {
 		clientIP := c.ClientIP()
 		method := c.Request.Method
 		path := c.Request.URL.Path
+
 		query := c.Request.URL.RawQuery
 		if query != "" {
 			path = path + "?" + query

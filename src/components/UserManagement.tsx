@@ -26,7 +26,8 @@ import {
   Chip,
   Avatar,
   Tooltip,
-  Divider
+  Divider,
+  Switch
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -44,6 +45,7 @@ const UserManagement = (): React.JSX.Element => {
     displayName?: string;
     email?: string;
     avatar?: string;
+    enabled?: boolean;
     lastLogin?: string | null;
     lastModified?: string;
   }[]>([]);
@@ -82,6 +84,35 @@ const UserManagement = (): React.JSX.Element => {
       await loadUsers();
     })();
   }, [loadUsers]);
+
+  const handleToggleEnabled = async (targetUsername: string, newEnabled: boolean, targetRoles: string[]) => {
+    if (!isAdmin) {
+      return;
+    }
+    // Do not allow changing own status (UI disables switch, this is an extra safety)
+    if (currentUser?.username === targetUsername) {
+      setLocalError('You cannot change your own status');
+      await loadUsers();
+      return;
+    }
+    // Prevent disabling the current admin user
+    const isTargetCurrentAdmin = currentUser?.username === targetUsername && targetRoles.includes('admin');
+    if (!newEnabled && isTargetCurrentAdmin) {
+      setLocalError('Cannot disable the current admin user');
+      // Reload users to reset any optimistic UI
+      await loadUsers();
+      return;
+    }
+    try {
+      await updateUserProfile(targetUsername, { enabled: newEnabled });
+      setSuccessMessage(`User ${targetUsername} ${newEnabled ? 'enabled' : 'disabled'} successfully`);
+      await loadUsers();
+    } catch (err) {
+      console.error('Error toggling enabled status:', err);
+      setLocalError('Failed to update user status');
+      await loadUsers();
+    }
+  };
 
   const handleAddUser = async () => {
     setLocalError(null);
@@ -297,6 +328,7 @@ const UserManagement = (): React.JSX.Element => {
                     <TableCell>Display Name</TableCell>
                     <TableCell>Email</TableCell>
                     <TableCell>Roles</TableCell>
+                    <TableCell>Status</TableCell>
                     <TableCell>Last Login</TableCell>
                     <TableCell>Last Modified</TableCell>
                     <TableCell align="right">Actions</TableCell>
@@ -331,6 +363,28 @@ const UserManagement = (): React.JSX.Element => {
                             sx={{ mr: 0.5 }} 
                           />
                         ))}
+                      </TableCell>
+                      <TableCell>
+                        <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                          <Chip 
+                            label={user.enabled === false ? 'Disabled' : 'Enabled'} 
+                            color={user.enabled === false ? 'default' : 'success'} 
+                            size="small" 
+                            sx={{ mr: 1 }} 
+                          />
+                          {isAdmin && (
+                            <Tooltip title={currentUser?.username === user.username ? 'You cannot change your own status' : 'Toggle enabled'}>
+                              <span>
+                                <Switch
+                                  size="small"
+                                  checked={user.enabled !== false}
+                                  onChange={(e) => handleToggleEnabled(user.username, e.target.checked, user.roles)}
+                                  disabled={!isAdmin || currentUser?.username === user.username}
+                                />
+                              </span>
+                            </Tooltip>
+                          )}
+                        </Box>
                       </TableCell>
                       <TableCell>
                         {user.lastLogin !== null && user.lastLogin !== undefined ? new Date(user.lastLogin).toLocaleString() : 'Never logged in'}
@@ -668,3 +722,7 @@ const UserManagement = (): React.JSX.Element => {
 };
 
 export default UserManagement;
+
+
+// Admin-only toggle for enabled/disabled
+// Placed at end of component file to avoid disrupting existing logic

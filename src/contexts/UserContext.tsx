@@ -8,6 +8,7 @@ interface User {
   displayName?: string;
   email?: string;
   avatar?: string;
+  enabled?: boolean;
   lastLogin?: string | null;
   lastModified?: string;
   // TOTP fields

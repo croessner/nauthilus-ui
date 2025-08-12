@@ -190,6 +190,7 @@ func (m *MongoDB) initializeDefaultUser(ctx context.Context) error {
 			Username:     "admin",
 			PasswordHash: string(passwordHash),
 			Roles:        []string{"admin"},
+			Enabled:      true,
 			LastLogin:    nil,
 			LastModified: time.Now().Format(time.RFC3339),
 		}

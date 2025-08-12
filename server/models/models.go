@@ -21,6 +21,7 @@ type User struct {
 	DisplayName  string   `bson:"displayName,omitempty" json:"displayName,omitempty"`
 	Email        string   `bson:"email,omitempty" json:"email,omitempty"`
 	Avatar       string   `bson:"avatar,omitempty" json:"avatar,omitempty"`
+	Enabled      bool     `bson:"enabled" json:"enabled"`
 	LastLogin    *string  `bson:"lastLogin" json:"lastLogin"`
 	LastModified string   `bson:"lastModified" json:"lastModified"`
 	// TOTP fields

@@ -98,6 +98,7 @@ export interface User {
   displayName?: string;
   email?: string;
   avatar?: string;
+  enabled?: boolean; // frontend flag, defaults to true on backend
   lastLogin?: string | null;
   lastModified?: string;
   // TOTP fields

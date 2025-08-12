@@ -36,6 +36,7 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 				{
 					Username:     "admin",
 					Roles:        []string{"admin"},
+					Enabled:      true,
 					LastLogin:    nil,
 					LastModified: time.Now().Format(time.RFC3339),
 				},
@@ -55,11 +56,51 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 
 	defer cursor.Close(ctx.Request.Context())
 
-	var users []models.User
-	if err := cursor.All(ctx.Request.Context(), &users); err != nil {
+	// Use an intermediate type to detect if 'enabled' is missing (nil)
+	type dbUser struct {
+		Username        string                      `bson:"username" json:"username"`
+		Roles           []string                    `bson:"roles" json:"roles"`
+		DisplayName     string                      `bson:"displayName,omitempty" json:"displayName,omitempty"`
+		Email           string                      `bson:"email,omitempty" json:"email,omitempty"`
+		Avatar          string                      `bson:"avatar,omitempty" json:"avatar,omitempty"`
+		Enabled         *bool                       `bson:"enabled" json:"enabled"`
+		LastLogin       *string                     `bson:"lastLogin" json:"lastLogin"`
+		LastModified    string                      `bson:"lastModified" json:"lastModified"`
+		TOTPEnabled     bool                        `bson:"totpEnabled" json:"totpEnabled"`
+		TOTPSecret      string                      `bson:"totpSecret,omitempty" json:"totpSecret,omitempty"`
+		WebAuthnEnabled bool                        `bson:"webAuthnEnabled" json:"webAuthnEnabled"`
+		WebAuthnDevices []models.WebAuthnCredential `bson:"webAuthnDevices,omitempty" json:"webAuthnDevices,omitempty"`
+	}
+
+	var dbUsers []dbUser
+	if err := cursor.All(ctx.Request.Context(), &dbUsers); err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
 
 		return
+	}
+
+	// Map to public model with backward-compatible default: missing enabled -> true
+	users := make([]models.User, 0, len(dbUsers))
+	for _, u := range dbUsers {
+		enabled := true
+		if u.Enabled != nil {
+			enabled = *u.Enabled
+		}
+
+		users = append(users, models.User{
+			Username:        u.Username,
+			Roles:           u.Roles,
+			DisplayName:     u.DisplayName,
+			Email:           u.Email,
+			Avatar:          u.Avatar,
+			Enabled:         enabled,
+			LastLogin:       u.LastLogin,
+			LastModified:    u.LastModified,
+			TOTPEnabled:     u.TOTPEnabled,
+			TOTPSecret:      u.TOTPSecret,
+			WebAuthnEnabled: u.WebAuthnEnabled,
+			WebAuthnDevices: u.WebAuthnDevices,
+		})
 	}
 
 	ctx.JSON(http.StatusOK, models.UsersResponse{Users: users})
@@ -75,13 +116,29 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 	}
 
 	username := ctx.Param("username")
-	var user models.User
+	// Use intermediate type with pointer for enabled to detect missing field
+	type dbUser struct {
+		Username        string                      `bson:"username" json:"username"`
+		Roles           []string                    `bson:"roles" json:"roles"`
+		DisplayName     string                      `bson:"displayName,omitempty" json:"displayName,omitempty"`
+		Email           string                      `bson:"email,omitempty" json:"email,omitempty"`
+		Avatar          string                      `bson:"avatar,omitempty" json:"avatar,omitempty"`
+		Enabled         *bool                       `bson:"enabled" json:"enabled"`
+		LastLogin       *string                     `bson:"lastLogin" json:"lastLogin"`
+		LastModified    string                      `bson:"lastModified" json:"lastModified"`
+		TOTPEnabled     bool                        `bson:"totpEnabled" json:"totpEnabled"`
+		TOTPSecret      string                      `bson:"totpSecret,omitempty" json:"totpSecret,omitempty"`
+		WebAuthnEnabled bool                        `bson:"webAuthnEnabled" json:"webAuthnEnabled"`
+		WebAuthnDevices []models.WebAuthnCredential `bson:"webAuthnDevices,omitempty" json:"webAuthnDevices,omitempty"`
+	}
+
+	var du dbUser
 
 	err := h.MongoDB.GetUserCollection().FindOne(
 		ctx.Request.Context(),
 		bson.M{"username": username},
 		options.FindOne().SetProjection(bson.M{"passwordHash": 0}),
-	).Decode(&user)
+	).Decode(&du)
 
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -91,6 +148,25 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 		}
 
 		return
+	}
+
+	enabled := true
+	if du.Enabled != nil {
+		enabled = *du.Enabled
+	}
+	user := models.User{
+		Username:        du.Username,
+		Roles:           du.Roles,
+		DisplayName:     du.DisplayName,
+		Email:           du.Email,
+		Avatar:          du.Avatar,
+		Enabled:         enabled,
+		LastLogin:       du.LastLogin,
+		LastModified:    du.LastModified,
+		TOTPEnabled:     du.TOTPEnabled,
+		TOTPSecret:      du.TOTPSecret,
+		WebAuthnEnabled: du.WebAuthnEnabled,
+		WebAuthnDevices: du.WebAuthnDevices,
 	}
 
 	ctx.JSON(http.StatusOK, models.UserResponse{User: user})
@@ -109,6 +185,7 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 		Username string   `json:"username"`
 		Password string   `json:"password"`
 		Roles    []string `json:"roles"`
+		Enabled  *bool    `json:"enabled"`
 		models.User
 	}
 
@@ -140,6 +217,12 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 	}
 
 	// Create user
+	// Determine enabled status (default true)
+	enabled := true
+	if userRequest.Enabled != nil {
+		enabled = *userRequest.Enabled
+	}
+
 	user := models.User{
 		Username:     userRequest.Username,
 		PasswordHash: string(passwordHash),
@@ -147,6 +230,7 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 		DisplayName:  userRequest.DisplayName,
 		Email:        userRequest.Email,
 		Avatar:       userRequest.Avatar,
+		Enabled:      enabled,
 		LastLogin:    nil,
 		LastModified: time.Now().Format(time.RFC3339),
 	}
@@ -181,6 +265,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	var userRequest struct {
 		Password string   `json:"password"`
 		Roles    []string `json:"roles"`
+		Enabled  *bool    `json:"enabled"`
 		models.User
 	}
 
@@ -213,6 +298,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 
 			return
 		}
+
 		update["passwordHash"] = string(passwordHash)
 	}
 
@@ -230,6 +316,40 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 
 	if userRequest.Avatar != "" {
 		update["avatar"] = userRequest.Avatar
+	}
+
+	// Handle enabled status update with admin check
+	if userRequest.Enabled != nil {
+		// Only admins can toggle enabled
+		rolesIfc, _ := ctx.Get("roles")
+		roles, _ := rolesIfc.([]string)
+		isAdmin := false
+
+		for _, r := range roles {
+			if r == "admin" {
+				isAdmin = true
+
+				break
+			}
+		}
+
+		if !isAdmin {
+			ctx.JSON(http.StatusForbidden, models.ErrorResponse{Error: "Only admins can change user enabled status"})
+
+			return
+		}
+
+		// Prevent disabling current admin
+		currentUserIfc, _ := ctx.Get("username")
+
+		currentUsername, _ := currentUserIfc.(string)
+		if currentUsername == username && hasRole(user.Roles, "admin") && !*userRequest.Enabled {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Cannot disable the current admin user"})
+
+			return
+		}
+
+		update["enabled"] = *userRequest.Enabled
 	}
 
 	if userRequest.LastLogin != nil {
@@ -271,6 +391,17 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, models.UserResponse{User: updatedUser})
+}
+
+// hasRole checks if a role exists in the slice
+func hasRole(roles []string, role string) bool {
+	for _, r := range roles {
+		if r == role {
+			return true
+		}
+	}
+
+	return false
 }
 
 // DeleteUser handles the DELETE /api/users/:username endpoint
