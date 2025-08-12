@@ -95,15 +95,19 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	// Find user by username (decode with pointer enabled for backward compatibility)
 	type dbUser struct {
-		Username     string   `bson:"username"`
-		PasswordHash string   `bson:"passwordHash"`
-		Roles        []string `bson:"roles"`
-		Enabled      *bool    `bson:"enabled"`
-		DisplayName  string   `bson:"displayName,omitempty"`
-		Email        string   `bson:"email,omitempty"`
-		Avatar       string   `bson:"avatar,omitempty"`
-		LastLogin    *string  `bson:"lastLogin"`
-		LastModified string   `bson:"lastModified"`
+		Username        string                      `bson:"username"`
+		PasswordHash    string                      `bson:"passwordHash"`
+		Roles           []string                    `bson:"roles"`
+		Enabled         *bool                       `bson:"enabled"`
+		DisplayName     string                      `bson:"displayName,omitempty"`
+		Email           string                      `bson:"email,omitempty"`
+		Avatar          string                      `bson:"avatar,omitempty"`
+		LastLogin       *string                     `bson:"lastLogin"`
+		LastModified    string                      `bson:"lastModified"`
+		TOTPEnabled     bool                        `bson:"totpEnabled"`
+		TOTPSecret      string                      `bson:"totpSecret,omitempty"`
+		WebAuthnEnabled bool                        `bson:"webAuthnEnabled"`
+		WebAuthnDevices []models.WebAuthnCredential `bson:"webAuthnDevices,omitempty"`
 	}
 
 	var du dbUser
@@ -123,15 +127,19 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		enabled = *du.Enabled
 	}
 	user := models.User{
-		Username:     du.Username,
-		PasswordHash: du.PasswordHash,
-		Roles:        du.Roles,
-		DisplayName:  du.DisplayName,
-		Email:        du.Email,
-		Avatar:       du.Avatar,
-		Enabled:      enabled,
-		LastLogin:    du.LastLogin,
-		LastModified: du.LastModified,
+		Username:        du.Username,
+		PasswordHash:    du.PasswordHash,
+		Roles:           du.Roles,
+		DisplayName:     du.DisplayName,
+		Email:           du.Email,
+		Avatar:          du.Avatar,
+		Enabled:         enabled,
+		LastLogin:       du.LastLogin,
+		LastModified:    du.LastModified,
+		TOTPEnabled:     du.TOTPEnabled,
+		TOTPSecret:      du.TOTPSecret,
+		WebAuthnEnabled: du.WebAuthnEnabled,
+		WebAuthnDevices: du.WebAuthnDevices,
 	}
 
 	slog.Info("User found during login", "username", user.Username, "roles", user.Roles)
