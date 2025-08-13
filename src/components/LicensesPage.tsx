@@ -1,68 +1,67 @@
-import React from 'react';
-import { Box, Paper, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link } from '@mui/material';
+import React, { useMemo } from 'react';
+import { Box, Paper, Typography, Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Link, Alert } from '@mui/material';
+// Import package metadata from lockfile and package.json to build an up-to-date licenses table
+// Vite with resolveJsonModule allows importing JSON files
+import packageJson from '../../package.json';
+import packageLock from '../../package-lock.json';
 
-interface License {
+interface LicenseEntry {
   name: string;
   version: string;
-  license: string;
-  website?: string;
+  license?: string;
+  website: string;
+  dev: boolean;
 }
 
-const licenses: License[] = [
-  { name: '@babel/plugin-transform-class-properties', version: '7.27.1', license: 'MIT', website: 'https://babel.dev/docs/babel-plugin-transform-class-properties' },
-  { name: '@babel/plugin-transform-nullish-coalescing-operator', version: '7.27.1', license: 'MIT', website: 'https://babel.dev/' },
-  { name: '@babel/plugin-transform-numeric-separator', version: '7.27.1', license: 'MIT', website: 'https://babel.dev/' },
-  { name: '@babel/plugin-transform-optional-chaining', version: '7.27.1', license: 'MIT', website: 'https://babel.dev/' },
-  { name: '@babel/plugin-transform-private-methods', version: '7.27.1', license: 'MIT', website: 'https://babel.dev/' },
-  { name: '@babel/plugin-transform-private-property-in-object', version: '7.27.1', license: 'MIT', website: 'https://babel.dev/' },
-  { name: '@emotion/react', version: '11.11.1', license: 'MIT', website: 'https://github.com/emotion-js/emotion' },
-  { name: '@emotion/styled', version: '11.11.0', license: 'MIT', website: 'https://github.com/emotion-js/emotion' },
-  { name: '@eslint/config-array', version: '0.21.0', license: 'MIT', website: 'https://github.com/eslint/eslint' },
-  { name: '@eslint/object-schema', version: '2.1.6', license: 'MIT', website: 'https://github.com/eslint/eslint' },
-  { name: '@jridgewell/sourcemap-codec', version: '1.5.0', license: 'MIT', website: 'https://github.com/jridgewell/sourcemap-codec' },
-  { name: '@mui/icons-material', version: '5.14.19', license: 'MIT', website: 'https://mui.com/material-ui/material-icons/' },
-  { name: '@mui/material', version: '5.14.19', license: 'MIT', website: 'https://mui.com/' },
-  { name: '@rollup/plugin-terser', version: '0.4.4', license: 'MIT', website: 'https://github.com/rollup/plugins' },
-  { name: '@testing-library/jest-dom', version: '5.17.0', license: 'MIT', website: 'https://github.com/testing-library/jest-dom' },
-  { name: '@testing-library/react', version: '13.4.0', license: 'MIT', website: 'https://github.com/testing-library/react-testing-library' },
-  { name: '@testing-library/user-event', version: '13.5.0', license: 'MIT', website: 'https://github.com/testing-library/user-event' },
-  { name: '@types/crypto-js', version: '4.2.2', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: '@types/jest', version: '27.5.2', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: '@types/js-cookie', version: '3.0.6', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: '@types/js-yaml', version: '4.0.9', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: '@types/node', version: '16.18.65', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: '@types/react', version: '18.2.38', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: '@types/react-dom', version: '18.2.17', license: 'MIT', website: 'https://github.com/DefinitelyTyped/DefinitelyTyped' },
-  { name: 'axios', version: '1.6.2', license: 'MIT', website: 'https://axios-http.com/' },
-  { name: 'crypto-js', version: '4.2.0', license: 'MIT', website: 'https://github.com/brix/crypto-js' },
-  { name: 'dotenv', version: '16.3.1', license: 'BSD-2-Clause', website: 'https://github.com/motdotla/dotenv' },
-  { name: 'eslint-formatter-codeframe', version: '7.32.1', license: 'MIT', website: 'https://github.com/eslint/eslint' },
-  { name: 'formik', version: '2.4.5', license: 'MIT', website: 'https://formik.org/' },
-  { name: 'glob', version: '11.0.3', license: 'ISC', website: 'https://github.com/isaacs/node-glob' },
-  { name: 'http-proxy-middleware', version: '2.0.6', license: 'MIT', website: 'https://github.com/chimurai/http-proxy-middleware' },
-  { name: 'js-cookie', version: '3.0.5', license: 'MIT', website: 'https://github.com/js-cookie/js-cookie' },
-  { name: 'js-yaml', version: '4.1.0', license: 'MIT', website: 'https://github.com/nodeca/js-yaml' },
-  { name: 'jwt-decode', version: '4.0.0', license: 'MIT', website: 'https://github.com/auth0/jwt-decode' },
-  { name: 'react', version: '18.2.0', license: 'MIT', website: 'https://reactjs.org/' },
-  { name: 'react-dom', version: '18.2.0', license: 'MIT', website: 'https://reactjs.org/' },
-  { name: 'react-router-dom', version: '6.20.0', license: 'MIT', website: 'https://reactrouter.com/' },
-  { name: 'react-scripts', version: '5.0.1', license: 'MIT', website: 'https://github.com/facebook/create-react-app' },
-  { name: 'rimraf', version: '6.0.1', license: 'ISC', website: 'https://github.com/isaacs/rimraf' },
-  { name: 'svgo', version: '4.0.0', license: 'MIT', website: 'https://github.com/svg/svgo' },
-  { name: 'typescript', version: '4.9.5', license: 'Apache-2.0', website: 'https://www.typescriptlang.org/' },
-  { name: 'web-vitals', version: '2.1.4', license: 'Apache-2.0', website: 'https://github.com/GoogleChrome/web-vitals' },
-  { name: 'yup', version: '1.3.2', license: 'MIT', website: 'https://github.com/jquense/yup' }
-];
+type PackageJson = {
+  dependencies?: Record<string, string>;
+  devDependencies?: Record<string, string>;
+};
+
+type PackageLockV3 = {
+  packages?: Record<string, { version?: string; license?: string }>;
+};
 
 const LicensesPage = (): React.JSX.Element => {
+  const entries = useMemo<LicenseEntry[]>(() => {
+    const pj = packageJson as unknown as PackageJson;
+    const pl = packageLock as unknown as PackageLockV3;
+    const pkgs: Record<string, { dev: boolean }> = {};
+
+    // Collect top-level deps and devDeps
+    for (const [name] of Object.entries(pj.dependencies || {})) {
+      pkgs[name] = { dev: false };
+    }
+    for (const [name] of Object.entries(pj.devDependencies || {})) {
+      // If already present as dep, keep it as non-dev; otherwise mark as dev
+      if (!pkgs[name]) pkgs[name] = { dev: true };
+    }
+
+    const rows: LicenseEntry[] = Object.keys(pkgs).map((name) => {
+      const nodePath = `node_modules/${name}`;
+      const meta = pl.packages?.[nodePath] || {};
+      const version = meta.version || (pj.dependencies?.[name] || pj.devDependencies?.[name] || '').replace(/^[^0-9]*/, '') || 'unknown';
+      const license = meta.license;
+      const website = `https://www.npmjs.com/package/${encodeURIComponent(name)}${version && version !== 'unknown' ? `/v/${version}` : ''}`;
+      return { name, version, license, website, dev: pkgs[name].dev };
+    });
+
+    // Sort: non-dev first, then by name
+    rows.sort((a, b) => (a.dev === b.dev ? a.name.localeCompare(b.name) : a.dev ? 1 : -1));
+    return rows;
+  }, []);
+
   return (
     <Box sx={{ width: '100%', mt: 2 }}>
       <Typography variant="h5" gutterBottom>
         Open Source Licenses
       </Typography>
       <Typography variant="body2" color="text.secondary" paragraph>
-        This page lists all the open source software used in this application along with their licenses.
+        This list is generated from the current package-lock.json and package.json to reflect the exact versions in use. Click a package to view its license details on npm.
       </Typography>
+      <Alert severity="info" sx={{ mb: 2 }}>
+        Entries marked as Dev are development-only dependencies and are not included in the production bundle.
+      </Alert>
       <TableContainer component={Paper} sx={{ mt: 2, width: '100%', overflowX: 'auto' }}>
         <Table>
           <TableHead>
@@ -70,21 +69,21 @@ const LicensesPage = (): React.JSX.Element => {
               <TableCell><strong>Software</strong></TableCell>
               <TableCell><strong>Version</strong></TableCell>
               <TableCell><strong>License</strong></TableCell>
+              <TableCell><strong>Dev</strong></TableCell>
               <TableCell><strong>Website</strong></TableCell>
             </TableRow>
           </TableHead>
           <TableBody>
-            {licenses.map((item) => (
+            {entries.map((item) => (
               <TableRow key={item.name}>
                 <TableCell>{item.name}</TableCell>
                 <TableCell>{item.version}</TableCell>
-                <TableCell>{item.license}</TableCell>
+                <TableCell>{item.license || 'Unknown'}</TableCell>
+                <TableCell>{item.dev ? 'Yes' : 'No'}</TableCell>
                 <TableCell>
-                  {item.website && (
-                    <Link href={item.website} target="_blank" rel="noopener noreferrer" sx={{ wordBreak: 'break-all' }}>
-                      {item.website}
-                    </Link>
-                  )}
+                  <Link href={item.website} target="_blank" rel="noopener noreferrer" sx={{ wordBreak: 'break-all' }}>
+                    {item.website}
+                  </Link>
                 </TableCell>
               </TableRow>
             ))}

@@ -1,5 +1,12 @@
 # Changes
 
+## 2025-08-13: Update Licenses page to current state
+
+- LicensesPage now builds its list dynamically from package-lock.json and package.json, ensuring it reflects the exact installed versions.
+- Displays name, version, license (from the lockfile when available), a link to the npm package page, and whether it is a dev dependency.
+- Removed the outdated hardcoded list (which still referenced CRA/react-scripts) so the page stays current without manual edits.
+- No backend changes required; works in both dev and production builds.
+
 ## 2025-08-11: Face ID still not offered on iPhone — align RP ID/Origin and add hints
 
 ### Issue
