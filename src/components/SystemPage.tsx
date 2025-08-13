@@ -114,8 +114,8 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; idle?: number }>
     const fill = colorFor(pct, goodIsHigh);
 
     return (
-      <Box sx={{ textAlign: 'center' }}>
-        <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`} aria-label={`${label} gauge`}>
+      <Box sx={{ textAlign: 'center', flex: '1 1 140px', minWidth: 140, maxWidth: 260 }}>
+        <svg width="100%" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="xMidYMid meet" aria-label={`${label} gauge`} style={{ height: 'auto' }}>
           {/* track */}
           <path d={track} fill="#e0e0e0" />
           {/* value */}
@@ -139,7 +139,12 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; idle?: number }>
     <Card variant="outlined">
       <CardContent>
         <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>CPU</Typography>
-        <Stack direction="row" spacing={2} justifyContent="space-around" sx={{ width: '100%' }}>
+        <Stack
+          direction="row"
+          spacing={2}
+          justifyContent={{ xs: 'center', sm: 'space-around' }}
+          sx={{ width: '100%', flexWrap: 'wrap', rowGap: 2, columnGap: 2, overflowX: 'auto' }}
+        >
           <SingleGauge label="User" value={u} />
           <SingleGauge label="System" value={s} />
           <SingleGauge label="Idle" value={i} goodIsHigh />
