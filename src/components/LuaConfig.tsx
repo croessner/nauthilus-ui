@@ -21,7 +21,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  InputAdornment
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -29,6 +30,7 @@ import { LuaFeatureConfig, LuaFilterConfig, LuaActionConfig, LuaCustomHookConfig
 import { useConfig } from '../contexts/ConfigContext';
 import ValidationErrors from './common/ValidationErrors';
 import ProtocolsConfig from './ProtocolsConfig';
+import InfoTooltip from './common/InfoTooltip';
 
 // Validation schema
 const LuaConfigSchema = Yup.object().shape({
@@ -238,6 +240,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `features[${index}].name`) &&
                               getIn(errors, `features[${index}].name`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Human-readable name shown in the UI for this feature." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={5}>
@@ -255,6 +260,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `features[${index}].script_path`) &&
                               getIn(errors, `features[${index}].script_path`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Path to the Lua script file. Relative or absolute path supported." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -319,6 +327,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `filters[${index}].name`) &&
                               getIn(errors, `filters[${index}].name`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Name of the filter step applied after backends complete." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={5}>
@@ -336,6 +347,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `filters[${index}].script_path`) &&
                               getIn(errors, `filters[${index}].script_path`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Path to the Lua script implementing this filter." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -423,6 +437,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `actions[${index}].name`) &&
                               getIn(errors, `actions[${index}].name`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Identifier for this action; used to distinguish between actions." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={4}>
@@ -440,6 +457,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `actions[${index}].script_path`) &&
                               getIn(errors, `actions[${index}].script_path`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Lua script executed for this action. Post actions run after response is sent." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -504,6 +524,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `custom_hooks[${index}].http_location`) &&
                               getIn(errors, `custom_hooks[${index}].http_location`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="URL path where this hook is exposed (e.g., /api/my-hook)." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -544,6 +567,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `custom_hooks[${index}].script_path`) &&
                               getIn(errors, `custom_hooks[${index}].script_path`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Lua script executed when this HTTP hook is called." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -557,6 +583,9 @@ const LuaConfig = (): React.JSX.Element => {
                               setFieldValue(`custom_hooks[${index}].roles`, roles)
                                   .then(() => setHasUnsavedChanges(true));
                             }}
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="List of roles allowed to access this hook (e.g., admin,user)." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -631,6 +660,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `search[${index}].cache_name`) &&
                               getIn(errors, `search[${index}].cache_name`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Name of the cache used to speed up lookups for this protocol." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={3}>
@@ -648,6 +680,9 @@ const LuaConfig = (): React.JSX.Element => {
                               getIn(touched, `search[${index}].backend_name`) &&
                               getIn(errors, `search[${index}].backend_name`)
                             }
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Optional backend to route this search to. Leave empty for default behavior." /></InputAdornment>
+                            ) }}
                           />
                         </Grid>
                         <Grid item xs={2}>
@@ -734,6 +769,9 @@ const LuaConfig = (): React.JSX.Element => {
                               type="number"
                               value={backendConfig.number_of_workers || ''}
                               onChange={handleChange}
+                              InputProps={{ endAdornment: (
+                                <InputAdornment position="end"><InfoTooltip title="How many worker goroutines execute Lua scripts in this backend." /></InputAdornment>
+                              ) }}
                             />
                           </Grid>
                           <Grid item xs={12} md={6}>
@@ -743,6 +781,9 @@ const LuaConfig = (): React.JSX.Element => {
                               name={`optional_lua_backends.${backendName}.package_path`}
                               value={backendConfig.package_path || ''}
                               onChange={handleChange}
+                              InputProps={{ endAdornment: (
+                                <InputAdornment position="end"><InfoTooltip title="Lua package.path used by this backend to resolve requires." /></InputAdornment>
+                              ) }}
                             />
                           </Grid>
                           <Grid item xs={12}>
@@ -752,6 +793,9 @@ const LuaConfig = (): React.JSX.Element => {
                               name={`optional_lua_backends.${backendName}.backend_script_path`}
                               value={backendConfig.backend_script_path || ''}
                               onChange={handleChange}
+                              InputProps={{ endAdornment: (
+                                <InputAdornment position="end"><InfoTooltip title="Path to the main Lua backend script for this optional backend." /></InputAdornment>
+                              ) }}
                             />
                           </Grid>
                           <Grid item xs={12}>
@@ -761,6 +805,9 @@ const LuaConfig = (): React.JSX.Element => {
                               name={`optional_lua_backends.${backendName}.init_script_path`}
                               value={backendConfig.init_script_path || ''}
                               onChange={handleChange}
+                              InputProps={{ endAdornment: (
+                                <InputAdornment position="end"><InfoTooltip title="Optional init script executed on backend startup." /></InputAdornment>
+                              ) }}
                             />
                           </Grid>
                           <Grid item xs={12}>
@@ -778,6 +825,9 @@ const LuaConfig = (): React.JSX.Element => {
                                         name={`optional_lua_backends.${backendName}.init_script_paths[${pathIndex}]`}
                                         value={path}
                                         onChange={handleChange}
+                                        InputProps={{ endAdornment: (
+                                          <InputAdornment position="end"><InfoTooltip title="Additional init scripts executed on backend startup (in order)." /></InputAdornment>
+                                        ) }}
                                       />
                                     </Grid>
                                     <Grid item xs={2}>
@@ -860,6 +910,9 @@ const LuaConfig = (): React.JSX.Element => {
                         getIn(touched, 'config.number_of_workers') &&
                         getIn(errors, 'config.number_of_workers')
                       }
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Global number of worker goroutines for Lua execution." /></InputAdornment>
+                      ) }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -877,6 +930,9 @@ const LuaConfig = (): React.JSX.Element => {
                         getIn(touched, 'config.package_path') &&
                         getIn(errors, 'config.package_path')
                       }
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Global Lua package.path used to locate modules." /></InputAdornment>
+                      ) }}
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -894,6 +950,9 @@ const LuaConfig = (): React.JSX.Element => {
                         getIn(touched, 'config.backend_script_path') &&
                         getIn(errors, 'config.backend_script_path')
                       }
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Main Lua backend script path for the global configuration." /></InputAdornment>
+                      ) }}
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -911,6 +970,9 @@ const LuaConfig = (): React.JSX.Element => {
                         getIn(touched, 'config.init_script_path') &&
                         getIn(errors, 'config.init_script_path')
                       }
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Optional init script executed when the server starts." /></InputAdornment>
+                      ) }}
                     />
                   </Grid>
                   <Grid item xs={12}>
@@ -928,6 +990,9 @@ const LuaConfig = (): React.JSX.Element => {
                                 name={`config.init_script_paths[${index}]`}
                                 value={path}
                                 onChange={handleChange}
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Additional init scripts executed on server startup (in order)." /></InputAdornment>
+                                ) }}
                               />
                             </Grid>
                             <Grid item xs={2}>

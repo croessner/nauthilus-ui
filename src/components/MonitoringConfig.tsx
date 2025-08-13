@@ -13,6 +13,7 @@ import {
   Typography,
   Switch
 } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
@@ -105,7 +106,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                         name="insights.enable_pprof"
                       />
                     }
-                    label="Enable pprof (Go Profiling)"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable pprof (Go Profiling)<InfoTooltip title="Enables Go pprof for runtime profiling (CPU, heap, etc.). Use only in test/debug environments." /></Box>}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -120,7 +121,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                         name="insights.enable_block_profile"
                       />
                     }
-                    label="Enable Block Profile"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Block Profile<InfoTooltip title="Captures blocking events (block profiling). Adds overhead; enable only temporarily." /></Box>}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -135,7 +136,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                         name="insights.monitor_connections"
                       />
                     }
-                    label="Monitor Connections"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Monitor Connections<InfoTooltip title="Monitors incoming connections for diagnostics. May increase logging/metrics volume." /></Box>}
                   />
                 </Grid>
               </Grid>
@@ -159,12 +160,15 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                         name="prometheus_timer.enabled"
                       />
                     }
-                    label="Enable Prometheus Timer"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Prometheus Timer<InfoTooltip title="Enables latency timer for Prometheus. Provides metrics based on the selected labels." /></Box>}
                   />
                 </Grid>
                 {values.prometheus_timer?.enabled && (
                   <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Timer Labels</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                        <Typography variant="subtitle2">Timer Labels</Typography>
+                                        <InfoTooltip title="Choose additional labels to break down metrics (e.g., per action/backend). Too many labels increase cardinality." />
+                                        </Box>
                     <FormControl fullWidth>
                       <Select
                         multiple

@@ -9,8 +9,10 @@ import {
   Box,
   FormHelperText,
   Typography,
-  Switch
+  Switch,
+  InputAdornment
 } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
@@ -150,7 +152,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       name="basic_auth.enabled"
                     />
                   }
-                  label="Enable Basic Authentication"
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Basic Authentication<InfoTooltip title="Enables simple HTTP authentication for API access. Do not use alongside JWT." /></Box>}
                 />
               </Grid>
               {values.basic_auth?.enabled && (
@@ -161,6 +163,9 @@ const AuthConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="basic_auth.username"
                       label="Username"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Username for Basic Auth. No spaces allowed." /></InputAdornment>
+                      ) }}
                       variant="outlined"
                       error={getIn(touched, 'basic_auth.username') && Boolean(getIn(errors, 'basic_auth.username'))}
                       helperText={getIn(touched, 'basic_auth.username') && getIn(errors, 'basic_auth.username')}
@@ -176,6 +181,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="basic_auth.password"
                       label="Password"
+                      infoTitle="Password for Basic Auth. At least 16 characters, no spaces. Keep it secure."
                       variant="outlined"
                       error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
                       helperText={
@@ -212,7 +218,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       name="jwt_auth.enabled"
                     />
                   }
-                  label="Enable JWT Authentication"
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable JWT Authentication<InfoTooltip title="Enables JSON Web Tokens for API authentication. Do not use alongside Basic Auth." /></Box>}
                 />
               </Grid>
               {values.jwt_auth?.enabled && (
@@ -223,6 +229,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="jwt_auth.secret_key"
                       label="Secret Key"
+                      infoTitle="Secret key for signing JWTs. At least 32 characters; store securely."
                       variant="outlined"
                       error={getIn(touched, 'jwt_auth.secret_key') && Boolean(getIn(errors, 'jwt_auth.secret_key'))}
                       helperText={
@@ -237,10 +244,13 @@ const AuthConfig = (): React.JSX.Element | null => {
                   </Grid>
                   <Grid item xs={12} md={6}>
                     <Field
-                      as={TextField}
-                      fullWidth
-                      name="jwt_auth.token_expiry"
-                      label="Token Expiry"
+                        as={TextField}
+                        fullWidth
+                        name="jwt_auth.token_expiry"
+                        label="Token Expiry"
+                        InputProps={{ endAdornment: (
+                          <InputAdornment position="end"><InfoTooltip title="Expiration duration for access tokens (e.g., 1h, 30m). Shorter is safer." /></InputAdornment>
+                        ) }}
                       variant="outlined"
                       placeholder="e.g., 1h, 30m, 24h"
                       error={getIn(touched, 'jwt_auth.token_expiry') && Boolean(getIn(errors, 'jwt_auth.token_expiry'))}
@@ -266,7 +276,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                           name="jwt_auth.refresh_token"
                         />
                       }
-                      label="Enable Refresh Tokens"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Refresh Tokens<InfoTooltip title="Issues refresh tokens to extend sessions. Requires additional safeguards." /></Box>}
                     />
                   </Grid>
                   {values.jwt_auth?.refresh_token && (
@@ -302,7 +312,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                           name="jwt_auth.store_in_redis"
                         />
                       }
-                      label="Store Tokens in Redis (for multi-instance compatibility)"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Store Tokens in Redis (for multi-instance compatibility)<InfoTooltip title="Stores tokens in Redis to support multiple server instances. Improves availability." /></Box>}
                     />
                   </Grid>
 

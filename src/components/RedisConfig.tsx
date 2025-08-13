@@ -13,7 +13,8 @@ import {
   FormControl,
   FormLabel,
   IconButton,
-  Switch
+  Switch,
+  InputAdornment
 } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -22,6 +23,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PasswordField from './common/PasswordField';
+import InfoTooltip from './common/InfoTooltip';
 
 // Validation schema
 const RedisConfigSchema = Yup.object().shape({
@@ -375,7 +377,7 @@ const RedisConfig = (): React.JSX.Element | null => {
             <Grid container spacing={3}>
               <Grid item xs={12}>
                 <FormControl component="fieldset">
-                  <FormLabel component="legend">Redis Setup Type</FormLabel>
+                  <FormLabel component="legend">Redis Setup Type <InfoTooltip title="Choose how your Redis is deployed: standalone, replica set, Sentinel, or Cluster." /></FormLabel>
                   <RadioGroup
                     row
                     value={redisSetupType}
@@ -398,7 +400,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                   label="Database Number"
                   variant="outlined"
                   type="number"
-                  InputProps={{ inputProps: { min: 0, max: 15 } }}
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Redis logical database index (0-15)." /></InputAdornment>
+                  ), inputProps: { min: 0, max: 15 } }}
                   error={getIn(touched, 'redis.database_number') && Boolean(getIn(errors, 'redis.database_number'))}
                   helperText={(getIn(touched, 'redis.database_number') && getIn(errors, 'redis.database_number')) || "Redis database number (0-15)"}
                   onChange={(e: React.ChangeEvent<any>) => {
@@ -414,6 +418,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                   name="redis.prefix"
                   label="Key Prefix"
                   variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Optional prefix added to all Redis keys." /></InputAdornment>
+                  ) }}
                   error={getIn(touched, 'redis.prefix') && Boolean(getIn(errors, 'redis.prefix'))}
                   helperText={(getIn(touched, 'redis.prefix') && getIn(errors, 'redis.prefix')) || "Prefix for Redis keys"}
                   onChange={(e: React.ChangeEvent<any>) => {
@@ -428,6 +435,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   fullWidth
                   name="redis.password_nonce"
                   label="Password Nonce"
+                  infoTitle="Random string to salt/encrypt stored passwords. Minimum 16 chars; keep it secret."
                   variant="outlined"
                   error={getIn(touched, 'redis.password_nonce') && Boolean(getIn(errors, 'redis.password_nonce'))}
                   helperText={(getIn(touched, 'redis.password_nonce') && getIn(errors, 'redis.password_nonce')) || "Nonce for password encryption (min 16 characters, can include symbols)"}
@@ -445,7 +453,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                   label="Pool Size"
                   variant="outlined"
                   type="number"
-                  InputProps={{ inputProps: { min: 1 } }}
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Maximum number of open Redis connections." /></InputAdornment>
+                  ), inputProps: { min: 1 } }}
                   error={getIn(touched, 'redis.pool_size') && Boolean(getIn(errors, 'redis.pool_size'))}
                   helperText={(getIn(touched, 'redis.pool_size') && getIn(errors, 'redis.pool_size')) || "Size of the connection pool"}
                   onChange={(e: React.ChangeEvent<any>) => {
@@ -462,7 +472,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                   label="Idle Pool Size"
                   variant="outlined"
                   type="number"
-                  InputProps={{ inputProps: { min: 0 } }}
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Number of idle connections kept for reuse." /></InputAdornment>
+                  ), inputProps: { min: 0 } }}
                   error={getIn(touched, 'redis.idle_pool_size') && Boolean(getIn(errors, 'redis.idle_pool_size'))}
                   helperText={(getIn(touched, 'redis.idle_pool_size') && getIn(errors, 'redis.idle_pool_size')) || "Number of idle connections allowed"}
                   onChange={(e: React.ChangeEvent<any>) => {
@@ -478,6 +490,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                   name="redis.positive_cache_ttl"
                   label="Positive Cache TTL"
                   variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Time-to-live for successful auth cache entries (e.g., 5m)." /></InputAdornment>
+                  ) }}
                   error={getIn(touched, 'redis.positive_cache_ttl') && Boolean(getIn(errors, 'redis.positive_cache_ttl'))}
                   helperText={(getIn(touched, 'redis.positive_cache_ttl') && getIn(errors, 'redis.positive_cache_ttl')) || "Duration format (e.g., 5m, 1h)"}
                   onChange={(e: React.ChangeEvent<any>) => {
@@ -493,6 +508,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                   name="redis.negative_cache_ttl"
                   label="Negative Cache TTL"
                   variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Time-to-live for failed auth cache entries (e.g., 30s, 1m)." /></InputAdornment>
+                  ) }}
                   error={getIn(touched, 'redis.negative_cache_ttl') && Boolean(getIn(errors, 'redis.negative_cache_ttl'))}
                   helperText={(getIn(touched, 'redis.negative_cache_ttl') && getIn(errors, 'redis.negative_cache_ttl')) || "Duration format (e.g., 1m, 30s)"}
                   onChange={(e: React.ChangeEvent<any>) => {
@@ -523,7 +541,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                       name="redis.tls.enabled"
                     />
                   }
-                  label="Enable TLS"
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable TLS<InfoTooltip title="Use TLS when connecting to Redis. Provide cert/key below if required." /></Box>}
                 />
               </Grid>
               {values.redis.tls?.enabled && (
@@ -534,6 +552,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="redis.tls.cert"
                       label="TLS Certificate Path"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Path to client certificate for Redis TLS (if needed)." /></InputAdornment>
+                      ) }}
                       variant="outlined"
                       error={getIn(touched, 'redis.tls.cert') && Boolean(getIn(errors, 'redis.tls.cert'))}
                       helperText={getIn(touched, 'redis.tls.cert') && getIn(errors, 'redis.tls.cert')}
@@ -549,6 +570,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="redis.tls.key"
                       label="TLS Key Path"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Path to private key matching the TLS certificate." /></InputAdornment>
+                      ) }}
                       variant="outlined"
                       error={getIn(touched, 'redis.tls.key') && Boolean(getIn(errors, 'redis.tls.key'))}
                       helperText={getIn(touched, 'redis.tls.key') && getIn(errors, 'redis.tls.key')}
@@ -570,7 +594,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                           name="redis.tls.skip_verify"
                         />
                       }
-                      label="Skip TLS Verification"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Skip TLS Verification<InfoTooltip title="Do not verify Redis TLS certificates. Unsafe; use only for testing." /></Box>}
                     />
                   </Grid>
                 </>
@@ -592,6 +616,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                     fullWidth
                     name="redis.master.address"
                     label="Master Address"
+                                        InputProps={{ endAdornment: (
+                                          <InputAdornment position="end"><InfoTooltip title="Hostname and port of the Redis master (e.g., localhost:6379)." /></InputAdornment>
+                                        ) }}
                     variant="outlined"
                     placeholder="localhost:6379"
                     error={getIn(touched, 'redis.master.address') && Boolean(getIn(errors, 'redis.master.address'))}
@@ -610,6 +637,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                         fullWidth
                         name="redis.master.username"
                         label="Username"
+                        InputProps={{ endAdornment: (
+                          <InputAdornment position="end"><InfoTooltip title="Redis username for ACL-enabled deployments (optional)." /></InputAdornment>
+                        ) }}
                         variant="outlined"
                         error={getIn(touched, 'redis.master.username') && Boolean(getIn(errors, 'redis.master.username'))}
                         helperText={(getIn(touched, 'redis.master.username') && getIn(errors, 'redis.master.username')) || "Redis username (optional)"}
@@ -625,6 +655,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         fullWidth
                         name="redis.master.password"
                         label="Password"
+                        infoTitle="Password for the Redis user (if required). Keep it secret."
                         variant="outlined"
                         error={getIn(touched, 'redis.master.password') && Boolean(getIn(errors, 'redis.master.password'))}
                         helperText={(getIn(touched, 'redis.master.password') && getIn(errors, 'redis.master.password')) || "Redis password (optional)"}
@@ -662,6 +693,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                                 name={`redis.replica.addresses[${index}]`}
                                 label={`Replica Address ${index + 1}`}
                                 variant="outlined"
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Replica address in hostname:port format." /></InputAdornment>
+                                ) }}
                                 placeholder="localhost:6379"
                                 error={getIn(touched, `redis.replica.addresses[${index}]`) && Boolean(getIn(errors, `redis.replica.addresses[${index}]`))}
                                 helperText={(getIn(touched, `redis.replica.addresses[${index}]`) && getIn(errors, `redis.replica.addresses[${index}]`)) || "Redis replica address in the format hostname:port"}
@@ -720,6 +754,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                     name="redis.sentinels.master"
                     label="Master Name"
                     variant="outlined"
+                    InputProps={{ endAdornment: (
+                      <InputAdornment position="end"><InfoTooltip title="Name of the master as configured in Sentinel." /></InputAdornment>
+                    ) }}
                     error={getIn(touched, 'redis.sentinels.master') && Boolean(getIn(errors, 'redis.sentinels.master'))}
                     helperText={(getIn(touched, 'redis.sentinels.master') && getIn(errors, 'redis.sentinels.master')) || "Name of the master instance in Sentinel"}
                     onChange={(e: React.ChangeEvent<any>) => {
@@ -742,6 +779,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                                 name={`redis.sentinels.addresses[${index}]`}
                                 label={`Sentinel Address ${index + 1}`}
                                 variant="outlined"
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Sentinel address in hostname:port format." /></InputAdornment>
+                                ) }}
                                 placeholder="localhost:26379"
                                 error={getIn(touched, `redis.sentinels.addresses[${index}]`) && Boolean(getIn(errors, `redis.sentinels.addresses[${index}]`))}
                                 helperText={(getIn(touched, `redis.sentinels.addresses[${index}]`) && getIn(errors, `redis.sentinels.addresses[${index}]`)) || "Redis sentinel address in the format hostname:port"}
@@ -789,6 +829,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                         fullWidth
                         name="redis.sentinels.username"
                         label="Username"
+                        InputProps={{ endAdornment: (
+                          <InputAdornment position="end"><InfoTooltip title="Sentinel username if authentication is enabled (optional)." /></InputAdornment>
+                        ) }}
                         variant="outlined"
                         error={getIn(touched, 'redis.sentinels.username') && Boolean(getIn(errors, 'redis.sentinels.username'))}
                         helperText={(getIn(touched, 'redis.sentinels.username') && getIn(errors, 'redis.sentinels.username')) || "Sentinel username (optional)"}
@@ -804,6 +847,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         fullWidth
                         name="redis.sentinels.password"
                         label="Password"
+                        infoTitle="Password for Sentinel authentication (optional)."
                         variant="outlined"
                         error={getIn(touched, 'redis.sentinels.password') && Boolean(getIn(errors, 'redis.sentinels.password'))}
                         helperText={(getIn(touched, 'redis.sentinels.password') && getIn(errors, 'redis.sentinels.password')) || "Sentinel password (optional)"}
@@ -841,6 +885,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                                 name={`redis.cluster.addresses[${index}]`}
                                 label={`Cluster Address ${index + 1}`}
                                 variant="outlined"
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Cluster node address in hostname:port format." /></InputAdornment>
+                                ) }}
                                 placeholder="localhost:6379"
                                 error={getIn(touched, `redis.cluster.addresses[${index}]`) && Boolean(getIn(errors, `redis.cluster.addresses[${index}]`))}
                                 helperText={(getIn(touched, `redis.cluster.addresses[${index}]`) && getIn(errors, `redis.cluster.addresses[${index}]`)) || "Redis cluster address in the format hostname:port"}
@@ -889,6 +936,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                         name="redis.cluster.username"
                         label="Username"
                         variant="outlined"
+                        InputProps={{ endAdornment: (
+                          <InputAdornment position="end"><InfoTooltip title="Cluster username if ACL/authentication is enabled (optional)." /></InputAdornment>
+                        ) }}
                         error={getIn(touched, 'redis.cluster.username') && Boolean(getIn(errors, 'redis.cluster.username'))}
                         helperText={(getIn(touched, 'redis.cluster.username') && getIn(errors, 'redis.cluster.username')) || "Cluster username (optional)"}
                         onChange={(e: React.ChangeEvent<any>) => {
@@ -903,6 +953,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         fullWidth
                         name="redis.cluster.password"
                         label="Password"
+                        infoTitle="Password for Redis Cluster user (optional)."
                         variant="outlined"
                         error={getIn(touched, 'redis.cluster.password') && Boolean(getIn(errors, 'redis.cluster.password'))}
                         helperText={(getIn(touched, 'redis.cluster.password') && getIn(errors, 'redis.cluster.password')) || "Cluster password (optional)"}
@@ -926,7 +977,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         name="redis.cluster.route_by_latency"
                       />
                     }
-                    label="Route By Latency"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Route By Latency<InfoTooltip title="Prefer nodes with the lowest latency when routing requests." /></Box>}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -941,7 +992,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         name="redis.cluster.route_randomly"
                       />
                     }
-                    label="Route Randomly"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Route Randomly<InfoTooltip title="Distribute requests randomly across nodes (ignores latency)." /></Box>}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>
@@ -956,7 +1007,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         name="redis.cluster.route_reads_to_replicas"
                       />
                     }
-                    label="Route Reads To Replicas"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Route Reads To Replicas<InfoTooltip title="Send read operations to replica nodes when possible." /></Box>}
                   />
                 </Grid>
                 <Grid item xs={12} md={6}>

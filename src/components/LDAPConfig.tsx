@@ -23,8 +23,10 @@ import {
   DialogTitle,
   DialogContent,
   DialogContentText,
-  DialogActions
+  DialogActions,
+  InputAdornment
 } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LDAPConfig as LDAPConfigType, LDAPSearchProtocolConfig, NauthilusConfig } from '../types/config';
@@ -201,7 +203,7 @@ const LDAPConfig = (): React.JSX.Element => {
                           onChange={handleChange}
                         />
                       }
-                      label="Pool Only"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Pool Only<InfoTooltip title="Use only pooled connections; disables direct binds on demand." /></Box>}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -213,7 +215,7 @@ const LDAPConfig = (): React.JSX.Element => {
                           onChange={handleChange}
                         />
                       }
-                      label="Start TLS"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Start TLS<InfoTooltip title="Upgrade plain LDAP connection to TLS using STARTTLS." /></Box>}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -225,7 +227,7 @@ const LDAPConfig = (): React.JSX.Element => {
                           onChange={handleChange}
                         />
                       }
-                      label="TLS Skip Verify"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>TLS Skip Verify<InfoTooltip title="Do not verify server certificate. Unsafe; only for testing." /></Box>}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -237,7 +239,7 @@ const LDAPConfig = (): React.JSX.Element => {
                           onChange={handleChange}
                         />
                       }
-                      label="SASL External"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>SASL External<InfoTooltip title="Use SASL EXTERNAL mechanism (e.g., with client TLS certificates)." /></Box>}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -345,6 +347,9 @@ const LDAPConfig = (): React.JSX.Element => {
                         getIn(touched, 'config.bind_dn') &&
                         getIn(errors, 'config.bind_dn')
                       }
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Distinguished Name used for LDAP bind (e.g., cn=admin,dc=example,dc=com)." /></InputAdornment>
+                      ) }}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>
@@ -352,6 +357,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       fullWidth
                       name="config.bind_pw"
                       label="Bind Password"
+                      infoTitle="Password for the bind DN user. Keep it secret."
                       value={values.config.bind_pw || ''}
                       onChange={handleChange}
                       error={Boolean(
@@ -445,6 +451,9 @@ const LDAPConfig = (): React.JSX.Element => {
                                 fullWidth
                                 label={`Server URI ${index + 1}`}
                                 name={`config.server_uri[${index}]`}
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="LDAP server URI (e.g., ldap://host:389 or ldaps://host:636)." /></InputAdornment>
+                                ) }}
                                 value={uri}
                                 onChange={handleChange}
                                 error={Boolean(

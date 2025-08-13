@@ -20,8 +20,10 @@ import {
   FormControl,
   InputLabel,
   Select,
-  MenuItem
+  MenuItem,
+  InputAdornment
 } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import PasswordField from './common/PasswordField';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -229,7 +231,7 @@ const FrontendConfig = (): React.JSX.Element => {
                         }}
                       />
                     }
-                    label="Enable Frontend"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Frontend<InfoTooltip title="Enables the web frontend. Requires secure keys and HTTPS in production." /></Box>}
                   />
                 </Grid>
 
@@ -241,6 +243,7 @@ const FrontendConfig = (): React.JSX.Element => {
                         fullWidth
                         label="CSRF Secret"
                         name="frontend.csrf_secret"
+                        infoTitle="Secret 32-character key to protect against CSRF attacks. Keep it private."
                         value={values.frontend?.csrf_secret || ''}
                         onChange={handleChange}
                         error={Boolean(getIn(touched, 'frontend.csrf_secret') && getIn(errors, 'frontend.csrf_secret'))}
@@ -256,6 +259,7 @@ const FrontendConfig = (): React.JSX.Element => {
                         as={PasswordField}
                         fullWidth
                         label="Cookie Store Auth Key"
+                                                infoTitle="32-character key for signing session cookies. Keep it private."
                         name="frontend.cookie_store_auth_key"
                         value={values.frontend?.cookie_store_auth_key || ''}
                         onChange={handleChange}

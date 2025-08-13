@@ -17,7 +17,9 @@ import {
   DialogContent,
   DialogContentText,
   DialogActions,
+  InputAdornment,
 } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -377,6 +379,9 @@ const ConnectionConfig: React.FC = () => {
                     fullWidth
                     name="backend_url"
                     label="Nauthilus Backend URL"
+                    InputProps={{ endAdornment: (
+                      <InputAdornment position="end"><InfoTooltip title="Base URL of your Nauthilus backend API (e.g., https://nauthilus.example.com)." /></InputAdornment>
+                    ) }}
                     variant="outlined"
                     placeholder="https://nauthilus.example.com"
                     error={getIn(touched, 'backend_url') && Boolean(getIn(errors, 'backend_url'))}
@@ -412,7 +417,7 @@ const ConnectionConfig: React.FC = () => {
                         name="basic_auth.enabled"
                       />
                     }
-                    label="Enable Basic Authentication"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Basic Authentication<InfoTooltip title="Enable HTTP Basic Auth for connecting to the backend. Do not use together with JWT here." /></Box>}
                   />
                 </Grid>
                 {values.basic_auth?.enabled && (
@@ -425,6 +430,9 @@ const ConnectionConfig: React.FC = () => {
                             fullWidth
                             name="basic_auth.username"
                             label="Username"
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Username for Basic Auth. No spaces." /></InputAdornment>
+                            ) }}
                             variant="outlined"
                             error={getIn(touched, 'basic_auth.username') && Boolean(getIn(errors, 'basic_auth.username'))}
                             helperText={getIn(touched, 'basic_auth.username') && getIn(errors, 'basic_auth.username')}
@@ -440,6 +448,7 @@ const ConnectionConfig: React.FC = () => {
                             fullWidth
                             name="basic_auth.password"
                             label="Password"
+                            infoTitle="Password for Basic Auth. Avoid spaces; keep it secret."
                             variant="outlined"
                             error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
                             helperText={
@@ -478,7 +487,7 @@ const ConnectionConfig: React.FC = () => {
                         name="jwt_auth.enabled"
                       />
                     }
-                    label="Enable JWT Authentication"
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable JWT Authentication<InfoTooltip title="Use JWT-based auth when your backend expects JWT credentials. Do not use together with Basic here." /></Box>}
                   />
                 </Grid>
                 {values.jwt_auth?.enabled && (
@@ -491,6 +500,9 @@ const ConnectionConfig: React.FC = () => {
                             fullWidth
                             name="jwt_auth.username"
                             label="Username"
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Username for JWT authentication (if required by your backend)." /></InputAdornment>
+                            ) }}
                             variant="outlined"
                             error={getIn(touched, 'jwt_auth.username') && Boolean(getIn(errors, 'jwt_auth.username'))}
                             helperText={
@@ -509,6 +521,7 @@ const ConnectionConfig: React.FC = () => {
                             fullWidth
                             name="jwt_auth.password"
                             label="Password"
+                            infoTitle="Password for JWT authentication if needed by backend. Keep it secure."
                             variant="outlined"
                             error={getIn(touched, 'jwt_auth.password') && Boolean(getIn(errors, 'jwt_auth.password'))}
                             helperText={

@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { TextField, InputAdornment, IconButton } from '@mui/material';
+import InfoTooltip from './InfoTooltip';
 import VisibilityIcon from '@mui/icons-material/Visibility';
 import VisibilityOffIcon from '@mui/icons-material/VisibilityOff';
 
@@ -17,6 +18,7 @@ interface PasswordFieldProps {
   disabled?: boolean;
   className?: string;
   margin?: 'none' | 'dense' | 'normal';
+  infoTitle?: string;
 }
 
 const PasswordField = ({
@@ -33,6 +35,7 @@ const PasswordField = ({
   disabled = false,
   className,
   margin,
+  infoTitle,
 }: PasswordFieldProps): JSX.Element => {
   const [showPassword, setShowPassword] = useState(false);
 
@@ -59,6 +62,7 @@ const PasswordField = ({
       InputProps={{
         endAdornment: (
           <InputAdornment position="end">
+            {infoTitle && <InfoTooltip title={infoTitle} />}
             <IconButton
               aria-label={showPassword ? 'Hide password' : 'Show password'}
               onClick={handleClickShowPassword}

@@ -32,6 +32,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PasswordField from './common/PasswordField';
+import InfoTooltip from './common/InfoTooltip';
 
 // Interface for tab panel props
 interface TabPanelProps {
@@ -388,7 +389,7 @@ const FeaturesConfig: React.FC = () => {
                           getIn(errors, 'selectedFeatures')
                         )}
                       >
-                        <InputLabel id="features-select-label">Features</InputLabel>
+                        <InputLabel id="features-select-label">Features <InfoTooltip title="Enable built-in feature modules for the server. Select one or more." /></InputLabel>
                         <Select
                           labelId="features-select-label"
                           id="features-select"

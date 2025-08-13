@@ -13,12 +13,14 @@ import {
   Select,
   MenuItem,
   Typography,
-  Switch
+  Switch,
+  InputAdornment
 } from '@mui/material';
 import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
+import InfoTooltip from './common/InfoTooltip';
 
 // Validation schema
 const ServerConfigSchema = Yup.object().shape({
@@ -338,6 +340,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                   fullWidth
                   name="address"
                   label="Server Address"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Listening address with port. IPv4 or IPv6 in brackets (e.g., 127.0.0.1:8080 or [::1]:8080)." /></InputAdornment>
+                  ) }}
                   variant="outlined"
                   placeholder="127.0.0.1:8080 or [::1]:8080"
                   error={touched.address && Boolean(errors.address)}
@@ -357,6 +362,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                   fullWidth
                   name="instance_name"
                   label="Instance Name"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Human-readable instance identifier used in logs/metrics and UI." /></InputAdornment>
+                  ) }}
                   variant="outlined"
                   error={touched.instance_name && Boolean(errors.instance_name)}
                   helperText={touched.instance_name && errors.instance_name}
@@ -372,6 +380,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                   fullWidth
                   name="max_concurrent_requests"
                   label="Max Concurrent Requests"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Maximum number of requests processed simultaneously. Higher values increase throughput but also resource usage." /></InputAdornment>
+                  ) }}
                   variant="outlined"
                   type="number"
                   error={touched.max_concurrent_requests && Boolean(errors.max_concurrent_requests)}
@@ -388,6 +399,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                   fullWidth
                   name="max_password_history_entries"
                   label="Max Password History Entries"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="How many previous passwords are remembered to prevent reuse." /></InputAdornment>
+                  ) }}
                   variant="outlined"
                   type="number"
                   error={touched.max_password_history_entries && Boolean(errors.max_password_history_entries)}
@@ -410,7 +424,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       name="http3"
                     />
                   }
-                  label="Enable HTTP/3"
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable HTTP/3<InfoTooltip title="Enables HTTP/3 (QUIC) support. Requires compatible clients and network." /></Box>}
                 />
               </Grid>
               <Grid item xs={12} md={6}>
@@ -425,7 +439,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       name="haproxy_v2"
                     />
                   }
-                  label="Enable HAProxy Protocol v2"
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable HAProxy Protocol v2<InfoTooltip title="Accepts the HAProxy PROXY v2 header to get client IPs behind load balancers." /></Box>}
                 />
               </Grid>
             </Grid>
@@ -449,7 +463,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       name="tls.enabled"
                     />
                   }
-                  label="Enable TLS"
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable TLS<InfoTooltip title="Serve HTTPS directly from the server. Provide certificate and key paths." /></Box>}
                 />
               </Grid>
               {values.tls?.enabled && (
@@ -460,6 +474,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="tls.cert"
                       label="TLS Certificate Path"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Path to PEM-encoded certificate file for HTTPS." /></InputAdornment>
+                      ) }}
                       variant="outlined"
                       error={getIn(touched, 'tls.cert') && Boolean(getIn(errors, 'tls.cert'))}
                       helperText={getIn(touched, 'tls.cert') && getIn(errors, 'tls.cert')}
@@ -475,6 +492,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="tls.key"
                       label="TLS Key Path"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Path to PEM-encoded private key file matching the certificate." /></InputAdornment>
+                      ) }}
                       variant="outlined"
                       error={getIn(touched, 'tls.key') && Boolean(getIn(errors, 'tls.key'))}
                       helperText={getIn(touched, 'tls.key') && getIn(errors, 'tls.key')}
@@ -490,6 +510,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                       fullWidth
                       name="tls.ca_file"
                       label="TLS CA Certificate Path"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Optional: CA bundle to verify client or upstream certificates." /></InputAdornment>
+                      ) }}
                       variant="outlined"
                       error={getIn(touched, 'tls.ca_file') && Boolean(getIn(errors, 'tls.ca_file'))}
                       helperText={getIn(touched, 'tls.ca_file') && getIn(errors, 'tls.ca_file')}
@@ -511,7 +534,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                           name="tls.skip_verify"
                         />
                       }
-                      label="Skip TLS Verification"
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Skip TLS Verification<InfoTooltip title="Do not verify peer TLS certificates. Unsafe; testing only." /></Box>}
                     />
                   </Grid>
                   <Grid item xs={12} md={6}>

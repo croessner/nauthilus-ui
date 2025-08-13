@@ -18,6 +18,7 @@ import {
   Card,
   CardContent,
 } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
@@ -147,7 +148,10 @@ const BackendsConfig = (): React.JSX.Element => {
                           <Grid container spacing={2} alignItems="center">
                             <Grid item xs={8}>
                               <FormControl fullWidth>
-                                <InputLabel id={`backend-type-label-${index}`}>Backend Type</InputLabel>
+                                <InputLabel id={`backend-type-label-${index}`}>
+                                                                  Backend Type
+                                                                  <InfoTooltip title="Select which backend to use at this position. Order defines processing sequence." />
+                                                                </InputLabel>
                                 <Select
                                   labelId={`backend-type-label-${index}`}
                                   id={`backend-type-${index}`}

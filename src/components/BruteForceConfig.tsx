@@ -27,12 +27,14 @@ import {
   Alert,
   Snackbar,
   TablePagination,
-  Divider
+  Divider,
+  InputAdornment
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
 import { useConfig } from '../contexts/ConfigContext';
+import InfoTooltip from './common/InfoTooltip';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 
@@ -569,7 +571,7 @@ const BruteForceConfig: React.FC = () => {
       <Paper sx={{ p: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <SecurityIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6">Brute Force Protection Management</Typography>
+          <Typography variant="h6">Brute Force Protection Management</Typography><InfoTooltip title="View and manage blocked IPs and affected accounts. Free entries when false positives occur." />
         </Box>
 
         {connectionStatus === 'connected' ? (
@@ -869,6 +871,9 @@ const BruteForceConfig: React.FC = () => {
               fullWidth
               label="Username"
               value={selectedUser}
+              InputProps={{ endAdornment: (
+                <InputAdornment position="end"><InfoTooltip title="Account username to free from brute force protection." /></InputAdornment>
+              ) }}
               onChange={(e) => setSelectedUser(e.target.value)}
               margin="normal"
               helperText="Enter the username to free from brute force protection"
@@ -879,6 +884,9 @@ const BruteForceConfig: React.FC = () => {
                 fullWidth
                 label="IP Address"
                 value={selectedIp}
+                InputProps={{ endAdornment: (
+                  <InputAdornment position="end"><InfoTooltip title="IP address to free. Supports IPv4 or IPv6." /></InputAdornment>
+                ) }}
                 onChange={(e) => setSelectedIp(e.target.value)}
                 margin="normal"
                 helperText="Enter the IP address to free from brute force protection"
@@ -908,6 +916,9 @@ const BruteForceConfig: React.FC = () => {
                 value={selectedProtocol}
                 onChange={(e) => setSelectedProtocol(e.target.value)}
                 margin="normal"
+                InputProps={{ endAdornment: (
+                  <InputAdornment position="end"><InfoTooltip title="Optional protocol filter (e.g., smtp, imap). Leave empty for all." /></InputAdornment>
+                ) }}
                 helperText="Leave empty to free the IP regardless of protocol"
               />
 
@@ -917,6 +928,9 @@ const BruteForceConfig: React.FC = () => {
                 value={selectedOidcCid}
                 onChange={(e) => setSelectedOidcCid(e.target.value)}
                 margin="normal"
+                InputProps={{ endAdornment: (
+                  <InputAdornment position="end"><InfoTooltip title="Optional OIDC client ID to narrow the free operation. Leave empty for all." /></InputAdornment>
+                ) }}
                 helperText="Leave empty to free the IP regardless of OIDC Client ID"
               />
             </>
@@ -985,6 +999,9 @@ const BruteForceConfig: React.FC = () => {
             onChange={(e) => setSelectedProtocol(e.target.value)}
             margin="normal"
             disabled={isProcessing}
+            InputProps={{ endAdornment: (
+              <InputAdornment position="end"><InfoTooltip title="Optional protocol filter (e.g., smtp, imap). Leave empty for all." /></InputAdornment>
+            ) }}
             helperText="Leave empty to free the IP regardless of protocol"
           />
 
@@ -995,6 +1012,9 @@ const BruteForceConfig: React.FC = () => {
             onChange={(e) => setSelectedOidcCid(e.target.value)}
             margin="normal"
             disabled={isProcessing}
+            InputProps={{ endAdornment: (
+              <InputAdornment position="end"><InfoTooltip title="Optional OIDC client ID to narrow the free operation. Leave empty for all." /></InputAdornment>
+            ) }}
             helperText="Leave empty to free the IP regardless of OIDC Client ID"
           />
         </DialogContent>

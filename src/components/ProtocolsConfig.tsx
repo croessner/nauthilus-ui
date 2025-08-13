@@ -1,6 +1,7 @@
 import React from 'react';
-import { TextField } from '@mui/material';
+import { TextField, InputAdornment } from '@mui/material';
 import { getIn } from 'formik';
+import InfoTooltip from './common/InfoTooltip';
 
 interface ProtocolsConfigProps {
   index: number;
@@ -40,6 +41,9 @@ const ProtocolsConfig = ({
         getIn(touched, `search[${index}].protocol`) &&
         getIn(errors, `search[${index}].protocol`)
       }
+      InputProps={{ endAdornment: (
+        <InputAdornment position="end"><InfoTooltip title="Comma-separated protocols to enable (e.g., smtp,imap,pop3)." /></InputAdornment>
+      ) }}
     />
   );
 };

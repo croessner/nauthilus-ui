@@ -1,5 +1,6 @@
 import React from 'react';
 import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button } from '@mui/material';
+import InfoTooltip from './common/InfoTooltip';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
 import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
@@ -175,7 +176,6 @@ const SystemPage: React.FC = () => {
   const [prev, setPrev] = React.useState<MetricsResponse | null>(null);
   const dataRef = React.useRef<MetricsResponse | null>(null);
   React.useEffect(() => { dataRef.current = data; }, [data]);
-  const [cpuCores] = React.useState<number>(4); // display max for gauge; unknown actual cores
   const [statusMessage, setStatusMessage] = React.useState<string>('');
 
   // Bootstrapping: ensure runtime settings are loaded and connection checked (debounced)
@@ -242,14 +242,6 @@ const SystemPage: React.FC = () => {
     return () => clearInterval(id);
   }, [fetchMetrics]);
 
-  // Compute CPU usage between samples as cores usage (delta seconds / delta time seconds)
-  let cpuUsageCores = 0;
-  if (data?.process_cpu_seconds_total && prev?.process_cpu_seconds_total && data.timestamp_ms && prev.timestamp_ms) {
-    const dv = data.process_cpu_seconds_total - prev.process_cpu_seconds_total;
-    const dt = (data.timestamp_ms - prev.timestamp_ms) / 1000;
-    if (dt > 0 && dv >= 0) cpuUsageCores = dv / dt;
-  }
-
   // Prepare display values
   const version = data?.version || 'unknown';
   const uptime = formatDuration(data?.uptime_seconds);
@@ -261,7 +253,7 @@ const SystemPage: React.FC = () => {
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>System</Typography>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>System</Typography><InfoTooltip title="Live system metrics fetched from the backend periodically." />
         <Chip label={`Version: ${version}`} size="small" sx={{ ml: 1 }} />
         {statusMessage && (
           <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>{statusMessage}</Typography>
@@ -272,27 +264,23 @@ const SystemPage: React.FC = () => {
 
       <Grid container spacing={2}>
         <Grid item xs={12}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 1 }}>CPU</Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 1 }}>CPU</Typography>
+                    <InfoTooltip title="CPU usage breakdown (user/system/idle). Gauges initialize at 0% until data is available." />
+                  </Stack>
         </Grid>
         <Grid item xs={12} md={6}>
-          {Number.isFinite(data?.cpu_user_usage_percent ?? NaN) ? (
-            <CpuUsageGauge 
-              user={data?.cpu_user_usage_percent}
-              system={data?.cpu_system_usage_percent}
-              idle={data?.cpu_idle_usage_percent}
-            />
-          ) : (
-            <GaugeBar 
-              label="CPU Usage (cores)" 
-              value={cpuUsageCores}
-              max={cpuCores}
-              color={cpuUsageCores > cpuCores * 0.8 ? 'error' : cpuUsageCores > cpuCores * 0.6 ? 'warning' : 'success'}
-              subtitle={`${cpuUsageCores.toFixed(2)} cores`}
-            />
-          )}
+          <CpuUsageGauge 
+            user={data?.cpu_user_usage_percent}
+            system={data?.cpu_system_usage_percent}
+            idle={data?.cpu_idle_usage_percent}
+          />
         </Grid>
         <Grid item xs={12}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Memory</Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Memory</Typography>
+                    <InfoTooltip title="Memory usage of the Go process (RSS) and allocated heap. Values are updated periodically." />
+                  </Stack>
         </Grid>
         <Grid item xs={12} md={6}>
           <GaugeBar 
@@ -313,7 +301,10 @@ const SystemPage: React.FC = () => {
           />
         </Grid>
         <Grid item xs={12}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Runtime</Typography>
+          <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Runtime</Typography>
+                    <InfoTooltip title="General runtime stats like uptime and concurrency metrics (goroutines/threads)." />
+                  </Stack>
         </Grid>
         <Grid item xs={12} md={6}>
           <StatCard icon="⏱️" title="Uptime" value={uptime} />
