@@ -346,8 +346,8 @@ const ConnectionConfig: React.FC = () => {
                     {connectionStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
                     {connectionStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
                     {connectionStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
-                    {(connectionStatus === 'connected' || connectionStatus === 'disconnected') && (
-                      <Typography color={connectionStatus === 'connected' ? 'success.main' : 'error.main'}>
+                    {connectionStatus === 'disconnected' && (
+                      <Typography color="error.main">
                         {statusMessage}
                       </Typography>
                     )}

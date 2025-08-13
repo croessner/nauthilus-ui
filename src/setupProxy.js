@@ -190,6 +190,37 @@ module.exports = function(app) {
     })
   );
 
+  // Proxy for system metrics endpoint
+  app.use(
+    '/proxy/system/metrics',
+    createProxyMiddleware({
+      target: API_TARGET, // Route through Go backend
+      pathRewrite: (path, req) => {
+        const targetUrl = req.query.url;
+        if (!targetUrl) {
+          throw new Error('Target URL is required');
+        }
+        req.headers['x-target-url'] = targetUrl;
+        // Pass auth parameters in headers
+        if (req.query.authType && req.query.authValue) {
+          req.headers['x-auth-type'] = req.query.authType;
+          req.headers['x-auth-value'] = req.query.authValue;
+        }
+        return '/proxy/system/metrics';
+      },
+      changeOrigin: true,
+      secure: true,
+      onProxyReq: (proxyReq, req, res) => {
+        // Add authentication headers if provided in the request
+        addAuthorizationHeader(proxyReq, req);
+      },
+      onError: (err, req, res) => {
+        console.error('Proxy error for system/metrics:', err);
+        res.status(500).json({ error: err.message });
+      },
+    })
+  );
+
   // Proxy for config load endpoint
   app.use(
     '/proxy/config/load',

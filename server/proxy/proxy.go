@@ -1,6 +1,7 @@
 package proxy
 
 import (
+	"bufio"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -8,7 +9,10 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"regexp"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 
@@ -295,6 +299,9 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	router.GET("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
 	router.POST("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
+
+	// System metrics route
+	router.GET("/proxy/system/metrics", h.SystemMetricsProxy)
 }
 
 // PingProxy handles the /proxy/ping endpoint
@@ -490,4 +497,133 @@ func (h *ProxyHandler) DistributedBruteForceTestProxy(ctx *gin.Context) {
 	}
 
 	h.handleProxyRequest(ctx, config)
+}
+
+// SystemMetricsProxy fetches OpenMetrics/Prometheus metrics and returns selected values as JSON
+func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
+	// Resolve target base URL
+	targetURL, statusCode, errMsg, ok := getTargetURL(ctx)
+	if !ok {
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+		return
+	}
+
+	// Build metrics URL
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
+		return
+	}
+	u.Path = "/metrics"
+
+	// Prepare request
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create request"})
+		return
+	}
+
+	// Add backend auth if provided
+	authType, authValue := getAuthParams(ctx)
+	if authType != "" && authValue != "" {
+		utils.AddAuthorizationHeader(req, authType, authValue)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Failed to fetch metrics: " + err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Backend returned status " + strconv.Itoa(resp.StatusCode) + ": " + string(body)})
+		return
+	}
+
+	// Parse OpenMetrics/Prometheus text format
+	scanner := bufio.NewScanner(resp.Body)
+	// Simple regex to capture: name{labels} value or name value
+	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
+	labelVersion := regexp.MustCompile(`(?:^|[,{])\s*version\s*=\s*"([^"]+)"`)
+
+	var (
+		processCPUSeconds float64
+		processRSSBytes   float64
+		goAllocBytes      float64
+		goGoroutines      float64
+		goThreads         float64
+		processStartTime  float64
+		version           string
+
+		cpuUserUsagePercent   float64
+		cpuSystemUsagePercent float64
+		cpuIdleUsagePercent   float64
+	)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+			continue
+		}
+		m := metricLine.FindStringSubmatch(line)
+		if len(m) == 0 {
+			continue
+		}
+		name := m[1]
+		labels := m[2]
+		valStr := m[3]
+		v, _ := strconv.ParseFloat(valStr, 64)
+
+		switch name {
+		case "process_cpu_seconds_total":
+			processCPUSeconds = v
+		case "process_resident_memory_bytes":
+			processRSSBytes = v
+		case "go_memstats_alloc_bytes":
+			goAllocBytes = v
+		case "go_goroutines":
+			goGoroutines = v
+		case "go_threads":
+			goThreads = v
+		case "process_start_time_seconds":
+			processStartTime = v
+		case "nauthilus_version_info":
+			if labels != "" {
+				if mm := labelVersion.FindStringSubmatch(labels); len(mm) == 2 {
+					version = mm[1]
+				}
+			}
+		case "cpu_user_usage_percent":
+			cpuUserUsagePercent = v
+		case "cpu_system_usage_percent":
+			cpuSystemUsagePercent = v
+		case "cpu_idle_usage_percent":
+			cpuIdleUsagePercent = v
+		}
+	}
+
+	// Compute uptime if start time available
+	uptime := 0.0
+	if processStartTime > 0 {
+		uptime = time.Since(time.Unix(int64(processStartTime), 0)).Seconds()
+	}
+
+	result := gin.H{
+		"timestamp_ms":                  time.Now().UnixMilli(),
+		"version":                       version,
+		"uptime_seconds":                uptime,
+		"process_cpu_seconds_total":     processCPUSeconds,
+		"process_resident_memory_bytes": processRSSBytes,
+		"go_memstats_alloc_bytes":       goAllocBytes,
+		"go_goroutines":                 goGoroutines,
+		"go_threads":                    goThreads,
+		"cpu_user_usage_percent":        cpuUserUsagePercent,
+		"cpu_system_usage_percent":      cpuSystemUsagePercent,
+		"cpu_idle_usage_percent":        cpuIdleUsagePercent,
+	}
+
+	ctx.JSON(http.StatusOK, result)
 }

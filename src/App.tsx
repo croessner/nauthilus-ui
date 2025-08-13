@@ -77,6 +77,7 @@ import BackendsConfig from './components/BackendsConfig';
 import FeaturesConfig from './components/FeaturesConfig';
 import RedisConfig from './components/RedisConfig';
 import MonitoringConfig from './components/MonitoringConfig';
+import SystemPage from './components/SystemPage';
 import LuaConfig from './components/LuaConfig';
 import LDAPConfig from './components/LDAPConfig';
 import FrontendConfig from './components/FrontendConfig';
@@ -256,6 +257,7 @@ const MainContent = (): JSX.Element => {
   // Define other menu items
   const runtimeMenuItems: NavigationMenuItem[] = [
     { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
+    { text: 'System', icon: <MonitorHeartIcon />, path: '/system' },
     { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
   ];
 
@@ -1021,6 +1023,7 @@ const MainContent = (): JSX.Element => {
               <Route path="/redis" element={<RedisConfig />} />
               <Route path="/frontend" element={<FrontendConfig />} />
               <Route path="/monitoring" element={<MonitoringConfig />} />
+              <Route path="/system" element={<SystemPage />} />
               <Route path="/lua" element={<LuaConfig />} />
               <Route path="/ldap" element={<LDAPConfig />} />
               <Route path="/config-preview" element={<ConfigPreview />} />
