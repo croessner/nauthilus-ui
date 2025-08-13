@@ -111,7 +111,7 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; idle?: number }>
     const track = arcPath(baseStart, baseStart + totalAngle, rOuter, rInner);
     const needle = arcPath(baseStart, endAngle, rOuter, rInner);
 
-    const fill = colorFor(pct, !!goodIsHigh);
+    const fill = colorFor(pct, goodIsHigh);
 
     return (
       <Box sx={{ textAlign: 'center' }}>
@@ -149,13 +149,6 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; idle?: number }>
   );
 };
 
-const Legend: React.FC<{ color: string; label: string; value: number }> = ({ color, label, value }) => (
-  <Stack direction="row" spacing={1} alignItems="center">
-    <Box sx={{ width: 10, height: 10, bgcolor: color, borderRadius: '2px' }} />
-    <Typography variant="body2" color="text.secondary">{label}: {value.toFixed(1)}%</Typography>
-  </Stack>
-);
-
 const StatCard: React.FC<{ icon?: string; title: string; value: string }>
  = ({ icon, title, value }) => (
   <Card variant="outlined">
@@ -173,9 +166,6 @@ const SystemPage: React.FC = () => {
   const { connection, loadRuntimeSettings } = useRuntime();
   const { currentProfileName } = useConfig();
   const [data, setData] = React.useState<MetricsResponse | null>(null);
-  const [prev, setPrev] = React.useState<MetricsResponse | null>(null);
-  const dataRef = React.useRef<MetricsResponse | null>(null);
-  React.useEffect(() => { dataRef.current = data; }, [data]);
   const [statusMessage, setStatusMessage] = React.useState<string>('');
 
   // Bootstrapping: ensure runtime settings are loaded and connection checked (debounced)
@@ -189,13 +179,18 @@ const SystemPage: React.FC = () => {
 
   React.useEffect(() => {
     (async () => {
-      await loadSettingsUtil(
-        getCurrentUserId,
-        loadRuntimeSettings,
-        currentProfileName,
-        checkConnection,
-        getConnection
-      );
+      try {
+        await loadSettingsUtil(
+          getCurrentUserId,
+          loadRuntimeSettings,
+          currentProfileName,
+          checkConnection,
+          getConnection
+        );
+      } catch (err) {
+        console.error('Failed to load settings on SystemPage:', err);
+        setStatusMessage(`Failed to load settings: ${err instanceof Error ? err.message : String(err)}`);
+      }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProfileName]);
@@ -218,12 +213,15 @@ const SystemPage: React.FC = () => {
 
       const res = await authenticatedFetch(proxyUrl.toString());
       if (!res.ok) {
+        setStatusMessage(`Failed to fetch metrics: ${res.status} ${res.statusText}`);
         return;
       }
       const json = await res.json() as MetricsResponse;
-      const prevData = dataRef.current;
-      setPrev((p) => prevData ?? p);
       setData(json);
+      setStatusMessage('');
+    } catch (err) {
+      console.error('Failed to fetch metrics:', err);
+      setStatusMessage(`Failed to fetch metrics: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       inFlightRef.current = false;
     }
@@ -231,13 +229,13 @@ const SystemPage: React.FC = () => {
 
   React.useEffect(() => {
     // initial fetch
-    fetchMetrics();
+    void fetchMetrics();
     // interval tick only when page/tab is visible
     const id = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
         return;
       }
-      fetchMetrics();
+      void fetchMetrics();
     }, 1000);
     return () => clearInterval(id);
   }, [fetchMetrics]);
