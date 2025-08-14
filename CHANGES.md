@@ -1,5 +1,21 @@
 # Changes
 
+## 2025-08-14: Add multilingual cookie consent banner
+
+- Added a slim cookie consent banner shown at the bottom of the app until the user clicks OK.
+- The banner includes a link to the Privacy Policy (/legal/privacy).
+- Language is auto-detected from the browser (navigator.languages) with fallback to English.
+- Translations are delivered by the backend via GET /api/i18n/cookie-consent (public endpoint on the same FRONTEND_ADDRESS/FRONTEND_PORT). The frontend also includes a small built-in fallback set.
+- Backend now attempts to load translations from a JSON file before using built-in defaults. Search order:
+  - ./config/cookie-consent.json
+  - ../config/cookie-consent.json
+  - ./cookie-consent.json
+  - ./src/locales/cookie-consent.json (dev)
+  - ../src/locales/cookie-consent.json (dev)
+  If none are found/valid, hardcoded defaults are used.
+- Text wording updated to emphasize technical necessity (strictly necessary/technisch notwendige cookies) instead of just improving experience.
+- Consent is remembered in localStorage under key "cookieConsentAccepted".
+
 ## 2025-08-13: Update Licenses page to current state
 
 - LicensesPage now builds its list dynamically from package-lock.json and package.json, ensuring it reflects the exact installed versions.

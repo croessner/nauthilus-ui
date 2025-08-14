@@ -1,0 +1,37 @@
+{
+  "en": {
+    "text": "We use strictly necessary cookies required to operate this application.",
+    "privacyLinkText": "Privacy Policy",
+    "ok": "OK"
+  },
+  "de": {
+    "text": "Wir setzen technisch notwendige Cookies ein, die für den Betrieb dieser Anwendung erforderlich sind.",
+    "privacyLinkText": "Datenschutzerklärung",
+    "ok": "OK"
+  },
+  "fr": {
+    "text": "Nous utilisons des cookies strictement nécessaires au fonctionnement de cette application.",
+    "privacyLinkText": "Politique de confidentialité",
+    "ok": "OK"
+  },
+  "es": {
+    "text": "Utilizamos cookies estrictamente necesarias para el funcionamiento de esta aplicación.",
+    "privacyLinkText": "Política de privacidad",
+    "ok": "OK"
+  },
+  "it": {
+    "text": "Utilizziamo cookie strettamente necessari al funzionamento di questa applicazione.",
+    "privacyLinkText": "Informativa sulla privacy",
+    "ok": "OK"
+  },
+  "nl": {
+    "text": "We gebruiken strikt noodzakelijke cookies die nodig zijn voor het functioneren van deze applicatie.",
+    "privacyLinkText": "Privacybeleid",
+    "ok": "OK"
+  },
+  "pl": {
+    "text": "Używamy ciasteczek niezbędnych do działania tej aplikacji.",
+    "privacyLinkText": "Polityka prywatności",
+    "ok": "OK"
+  }
+}

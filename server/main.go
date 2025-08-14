@@ -77,7 +77,7 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	strictJWTMiddleware := func(ctx *gin.Context) {
 		// Skip authentication for auth and health endpoints
 		path := ctx.Request.URL.Path
-		if strings.HasPrefix(path, "/api/auth/") || strings.HasPrefix(path, "/api/health") {
+		if strings.HasPrefix(path, "/api/auth/") || strings.HasPrefix(path, "/api/health") || strings.HasPrefix(path, "/api/i18n/") {
 			ctx.Next()
 
 			return
@@ -108,6 +108,10 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Register OIDC endpoints (optional; middleware will skip these)
 	oidcHandler := api.NewOIDCHandler(mongoDB)
 	oidcHandler.RegisterRoutes(r)
+
+	// Register public i18n endpoints (must be accessible before login)
+	i18nHandler := api.NewI18nHandler()
+	i18nHandler.RegisterRoutes(r)
 
 	// Register health endpoint (middleware will skip these)
 	healthHandler := api.NewHealthHandler(mongoDB)

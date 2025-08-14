@@ -91,6 +91,7 @@ import BruteForceConfig from './components/BruteForceConfig';
 import MFASettings from './components/MFASettings';
 import LegalPage from './components/LegalPage';
 import { authenticatedFetch } from './utils/apiUtils';
+import CookieBanner from './components/CookieBanner';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 260;
@@ -1158,6 +1159,9 @@ const MainContent = (): React.JSX.Element => {
         )}
       </Box>
     </Box>
+
+    {/* Cookie Consent Banner */}
+    <CookieBanner />
 
       {/* Reset Confirmation Dialog */}
       <Dialog
