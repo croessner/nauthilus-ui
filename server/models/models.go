@@ -1,5 +1,21 @@
 package models
 
+// LegalPage represents a legal page (e.g., imprint or privacy policy)
+type LegalPage struct {
+	Key       string `bson:"key" json:"key"`
+	Title     string `bson:"title" json:"title"`
+	ContentMD string `bson:"contentMd" json:"contentMd"`
+	UpdatedAt string `bson:"updatedAt" json:"updatedAt"`
+	UpdatedBy string `bson:"updatedBy" json:"updatedBy"`
+}
+
+// LegalResponse represents a list/map of legal pages
+// We’ll return as a simple array for flexibility
+// Keys should be one of: "imprint", "privacy"
+type LegalResponse struct {
+	Pages []LegalPage `json:"pages"`
+}
+
 // WebAuthnCredential represents a WebAuthn credential for a user
 type WebAuthnCredential struct {
 	ID             string `bson:"id" json:"id"`

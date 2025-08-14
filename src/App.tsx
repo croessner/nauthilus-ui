@@ -89,9 +89,11 @@ import UserManagement from './components/UserManagement';
 import UserProfile from './components/UserProfile';
 import BruteForceConfig from './components/BruteForceConfig';
 import MFASettings from './components/MFASettings';
+import LegalPage from './components/LegalPage';
+import { authenticatedFetch } from './utils/apiUtils';
 
 // Define drawer widths for different modes
-const fullDrawerWidth = 240;
+const fullDrawerWidth = 260;
 const iconOnlyDrawerWidth = 72;
 
 interface NavigationMenuItem {
@@ -101,7 +103,7 @@ interface NavigationMenuItem {
 }
 
 // Main content component
-const MainContent = (): JSX.Element => {
+const MainContent = (): React.JSX.Element => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [resetDialogOpen, setResetDialogOpen] = useState(false);
   const [navigationDialogOpen, setNavigationDialogOpen] = useState(false);
@@ -266,6 +268,44 @@ const MainContent = (): JSX.Element => {
     { text: 'User Management', icon: <PeopleIcon />, path: '/users' },
   ];
 
+  // Legal titles (dynamic)
+  const [legalTitles, setLegalTitles] = useState<{ imprint: string; privacy: string }>(() => ({
+    imprint: 'Imprint',
+    privacy: 'Privacy Policy'
+  }));
+
+  useEffect(() => {
+    // Load legal titles once user is authenticated and listen for updates
+    const load = async () => {
+      try {
+        const resp = await authenticatedFetch('/api/legal');
+        if (!resp.ok) return;
+        const json = await resp.json();
+        if (json && Array.isArray(json.pages)) {
+          const t: any = { imprint: 'Imprint', privacy: 'Privacy Policy' };
+          for (const p of json.pages) {
+            if (p.key === 'imprint' && p.title) t.imprint = p.title;
+            if (p.key === 'privacy' && p.title) t.privacy = p.title;
+          }
+          setLegalTitles(t);
+        }
+      } catch {
+        // ignore
+      }
+    };
+    load().catch(() => { /* intentionally ignored */ });
+
+    const onUpdated = (e: any) => {
+      const { key, title } = e.detail || {};
+      if (key === 'imprint') setLegalTitles((prev) => ({ ...prev, imprint: title || prev.imprint }));
+      if (key === 'privacy') setLegalTitles((prev) => ({ ...prev, privacy: title || prev.privacy }));
+    };
+    window.addEventListener('legal:updated' as any, onUpdated);
+    return () => {
+      window.removeEventListener('legal:updated' as any, onUpdated);
+    };
+  }, []);
+
   // Define MFA menu items (available to all users)
   const mfaMenuItems: NavigationMenuItem[] = [
     { text: 'Two-Factor Authentication', icon: <SecurityIcon />, path: '/mfa-settings' },
@@ -290,10 +330,14 @@ const MainContent = (): JSX.Element => {
     setIconOnly(!iconOnly);
   };
 
-  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
-      uploadConfig(file);
+      try {
+        await uploadConfig(file);
+      } catch {
+        // ignore upload errors for now
+      }
     }
     // Reset the input value so the same file can be uploaded again if needed
     if (fileInputRef.current) {
@@ -302,6 +346,7 @@ const MainContent = (): JSX.Element => {
   };
 
   const handleDownload = () => {
+    // downloadConfig is synchronous and handles its own errors
     downloadConfig();
   };
 
@@ -309,8 +354,12 @@ const MainContent = (): JSX.Element => {
     setResetDialogOpen(true);
   };
 
-  const handleResetConfirm = () => {
-    resetConfig();
+  const handleResetConfirm = async () => {
+    try {
+      await resetConfig();
+    } catch {
+      // ignore reset errors for now
+    }
     setResetDialogOpen(false);
     navigate('/config-wizard'); // Navigate to Config Wizard page
   };
@@ -364,9 +413,13 @@ const MainContent = (): JSX.Element => {
     setProfileMenuAnchorEl(null);
   };
 
-  const handleProfileChange = (event: SelectChangeEvent<string>) => {
+  const handleProfileChange = async (event: SelectChangeEvent) => {
     const profileName = event.target.value;
-    switchProfile(profileName);
+    try {
+      await switchProfile(profileName);
+    } catch {
+      // ignore switch errors for now
+    }
   };
 
   const handleCreateProfileClick = () => {
@@ -375,9 +428,13 @@ const MainContent = (): JSX.Element => {
     handleProfileMenuClose();
   };
 
-  const handleCreateProfileConfirm = () => {
+  const handleCreateProfileConfirm = async () => {
     if (newProfileName.trim()) {
-      createProfile(newProfileName.trim());
+      try {
+        await createProfile(newProfileName.trim());
+      } catch {
+        // ignore create errors for now
+      }
       setCreateProfileDialogOpen(false);
     }
   };
@@ -389,9 +446,13 @@ const MainContent = (): JSX.Element => {
     handleProfileMenuClose();
   };
 
-  const handleRenameProfileConfirm = () => {
+  const handleRenameProfileConfirm = async () => {
     if (newProfileNameForRename.trim() && profileToRename) {
-      renameProfile(profileToRename, newProfileNameForRename.trim());
+      try {
+        await renameProfile(profileToRename, newProfileNameForRename.trim());
+      } catch {
+        // ignore rename errors for now
+      }
       setRenameProfileDialogOpen(false);
     }
   };
@@ -402,9 +463,13 @@ const MainContent = (): JSX.Element => {
     handleProfileMenuClose();
   };
 
-  const handleDeleteProfileConfirm = () => {
+  const handleDeleteProfileConfirm = async () => {
     if (profileToDelete) {
-      deleteProfile(profileToDelete);
+      try {
+        await deleteProfile(profileToDelete);
+      } catch {
+        // ignore delete errors for now
+      }
       setDeleteProfileDialogOpen(false);
     }
   };
@@ -415,9 +480,16 @@ const MainContent = (): JSX.Element => {
     handleProfileMenuClose();
   };
 
-  const handleUploadWithProfileConfirm = () => {
+  const handleUploadWithProfileConfirm = async () => {
     if (uploadWithProfileRef.current?.files?.[0]) {
-      uploadConfig(uploadWithProfileRef.current.files[0], uploadProfileName.trim() || undefined);
+      try {
+        await uploadConfig(
+          uploadWithProfileRef.current.files[0],
+          uploadProfileName.trim() || undefined
+        );
+      } catch {
+        // ignore upload errors for now
+      }
       setUploadProfileDialogOpen(false);
       // Reset the input value so the same file can be uploaded again if needed
       if (uploadWithProfileRef.current) {
@@ -623,6 +695,54 @@ const MainContent = (): JSX.Element => {
         >
           {mfaMenuItems.map((item) => (
             <ListItem key={item.text} disablePadding>
+              {iconOnly ? (
+                <Tooltip title={item.text} placement="right">
+                  <ListItemButton 
+                    onClick={() => handleNavigation(item.path)}
+                    sx={{ 
+                      justifyContent: 'center',
+                      '&:hover': {
+                        backgroundColor: 'action.hover',
+                        borderRadius: 1
+                      }
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 0, mr: 0 }}>
+                      {item.icon}
+                    </ListItemIcon>
+                  </ListItemButton>
+                </Tooltip>
+              ) : (
+                <ListItemButton onClick={() => handleNavigation(item.path)}>
+                  <ListItemIcon>
+                    {item.icon}
+                  </ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </ListItemButton>
+              )}
+            </ListItem>
+          ))}
+        </List>
+      )}
+
+      {/* Legal Section */}
+      {user && (
+        <List
+          subheader={
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
+              {!iconOnly && (
+                <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+                  Legal
+                </Typography>
+              )}
+            </Box>
+          }
+        >
+          {[
+            { text: legalTitles.imprint, icon: <DescriptionIcon />, path: '/legal/imprint' },
+            { text: legalTitles.privacy, icon: <DescriptionIcon />, path: '/legal/privacy' },
+          ].map((item) => (
+            <ListItem key={item.path} disablePadding>
               {iconOnly ? (
                 <Tooltip title={item.text} placement="right">
                   <ListItemButton 
@@ -1032,6 +1152,7 @@ const MainContent = (): JSX.Element => {
               <Route path="/users" element={<UserManagement />} />
               <Route path="/profile" element={<UserProfile />} />
               <Route path="/mfa-settings" element={<MFASettings />} />
+              <Route path="/legal/:key" element={<LegalPage />} />
             </Routes>
           </>
         )}
@@ -1190,7 +1311,7 @@ const MainContent = (): JSX.Element => {
 };
 
 // AppContent component to handle conditional rendering based on authentication
-const AppContent = (): JSX.Element => {
+const AppContent = (): React.JSX.Element => {
   const { isAuthenticated } = useUser();
   const { auth } = useAuth();
 
@@ -1225,7 +1346,7 @@ const AppContent = (): JSX.Element => {
 };
 
 // Wrap the app content with the ThemeProvider, ConfigProvider, RuntimeProvider, UserProvider, and AuthProvider
-const App = (): JSX.Element => {
+const App = (): React.JSX.Element => {
   return (
     <ThemeProvider>
       <ConfigProvider>

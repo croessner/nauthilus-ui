@@ -141,6 +141,10 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	} else {
 		mfaHandler.RegisterRoutes(r)
 	}
+
+	// Register Legal handler (protected by middleware via apiGroup)
+	legalHandler := api.NewLegalHandler(mongoDB)
+	legalHandler.RegisterGroupRoutes(apiGroup)
 }
 
 // registerMiddleware registers all middleware with the router

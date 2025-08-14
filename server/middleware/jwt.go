@@ -201,11 +201,11 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Set user information in the context
 		ctx.Set("username", username)
 
-		// Extract roles if available
+		// Extract roles if available (handle multiple possible JSON types)
 		if rolesInterface, ok := claims["roles"]; ok {
+			// Case 1: roles came in as []interface{} (common when decoding JSON arrays)
 			if roles, ok := rolesInterface.([]interface{}); ok {
 				roleStrings := make([]string, 0, len(roles))
-
 				for _, role := range roles {
 					if roleStr, ok := role.(string); ok {
 						roleStrings = append(roleStrings, roleStr)
@@ -213,6 +213,12 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 				}
 
 				ctx.Set("roles", roleStrings)
+			} else if rolesStrSlice, ok := rolesInterface.([]string); ok {
+				// Case 2: roles already decoded as []string
+				ctx.Set("roles", rolesStrSlice)
+			} else if singleRole, ok := rolesInterface.(string); ok {
+				// Case 3: a single role as string (non-standard but be lenient)
+				ctx.Set("roles", []string{singleRole})
 			}
 		}
 

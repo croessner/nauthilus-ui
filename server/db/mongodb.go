@@ -43,6 +43,7 @@ type MongoDB struct {
 	UserColl      *mongo.Collection
 	JWTConfigColl *mongo.Collection
 	RuntimeColl   *mongo.Collection
+	LegalColl     *mongo.Collection
 	Config        *config.Config
 	RetryCount    int
 	IsConnected   bool
@@ -89,6 +90,7 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	m.UserColl = m.DB.Collection("users")
 	m.JWTConfigColl = m.DB.Collection("jwtconfig")
 	m.RuntimeColl = m.DB.Collection("runtime")
+	m.LegalColl = m.DB.Collection("legal")
 	m.IsConnected = true
 	m.RetryCount = 0
 
@@ -130,6 +132,11 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 
 	// Initialize runtime collection
 	if err := m.initializeRuntimeCollection(ctx); err != nil {
+		return err
+	}
+
+	// Initialize legal pages
+	if err := m.initializeLegalPages(ctx); err != nil {
 		return err
 	}
 
@@ -278,6 +285,32 @@ func (m *MongoDB) initializeRuntimeCollection(ctx context.Context) error {
 	}
 
 	slog.Info("Runtime collection initialized", "documents", runtimeCount)
+	return nil
+}
+
+// initializeLegalPages creates default legal pages if they don't exist
+func (m *MongoDB) initializeLegalPages(ctx context.Context) error {
+	// Check if collection is empty
+	count, err := m.LegalColl.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	if count == 0 {
+		slog.Info("Creating default legal pages...")
+		now := time.Now().Format(time.RFC3339)
+		pages := []interface{}{
+			bson.M{"key": "imprint", "title": "Imprint", "contentMd": "", "updatedAt": now, "updatedBy": "system"},
+			bson.M{"key": "privacy", "title": "Privacy Policy", "contentMd": "", "updatedAt": now, "updatedBy": "system"},
+		}
+
+		if _, err := m.LegalColl.InsertMany(ctx, pages); err != nil {
+			return err
+		}
+
+		slog.Info("Default legal pages created")
+	}
+
 	return nil
 }
 
