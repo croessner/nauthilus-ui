@@ -1,6 +1,7 @@
 import React from 'react';
-import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem } from '@mui/material';
+import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
 import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
@@ -18,6 +19,18 @@ interface MetricsResponse {
   cpu_user_usage_percent?: number;
   cpu_system_usage_percent?: number;
   cpu_idle_usage_percent?: number;
+  cpu_nice_usage_percent?: number;
+  cpu_iowait_usage_percent?: number;
+  cpu_steal_usage_percent?: number;
+
+  // Newly added fields for connections and Redis
+  connections_current?: number;
+  redis_up?: number; // 1=up, 0=down
+  redis_connected_clients?: number;
+  redis_used_memory_bytes?: number;
+  redis_keyspace_hits?: number;
+  redis_keyspace_misses?: number;
+  redis_role?: string;
 }
 
 const formatBytes = (bytes?: number): string => {
@@ -61,11 +74,14 @@ const GaugeBar: React.FC<{ label: string; value: number; max?: number; color?: '
 };
 
 // Three separate semicircular gauges for User/System/Idle with idle having reversed color logic
-const CpuUsageGauge: React.FC<{ user?: number; system?: number; idle?: number }>
- = ({ user, system, idle }) => {
+const CpuUsageGauge: React.FC<{ user?: number; system?: number; nice?: number; iowait?: number; steal?: number; idle?: number }>
+ = ({ user, system, nice, iowait, steal, idle }) => {
   // Clamp values to [0,100]
   const u = Math.max(0, Math.min(user ?? 0, 100));
   const s = Math.max(0, Math.min(system ?? 0, 100));
+  const n = Math.max(0, Math.min(nice ?? 0, 100));
+  const w = Math.max(0, Math.min(iowait ?? 0, 100));
+  const st = Math.max(0, Math.min(steal ?? 0, 100));
   const i = Math.max(0, Math.min(idle ?? 0, 100));
 
   const width = 160;
@@ -146,8 +162,12 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; idle?: number }>
           justifyContent={{ xs: 'center', sm: 'space-around' }}
           sx={{ width: '100%', flexWrap: 'wrap', rowGap: 2, columnGap: 2, overflowX: 'auto' }}
         >
+          {/* Logical order: User, System, Nice, I/O Wait, Steal, Idle */}
           <SingleGauge label="User" value={u} />
           <SingleGauge label="System" value={s} />
+          <SingleGauge label="Nice" value={n} />
+          <SingleGauge label="I/O Wait" value={w} />
+          <SingleGauge label="Steal" value={st} />
           <SingleGauge label="Idle" value={i} goodIsHigh />
         </Stack>
       </CardContent>
@@ -259,6 +279,30 @@ const SystemPage: React.FC = () => {
     return () => clearInterval(id);
   }, [fetchMetrics, refreshMs]);
 
+  // Collapsible sections expanded state persisted in sessionStorage
+  const getSessionBool = (key: string, def: boolean) => {
+    try {
+      const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(key) : null;
+      if (v === 'true') return true;
+      if (v === 'false') return false;
+    } catch {}
+    return def;
+  };
+  const setSessionBool = (key: string, val: boolean) => {
+    try { if (typeof window !== 'undefined') window.sessionStorage.setItem(key, val ? 'true' : 'false'); } catch {}
+  };
+  const [cpuExpanded, setCpuExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:cpu', true));
+  const [memoryExpanded, setMemoryExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:memory', true));
+  const [runtimeExpanded, setRuntimeExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:runtime', true));
+  const [redisExpanded, setRedisExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:redis', true));
+  const [detailsExpanded, setDetailsExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:details', true));
+
+  React.useEffect(() => setSessionBool('ui:system:cpu', cpuExpanded), [cpuExpanded]);
+  React.useEffect(() => setSessionBool('ui:system:memory', memoryExpanded), [memoryExpanded]);
+  React.useEffect(() => setSessionBool('ui:system:runtime', runtimeExpanded), [runtimeExpanded]);
+  React.useEffect(() => setSessionBool('ui:system:redis', redisExpanded), [redisExpanded]);
+  React.useEffect(() => setSessionBool('ui:system:details', detailsExpanded), [detailsExpanded]);
+
   // Prepare display values
   const version = data?.version || 'unknown';
   const instanceName = (data?.instance && data.instance.trim()) || (config?.server?.instance_name || 'nauthilus');
@@ -268,10 +312,23 @@ const SystemPage: React.FC = () => {
   const goroutines = data?.go_goroutines ?? NaN;
   const threads = data?.go_threads ?? NaN;
 
+  // Connections
+  const connectionsCurrent = data?.connections_current;
+
+  // Redis derived values
+  const redisUp = data?.redis_up === undefined ? undefined : (data.redis_up >= 0.5);
+  const redisRole = (data?.redis_role || '').trim();
+  const redisClients = data?.redis_connected_clients;
+  const redisMem = formatBytes(data?.redis_used_memory_bytes);
+  const hits = data?.redis_keyspace_hits ?? 0;
+  const misses = data?.redis_keyspace_misses ?? 0;
+  const totalGets = (Number.isFinite(hits) ? hits : 0) + (Number.isFinite(misses) ? misses : 0);
+  const hitRate = totalGets > 0 ? Math.round((hits / totalGets) * 100) : NaN;
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
-        <Typography variant="h5" sx={{ fontWeight: 700 }}>System</Typography><InfoTooltip title="Live system metrics fetched from the backend periodically." />
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>System</Typography><InfoTooltip title="Live metrics of this instance, fetched periodically from the backend." />
         <Chip label={`Instance: ${instanceName}`} size="small" sx={{ ml: 1 }} />
         <Chip label={`Version: ${version}`} size="small" sx={{ ml: 1 }} />
         {statusMessage && (
@@ -298,73 +355,198 @@ const SystemPage: React.FC = () => {
 
       <Grid container spacing={2}>
         <Grid item xs={12}>
-          <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 1 }}>CPU</Typography>
-                    <InfoTooltip title="CPU usage breakdown (user/system/idle). Gauges initialize at 0% until data is available." />
-                  </Stack>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <CpuUsageGauge 
-            user={data?.cpu_user_usage_percent}
-            system={data?.cpu_system_usage_percent}
-            idle={data?.cpu_idle_usage_percent}
-          />
-        </Grid>
-        <Grid item xs={12}>
-          <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Memory</Typography>
-                    <InfoTooltip title="Memory usage of the Go process (RSS) and allocated heap. Values are updated periodically." />
-                  </Stack>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <GaugeBar 
-            label="Go Allocated Memory" 
-            value={(data?.go_memstats_alloc_bytes || 0) / (1024*1024)}
-            max={1024 * 8}
-            color="info"
-            subtitle={`${alloc}`}
-          />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <GaugeBar 
-            label="Process RSS Memory" 
-            value={(data?.process_resident_memory_bytes || 0) / (1024*1024)}
-            max={1024 * 16}
-            color="secondary"
-            subtitle={`${rss}`}
-          />
-        </Grid>
-        <Grid item xs={12}>
-          <Stack direction="row" spacing={1} alignItems="center">
-                    <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Runtime</Typography>
-                    <InfoTooltip title="General runtime stats like uptime and concurrency metrics (goroutines/threads)." />
-                  </Stack>
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <StatCard icon="⏱️" title="Uptime" value={uptime} />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <StatCard icon="📈" title="Goroutines" value={Number.isFinite(goroutines) ? String(goroutines) : 'N/A'} />
-        </Grid>
-        <Grid item xs={12} md={6}>
-          <StatCard icon="🧵" title="Threads" value={Number.isFinite(threads) ? String(threads) : 'N/A'} />
-        </Grid>
-        <Grid item xs={12}>
-          <Typography variant="h6" sx={{ fontWeight: 700, mt: 2 }}>Details</Typography>
-        </Grid>
-        <Grid item xs={12}>
-          <Card variant="outlined">
-            <CardContent>
-              <Stack direction="row" spacing={2} alignItems="center">
-                <Typography variant="body2" color="text.secondary">
-                  CPU seconds total: {data?.process_cpu_seconds_total?.toFixed ? data.process_cpu_seconds_total.toFixed(2) : 'N/A'}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  RSS: {rss} • Go Alloc: {alloc}
-                </Typography>
+          <Accordion
+            expanded={cpuExpanded}
+            onChange={() => setCpuExpanded(prev => !prev)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>CPU</Typography>
+                <InfoTooltip title="CPU usage breakdown. User: app code; System: OS/kernel work; Nice: low‑priority work; I/O Wait: waiting for disks/network; Steal: time taken by other VMs; Idle: unused CPU. Gauges start at 0% until data arrives." />
               </Stack>
-            </CardContent>
-          </Card>
+            </AccordionSummary>
+            <AccordionDetails>
+              <CpuUsageGauge
+                user={data?.cpu_user_usage_percent}
+                system={data?.cpu_system_usage_percent}
+                nice={data?.cpu_nice_usage_percent}
+                iowait={data?.cpu_iowait_usage_percent}
+                steal={data?.cpu_steal_usage_percent}
+                idle={data?.cpu_idle_usage_percent}
+              />
+            </AccordionDetails>
+          </Accordion>
+        </Grid>
+        <Grid item xs={12}>
+          <Accordion
+            expanded={memoryExpanded}
+            onChange={() => setMemoryExpanded(prev => !prev)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>Memory</Typography>
+                <InfoTooltip title="Memory used by this process. RSS (Resident Set Size) is the part of memory currently in RAM; Go heap (allocated) is memory managed by Go. Values update periodically." />
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <GaugeBar
+                    label="Go Heap (allocated)"
+                    value={(data?.go_memstats_alloc_bytes || 0) / (1024*1024)}
+                    max={1024 * 8}
+                    color="info"
+                    subtitle={`${alloc}`}
+                  />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <GaugeBar
+                    label="Process Memory (RSS)"
+                    value={(data?.process_resident_memory_bytes || 0) / (1024*1024)}
+                    max={1024 * 16}
+                    color="secondary"
+                    subtitle={`${rss}`}
+                  />
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        </Grid>
+        <Grid item xs={12}>
+          <Accordion
+            expanded={runtimeExpanded}
+            onChange={() => setRuntimeExpanded(prev => !prev)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}> 
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>Runtime</Typography>
+                <InfoTooltip title="General runtime stats like uptime and concurrency metrics (goroutines/threads)." />
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12} md={6}>
+                  <StatCard icon="⏱️" title="Uptime" value={uptime} />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <StatCard icon="📈" title="Goroutines" value={Number.isFinite(goroutines) ? String(goroutines) : 'N/A'} />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <StatCard icon="🧵" title="Threads" value={Number.isFinite(threads) ? String(threads) : 'N/A'} />
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <StatCard icon="🔌" title="Connections" value={Number.isFinite(connectionsCurrent || NaN) ? String(connectionsCurrent) : 'N/A'} />
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Accordion
+            expanded={redisExpanded}
+            onChange={() => setRedisExpanded(prev => !prev)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Stack direction="row" spacing={1} alignItems="center">
+                <Typography variant="h6" sx={{ fontWeight: 700 }}>Redis</Typography>
+                <InfoTooltip title="Status information for the Redis backend: Up/Down, role, connected clients, memory usage, and cache hit rate." />
+              </Stack>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Grid container spacing={2}>
+                <Grid item xs={12}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" rowGap={1}>
+                        <Chip size="small" label={`Status: ${redisUp === undefined ? 'N/A' : (redisUp ? 'Up' : 'Down')}`} color={redisUp === undefined ? 'default' : (redisUp ? 'success' : 'error')} />
+                        {redisRole && <Chip size="small" label={`Role: ${redisRole}`} />}
+                        <Typography variant="body2" color="text.secondary">
+                          Clients: {Number.isFinite(redisClients || NaN) ? String(redisClients) : 'N/A'}
+                        </Typography>
+                        <Typography variant="body2" color="text.secondary">
+                          Memory: {redisMem}
+                        </Typography>
+                      </Stack>
+                    </CardContent>
+                  </Card>
+                </Grid>
+                <Grid item xs={12} md={6}>
+                  <Card variant="outlined">
+                    <CardContent>
+                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Redis Hit Rate</Typography>
+                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                        {Number.isFinite(hitRate) ? (
+                          <svg width="180" height="120" viewBox="0 0 180 120" preserveAspectRatio="xMidYMid meet" aria-label="Hit Rate Gauge">
+                            {(() => {
+                              const value = Math.max(0, Math.min(hitRate || 0, 100));
+                              const cx = 90, cy = 112, rOuter = 70, rInner = 58;
+                              const baseStart = -90, totalAngle = 180, endAngle = baseStart + (totalAngle * value) / 100;
+                              const toRad = (deg: number) => (deg - 90) * Math.PI / 180;
+                              const polar = (ang: number, r: number) => ({ x: cx + r * Math.cos(toRad(ang)), y: cy + r * Math.sin(toRad(ang)) });
+                              const arcPath = (start: number, end: number, ro: number, ri: number) => {
+                                const largeArc = end - start > 180 ? 1 : 0;
+                                const p1 = polar(start, ro), p2 = polar(end, ro), p3 = polar(end, ri), p4 = polar(start, ri);
+                                return `M ${p1.x} ${p1.y} A ${ro} ${ro} 0 ${largeArc} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${ri} ${ri} 0 ${largeArc} 0 ${p4.x} ${p4.y} Z`;
+                              };
+                              const colorFor = (val: number) => {
+                                if (val >= 70) return '#4caf50';
+                                if (val >= 40) return '#ff9800';
+                                return '#f44336';
+                              };
+                              const track = arcPath(baseStart, baseStart + totalAngle, rOuter, rInner);
+                              const fill = arcPath(baseStart, endAngle, rOuter, rInner);
+                              return (
+                                <g>
+                                  <path d={track} fill="#e0e0e0" />
+                                  <path d={fill} fill={colorFor(value)} />
+                                  {Array.from({ length: 7 }).map((_, idx) => {
+                                    const ang = baseStart + (idx * totalAngle) / 6;
+                                    const po = polar(ang, rOuter);
+                                    const pi = polar(ang, rOuter - 8);
+                                    return <line key={idx} x1={pi.x} y1={pi.y} x2={po.x} y2={po.y} stroke="#bdbdbd" strokeWidth={1}/>;
+                                  })}
+                                  <text x={cx} y={cy - 14} textAnchor="middle" fontSize="16" fill="#424242">{Math.round(value)}%</text>
+                                  <text x={cx} y={cy + 2} textAnchor="middle" fontSize="12" fill="#616161">Hit Rate</text>
+                                </g>
+                              );
+                            })()}
+                          </svg>
+                        ) : (
+                          <Typography variant="body2" color="text.secondary">No data for hit rate</Typography>
+                        )}
+                      </Box>
+                    </CardContent>
+                  </Card>
+                </Grid>
+              </Grid>
+            </AccordionDetails>
+          </Accordion>
+        </Grid>
+
+        <Grid item xs={12}>
+          <Accordion
+            expanded={detailsExpanded}
+            onChange={() => setDetailsExpanded(prev => !prev)}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+              <Typography variant="h6" sx={{ fontWeight: 700 }}>Details</Typography>
+            </AccordionSummary>
+            <AccordionDetails>
+              <Card variant="outlined">
+                <CardContent>
+                  <Stack direction="row" spacing={2} alignItems="center">
+                    <Typography variant="body2" color="text.secondary">
+                      CPU seconds total: {data?.process_cpu_seconds_total?.toFixed ? data.process_cpu_seconds_total.toFixed(2) : 'N/A'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      RSS (Resident Set Size): {rss} • Go heap (allocated): {alloc}
+                    </Typography>
+                  </Stack>
+                </CardContent>
+              </Card>
+            </AccordionDetails>
+          </Accordion>
         </Grid>
       </Grid>
     </Box>

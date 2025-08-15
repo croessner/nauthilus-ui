@@ -563,6 +563,22 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		cpuUserUsagePercent   float64
 		cpuSystemUsagePercent float64
 		cpuIdleUsagePercent   float64
+
+		connectionsCurrent float64
+		seenConnections    bool
+
+		redisUp               float64
+		seenRedisUp           bool
+		redisConnectedClients float64
+		seenRedisClients      bool
+		redisUsedMemoryBytes  float64
+		seenRedisMem          bool
+		redisKeyspaceHits     float64
+		seenRedisHits         bool
+		redisKeyspaceMisses   float64
+		seenRedisMisses       bool
+		redisRole             string
+		seenRedisRole         bool
 	)
 
 	for scanner.Scan() {
@@ -607,6 +623,48 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 			cpuSystemUsagePercent = v
 		case "cpu_idle_usage_percent":
 			cpuIdleUsagePercent = v
+		// Connections — support a few possible metric names
+		case "nauthilus_connections_current", "nauthilus_active_connections", "server_connections_current", "current_active_connections", "server_concurrent_requests":
+			connectionsCurrent = v
+			seenConnections = true
+		// Redis exporter metrics
+		case "redis_up":
+			redisUp = v
+			seenRedisUp = true
+		case "redis_connected_clients":
+			redisConnectedClients = v
+			seenRedisClients = true
+		case "redis_memory_used_bytes", "redis_used_memory_bytes":
+			redisUsedMemoryBytes = v
+			seenRedisMem = true
+		case "redis_keyspace_hits_total", "redis_keyspace_hits":
+			redisKeyspaceHits = v
+			seenRedisHits = true
+		case "redis_keyspace_misses_total", "redis_keyspace_misses":
+			redisKeyspaceMisses = v
+			seenRedisMisses = true
+		case "redis_instance_info":
+			// Try to extract role label if present
+			if labels != "" {
+				if strings.Contains(labels, "role=") {
+					roleRe := regexp.MustCompile(`(?:^|,|\{)\s*role\s*=\s*"([^"]+)"`)
+					if rm := roleRe.FindStringSubmatch(labels); len(rm) == 2 {
+						redisRole = rm[1]
+						seenRedisRole = true
+					}
+				}
+			}
+		case "up":
+			// Generic Prometheus 'up' metric; consider it Redis status if job label indicates redis
+			if labels != "" {
+				jobRe := regexp.MustCompile(`(?:^|,|\{)\s*job\s*=\s*"([^"]+)"`)
+				if jm := jobRe.FindStringSubmatch(labels); len(jm) == 2 {
+					if strings.Contains(strings.ToLower(jm[1]), "redis") {
+						redisUp = v
+						seenRedisUp = true
+					}
+				}
+			}
 		}
 	}
 
@@ -614,6 +672,14 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	uptime := 0.0
 	if processStartTime > 0 {
 		uptime = time.Since(time.Unix(int64(processStartTime), 0)).Seconds()
+	}
+
+	// Derive Redis up if not explicitly exposed but clear activity is present
+	if !seenRedisUp {
+		if seenRedisClients && redisConnectedClients > 0 {
+			redisUp = 1
+			seenRedisUp = true
+		}
 	}
 
 	result := gin.H{
@@ -629,6 +695,35 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		"cpu_user_usage_percent":        cpuUserUsagePercent,
 		"cpu_system_usage_percent":      cpuSystemUsagePercent,
 		"cpu_idle_usage_percent":        cpuIdleUsagePercent,
+	}
+
+	// Optional fields: only include if observed
+	if seenConnections {
+		result["connections_current"] = connectionsCurrent
+	}
+
+	if seenRedisUp {
+		result["redis_up"] = redisUp
+	}
+
+	if seenRedisClients {
+		result["redis_connected_clients"] = redisConnectedClients
+	}
+
+	if seenRedisMem {
+		result["redis_used_memory_bytes"] = redisUsedMemoryBytes
+	}
+
+	if seenRedisHits {
+		result["redis_keyspace_hits"] = redisKeyspaceHits
+	}
+
+	if seenRedisMisses {
+		result["redis_keyspace_misses"] = redisKeyspaceMisses
+	}
+
+	if seenRedisRole {
+		result["redis_role"] = redisRole
 	}
 
 	ctx.JSON(http.StatusOK, result)
