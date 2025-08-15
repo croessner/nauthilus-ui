@@ -54,8 +54,6 @@ const InfoTooltip: React.FC<InfoTooltipProps> = ({ title, size = 'small', placem
           height: size === 'small' ? 36 : 40,
           p: 0.5,
           borderRadius: '50%',
-          border: '1px solid',
-          borderColor: 'divider',
           color: 'text.secondary',
           '&:hover': { backgroundColor: 'action.hover' },
         }}
