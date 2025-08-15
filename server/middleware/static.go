@@ -58,10 +58,11 @@ func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 	// Create a JSON object with environment variables
 	// Note: JWT secret and OIDC client secret are NOT exposed to the frontend for security reasons
 	envConfig := map[string]string{
-		"REACT_APP_TOKEN_EXPIRY":         fmt.Sprintf("%d", h.Config.TokenExpiry),
-		"REACT_APP_REFRESH_TOKEN_EXPIRY": fmt.Sprintf("%d", h.Config.RefreshTokenExpiry),
-		"REACT_APP_REMEMBER_ME_EXPIRY":   fmt.Sprintf("%d", h.Config.RememberMeExpiry),
-		"REACT_APP_PROXY_PORT":           h.Config.ReactProxyPort,
+		"REACT_APP_TOKEN_EXPIRY":              fmt.Sprintf("%d", h.Config.TokenExpiry),
+		"REACT_APP_REFRESH_TOKEN_EXPIRY":      fmt.Sprintf("%d", h.Config.RefreshTokenExpiry),
+		"REACT_APP_REMEMBER_ME_EXPIRY":        fmt.Sprintf("%d", h.Config.RememberMeExpiry),
+		"REACT_APP_COOKIE_BANNER_RESHOW_DAYS": fmt.Sprintf("%d", h.Config.CookieBannerReshowDays),
+		"REACT_APP_PROXY_PORT":                h.Config.ReactProxyPort,
 		// Whitelisted OIDC-related variables needed in the frontend
 		"REACT_APP_OIDC_ENABLED":        fmt.Sprintf("%t", h.Config.OIDCEnabled),
 		"REACT_APP_OIDC_ISSUER":         h.Config.OIDCIssuer,

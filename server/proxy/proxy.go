@@ -547,7 +547,8 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	scanner := bufio.NewScanner(resp.Body)
 	// Simple regex to capture: name{labels} value or name value
 	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
-	labelVersion := regexp.MustCompile(`(?:^|[,{])\s*version\s*=\s*"([^"]+)"`)
+	labelVersion := regexp.MustCompile(`(?:^|[,\{])\s*version\s*=\s*"([^"]+)"`)
+	labelInstance := regexp.MustCompile(`(?:^|[,\{])\s*(?:instance_name|instance|name)\s*=\s*"([^"]+)"`)
 
 	var (
 		processCPUSeconds float64
@@ -557,6 +558,7 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		goThreads         float64
 		processStartTime  float64
 		version           string
+		instanceName      string
 
 		cpuUserUsagePercent   float64
 		cpuSystemUsagePercent float64
@@ -595,6 +597,9 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 				if mm := labelVersion.FindStringSubmatch(labels); len(mm) == 2 {
 					version = mm[1]
 				}
+				if mi := labelInstance.FindStringSubmatch(labels); len(mi) == 2 {
+					instanceName = mi[1]
+				}
 			}
 		case "cpu_user_usage_percent":
 			cpuUserUsagePercent = v
@@ -614,6 +619,7 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	result := gin.H{
 		"timestamp_ms":                  time.Now().UnixMilli(),
 		"version":                       version,
+		"instance":                      instanceName,
 		"uptime_seconds":                uptime,
 		"process_cpu_seconds_total":     processCPUSeconds,
 		"process_resident_memory_bytes": processRSSBytes,

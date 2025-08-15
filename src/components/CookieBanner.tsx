@@ -12,6 +12,8 @@ interface ConsentTranslation {
 type ConsentTranslations = Record<string, ConsentTranslation>;
 
 const CONSENT_STORAGE_KEY = 'cookieConsentAccepted';
+const CONSENT_LAST_ACCEPTED_AT = 'cookieConsentAcceptedAt';
+const CONSENT_SESSION_DISMISSED = 'cookieConsentSessionDismissed';
 
 function pickLanguage(available: string[], navigatorLanguages: readonly string[] | undefined, navigatorLanguage: string | undefined): string {
   // Normalize codes to lower-case and strip region (e.g., de-DE -> de)
@@ -50,9 +52,45 @@ function pickLanguage(available: string[], navigatorLanguages: readonly string[]
 }
 
 const CookieBanner: React.FC = () => {
+  // Resolve reshow days from runtime env or build-time env
+  const resolveReshowDays = (): number => {
+    const fromWindow = (window as any)?._env_?.REACT_APP_COOKIE_BANNER_RESHOW_DAYS;
+    const fromProcess = (typeof process !== 'undefined' && (process as any).env?.REACT_APP_COOKIE_BANNER_RESHOW_DAYS) as string | undefined;
+    const raw = (fromWindow ?? fromProcess ?? '').toString().trim();
+    const n = raw === '' ? NaN : Number(raw);
+    if (!Number.isFinite(n)) return -1; // default: never show
+    return Math.trunc(n);
+  };
+
+  const [reshowDays] = useState<number>(() => resolveReshowDays());
+
   const [accepted, setAccepted] = useState<boolean>(() => {
     try {
-      return localStorage.getItem(CONSENT_STORAGE_KEY) === 'true';
+      // -1: never show
+      if (reshowDays === -1) return true;
+
+      // 0: always show unless dismissed for the current session
+      if (reshowDays === 0) {
+        return sessionStorage.getItem(CONSENT_SESSION_DISMISSED) === 'true';
+      }
+
+      // N days: show again after N days
+      const acceptedAt = localStorage.getItem(CONSENT_LAST_ACCEPTED_AT);
+      const legacyAccepted = localStorage.getItem(CONSENT_STORAGE_KEY) === 'true';
+      if (!acceptedAt) {
+        // Migrate legacy acceptance to a timestamp so we don't show immediately after update
+        if (legacyAccepted) {
+          const now = Date.now().toString();
+          localStorage.setItem(CONSENT_LAST_ACCEPTED_AT, now);
+          return true;
+        }
+        return false; // not accepted yet
+      }
+      const last = parseInt(acceptedAt, 10);
+      if (Number.isNaN(last)) return false;
+      const msSince = Date.now() - last;
+      const msThreshold = reshowDays * 24 * 60 * 60 * 1000;
+      return msSince < msThreshold; // accepted if within window
     } catch {
       return false;
     }
@@ -106,6 +144,20 @@ const CookieBanner: React.FC = () => {
 
   const handleAccept = () => {
     try {
+      if (reshowDays === -1) {
+        // nothing to show anyway
+        setAccepted(true);
+        return;
+      }
+      if (reshowDays === 0) {
+        // session-only dismissal
+        sessionStorage.setItem(CONSENT_SESSION_DISMISSED, 'true');
+        setAccepted(true);
+        return;
+      }
+      // N days: store timestamp and legacy flag for backwards-compatibility
+      const now = Date.now().toString();
+      localStorage.setItem(CONSENT_LAST_ACCEPTED_AT, now);
       localStorage.setItem(CONSENT_STORAGE_KEY, 'true');
     } catch {
       // ignore storage errors (e.g., disabled cookies); fall back to in-memory state
@@ -113,7 +165,16 @@ const CookieBanner: React.FC = () => {
     setAccepted(true);
   };
 
-  if (accepted) return null;
+  // -1: never show
+  if (reshowDays === -1) return null;
+
+  // 0: show unless dismissed in this session
+  if (reshowDays === 0) {
+    if (accepted) return null; // dismissed for this session
+  } else {
+    // N days logic
+    if (accepted) return null;
+  }
 
   return (
     <Box

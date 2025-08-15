@@ -1,5 +1,38 @@
 # Changes
 
+## 2025-08-15: System page — show instance name and selectable refresh interval
+
+- SystemPage now displays the instance name next to the version.
+  - Backend: server/proxy/proxy.go (SystemMetricsProxy) now also extracts an instance name from the `nauthilus_version_info` metric labels (tries `instance_name`, then `instance`, then `name`) and returns it as `instance` in the JSON.
+  - Frontend: SystemPage.tsx reads `instance` from metrics and falls back to the configured `config.server.instance_name` if not present.
+- Added a user-selectable auto-refresh interval to the System page header with options: 1 s, 5 s, 10 s, 30 s, 1 m, 5 m.
+  - The choice is remembered for the current browser session via `sessionStorage` under `systemPage.refreshIntervalMs`.
+  - Polling now respects the chosen interval; manual Refresh button remains available.
+
+## 2025-08-15: Make info (i) help icons tappable on smartphones
+
+- Fixed an accessibility/usability issue where small info/help “i” tooltips were hard or impossible to activate on touch devices.
+- Frontend: src/components/common/InfoTooltip.tsx
+  - Added explicit onClick and onTouchStart handlers to open the tooltip immediately on tap.
+  - Kept desktop behavior by opening on hover/focus and closing on mouse leave/blur.
+  - Auto-closes after ~3 seconds on tap to avoid sticking open.
+  - Increased IconButton hit target to ~36–40 px to meet mobile touch guidelines while preserving the visual size of the icon.
+- This change applies across the app wherever <InfoTooltip /> is used (configuration forms, system page, etc.).
+
+## 2025-08-15: Cookie banner re-show policy via env-config.js
+
+- Introduced new environment variable REACT_APP_COOKIE_BANNER_RESHOW_DAYS to control when the cookie banner re-appears:
+  - -1: never show
+  - 0: always show (user can dismiss for the current browser session)
+  - N: show again after N days
+- Backend:
+  - server/config/config.go reads REACT_APP_COOKIE_BANNER_RESHOW_DAYS (int) and stores it in Config.CookieBannerReshowDays.
+  - server/middleware/static.go exposes REACT_APP_COOKIE_BANNER_RESHOW_DAYS via /env-config.js so the frontend can read it at runtime (works with Docker real env vars as well).
+- Frontend:
+  - src/components/CookieBanner.tsx now respects the policy. Legacy acceptance (cookieConsentAccepted=true) is migrated to a timestamp on first load to avoid immediate re-show.
+  - For 0 (always show), dismissal is tracked in sessionStorage and resets on browser/tab close.
+- .env.example updated with documentation and default (-1).
+
 ## 2025-08-14: Add multilingual cookie consent banner
 
 - Added a slim cookie consent banner shown at the bottom of the app until the user clicks OK.

@@ -9,14 +9,50 @@ interface InfoTooltipProps {
 }
 
 const InfoTooltip: React.FC<InfoTooltipProps> = ({ title, size = 'small', placement = 'top' }) => {
+  const [open, setOpen] = React.useState(false);
+  const closeTimer = React.useRef<number | null>(null);
+
+  const scheduleClose = (delay = 3000) => {
+    if (closeTimer.current) {
+      window.clearTimeout(closeTimer.current);
+    }
+    closeTimer.current = window.setTimeout(() => setOpen(false), delay);
+  };
+
+  const handleClick = () => {
+    setOpen(true);
+    scheduleClose();
+  };
+
+  const handleTouchStart = () => {
+    setOpen(true);
+    scheduleClose();
+  };
+
+  const handleMouseEnter = () => setOpen(true);
+  const handleMouseLeave = () => setOpen(false);
+  const handleFocus = () => setOpen(true);
+  const handleBlur = () => setOpen(false);
+
+  React.useEffect(() => () => { if (closeTimer.current) window.clearTimeout(closeTimer.current); }, []);
+
   return (
-    <Tooltip title={title} placement={placement} arrow>
+    <Tooltip title={title} placement={placement} arrow open={open}>
       <IconButton
         size={size}
         aria-label="info"
+        onClick={handleClick}
+        onTouchStart={handleTouchStart}
+        onMouseEnter={handleMouseEnter}
+        onMouseLeave={handleMouseLeave}
+        onFocus={handleFocus}
+        onBlur={handleBlur}
         sx={{
           ml: 0.5,
-          p: 0.3,
+          // Increase touch target for mobile accessibility (WCAG ~44x44px)
+          width: size === 'small' ? 36 : 40,
+          height: size === 'small' ? 36 : 40,
+          p: 0.5,
           borderRadius: '50%',
           border: '1px solid',
           borderColor: 'divider',

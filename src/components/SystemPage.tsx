@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button } from '@mui/material';
+import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
@@ -8,6 +8,7 @@ import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as 
 interface MetricsResponse {
   timestamp_ms: number;
   version?: string;
+  instance?: string;
   uptime_seconds?: number;
   process_cpu_seconds_total?: number;
   process_resident_memory_bytes?: number;
@@ -169,7 +170,7 @@ const StatCard: React.FC<{ icon?: string; title: string; value: string }>
 
 const SystemPage: React.FC = () => {
   const { connection, loadRuntimeSettings } = useRuntime();
-  const { currentProfileName } = useConfig();
+  const { currentProfileName, config } = useConfig();
   const [data, setData] = React.useState<MetricsResponse | null>(null);
   const [statusMessage, setStatusMessage] = React.useState<string>('');
 
@@ -232,6 +233,19 @@ const SystemPage: React.FC = () => {
     }
   }, [getConnection]);
 
+  const REFRESH_SESSION_KEY = 'systemPage.refreshIntervalMs';
+  const [refreshMs, setRefreshMs] = React.useState<number>(() => {
+    const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(REFRESH_SESSION_KEY) : null;
+    const n = v ? parseInt(v, 10) : NaN;
+    return Number.isFinite(n) && n > 0 ? n : 1000;
+  });
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      window.sessionStorage.setItem(REFRESH_SESSION_KEY, String(refreshMs));
+    }
+  }, [refreshMs]);
+
   React.useEffect(() => {
     // initial fetch
     void fetchMetrics();
@@ -241,12 +255,13 @@ const SystemPage: React.FC = () => {
         return;
       }
       void fetchMetrics();
-    }, 1000);
+    }, refreshMs);
     return () => clearInterval(id);
-  }, [fetchMetrics]);
+  }, [fetchMetrics, refreshMs]);
 
   // Prepare display values
   const version = data?.version || 'unknown';
+  const instanceName = (data?.instance && data.instance.trim()) || (config?.server?.instance_name || 'nauthilus');
   const uptime = formatDuration(data?.uptime_seconds);
   const rss = formatBytes(data?.process_resident_memory_bytes);
   const alloc = formatBytes(data?.go_memstats_alloc_bytes);
@@ -255,13 +270,29 @@ const SystemPage: React.FC = () => {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2 }}>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>System</Typography><InfoTooltip title="Live system metrics fetched from the backend periodically." />
+        <Chip label={`Instance: ${instanceName}`} size="small" sx={{ ml: 1 }} />
         <Chip label={`Version: ${version}`} size="small" sx={{ ml: 1 }} />
         {statusMessage && (
           <Typography variant="body2" color="text.secondary" sx={{ ml: 2 }}>{statusMessage}</Typography>
         )}
         <Box sx={{ flexGrow: 1 }} />
+        <Select
+          size="small"
+          value={refreshMs}
+          onChange={(e) => setRefreshMs(Number(e.target.value))}
+          sx={{ minWidth: 120, mr: 1 }}
+          displayEmpty
+          aria-label="Refresh interval"
+        >
+          <MenuItem value={1000}>1 s</MenuItem>
+          <MenuItem value={5000}>5 s</MenuItem>
+          <MenuItem value={10000}>10 s</MenuItem>
+          <MenuItem value={30000}>30 s</MenuItem>
+          <MenuItem value={60000}>1 m</MenuItem>
+          <MenuItem value={300000}>5 m</MenuItem>
+        </Select>
         <Button variant="outlined" size="small" onClick={fetchMetrics}>Refresh</Button>
       </Stack>
 

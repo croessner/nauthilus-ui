@@ -35,6 +35,11 @@ type Config struct {
 	// RememberMeExpiry is the expiration time for "remember me" tokens in seconds.
 	RememberMeExpiry int
 
+	// Cookie banner configuration
+	// CookieBannerReshowDays controls how the cookie banner is re-shown:
+	// -1: never show, 0: always show (dismissable for the current session), N: days until re-show
+	CookieBannerReshowDays int
+
 	// WebAuthn configuration
 	// WebAuthnRPID is the Relying Party ID for WebAuthn.
 	WebAuthnRPID string
@@ -73,6 +78,9 @@ func LoadConfig() *Config {
 		TokenExpiry:        getEnvAsInt("REACT_APP_TOKEN_EXPIRY", 3600),
 		RefreshTokenExpiry: getEnvAsInt("REACT_APP_REFRESH_TOKEN_EXPIRY", 86400),
 		RememberMeExpiry:   getEnvAsInt("REACT_APP_REMEMBER_ME_EXPIRY", 86400),
+
+		// Cookie banner configuration
+		CookieBannerReshowDays: getEnvAsInt("REACT_APP_COOKIE_BANNER_RESHOW_DAYS", -1),
 
 		// WebAuthn configuration
 		WebAuthnRPID:          getEnv("WEBAUTHN_RP_ID", ""),
