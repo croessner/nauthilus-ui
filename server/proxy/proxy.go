@@ -544,7 +544,9 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		return
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
@@ -556,9 +558,9 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	// Parse OpenMetrics/Prometheus text format
 	scanner := bufio.NewScanner(resp.Body)
 	// Simple regex to capture: name{labels} value or name value
-	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
-	labelVersion := regexp.MustCompile(`(?:^|[,\{])\s*version\s*=\s*"([^"]+)"`)
-	labelInstance := regexp.MustCompile(`(?:^|[,\{])\s*(?:instance_name|instance|name)\s*=\s*"([^"]+)"`)
+	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
+	labelVersion := regexp.MustCompile(`(?:^|[,{])\s*version\s*=\s*"([^"]+)"`)
+	labelInstance := regexp.MustCompile(`(?:^|[,{])\s*(?:instance_name|instance|name)\s*=\s*"([^"]+)"`)
 
 	var (
 		processCPUSeconds float64
@@ -784,7 +786,9 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 		return
 	}
 
-	defer resp.Body.Close()
+	defer func() {
+		_ = resp.Body.Close()
+	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
@@ -795,7 +799,7 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 
 	// Parse OpenMetrics/Prometheus text format focusing on security_* metrics
 	scanner := bufio.NewScanner(resp.Body)
-	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
+	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
 	labelKVP := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"([^"]*)"`)
 
 	// Data structures
