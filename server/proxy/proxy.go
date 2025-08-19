@@ -302,6 +302,8 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	// System metrics route
 	router.GET("/proxy/system/metrics", h.SystemMetricsProxy)
+	// Security metrics route
+	router.GET("/proxy/security/metrics", h.SecurityMetricsProxy)
 }
 
 // PingProxy handles the /proxy/ping endpoint
@@ -505,6 +507,7 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	targetURL, statusCode, errMsg, ok := getTargetURL(ctx)
 	if !ok {
 		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+
 		return
 	}
 
@@ -512,14 +515,17 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	u, err := url.Parse(targetURL)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
+
 		return
 	}
+
 	u.Path = "/metrics"
 
 	// Prepare request
 	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create request"})
+
 		return
 	}
 
@@ -530,16 +536,20 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	}
 
 	client := &http.Client{Timeout: 10 * time.Second}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Failed to fetch metrics: " + err.Error()})
+
 		return
 	}
+
 	defer resp.Body.Close()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		body, _ := io.ReadAll(resp.Body)
 		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Backend returned status " + strconv.Itoa(resp.StatusCode) + ": " + string(body)})
+
 		return
 	}
 
@@ -586,10 +596,12 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
 			continue
 		}
+
 		m := metricLine.FindStringSubmatch(line)
 		if len(m) == 0 {
 			continue
 		}
+
 		name := m[1]
 		labels := m[2]
 		valStr := m[3]
@@ -613,6 +625,7 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 				if mm := labelVersion.FindStringSubmatch(labels); len(mm) == 2 {
 					version = mm[1]
 				}
+
 				if mi := labelInstance.FindStringSubmatch(labels); len(mi) == 2 {
 					instanceName = mi[1]
 				}
@@ -727,4 +740,208 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, result)
+}
+
+// SecurityMetricsProxy fetches security_* metrics and returns structured JSON
+func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
+	// Resolve target base URL
+	targetURL, statusCode, errMsg, ok := getTargetURL(ctx)
+	if !ok {
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+
+		return
+	}
+
+	// Build metrics URL
+	u, err := url.Parse(targetURL)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
+
+		return
+	}
+
+	u.Path = "/metrics"
+
+	// Prepare request
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create request"})
+
+		return
+	}
+
+	// Add backend auth if provided
+	authType, authValue := getAuthParams(ctx)
+	if authType != "" && authValue != "" {
+		utils.AddAuthorizationHeader(req, authType, authValue)
+	}
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Failed to fetch metrics: " + err.Error()})
+
+		return
+	}
+
+	defer resp.Body.Close()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Backend returned status " + strconv.Itoa(resp.StatusCode) + ": " + string(body)})
+
+		return
+	}
+
+	// Parse OpenMetrics/Prometheus text format focusing on security_* metrics
+	scanner := bufio.NewScanner(resp.Body)
+	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*\})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
+	labelKVP := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"([^"]*)"`)
+
+	// Data structures
+	type perUserMetric struct {
+		Username string  `json:"username"`
+		Window   string  `json:"window"`
+		Value    float64 `json:"value"`
+	}
+
+	type perWindowMetric struct {
+		Window string  `json:"window"`
+		Value  float64 `json:"value"`
+	}
+
+	var (
+		uniqueIPsPerUser          []perUserMetric
+		failBudgetUsed            []perUserMetric
+		globalIPsPerUser          []perWindowMetric
+		accountsInProtection      float64
+		seenAccountsInProtection  bool
+		sprayedTokensByWindow     []perWindowMetric
+		stepupChallengesTotal     float64
+		seenStepup                bool
+		powChallengesTotal        float64
+		seenPow                   bool
+		slowAttackSuspicionsTotal float64
+		seenSlow                  bool
+	)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "#") || strings.TrimSpace(line) == "" {
+
+			continue
+		}
+
+		m := metricLine.FindStringSubmatch(line)
+		if len(m) == 0 {
+			continue
+		}
+
+		name := m[1]
+		labels := m[2]
+		valStr := m[3]
+		v, _ := strconv.ParseFloat(valStr, 64)
+
+		switch name {
+		case "security_unique_ips_per_user":
+			// labels: username, window
+			user := ""
+			win := ""
+
+			if labels != "" {
+				for _, lm := range labelKVP.FindAllStringSubmatch(labels, -1) {
+					if len(lm) == 3 {
+						k, val := lm[1], lm[2]
+						if k == "username" {
+							user = val
+						}
+						if k == "window" {
+							win = val
+						}
+					}
+				}
+			}
+
+			uniqueIPsPerUser = append(uniqueIPsPerUser, perUserMetric{Username: user, Window: win, Value: v})
+		case "security_account_fail_budget_used":
+			user := ""
+			win := ""
+
+			if labels != "" {
+				for _, lm := range labelKVP.FindAllStringSubmatch(labels, -1) {
+					if len(lm) == 3 {
+						k, val := lm[1], lm[2]
+						if k == "username" {
+							user = val
+						}
+						if k == "window" {
+							win = val
+						}
+					}
+				}
+			}
+
+			failBudgetUsed = append(failBudgetUsed, perUserMetric{Username: user, Window: win, Value: v})
+		case "security_global_ips_per_user":
+			win := ""
+
+			if labels != "" {
+				for _, lm := range labelKVP.FindAllStringSubmatch(labels, -1) {
+					if len(lm) == 3 && lm[1] == "window" {
+						win = lm[2]
+					}
+				}
+			}
+
+			globalIPsPerUser = append(globalIPsPerUser, perWindowMetric{Window: win, Value: v})
+		case "security_accounts_in_protection_mode_total":
+			accountsInProtection = v
+			seenAccountsInProtection = true
+		case "security_sprayed_password_tokens_total":
+			win := ""
+
+			if labels != "" {
+				for _, lm := range labelKVP.FindAllStringSubmatch(labels, -1) {
+					if len(lm) == 3 && lm[1] == "window" {
+						win = lm[2]
+					}
+				}
+			}
+
+			sprayedTokensByWindow = append(sprayedTokensByWindow, perWindowMetric{Window: win, Value: v})
+		case "security_stepup_challenges_issued_total":
+			stepupChallengesTotal = v
+			seenStepup = true
+		case "security_pow_challenges_issued_total":
+			powChallengesTotal = v
+			seenPow = true
+		case "security_slow_attack_suspicions_total":
+			slowAttackSuspicionsTotal = v
+			seenSlow = true
+		}
+	}
+
+	// Build response
+	res := gin.H{
+		"timestamp_ms":             time.Now().UnixMilli(),
+		"unique_ips_per_user":      uniqueIPsPerUser,
+		"account_fail_budget_used": failBudgetUsed,
+		"global_ips_per_user":      globalIPsPerUser,
+		"sprayed_password_tokens":  sprayedTokensByWindow,
+	}
+
+	if seenAccountsInProtection {
+		res["accounts_in_protection_mode_total"] = accountsInProtection
+	}
+	if seenStepup {
+		res["stepup_challenges_issued_total"] = stepupChallengesTotal
+	}
+	if seenPow {
+		res["pow_challenges_issued_total"] = powChallengesTotal
+	}
+	if seenSlow {
+		res["slow_attack_suspicions_total"] = slowAttackSuspicionsTotal
+	}
+
+	ctx.JSON(http.StatusOK, res)
 }
