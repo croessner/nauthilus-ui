@@ -933,12 +933,15 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 	if seenAccountsInProtection {
 		res["accounts_in_protection_mode_total"] = accountsInProtection
 	}
+
 	if seenStepup {
 		res["stepup_challenges_issued_total"] = stepupChallengesTotal
 	}
+
 	if seenPow {
 		res["pow_challenges_issued_total"] = powChallengesTotal
 	}
+
 	if seenSlow {
 		res["slow_attack_suspicions_total"] = slowAttackSuspicionsTotal
 	}
