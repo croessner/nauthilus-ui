@@ -812,7 +812,6 @@ const MainContent = (): React.JSX.Element => {
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-      <CssBaseline />
       <AppBar
         ref={appBarRef}
         position="sticky"
@@ -1356,6 +1355,7 @@ const AppContent = (): React.JSX.Element => {
 const App = (): React.JSX.Element => {
   return (
     <ThemeProvider>
+      <CssBaseline />
       <ConfigProvider>
         <RuntimeProvider>
           <UserProvider>
