@@ -40,14 +40,6 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 			return
 		}
 
-		// Skip authentication for proxy endpoints
-		if strings.HasPrefix(path, "/proxy/") {
-			slog.Info("JWT Middleware: Skipping auth for proxy endpoint", "path", path)
-			ctx.Next()
-
-			return
-		}
-
 		// Skip authentication for health endpoint
 		if strings.HasPrefix(path, "/api/health") {
 			slog.Info("JWT Middleware: Skipping auth for health endpoint", "path", path)

@@ -273,6 +273,42 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
 
+	// Strict JWT middleware for proxy routes
+	strictProxyJWTMiddleware := func(ctx *gin.Context) {
+		path := ctx.Request.URL.Path
+		method := ctx.Request.Method
+
+		// Allow CORS preflight
+		if method == http.MethodOptions {
+			ctx.Next()
+
+			return
+		}
+
+		// Skip authentication for specific public proxy endpoints
+		if strings.HasPrefix(path, "/proxy/ping") || strings.HasPrefix(path, "/proxy/jwt-token") {
+			ctx.Next()
+
+			return
+		}
+
+		// Enforce presence of Authorization header for all other /proxy endpoints
+		authHeader := ctx.GetHeader("Authorization")
+		if authHeader == "" {
+			slog.Warn("Missing Authorization header for protected proxy endpoint", "path", path)
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
+			ctx.Abort()
+
+			return
+		}
+
+		// Delegate JWT validation to the standard middleware
+		middleware.JWTAuthMiddleware(mongoDB)(ctx)
+	}
+
+	// Apply strict proxy middleware
+	r.Use(strictProxyJWTMiddleware)
+
 	// Register proxy handlers
 	proxyHandler := proxy.NewProxyHandler()
 	proxyHandler.RegisterRoutes(r)
