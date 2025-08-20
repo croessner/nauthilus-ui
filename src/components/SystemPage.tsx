@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
 import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -56,8 +57,8 @@ const formatDuration = (seconds?: number): string => {
   return parts.join(' ');
 };
 
-const GaugeBar: React.FC<{ label: string; value: number; max?: number; color?: 'primary'|'secondary'|'success'|'error'|'warning'|'info'; subtitle?: string }>
- = ({ label, value, max = 100, color = 'primary', subtitle }) => {
+interface GaugeBarProps { label: string; value: number; max?: number; color?: 'primary'|'secondary'|'success'|'error'|'warning'|'info'; subtitle?: string }
+const GaugeBar = ({ label, value, max = 100, color = 'primary', subtitle }: GaugeBarProps): React.JSX.Element => {
   const clamped = Math.max(0, Math.min(value, max));
   const pct = (clamped / max) * 100;
   return (
@@ -74,8 +75,8 @@ const GaugeBar: React.FC<{ label: string; value: number; max?: number; color?: '
 };
 
 // Three separate semicircular gauges for User/System/Idle with idle having reversed color logic
-const CpuUsageGauge: React.FC<{ user?: number; system?: number; nice?: number; iowait?: number; steal?: number; idle?: number }>
- = ({ user, system, nice, iowait, steal, idle }) => {
+interface CpuUsageGaugeProps { user?: number; system?: number; nice?: number; iowait?: number; steal?: number; idle?: number }
+const CpuUsageGauge = ({ user, system, nice, iowait, steal, idle }: CpuUsageGaugeProps): React.JSX.Element => {
   // Clamp values to [0,100]
   const u = Math.max(0, Math.min(user ?? 0, 100));
   const s = Math.max(0, Math.min(system ?? 0, 100));
@@ -118,8 +119,7 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; nice?: number; i
     }
   };
 
-  const SingleGauge: React.FC<{ label: string; value: number; goodIsHigh?: boolean }>
-   = ({ label, value, goodIsHigh = false }) => {
+  const SingleGauge = ({ label, value, goodIsHigh = false }: { label: string; value: number; goodIsHigh?: boolean }): React.JSX.Element => {
     const pct = Math.max(0, Math.min(value, 100));
     const baseStart = -90;
     const totalAngle = 180;
@@ -175,8 +175,8 @@ const CpuUsageGauge: React.FC<{ user?: number; system?: number; nice?: number; i
   );
 };
 
-const StatCard: React.FC<{ icon?: string; title: string; value: string }>
- = ({ icon, title, value }) => (
+interface StatCardProps { icon?: string; title: string; value: string }
+const StatCard = ({ icon, title, value }: StatCardProps): React.JSX.Element => (
   <Card variant="outlined">
     <CardContent>
       <Stack direction="row" spacing={1} alignItems="center" sx={{ mb: 1 }}>
@@ -188,7 +188,7 @@ const StatCard: React.FC<{ icon?: string; title: string; value: string }>
   </Card>
 );
 
-const SystemPage: React.FC = () => {
+const SystemPage = (): React.JSX.Element => {
   const { connection, loadRuntimeSettings } = useRuntime();
   const { currentProfileName, config } = useConfig();
   const [data, setData] = React.useState<MetricsResponse | null>(null);
@@ -254,30 +254,7 @@ const SystemPage: React.FC = () => {
   }, [getConnection]);
 
   const REFRESH_SESSION_KEY = 'systemPage.refreshIntervalMs';
-  const [refreshMs, setRefreshMs] = React.useState<number>(() => {
-    const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(REFRESH_SESSION_KEY) : null;
-    const n = v ? parseInt(v, 10) : NaN;
-    return Number.isFinite(n) && n > 0 ? n : 1000;
-  });
-
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(REFRESH_SESSION_KEY, String(refreshMs));
-    }
-  }, [refreshMs]);
-
-  React.useEffect(() => {
-    // initial fetch
-    void fetchMetrics();
-    // interval tick only when page/tab is visible
-    const id = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') {
-        return;
-      }
-      void fetchMetrics();
-    }, refreshMs);
-    return () => clearInterval(id);
-  }, [fetchMetrics, refreshMs]);
+  const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(fetchMetrics, REFRESH_SESSION_KEY, 5000);
 
   // Collapsible sections expanded state persisted in sessionStorage
   const getSessionBool = (key: string, def: boolean) => {

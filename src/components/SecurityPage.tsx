@@ -1,4 +1,5 @@
 import React from 'react';
+import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
 import { Box, Card, CardContent, Grid, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -30,7 +31,7 @@ interface SecurityMetricsResponse {
 
 const prettyWindow = (w?: string) => (w && w.trim()) || 'n/a';
 
-const SecurityPage: React.FC = () => {
+const SecurityPage = (): React.JSX.Element => {
   const { connection, loadRuntimeSettings } = useRuntime();
   const { currentProfileName } = useConfig();
   const [data, setData] = React.useState<SecurityMetricsResponse | null>(null);
@@ -94,25 +95,7 @@ const SecurityPage: React.FC = () => {
   }, [getConnection]);
 
   const REFRESH_SESSION_KEY = 'securityPage.refreshIntervalMs';
-  const [refreshMs, setRefreshMs] = React.useState<number>(() => {
-    const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(REFRESH_SESSION_KEY) : null;
-    const n = v ? parseInt(v, 10) : NaN;
-    return Number.isFinite(n) && n > 0 ? n : 5000;
-  });
-  React.useEffect(() => {
-    if (typeof window !== 'undefined') {
-      window.sessionStorage.setItem(REFRESH_SESSION_KEY, String(refreshMs));
-    }
-  }, [refreshMs]);
-
-  React.useEffect(() => {
-    void fetchMetrics();
-    const id = setInterval(() => {
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      void fetchMetrics();
-    }, refreshMs);
-    return () => clearInterval(id);
-  }, [fetchMetrics, refreshMs]);
+  const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(fetchMetrics, REFRESH_SESSION_KEY, 5000);
 
   // Helpers to render tables grouped by window
   const groupPerUserByWindow = (items?: PerUserMetric[]) => {
