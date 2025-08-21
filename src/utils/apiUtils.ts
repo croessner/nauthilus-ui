@@ -209,26 +209,35 @@ export const authenticatedFetch = async (
 ): Promise<Response> => {
   // Get the JWT token
   const token = getAuthToken();
-  
+
   // Prepare headers
   const headers = new Headers(options.headers || {});
-  
-  // Set default content type if not already set
-  if (!headers.has('Content-Type')) {
+
+  // Decide whether to set a default Content-Type
+  const method = (options.method || 'GET').toUpperCase();
+  const hasBody = options.body !== undefined && options.body !== null;
+  const isFormData = typeof FormData !== 'undefined' && hasBody && options.body instanceof FormData;
+
+  // Only set Content-Type automatically when:
+  // - there is a request body
+  // - it's not FormData (browser will set proper boundary)
+  // - caller did not already provide Content-Type
+  // Do NOT set for GET/HEAD requests or when no body is present.
+  if (hasBody && !isFormData && !headers.has('Content-Type') && method !== 'GET' && method !== 'HEAD') {
     headers.set('Content-Type', 'application/json');
   }
-  
+
   // Add Authorization header if token exists
-  if (token) {
+  if (token && !headers.has('Authorization')) {
     headers.set('Authorization', `Bearer ${token}`);
   }
-  
+
   // Merge options with headers
   const fetchOptions: RequestInit = {
     ...options,
     headers
   };
-  
+
   // Perform the fetch
   return fetch(url, fetchOptions);
 };

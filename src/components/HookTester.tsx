@@ -26,6 +26,8 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken } from '../utils/apiUtils';
@@ -64,6 +66,11 @@ const HookTester: React.FC = () => {
   const [respBody, setRespBody] = useState<string>('');
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [notif, setNotif] = useState<{open:boolean;severity:'success'|'error'|'info'|'warning';message:string}>({open:false,severity:'info',message:''});
+  // Collapsible panels
+  const [showRequestPanel, setShowRequestPanel] = useState<boolean>(true);
+  // Collapsible headers in response
+  const [showReqHeaders, setShowReqHeaders] = useState<boolean>(true);
+  const [showRespHeaders, setShowRespHeaders] = useState<boolean>(true);
   // Connection status state (match other pages)
   const [connStatus, setConnStatus] = useState<'unknown'|'connected'|'disconnected'|'checking'>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -390,127 +397,135 @@ const HookTester: React.FC = () => {
       )}
 
       <Paper sx={{ p: 2 }}>
-        <Grid container spacing={2}>
-          <Grid item xs={12} md={2}>
-            <TextField select fullWidth label="Method" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
-              {METHODS.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} md={10}>
-            <TextField
-              fullWidth
-              label="Endpoint Path (e.g., /api/v1/custom/hooks/distributed-brute-force-test)"
-              value={endpointPath}
-              onChange={(e) => setEndpointPath(e.target.value)}
-              placeholder="/api/v1/custom/..."
-              InputProps={{ endAdornment: (
-                <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
-                  <span>
-                    <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0} onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="pick-endpoint">
-                      <LinkIcon fontSize="small" />
-                    </IconButton>
-                  </span>
-                </Tooltip>
-              )}}
-              helperText={'Path relative to the Backend URL'}
-            />
-            <Menu anchorEl={anchorEl} open={menuOpen} onClose={closeMenu}>
-              {effectiveEndpointSuggestions.map((ep) => (
-                <MenuItem key={ep} onClick={() => pickEndpoint(ep)}>{ep}</MenuItem>
-              ))}
-            </Menu>
-          </Grid>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+          <Typography variant="h6" sx={{ flexGrow: 1 }}>Request</Typography>
+          <IconButton size="small" aria-label={showRequestPanel ? 'collapse request panel' : 'expand request panel'} onClick={() => setShowRequestPanel(v => !v)}>
+            {showRequestPanel ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+          </IconButton>
+        </Box>
+        {showRequestPanel && (
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={2}>
+              <TextField select fullWidth label="Method" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
+                {METHODS.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+              </TextField>
+            </Grid>
+            <Grid item xs={12} md={10}>
+              <TextField
+                fullWidth
+                label="Endpoint Path (e.g., /api/v1/custom/hooks/distributed-brute-force-test)"
+                value={endpointPath}
+                onChange={(e) => setEndpointPath(e.target.value)}
+                placeholder="/api/v1/custom/..."
+                InputProps={{ endAdornment: (
+                  <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
+                    <span>
+                      <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0} onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="pick-endpoint">
+                        <LinkIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                )}}
+                helperText={'Path relative to the Backend URL'}
+              />
+              <Menu anchorEl={anchorEl} open={menuOpen} onClose={closeMenu}>
+                {effectiveEndpointSuggestions.map((ep) => (
+                  <MenuItem key={ep} onClick={() => pickEndpoint(ep)}>{ep}</MenuItem>
+                ))}
+              </Menu>
+            </Grid>
 
-          {/* Query Params */}
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <Typography variant="subtitle1">Query Parameters</Typography>
-              <Chip size="small" label={`${query.filter(q => q.key).length}`} />
-              <Box flexGrow={1} />
-              <Button size="small" onClick={addRow}>Add param</Button>
-            </Box>
-            <Grid container spacing={1}>
-              {query.map((row) => (
-                <React.Fragment key={row.id}>
-                  <Grid item xs={5} md={3}>
-                    <TextField size="small" fullWidth label="key" value={row.key} onChange={(e) => updateRow(row.id, { key: e.target.value })} />
-                  </Grid>
-                  <Grid item xs={7} md={7}>
-                    <TextField size="small" fullWidth label="value" value={row.value} onChange={(e) => updateRow(row.id, { value: e.target.value })} />
-                  </Grid>
-                  <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
-                    <IconButton onClick={() => removeRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
-                  </Grid>
-                </React.Fragment>
-              ))}
+            {/* Query Params */}
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                <Typography variant="subtitle1">Query Parameters</Typography>
+                <Chip size="small" label={`${query.filter(q => q.key).length}`} />
+                <Box flexGrow={1} />
+                <Button size="small" onClick={addRow}>Add param</Button>
+              </Box>
+              <Grid container spacing={1}>
+                {query.map((row) => (
+                  <React.Fragment key={row.id}>
+                    <Grid item xs={5} md={3}>
+                      <TextField size="small" fullWidth label="key" value={row.key} onChange={(e) => updateRow(row.id, { key: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={7} md={7}>
+                      <TextField size="small" fullWidth label="value" value={row.value} onChange={(e) => updateRow(row.id, { value: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                      <IconButton onClick={() => removeRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
+                    </Grid>
+                  </React.Fragment>
+                ))}
+              </Grid>
+            </Grid>
+
+            {/* Custom Request Headers */}
+            <Grid item xs={12}>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
+                <Typography variant="subtitle1">Request Headers</Typography>
+                <Chip size="small" label={`${headersRows.filter(h => h.key).length}`} />
+                <Box flexGrow={1} />
+                <Button size="small" onClick={addHeaderRow}>Add header</Button>
+              </Box>
+              <Grid container spacing={1}>
+                {headersRows.map((row) => (
+                  <React.Fragment key={row.id}>
+                    <Grid item xs={5} md={3}>
+                      <TextField size="small" fullWidth label="Header name" value={row.key} onChange={(e) => updateHeaderRow(row.id, { key: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={7} md={7}>
+                      <TextField size="small" fullWidth label="Header value" value={row.value} onChange={(e) => updateHeaderRow(row.id, { value: e.target.value })} />
+                    </Grid>
+                    <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                      <IconButton onClick={() => removeHeaderRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
+                    </Grid>
+                  </React.Fragment>
+                ))}
+              </Grid>
+            </Grid>
+
+            {/* Body */}
+            {hasBody && (
+              <>
+                <Grid item xs={12} md={4}>
+                  <TextField select fullWidth label="Content-Type" value={contentType} onChange={(e) => setContentType(e.target.value)}>
+                    <MenuItem value="application/json">application/json</MenuItem>
+                    <MenuItem value="text/plain">text/plain</MenuItem>
+                    <MenuItem value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</MenuItem>
+                  </TextField>
+                  <FormControlLabel control={<Switch checked={useJsonPretty} onChange={(e)=>setUseJsonPretty(e.target.checked)} />} label="Format JSON on paste" />
+                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                    <Button size="small" startIcon={<RefreshIcon />} onClick={formatBody}>Format JSON</Button>
+                    <Button size="small" onClick={pasteExample}>Insert example</Button>
+                  </Stack>
+                </Grid>
+                <Grid item xs={12} md={8}>
+                  <TextField
+                    fullWidth
+                    multiline
+                    minRows={8}
+                    label="Request Body"
+                    value={body}
+                    onChange={(e) => setBody(e.target.value)}
+                    placeholder={contentType === 'application/json' ? '{\n  "action": "..."\n}' : ''}
+                  />
+                </Grid>
+              </>
+            )}
+
+            <Grid item xs={12}>
+              <Divider sx={{ my: 1 }} />
+              <Stack direction="row" spacing={1}>
+                <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk}>
+                  Send
+                </Button>
+                <Button variant="outlined" onClick={resetForm} disabled={loading}>Reset</Button>
+                <Button variant="text" startIcon={<ContentCopyIcon />} onClick={copyCurl} disabled={!endpointPath}>Copy cURL</Button>
+              </Stack>
             </Grid>
           </Grid>
-
-          {/* Custom Request Headers */}
-          <Grid item xs={12}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
-              <Typography variant="subtitle1">Request Headers</Typography>
-              <Chip size="small" label={`${headersRows.filter(h => h.key).length}`} />
-              <Box flexGrow={1} />
-              <Button size="small" onClick={addHeaderRow}>Add header</Button>
-            </Box>
-            <Grid container spacing={1}>
-              {headersRows.map((row) => (
-                <React.Fragment key={row.id}>
-                  <Grid item xs={5} md={3}>
-                    <TextField size="small" fullWidth label="Header name" value={row.key} onChange={(e) => updateHeaderRow(row.id, { key: e.target.value })} />
-                  </Grid>
-                  <Grid item xs={7} md={7}>
-                    <TextField size="small" fullWidth label="Header value" value={row.value} onChange={(e) => updateHeaderRow(row.id, { value: e.target.value })} />
-                  </Grid>
-                  <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
-                    <IconButton onClick={() => removeHeaderRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
-                  </Grid>
-                </React.Fragment>
-              ))}
-            </Grid>
-          </Grid>
-
-          {/* Body */}
-          {hasBody && (
-            <>
-              <Grid item xs={12} md={4}>
-                <TextField select fullWidth label="Content-Type" value={contentType} onChange={(e) => setContentType(e.target.value)}>
-                  <MenuItem value="application/json">application/json</MenuItem>
-                  <MenuItem value="text/plain">text/plain</MenuItem>
-                  <MenuItem value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</MenuItem>
-                </TextField>
-                <FormControlLabel control={<Switch checked={useJsonPretty} onChange={(e)=>setUseJsonPretty(e.target.checked)} />} label="Format JSON on paste" />
-                <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                  <Button size="small" startIcon={<RefreshIcon />} onClick={formatBody}>Format JSON</Button>
-                  <Button size="small" onClick={pasteExample}>Insert example</Button>
-                </Stack>
-              </Grid>
-              <Grid item xs={12} md={8}>
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={8}
-                  label="Request Body"
-                  value={body}
-                  onChange={(e) => setBody(e.target.value)}
-                  placeholder={contentType === 'application/json' ? '{\n  "action": "..."\n}' : ''}
-                />
-              </Grid>
-            </>
-          )}
-
-          <Grid item xs={12}>
-            <Divider sx={{ my: 1 }} />
-            <Stack direction="row" spacing={1}>
-              <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk}>
-                Send
-              </Button>
-              <Button variant="outlined" onClick={resetForm} disabled={loading}>Reset</Button>
-              <Button variant="text" startIcon={<ContentCopyIcon />} onClick={copyCurl} disabled={!endpointPath}>Copy cURL</Button>
-            </Stack>
-          </Grid>
-        </Grid>
+        )}
       </Paper>
 
       {/* Response */}
@@ -524,22 +539,36 @@ const HookTester: React.FC = () => {
         </Box>
         {reqHeaders.length > 0 && (
           <Box sx={{ mb: 1 }}>
-            <Typography variant="subtitle2">Request Headers</Typography>
-            <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
-              {reqHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Request Headers</Typography>
+              <IconButton size="small" aria-label={showReqHeaders ? 'collapse request headers' : 'expand request headers'} onClick={() => setShowReqHeaders(v => !v)}>
+                {showReqHeaders ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
             </Box>
+            {showReqHeaders && (
+              <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
+                {reqHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
+              </Box>
+            )}
           </Box>
         )}
         {respHeaders.length > 0 && (
           <Box sx={{ mb: 1 }}>
-            <Typography variant="subtitle2">Response Headers</Typography>
-            <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
-              {respHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
+            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+              <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Response Headers</Typography>
+              <IconButton size="small" aria-label={showRespHeaders ? 'collapse response headers' : 'expand response headers'} onClick={() => setShowRespHeaders(v => !v)}>
+                {showRespHeaders ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+              </IconButton>
             </Box>
+            {showRespHeaders && (
+              <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
+                {respHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
+              </Box>
+            )}
           </Box>
         )}
         <Typography variant="subtitle2">Body</Typography>
-        <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto', maxHeight: 400 }}>
+        <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto', maxHeight: showRequestPanel ? 400 : 650 }}>
           {showRaw ? respBody : pretty(respBody)}
         </Box>
       </Paper>
