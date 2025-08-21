@@ -264,9 +264,9 @@ const MainContent = (): React.JSX.Element => {
   const runtimeMenuItems: NavigationMenuItem[] = [
     { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
     { text: 'System', icon: <MonitorHeartIcon />, path: '/system' },
+    { text: 'Security', icon: <SecurityIcon />, path: '/security' },
     { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
     { text: 'Distributed BF', icon: <SecurityIcon />, path: '/distributed-bf' },
-    { text: 'Security', icon: <SecurityIcon />, path: '/security' },
     { text: 'Hook Tester', icon: <CodeIcon />, path: '/hook-tester' },
   ];
 

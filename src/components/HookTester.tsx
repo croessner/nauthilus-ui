@@ -24,6 +24,8 @@ import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
 import DeleteIcon from '@mui/icons-material/Delete';
 import LinkIcon from '@mui/icons-material/Link';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken } from '../utils/apiUtils';
@@ -62,6 +64,9 @@ const HookTester: React.FC = () => {
   const [respBody, setRespBody] = useState<string>('');
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [notif, setNotif] = useState<{open:boolean;severity:'success'|'error'|'info'|'warning';message:string}>({open:false,severity:'info',message:''});
+  // Connection status state (match other pages)
+  const [connStatus, setConnStatus] = useState<'unknown'|'connected'|'disconnected'|'checking'>('unknown');
+  const [statusMessage, setStatusMessage] = useState<string>('');
   // endpoint suggestions menu anchor
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(anchorEl);
@@ -73,13 +78,42 @@ const HookTester: React.FC = () => {
   useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
   const getConnection = useCallback(() => connectionRef.current, []);
 
-  // Bootstrap: load runtime settings on mount/profile change
+  // Connection check (similar to Distributed BF and Connection pages)
+  const checkConnection = useCallback(async () => {
+    const conn = getConnection();
+    if (!conn?.backend_url) {
+      setConnStatus('unknown');
+      setStatusMessage('No backend URL configured');
+      return;
+    }
+    setConnStatus('checking');
+    setStatusMessage('Checking connection...');
+    try {
+      const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
+      proxyUrl.searchParams.append('url', conn.backend_url!);
+      const resp = await authenticatedFetch(proxyUrl.toString(), { method: 'GET' });
+      if (resp.ok) {
+        setConnStatus('connected');
+        setStatusMessage('Connected to Nauthilus backend (ping successful)');
+      } else {
+        const msg = await extractErrorMessage(resp);
+        setConnStatus('disconnected');
+        setStatusMessage(`Failed to connect: ${msg}`);
+      }
+    } catch (e: any) {
+      setConnStatus('disconnected');
+      setStatusMessage(`Connection error: ${e?.message || String(e)}`);
+    }
+  }, [getConnection]);
+
+  // Bootstrap: load runtime settings on mount/profile change and then check connection
   useEffect(() => {
     (async () => {
       const userId = await getCurrentUserId();
       await loadRuntimeSettings(userId, currentProfileName);
+      await checkConnection();
     })().catch(() => { /* ignore */ });
-  }, [currentProfileName, loadRuntimeSettings]);
+  }, [currentProfileName, loadRuntimeSettings, /* eslint-disable-line react-hooks/exhaustive-deps */]);
 
   // Load last session from localStorage
   const username = 'default-user'; // aligned with getCurrentUserId()
@@ -330,6 +364,25 @@ const HookTester: React.FC = () => {
         Test arbitrary hooks of your Nauthilus backend. Choose the HTTP method and endpoint path, optionally send a body or query parameters, and inspect status code, headers, and response body.
       </Typography>
 
+      {/* Connection status (match Connection/Distributed BF pages) */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+        {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+        {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+        {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+        {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+        {connStatus === 'disconnected' && (
+          <Typography color="error.main">{statusMessage}</Typography>
+        )}
+        <Tooltip title="Check connection">
+          <span>
+            <IconButton onClick={checkConnection} disabled={connStatus === 'checking' || !connectionOk} sx={{ ml: 1 }}>
+              <RefreshIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+
       {!connectionOk && (
         <Alert severity="warning" sx={{ mb: 2 }}>
           No backend configured. Please set a Backend URL first under Runtime → Connection.
@@ -359,7 +412,7 @@ const HookTester: React.FC = () => {
                   </span>
                 </Tooltip>
               )}}
-              helperText={effectiveEndpointSuggestions.length ? `Known endpoints: ${effectiveEndpointSuggestions.join(', ')}` : 'Path relative to the Backend URL'}
+              helperText={'Path relative to the Backend URL'}
             />
             <Menu anchorEl={anchorEl} open={menuOpen} onClose={closeMenu}>
               {effectiveEndpointSuggestions.map((ep) => (

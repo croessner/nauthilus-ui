@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Box,
   Paper,
@@ -18,7 +18,8 @@ import {
   Tooltip,
   IconButton,
   Chip,
-  Snackbar
+  Snackbar,
+  Menu
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -26,6 +27,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
+import LinkIcon from '@mui/icons-material/Link';
 import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
@@ -54,6 +56,44 @@ const DistributedBruteForceTools: React.FC = () => {
   const [testEnabled, setTestEnabled] = useState<boolean>(Boolean(config?.lua?.hooks?.distributed_brute_force_test?.enabled || runtimeHooks?.distributed_brute_force_test?.enabled));
   const [adminPath, setAdminPath] = useState<string>(config?.lua?.hooks?.distributed_brute_force_admin?.endpoint_path || runtimeHooks?.distributed_brute_force_admin?.endpoint_path || '/hooks/distributed-brute-force-admin');
   const [testPath, setTestPath] = useState<string>(config?.lua?.hooks?.distributed_brute_force_test?.endpoint_path || runtimeHooks?.distributed_brute_force_test?.endpoint_path || '/hooks/distributed-brute-force-test');
+
+  // Known hook endpoint suggestions (same logic as in HookTester)
+  const effectiveEndpointSuggestions = useMemo(() => {
+    const opts: string[] = [];
+
+    const add = (v: any) => {
+      if (!v) return;
+      if (typeof v === 'string') {
+        if (v.startsWith('/')) opts.push(v);
+        return;
+      }
+      const ep = v.endpoint_path || v.http_location || v.path || v.endpoint || v.url_path;
+      if (typeof ep === 'string' && ep.startsWith('/')) opts.push(ep);
+    };
+
+    const h: any = runtimeHooks ?? {};
+    if (Array.isArray(h)) {
+      h.forEach(add);
+    } else if (h && typeof h === 'object') {
+      Object.keys(h).forEach((k) => add(h[k]));
+      if (Array.isArray(h.custom_hooks)) h.custom_hooks.forEach(add);
+      if (Array.isArray(h.hooks)) h.hooks.forEach(add);
+      if (h.lua && Array.isArray(h.lua?.custom_hooks)) h.lua.custom_hooks.forEach(add);
+    }
+
+    const normalized = opts.map((p) => (p.startsWith('/api/v1/custom') ? p : `/api/v1/custom${p}`));
+    return Array.from(new Set(normalized)).sort();
+  }, [runtimeHooks]);
+
+  // Menus for picking endpoints for Admin/Test fields
+  const [adminAnchorEl, setAdminAnchorEl] = useState<null | HTMLElement>(null);
+  const [testAnchorEl, setTestAnchorEl] = useState<null | HTMLElement>(null);
+  const adminMenuOpen = Boolean(adminAnchorEl);
+  const testMenuOpen = Boolean(testAnchorEl);
+  const closeAdminMenu = () => setAdminAnchorEl(null);
+  const closeTestMenu = () => setTestAnchorEl(null);
+  const pickAdminEndpoint = (ep: string) => { setAdminPath(ep); closeAdminMenu(); };
+  const pickTestEndpoint = (ep: string) => { setTestPath(ep); closeTestMenu(); };
 
   const [connStatus, setConnStatus] = useState<'unknown'|'connected'|'disconnected'|'checking'>('unknown');
   const [statusMessage, setStatusMessage] = useState('');
@@ -405,10 +445,25 @@ const DistributedBruteForceTools: React.FC = () => {
               value={adminPath}
               onChange={(e) => setAdminPath(e.target.value)}
               InputProps={{ endAdornment: (
-                <InputAdornment position="end"><InfoTooltip title="Path of the Admin hook as configured in the backend (e.g., /hooks/distributed-brute-force-admin)." /></InputAdornment>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
+                    <span>
+                      <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0} onClick={(e) => setAdminAnchorEl(e.currentTarget)} aria-label="pick-admin-endpoint">
+                        <LinkIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <InputAdornment position="end"><InfoTooltip title="Path of the Admin hook as configured in the backend (e.g., /hooks/distributed-brute-force-admin)." /></InputAdornment>
+                </Box>
               )}}
+              helperText={undefined}
               sx={{ mt: 1 }}
             />
+            <Menu anchorEl={adminAnchorEl} open={adminMenuOpen} onClose={closeAdminMenu}>
+              {effectiveEndpointSuggestions.map((ep) => (
+                <MenuItem key={ep} onClick={() => pickAdminEndpoint(ep)}>{ep}</MenuItem>
+              ))}
+            </Menu>
           </Grid>
           <Grid item xs={12} md={6}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>Test Hook</Typography>
@@ -422,10 +477,25 @@ const DistributedBruteForceTools: React.FC = () => {
               value={testPath}
               onChange={(e) => setTestPath(e.target.value)}
               InputProps={{ endAdornment: (
-                <InputAdornment position="end"><InfoTooltip title="Path of the Test hook as configured in the backend (e.g., /hooks/distributed-brute-force-test)." /></InputAdornment>
+                <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                  <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
+                    <span>
+                      <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0} onClick={(e) => setTestAnchorEl(e.currentTarget)} aria-label="pick-test-endpoint">
+                        <LinkIcon fontSize="small" />
+                      </IconButton>
+                    </span>
+                  </Tooltip>
+                  <InputAdornment position="end"><InfoTooltip title="Path of the Test hook as configured in the backend (e.g., /hooks/distributed-brute-force-test)." /></InputAdornment>
+                </Box>
               )}}
+              helperText={undefined}
               sx={{ mt: 1 }}
             />
+            <Menu anchorEl={testAnchorEl} open={testMenuOpen} onClose={closeTestMenu}>
+              {effectiveEndpointSuggestions.map((ep) => (
+                <MenuItem key={ep} onClick={() => pickTestEndpoint(ep)}>{ep}</MenuItem>
+              ))}
+            </Menu>
           </Grid>
         </Grid>
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
