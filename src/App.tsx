@@ -89,6 +89,7 @@ import ConfigWizard from './components/ConfigWizard';
 import UserManagement from './components/UserManagement';
 import UserProfile from './components/UserProfile';
 import BruteForceConfig from './components/BruteForceConfig';
+import DistributedBruteForceTools from './components/DistributedBruteForceTools';
 import MFASettings from './components/MFASettings';
 import LegalPage from './components/LegalPage';
 import { authenticatedFetch } from './utils/apiUtils';
@@ -263,6 +264,7 @@ const MainContent = (): React.JSX.Element => {
     { text: 'Connection', icon: <LinkIcon />, path: '/connection' },
     { text: 'System', icon: <MonitorHeartIcon />, path: '/system' },
     { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
+    { text: 'Distributed BF', icon: <SecurityIcon />, path: '/distributed-bf' },
     { text: 'Security', icon: <SecurityIcon />, path: '/security' },
   ];
 
@@ -1140,6 +1142,7 @@ const MainContent = (): React.JSX.Element => {
               <Route path="/auth" element={<AuthConfig />} />
               <Route path="/connection" element={<ConnectionConfig />} />
               <Route path="/bruteforce" element={<BruteForceConfig />} />
+              <Route path="/distributed-bf" element={<DistributedBruteForceTools />} />
               <Route path="/backends" element={<BackendsConfig />} />
               <Route path="/features" element={<FeaturesConfig />} />
               <Route path="/redis" element={<RedisConfig />} />

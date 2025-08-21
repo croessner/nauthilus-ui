@@ -28,11 +28,14 @@ import {
   Snackbar,
   TablePagination,
   Divider,
-  InputAdornment
+  InputAdornment,
+  Tooltip
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import { useConfig } from '../contexts/ConfigContext';
 import InfoTooltip from './common/InfoTooltip';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
@@ -93,6 +96,14 @@ const BruteForceConfig: React.FC = () => {
   const { connection: runtimeConnection, loadRuntimeSettings } = useRuntime();
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected' | 'checking'>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
+
+  // Auto-hide success message like on other runtime pages
+  useEffect(() => {
+    if (connectionStatus === 'connected' && statusMessage.includes('Connected to Nauthilus backend')) {
+      const t = setTimeout(() => setStatusMessage(''), 5000);
+      return () => clearTimeout(t);
+    }
+  }, [connectionStatus, statusMessage]);
   const [notification, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
@@ -572,6 +583,31 @@ const BruteForceConfig: React.FC = () => {
         <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
           <SecurityIcon sx={{ mr: 1, color: 'primary.main' }} />
           <Typography variant="h6">Brute Force Protection Management</Typography><InfoTooltip title="View and manage blocked IPs and affected accounts. Free entries when false positives occur." />
+        </Box>
+
+        {/* Connection status (match Connection page style) */}
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+          <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+          {connectionStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+          {connectionStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+          {connectionStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+          {connectionStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+          {connectionStatus === 'disconnected' && (
+            <Typography color="error.main">
+              {statusMessage}
+            </Typography>
+          )}
+          <Tooltip title="Check connection">
+            <span>
+              <IconButton 
+                onClick={() => checkConnection(runtimeConnection)} 
+                disabled={connectionStatus === 'checking' || !hasValidConnection}
+                sx={{ ml: 1 }}
+              >
+                <RefreshIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
         </Box>
 
         {connectionStatus === 'connected' ? (
