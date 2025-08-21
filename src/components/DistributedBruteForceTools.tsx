@@ -297,7 +297,7 @@ const DistributedBruteForceTools: React.FC = () => {
       setAdminResponseJson(null);
     }
     try {
-      const options: RequestInit = { method: 'POST', body: JSON.stringify(body || {}) } as any;
+      const options: RequestInit = { method: 'GET' } as any;
       const resp = await authenticatedFetch(url.toString(), options);
       if (!resp.ok) {
         const msg = await extractErrorMessage(resp);
