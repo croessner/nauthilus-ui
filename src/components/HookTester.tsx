@@ -235,21 +235,50 @@ const HookTester: React.FC = () => {
 
   const copyCurl = async () => {
     try {
-      const url = buildURL();
+      // Build direct backend URL (not the proxy)
       const conn = getConnection();
+      const baseUrl = conn?.backend_url || '';
+      if (!baseUrl) throw new Error('No backend URL configured in Runtime > Connection');
+
+      // Ensure endpoint path is applied relative to backend_url
+      const path = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+      const target = new URL(path, baseUrl);
+
+      // Append query params
+      for (const row of query) {
+        if (row.key && row.value !== undefined) {
+          target.searchParams.append(row.key, row.value);
+        }
+      }
+
       const { authType, authValue } = prepareAuthParams(conn || {});
-      const parts: string[] = ['curl', '-i', '-X', method, `'${url}'`];
-      if (authType && authValue) parts.push('-H', `'x-auth-type: ${authType}'`, '-H', `'x-auth-value: ${authValue}'`);
+      const parts: string[] = ['curl', '-i', '-X', method, `'${target.toString()}'`];
+
+      // Add Authorization header for direct backend access
+      if (authType && authValue) {
+        if (authType.toLowerCase() === 'bearer') {
+          parts.push('-H', `'Authorization: Bearer ${authValue}'`);
+        } else if (authType.toLowerCase() === 'basic') {
+          parts.push('-H', `'Authorization: Basic ${authValue}'`);
+        }
+      }
+
+      // Include user-provided custom headers (skip Authorization to avoid duplicates)
       for (const row of headersRows) {
         if (!row.key) continue;
         if (row.key.toLowerCase() === 'authorization') continue;
         parts.push('-H', `'${row.key}: ${row.value || ''}'`);
       }
-      if (hasBody) parts.push('-H', `'Content-Type: ${contentType}'`, '--data', `'${body.replace(/'/g, "'\\''")}'`);
+
+      // Include content type and body for methods that support a body
+      if (hasBody) {
+        parts.push('-H', `'Content-Type: ${contentType}'`, '--data', `'${(body || '').replace(/'/g, "'\\''")}'`);
+      }
+
       await navigator.clipboard.writeText(parts.join(' '));
       setNotif({ open: true, severity: 'success', message: 'cURL copied to clipboard' });
-    } catch {
-      setNotif({ open: true, severity: 'error', message: 'Failed to copy cURL' });
+    } catch (e) {
+      setNotif({ open: true, severity: 'error', message: e instanceof Error ? e.message : 'Failed to copy cURL' });
     }
   };
 
