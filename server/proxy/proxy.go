@@ -79,12 +79,19 @@ func getEndpointPath(ctx *gin.Context) (string, int, string, bool) {
 	return endpointPath, 0, "", true
 }
 
-// getOperation extracts the operation from the request
+// getOperation extracts the operation/action from the request (accepts both for compatibility)
 func getOperation(ctx *gin.Context) string {
-	// Get operation parameter from query parameter or header
+	// Prefer explicit headers first
 	operation := ctx.GetHeader("x-operation")
 	if operation == "" {
 		operation = ctx.Query("operation")
+	}
+	// Fallback to "action" naming if provided by client
+	if operation == "" {
+		operation = ctx.GetHeader("x-action")
+		if operation == "" {
+			operation = ctx.Query("action")
+		}
 	}
 
 	return operation
@@ -124,7 +131,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 	ctx.Header("Access-Control-Allow-Origin", origin)
 	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
+	ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value")
 	ctx.Header("Access-Control-Allow-Credentials", "true")
 
 	// Get and validate target URL if not provided
@@ -141,7 +148,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		}
 	}
 
-	// Log the request
+	// Log the request (initial)
 	if config.EndpointPath == "" {
 		// Simple endpoint with a fixed path
 		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", config.TargetURL)
@@ -161,15 +168,37 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Set the path
 	target.Path = config.EndpointPath
 
-	// If operation is provided, append it as a query parameter
+	// Build outgoing query parameters
+	q := target.Query()
+
 	if config.Operation != "" {
-		// Check if the endpoint path already has query parameters
-		if target.RawQuery != "" {
-			target.RawQuery += "&operation=" + config.Operation
-		} else {
-			target.RawQuery = "operation=" + config.Operation
+		// Choose parameter name depending on endpoint
+		paramName := "operation"
+		if strings.HasSuffix(config.EndpointPath, "/distributed-brute-force-admin") {
+			paramName = "action"
+		}
+
+		q.Set(paramName, config.Operation)
+	}
+
+	// For distributed-brute-force-admin reset_account, forward username as query param if provided
+	if strings.HasSuffix(config.EndpointPath, "/distributed-brute-force-admin") && strings.EqualFold(config.Operation, "reset_account") {
+		if uname := ctx.Query("username"); uname != "" {
+			q.Set("username", uname)
 		}
 	}
+
+	target.RawQuery = q.Encode()
+
+	// Log the final target including query strings (incoming and outgoing)
+	slog.Info("Proxy target prepared",
+		"endpoint", config.LogEndpoint,
+		"method", ctx.Request.Method,
+		"target_host", target.Scheme+"://"+target.Host,
+		"endpoint_path", config.EndpointPath,
+		"out_query", target.RawQuery,
+		"in_query", ctx.Request.URL.RawQuery,
+	)
 
 	// Use reverse proxy if specified
 	if config.UseReverseProxy {
@@ -259,7 +288,7 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 		ctx.Header("Access-Control-Allow-Origin", origin)
 		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-auth-type, x-auth-value")
+		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value")
 		ctx.Header("Access-Control-Allow-Credentials", "true")
 		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
 

@@ -17,7 +17,8 @@ import {
   CircularProgress,
   Divider,
   Tooltip,
-  IconButton
+  IconButton,
+  Chip
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -73,6 +74,7 @@ const DistributedBruteForceTools: React.FC = () => {
   const [adminResponseJson, setAdminResponseJson] = useState<any | null>(null);
   const [adminLoading, setAdminLoading] = useState<boolean>(false);
   const [showAdminRaw, setShowAdminRaw] = useState<boolean>(false);
+  const [expandedLists, setExpandedLists] = useState<Record<string, boolean>>({});
 
   const [testFields, setTestFields] = useState({
     username: '',
@@ -187,6 +189,8 @@ const DistributedBruteForceTools: React.FC = () => {
           setNotif({ open: true, severity: 'error', message: 'Username is required for reset_account' });
           return;
         }
+        // The username MUST be sent as a query parameter to the backend
+        url.searchParams.append('username', effectiveUsername);
         body = { username: effectiveUsername };
       } else {
         body = {};
@@ -242,6 +246,35 @@ const DistributedBruteForceTools: React.FC = () => {
     rule_name: testFields.rule_name || undefined,
     attempts: testFields.attempts || undefined,
   }), [testFields]);
+
+  // Helper to render string array metrics as chips with an expand/collapse toggle
+  const renderStringArray = (title: string, arr: any, key: string) => {
+    const isArr = Array.isArray(arr);
+    const items: string[] = isArr ? arr.map((v: any) => String(v)) : [];
+    const total = items.length;
+    const expanded = !!expandedLists[key];
+    const limit = 10;
+    const visibleItems = expanded ? items : items.slice(0, limit);
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>{title} ({total})</Typography>
+        {total === 0 ? (
+          <Typography variant="body2" color="text.secondary">None</Typography>
+        ) : (
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+            {visibleItems.map((item, idx) => (
+              <Chip key={`${key}-${idx}`} size="small" label={item} />
+            ))}
+            {total > limit && (
+              <Button size="small" onClick={() => setExpandedLists(s => ({ ...s, [key]: !expanded }))}>
+                {expanded ? 'Show less' : `Show all (${total})`}
+              </Button>
+            )}
+          </Box>
+        )}
+      </Box>
+    );
+  };
 
   return (
     <>
@@ -474,6 +507,14 @@ const DistributedBruteForceTools: React.FC = () => {
                             </Grid>
                             <Box sx={{ mt: 1, color: 'text.secondary' }}>
                               <Typography variant="caption">Status: {adminResponseJson?.status || 'n/a'} | Session: {adminResponseJson?.session || 'n/a'} | Time: {adminResponseJson?.ts || 'n/a'}</Typography>
+                            </Box>
+
+                            {/* Render detailed lists below the summary tiles */}
+                            <Box sx={{ mt: 2 }}>
+                              {renderStringArray('Attacked Accounts', m.attacked_accounts, 'attacked_accounts')}
+                              {renderStringArray('Rate-limited IPs', m.rate_limited_ips, 'rate_limited_ips')}
+                              {renderStringArray('Blocked Regions', m.blocked_regions, 'blocked_regions')}
+                              {renderStringArray('Captcha Accounts', m.captcha_accounts, 'captcha_accounts')}
                             </Box>
                           </>
                         );
