@@ -16,7 +16,8 @@ import {
   CircularProgress,
   Snackbar,
   Switch,
-  FormControlLabel
+  FormControlLabel,
+  Menu
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -61,6 +62,11 @@ const HookTester: React.FC = () => {
   const [respBody, setRespBody] = useState<string>('');
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [notif, setNotif] = useState<{open:boolean;severity:'success'|'error'|'info'|'warning';message:string}>({open:false,severity:'info',message:''});
+  // endpoint suggestions menu anchor
+  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+  const menuOpen = Boolean(anchorEl);
+  const closeMenu = () => setAnchorEl(null);
+  const pickEndpoint = (ep: string) => { setEndpointPath(ep); closeMenu(); };
 
   // Keep a ref with latest runtimeConnection
   const connectionRef = useRef(runtimeConnection);
@@ -111,14 +117,37 @@ const HookTester: React.FC = () => {
 
   const effectiveEndpointSuggestions = useMemo(() => {
     const opts: string[] = [];
-    // collect from runtimeHooks if available
-    const h: any = runtimeHooks || {};
-    for (const key of Object.keys(h)) {
-      const ep = h[key]?.endpoint_path;
-      if (ep && typeof ep === 'string') opts.push(ep);
+
+    const add = (v: any) => {
+      if (!v) return;
+      // handle primitive strings
+      if (typeof v === 'string') {
+        if (v.startsWith('/')) opts.push(v);
+        return;
+      }
+      // common fields
+      const ep = v.endpoint_path || v.http_location || v.path || v.endpoint || v.url_path;
+      if (typeof ep === 'string' && ep.startsWith('/')) opts.push(ep);
+    };
+
+    const h: any = runtimeHooks ?? {};
+    // runtimeHooks might be an array
+    if (Array.isArray(h)) {
+      h.forEach(add);
+    } else if (h && typeof h === 'object') {
+      // direct fields
+      Object.keys(h).forEach((k) => add(h[k]));
+      // nested arrays that often carry custom hooks
+      if (Array.isArray(h.custom_hooks)) h.custom_hooks.forEach(add);
+      if (Array.isArray(h.hooks)) h.hooks.forEach(add);
+      if (h.lua && Array.isArray(h.lua?.custom_hooks)) h.lua.custom_hooks.forEach(add);
     }
-    // ensure unique
-    return Array.from(new Set(opts));
+
+    // normalize: ensure "/api/v1/custom" prefix for all endpoints
+    const normalized = opts.map((p) => (p.startsWith('/api/v1/custom') ? p : `/api/v1/custom${p}`));
+
+    // ensure unique & sorted
+    return Array.from(new Set(normalized)).sort();
   }, [runtimeHooks]);
 
   const resetForm = () => {
@@ -225,10 +254,10 @@ const HookTester: React.FC = () => {
   const pasteExample = () => {
     // Provide a small example based on method
     if (method === 'GET') {
-      setEndpointPath('/hooks/distributed-brute-force-test');
+      setEndpointPath('/api/v1/custom/hooks/distributed-brute-force-test');
       setQuery([{ key: 'action', value: 'get_metrics', id: crypto.randomUUID() }]);
     } else {
-      setEndpointPath('/hooks/distributed-brute-force-test');
+      setEndpointPath('/api/v1/custom/hooks/distributed-brute-force-test');
       setBody(pretty({ action: 'run_test', username: 'alice', num_ips: 10 }));
     }
   };
@@ -317,14 +346,14 @@ const HookTester: React.FC = () => {
           <Grid item xs={12} md={10}>
             <TextField
               fullWidth
-              label="Endpoint Path (e.g., /hooks/distributed-brute-force-test)"
+              label="Endpoint Path (e.g., /api/v1/custom/hooks/distributed-brute-force-test)"
               value={endpointPath}
               onChange={(e) => setEndpointPath(e.target.value)}
-              placeholder="/hooks/..."
+              placeholder="/api/v1/custom/..."
               InputProps={{ endAdornment: (
-                <Tooltip title="Known hook paths from runtime settings">
+                <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
                   <span>
-                    <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0}>
+                    <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0} onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="pick-endpoint">
                       <LinkIcon fontSize="small" />
                     </IconButton>
                   </span>
@@ -332,6 +361,11 @@ const HookTester: React.FC = () => {
               )}}
               helperText={effectiveEndpointSuggestions.length ? `Known endpoints: ${effectiveEndpointSuggestions.join(', ')}` : 'Path relative to the Backend URL'}
             />
+            <Menu anchorEl={anchorEl} open={menuOpen} onClose={closeMenu}>
+              {effectiveEndpointSuggestions.map((ep) => (
+                <MenuItem key={ep} onClick={() => pickEndpoint(ep)}>{ep}</MenuItem>
+              ))}
+            </Menu>
           </Grid>
 
           {/* Query Params */}

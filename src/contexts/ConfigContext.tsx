@@ -1113,7 +1113,34 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         }
 
         // Update the current profile with the new configuration
-        return updateProfilesWithConfig(newConfig);
+        const updated = await updateProfilesWithConfig(newConfig);
+
+        // Additionally, sync runtime collection hooks.custom_hooks right after loading configuration
+        try {
+          const userId = await getCurrentUserId();
+          // Fetch existing runtime settings to preserve current connection
+          try {
+            const rt = await axios.get(`/api/runtime/${userId}/${currentProfileName}`);
+            const existingConnection = rt?.data?.connection || {};
+            // Upsert runtime with preserved connection and fresh custom_hooks from the loaded config
+            await axios.post(`/api/runtime/${userId}/${currentProfileName}`, {
+              connection: existingConnection,
+              hooks: { custom_hooks: newConfig.lua?.custom_hooks || [] }
+            });
+            console.log('Runtime hooks synchronized from loaded configuration');
+          } catch (rtErr) {
+            // If fetching runtime fails, still try to upsert using empty connection
+            await axios.post(`/api/runtime/${userId}/${currentProfileName}`, {
+              connection: {},
+              hooks: { custom_hooks: newConfig.lua?.custom_hooks || [] }
+            });
+            console.warn('Runtime GET failed; created runtime with custom_hooks only');
+          }
+        } catch (syncErr) {
+          console.warn('Failed to sync runtime hooks after loading configuration:', syncErr);
+        }
+
+        return updated;
       } catch (error) {
         console.error('Error parsing configuration:', error);
         throw new Error(`Failed to parse configuration: ${error instanceof Error ? error.message : String(error)}`);

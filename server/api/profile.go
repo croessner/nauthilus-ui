@@ -137,6 +137,60 @@ func (h *ProfileHandler) SaveProfiles(ctx *gin.Context) {
 		return
 	}
 
+	// After profiles are saved, sync custom_hooks from the currently active profile into runtime collection
+	currentProfileName := profileResponse.CurrentProfileName
+	var activeConfig map[string]interface{}
+	for _, p := range profile.Profiles {
+		if p.Name == currentProfileName {
+			activeConfig = p.Config
+			break
+		}
+	}
+
+	if activeConfig != nil {
+		// Try to extract lua.custom_hooks from the active config (if present)
+		var customHooks []interface{}
+		if luaSection, ok := activeConfig["lua"].(map[string]interface{}); ok {
+			if ch, ok := luaSection["custom_hooks"].([]interface{}); ok {
+				customHooks = ch
+			}
+		}
+
+		// Upsert runtime document for user+profile to set hooks.custom_hooks while preserving existing connection
+		runtimeFilter := bson.M{"userId": userID, "profileName": currentProfileName}
+		// Read existing connection if present
+		type runtimeDoc struct {
+			Connection map[string]interface{} `bson:"connection"`
+			Hooks      map[string]interface{} `bson:"hooks"`
+		}
+
+		var existing runtimeDoc
+		h.MongoDB.RuntimeColl.FindOne(context.Background(), runtimeFilter).Decode(&existing)
+
+		newHooks := bson.M{}
+		// start from existing hooks map if any
+		if existing.Hooks != nil {
+			for k, v := range existing.Hooks {
+				newHooks[k] = v
+			}
+		}
+
+		// set/overwrite custom_hooks only if we have them; otherwise keep as-is
+		if customHooks != nil {
+			newHooks["custom_hooks"] = customHooks
+		}
+
+		runtimeUpdate := bson.M{
+			"$set": bson.M{
+				"userId":      userID,
+				"profileName": currentProfileName,
+				"connection":  existing.Connection, // preserve
+				"hooks":       newHooks,
+			},
+		}
+		_, _ = h.MongoDB.RuntimeColl.UpdateOne(context.Background(), runtimeFilter, runtimeUpdate, options.Update().SetUpsert(true))
+	}
+
 	ctx.JSON(http.StatusOK, models.ProfileResponse{
 		Profiles:           profile.Profiles,
 		CurrentProfileName: profile.CurrentProfileName,
