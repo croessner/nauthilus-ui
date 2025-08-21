@@ -130,16 +130,18 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	}
 
 	ctx.Header("Access-Control-Allow-Origin", origin)
-	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
 	// Allow standard headers plus any requested by the browser in preflight
 	allowReq := ctx.GetHeader("Access-Control-Request-Headers")
-	baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value"
+	baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
 	if allowReq != "" {
 		ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
 	} else {
 		ctx.Header("Access-Control-Allow-Headers", baseAllow)
 	}
 	ctx.Header("Access-Control-Allow-Credentials", "true")
+	// Expose important headers so browsers can access them on HEAD/GET responses
+	ctx.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location")
 
 	// Get and validate target URL if not provided
 	if config.TargetURL == "" {
@@ -305,8 +307,10 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Set the status code
 	ctx.Writer.WriteHeader(resp.StatusCode)
 
-	// Copy the response body
-	_, _ = io.Copy(ctx.Writer, resp.Body)
+	// Copy the response body only for non-HEAD requests
+	if ctx.Request.Method != http.MethodHead {
+		_, _ = io.Copy(ctx.Writer, resp.Body)
+	}
 }
 
 // RegisterRoutes registers the proxy routes
@@ -321,16 +325,18 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 		}
 
 		ctx.Header("Access-Control-Allow-Origin", origin)
-		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
 		// Allow standard headers plus any requested by the browser in preflight
 		allowReq := ctx.GetHeader("Access-Control-Request-Headers")
-		baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value"
+		baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
 		if allowReq != "" {
 			ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
 		} else {
 			ctx.Header("Access-Control-Allow-Headers", baseAllow)
 		}
 		ctx.Header("Access-Control-Allow-Credentials", "true")
+		// Expose important headers so browsers can access them on HEAD/GET responses
+		ctx.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location")
 		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
 
 		// Handle preflight OPTIONS requests
