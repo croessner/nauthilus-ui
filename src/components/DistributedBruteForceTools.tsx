@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   Box,
   Paper,
@@ -321,12 +321,6 @@ const DistributedBruteForceTools: React.FC = () => {
     }
   };
 
-  const generatedTestJson = useMemo(() => prettyJson({
-    action: testFields.action || 'run_test',
-    username: testFields.username || undefined,
-    num_ips: testFields.num_ips || undefined,
-    country_code: testFields.country_code || undefined,
-  }), [testFields]);
 
   // Helper to render string array metrics as chips with an expand/collapse toggle
   const renderStringArray = (title: string, arr: any, key: string) => {
@@ -691,16 +685,6 @@ const DistributedBruteForceTools: React.FC = () => {
                     />
                   </Grid>
                 )}
-                <Grid item xs={12}>
-                  <TextField
-                    label="Generated parameters (read-only)"
-                    value={generatedTestJson}
-                    fullWidth
-                    multiline
-                    minRows={6}
-                    InputProps={{ readOnly: true }}
-                  />
-                </Grid>
               </Grid>
             )}
 
