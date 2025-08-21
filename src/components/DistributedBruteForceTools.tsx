@@ -94,41 +94,74 @@ const DistributedBruteForceTools: React.FC = () => {
   useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
   const getRuntimeConnection = useCallback(() => connectionRef.current, []);
 
+  // Centralized connection check to avoid duplication in effects and UI handlers
+  const checkConnection = useCallback(async () => {
+    const conn = getRuntimeConnection();
+    if (!conn?.backend_url) {
+      setConnStatus('unknown');
+      setStatusMessage('No backend URL configured');
+      return;
+    }
+    setConnStatus('checking');
+    setStatusMessage('Checking connection...');
+    try {
+      const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
+      proxyUrl.searchParams.append('url', conn.backend_url!);
+      const resp = await authenticatedFetch(proxyUrl.toString(), { method: 'GET' });
+      if (resp.ok) {
+        setConnStatus('connected');
+        setStatusMessage('Connected to Nauthilus backend (ping successful)');
+      } else {
+        setConnStatus('disconnected');
+        const msg = await extractErrorMessage(resp);
+        setStatusMessage(`Failed to connect: ${msg}`);
+      }
+    } catch (e: any) {
+      setConnStatus('disconnected');
+      setStatusMessage(`Connection error: ${e?.message || String(e)}`);
+    }
+  }, [getRuntimeConnection]);
+
   useEffect(() => {
     (async () => {
       await loadSettingsUtil(
         getCurrentUserId,
         loadRuntimeSettings,
         currentProfileName,
-        async (conn) => {
-          if (!conn?.backend_url) {
-            setConnStatus('unknown');
-            setStatusMessage('No backend URL configured');
-            return;
-          }
-          setConnStatus('checking');
-          setStatusMessage('Checking connection...');
-          try {
-            const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
-            proxyUrl.searchParams.append('url', conn.backend_url);
-            const resp = await authenticatedFetch(proxyUrl.toString(), { method: 'GET' });
-            if (resp.ok) {
-              setConnStatus('connected');
-              setStatusMessage('Connected to Nauthilus backend (ping successful)');
-            } else {
-              setConnStatus('disconnected');
-              const msg = await extractErrorMessage(resp);
-              setStatusMessage(`Failed to connect: ${msg}`);
-            }
-          } catch (e: any) {
-            setConnStatus('disconnected');
-            setStatusMessage(`Connection error: ${e?.message || String(e)}`);
-          }
+        async (_conn) => {
+          await checkConnection();
         },
         getRuntimeConnection
       );
     })();
-  }, [currentProfileName, loadRuntimeSettings, getRuntimeConnection]);
+  }, [currentProfileName, loadRuntimeSettings, getRuntimeConnection, checkConnection]);
+
+  // Sync hook states when configuration or runtime hook settings load/update
+  useEffect(() => {
+    const newAdminEnabled = Boolean(
+      config?.lua?.hooks?.distributed_brute_force_admin?.enabled ??
+      runtimeHooks?.distributed_brute_force_admin?.enabled
+    );
+    const newTestEnabled = Boolean(
+      config?.lua?.hooks?.distributed_brute_force_test?.enabled ??
+      runtimeHooks?.distributed_brute_force_test?.enabled
+    );
+    const newAdminPath = (
+      config?.lua?.hooks?.distributed_brute_force_admin?.endpoint_path ||
+      runtimeHooks?.distributed_brute_force_admin?.endpoint_path ||
+      '/hooks/distributed-brute-force-admin'
+    );
+    const newTestPath = (
+      config?.lua?.hooks?.distributed_brute_force_test?.endpoint_path ||
+      runtimeHooks?.distributed_brute_force_test?.endpoint_path ||
+      '/hooks/distributed-brute-force-test'
+    );
+
+    setAdminEnabled(newAdminEnabled);
+    setTestEnabled(newTestEnabled);
+    setAdminPath(newAdminPath);
+    setTestPath(newTestPath);
+  }, [config, runtimeHooks]);
 
   const hasValidConnection = Boolean(runtimeConnection?.backend_url);
 
@@ -168,7 +201,7 @@ const DistributedBruteForceTools: React.FC = () => {
     const { authType, authValue } = prepareAuthParams(conn);
     const proxyBase = isAdmin ? '/proxy/hooks/distributed-brute-force-admin' : '/proxy/hooks/distributed-brute-force-test';
     const url = new URL(proxyBase, getProxyOrigin());
-    url.searchParams.append('url', conn.backend_url);
+    url.searchParams.append('url', conn.backend_url!);
     url.searchParams.append('endpoint_path', path);
     if (authType && authValue) {
       url.searchParams.append('authType', authType);
@@ -251,7 +284,7 @@ const DistributedBruteForceTools: React.FC = () => {
     const isArr = Array.isArray(arr);
     const items: string[] = isArr ? arr.map((v: any) => String(v)) : [];
     const total = items.length;
-    const expanded = !!expandedLists[key];
+    const expanded = expandedLists[key];
     const limit = 10;
     const visibleItems = expanded ? items : items.slice(0, limit);
     return (
@@ -300,26 +333,7 @@ const DistributedBruteForceTools: React.FC = () => {
             <span>
               <IconButton
                 onClick={async () => {
-                  const conn = runtimeConnection;
-                  if (!conn?.backend_url) return;
-                  setConnStatus('checking');
-                  setStatusMessage('Checking connection...');
-                  try {
-                    const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
-                    proxyUrl.searchParams.append('url', conn.backend_url);
-                    const resp = await authenticatedFetch(proxyUrl.toString(), { method: 'GET' });
-                    if (resp.ok) {
-                      setConnStatus('connected');
-                      setStatusMessage('Connected to Nauthilus backend (ping successful)');
-                    } else {
-                      setConnStatus('disconnected');
-                      const msg = await extractErrorMessage(resp);
-                      setStatusMessage(`Failed to connect: ${msg}`);
-                    }
-                  } catch (e:any) {
-                    setConnStatus('disconnected');
-                    setStatusMessage(`Connection error: ${e?.message || String(e)}`);
-                  }
+                  await checkConnection();
                 }}
                 disabled={connStatus === 'checking' || !hasValidConnection}
                 sx={{ ml: 1 }}
