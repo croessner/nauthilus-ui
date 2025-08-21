@@ -90,6 +90,7 @@ import UserManagement from './components/UserManagement';
 import UserProfile from './components/UserProfile';
 import BruteForceConfig from './components/BruteForceConfig';
 import DistributedBruteForceTools from './components/DistributedBruteForceTools';
+import HookTester from './components/HookTester';
 import MFASettings from './components/MFASettings';
 import LegalPage from './components/LegalPage';
 import { authenticatedFetch } from './utils/apiUtils';
@@ -266,6 +267,7 @@ const MainContent = (): React.JSX.Element => {
     { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
     { text: 'Distributed BF', icon: <SecurityIcon />, path: '/distributed-bf' },
     { text: 'Security', icon: <SecurityIcon />, path: '/security' },
+    { text: 'Hook Tester', icon: <CodeIcon />, path: '/hook-tester' },
   ];
 
   // Define application menu items
@@ -1151,6 +1153,7 @@ const MainContent = (): React.JSX.Element => {
               <Route path="/system" element={<SystemPage />} />
               <Route path="/security" element={<SecurityPage />} />
               <Route path="/lua" element={<LuaConfig />} />
+              <Route path="/hook-tester" element={<HookTester />} />
               <Route path="/ldap" element={<LDAPConfig />} />
               <Route path="/config-preview" element={<ConfigPreview />} />
               <Route path="/licenses" element={<LicensesPage />} />

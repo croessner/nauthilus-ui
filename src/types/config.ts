@@ -283,9 +283,6 @@ export interface LuaHookConfig {
 export interface LuaHooksConfig {
   distributed_brute_force_admin?: LuaHookConfig;
   distributed_brute_force_test?: LuaHookConfig;
-  learning_mode?: LuaHookConfig;
-  neural_feedback?: LuaHookConfig;
-  train_neural_network?: LuaHookConfig;
 }
 
 export interface LuaConfig {

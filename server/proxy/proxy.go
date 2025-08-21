@@ -130,8 +130,15 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	}
 
 	ctx.Header("Access-Control-Allow-Origin", origin)
-	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-	ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value")
+	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+	// Allow standard headers plus any requested by the browser in preflight
+	allowReq := ctx.GetHeader("Access-Control-Request-Headers")
+	baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value"
+	if allowReq != "" {
+		ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
+	} else {
+		ctx.Header("Access-Control-Allow-Headers", baseAllow)
+	}
 	ctx.Header("Access-Control-Allow-Credentials", "true")
 
 	// Get and validate target URL if not provided
@@ -314,8 +321,15 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 		}
 
 		ctx.Header("Access-Control-Allow-Origin", origin)
-		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
-		ctx.Header("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value")
+		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+		// Allow standard headers plus any requested by the browser in preflight
+		allowReq := ctx.GetHeader("Access-Control-Request-Headers")
+		baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value"
+		if allowReq != "" {
+			ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
+		} else {
+			ctx.Header("Access-Control-Allow-Headers", baseAllow)
+		}
 		ctx.Header("Access-Control-Allow-Credentials", "true")
 		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
 
@@ -355,6 +369,9 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	router.GET("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
 	router.POST("/proxy/hooks/distributed-brute-force-test", h.DistributedBruteForceTestProxy)
+
+	// Generic hook proxy route (all methods)
+	router.Any("/proxy/hooks/any", h.HookGenericProxy)
 
 	// System metrics route
 	router.GET("/proxy/system/metrics", h.SystemMetricsProxy)
@@ -552,6 +569,27 @@ func (h *ProxyHandler) DistributedBruteForceTestProxy(ctx *gin.Context) {
 		RequiresAuth: true,
 		ContentType:  "application/json",
 		Operation:    getOperation(ctx),
+	}
+
+	h.handleProxyRequest(ctx, config)
+}
+
+// HookGenericProxy handles the /proxy/hooks/any endpoint for arbitrary hooks and methods
+func (h *ProxyHandler) HookGenericProxy(ctx *gin.Context) {
+	// Get endpoint path
+	endpointPath, statusCode, errMsg, ok := getEndpointPath(ctx)
+	if !ok {
+		ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
+
+		return
+	}
+
+	config := ProxyConfig{
+		EndpointPath: endpointPath,
+		LogEndpoint:  "/proxy/hooks/any",
+		RequiresAuth: true,
+		// Do not set ContentType to preserve incoming Content-Type header for arbitrary content
+		Operation: getOperation(ctx),
 	}
 
 	h.handleProxyRequest(ctx, config)
