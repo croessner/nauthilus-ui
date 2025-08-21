@@ -17,7 +17,8 @@ import {
   Divider,
   Tooltip,
   IconButton,
-  Chip
+  Chip,
+  Snackbar
 } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -90,6 +91,10 @@ const DistributedBruteForceTools: React.FC = () => {
 
   const [notif, setNotif] = useState<{open:boolean, severity:'success'|'error'|'info'|'warning', message:string}>({open:false, severity:'info', message:''});
 
+  // Local visibility for inline admin status messages
+  const [adminMetricsStatusOpen, setAdminMetricsStatusOpen] = useState<boolean>(false);
+  const [adminOpStatusOpen, setAdminOpStatusOpen] = useState<boolean>(false);
+
   const connectionRef = useRef(runtimeConnection);
   useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
   const getRuntimeConnection = useCallback(() => connectionRef.current, []);
@@ -135,6 +140,25 @@ const DistributedBruteForceTools: React.FC = () => {
       );
     })();
   }, [currentProfileName, loadRuntimeSettings, getRuntimeConnection, checkConnection]);
+
+  // Control visibility of inline Alerts for admin operations and auto-hide after 10s
+  useEffect(() => {
+    // get_metrics status message
+    if (adminResponseJson && adminOperation === 'get_metrics') {
+      setAdminMetricsStatusOpen(true);
+      const t = setTimeout(() => setAdminMetricsStatusOpen(false), 10000);
+      return () => clearTimeout(t);
+    }
+  }, [adminResponseJson, adminOperation]);
+
+  useEffect(() => {
+    // reset_protection / reset_account status message
+    if (adminResponseJson && (adminOperation === 'reset_protection' || adminOperation === 'reset_account')) {
+      setAdminOpStatusOpen(true);
+      const t = setTimeout(() => setAdminOpStatusOpen(false), 10000);
+      return () => clearTimeout(t);
+    }
+  }, [adminResponseJson, adminOperation]);
 
   // Sync hook states when configuration or runtime hook settings load/update
   useEffect(() => {
@@ -260,7 +284,8 @@ const DistributedBruteForceTools: React.FC = () => {
         setAdminResponseJson(json);
       }
       setResp(prettyJson(json));
-      setNotif({ open: true, severity: 'success', message: 'Request executed successfully' });
+      // Success toast at the top removed as per requirement: top hints are unnecessary here.
+      // Keep inline alerts for admin operations and rely on response panels for feedback.
     } catch (e:any) {
       const msg = e?.message || String(e);
       setResp(`Request error: ${msg}`);
@@ -462,6 +487,12 @@ const DistributedBruteForceTools: React.FC = () => {
                         const rateLimitedIPs = Array.isArray(m.rate_limited_ips) ? m.rate_limited_ips.length : 0;
                         return (
                           <>
+                            {/* Status message shown above detailed metrics */}
+                            {adminMetricsStatusOpen && (
+                              <Alert severity="success" sx={{ mb: 2 }} onClose={() => setAdminMetricsStatusOpen(false)}>
+                                {adminResponseJson?.message || 'Metrics retrieved successfully'}
+                              </Alert>
+                            )}
                             <Grid container spacing={2}>
                               <Grid item xs={12} md={3}>
                                 <Paper sx={{ p: 2 }}>
@@ -536,13 +567,17 @@ const DistributedBruteForceTools: React.FC = () => {
                     {(adminOperation === 'reset_protection' || adminOperation === 'reset_account') && (
                       <>
                         {adminResponseJson?.status === 'success' ? (
-                          <Alert severity="success" sx={{ mb: 1 }}>
-                            {adminResponseJson?.message || 'Operation executed successfully'}
-                          </Alert>
+                          adminOpStatusOpen && (
+                            <Alert severity="success" sx={{ mb: 1 }} onClose={() => setAdminOpStatusOpen(false)}>
+                              {adminResponseJson?.message || 'Operation executed successfully'}
+                            </Alert>
+                          )
                         ) : (
-                          <Alert severity="error" sx={{ mb: 1 }}>
-                            {adminResponseJson?.message || 'Operation failed'}
-                          </Alert>
+                          adminOpStatusOpen && (
+                            <Alert severity="error" sx={{ mb: 1 }} onClose={() => setAdminOpStatusOpen(false)}>
+                              {adminResponseJson?.message || 'Operation failed'}
+                            </Alert>
+                          )
                         )}
                         <Box sx={{ color: 'text.secondary' }}>
                           <Typography variant="caption">Caller: {adminResponseJson?.caller || 'n/a'} | Time: {adminResponseJson?.ts || 'n/a'}</Typography>
@@ -687,6 +722,18 @@ const DistributedBruteForceTools: React.FC = () => {
           </Box>
         )}
       </Paper>
+
+      {/* Snackbar for displaying notifications with auto-hide and close button */}
+      <Snackbar
+        open={notif.open}
+        autoHideDuration={10000}
+        onClose={() => setNotif({ ...notif, open: false })}
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+     >
+        <Alert onClose={() => setNotif({ ...notif, open: false })} severity={notif.severity} sx={{ width: '100%' }}>
+          {notif.message}
+        </Alert>
+      </Snackbar>
 
     </>
   );
