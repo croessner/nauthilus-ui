@@ -10,7 +10,6 @@ import {
   Button,
   Switch,
   FormControlLabel,
-  Snackbar,
   Alert,
   InputAdornment,
   MenuItem,
@@ -675,11 +674,6 @@ const DistributedBruteForceTools: React.FC = () => {
         )}
       </Paper>
 
-      <Snackbar open={notif.open} autoHideDuration={6000} onClose={() => setNotif({ ...notif, open: false })} anchorOrigin={{ vertical: 'top', horizontal: 'center' }}>
-        <Alert severity={notif.severity} sx={{ width: '100%' }} onClose={() => setNotif({ ...notif, open: false })}>
-          {notif.message}
-        </Alert>
-      </Snackbar>
     </>
   );
 };
