@@ -77,14 +77,12 @@ const DistributedBruteForceTools: React.FC = () => {
   const [expandedLists, setExpandedLists] = useState<Record<string, boolean>>({});
 
   const [testFields, setTestFields] = useState({
+    action: 'run_test',
     username: '',
-    ip_address: '',
-    protocol: '',
-    oidc_cid: '',
-    rule_name: '',
-    attempts: 0,
+    num_ips: 20,
+    country_code: '',
   });
-  const [testBodyText, setTestBodyText] = useState<string>('{}');
+  const [testBodyText, setTestBodyText] = useState<string>(prettyJson({ action: 'run_test', username: '', num_ips: 20, country_code: '' }));
   const [useAdvancedBody, setUseAdvancedBody] = useState<boolean>(false);
   const [testResponse, setTestResponse] = useState<string>('');
   const [testLoading, setTestLoading] = useState<boolean>(false);
@@ -232,7 +230,7 @@ const DistributedBruteForceTools: React.FC = () => {
       url.searchParams.append('authValue', authValue);
     }
     if (isAdmin && adminOperation) {
-      url.searchParams.append('operation', adminOperation);
+      url.searchParams.append('action', adminOperation);
     }
 
     // Build request body
@@ -247,19 +245,47 @@ const DistributedBruteForceTools: React.FC = () => {
         }
         // The username MUST be sent as a query parameter to the backend
         url.searchParams.append('username', effectiveUsername);
-        body = { username: effectiveUsername };
+        // Do not send any payload fields in the body; backend reads query params only
+        body = {};
       } else {
+        // Always send an empty body for admin operations
         body = {};
       }
     } else {
-      body = (useAdvancedBody ? (parseJson(testBodyText) ?? {}) : {
+      // Build test hook body but ensure required query parameters are provided
+      // as the Lua hook expects them in the query string even for POST.
+      const bodyObj = (useAdvancedBody ? (parseJson(testBodyText) ?? {}) : {
+        action: testFields.action || 'run_test',
         username: testFields.username || undefined,
-        ip_address: testFields.ip_address || undefined,
-        protocol: testFields.protocol || undefined,
-        oidc_cid: testFields.oidc_cid || undefined,
-        rule_name: testFields.rule_name || undefined,
-        attempts: testFields.attempts || undefined,
+        num_ips: testFields.num_ips || undefined,
+        country_code: testFields.country_code || undefined,
       });
+
+      // Validate required fields (username is required for all actions)
+      const effectiveAction = (typeof bodyObj.action === 'string' && bodyObj.action) ? bodyObj.action : 'run_test';
+      const effectiveUsername = (typeof bodyObj.username === 'string' && bodyObj.username) ? bodyObj.username : (testFields.username || '');
+      if (!effectiveUsername) {
+        setNotif({ open: true, severity: 'error', message: 'Username is required' });
+        setTestLoading(false);
+        return;
+      }
+
+      // Map to expected query params: action, username, num_ips, country_code
+      url.searchParams.append('action', effectiveAction);
+      url.searchParams.append('username', effectiveUsername);
+
+      // Only add num_ips and country_code if action is not check_detection
+      if (effectiveAction !== 'check_detection') {
+        const qpNumIps = (bodyObj.num_ips != null ? Number(bodyObj.num_ips) : (testFields.num_ips || undefined));
+        if (qpNumIps != null && !Number.isNaN(qpNumIps) && qpNumIps > 0) {
+          url.searchParams.append('num_ips', String(qpNumIps));
+        }
+        const qpCountry = (typeof bodyObj.country_code === 'string' && bodyObj.country_code) ? bodyObj.country_code : (testFields.country_code || '');
+        if (qpCountry) url.searchParams.append('country_code', qpCountry);
+      }
+
+      // Do not send the JSON body; backend reads only query parameters
+      body = {};
     }
 
     const setLoading = isAdmin ? setAdminLoading : setTestLoading;
@@ -296,12 +322,10 @@ const DistributedBruteForceTools: React.FC = () => {
   };
 
   const generatedTestJson = useMemo(() => prettyJson({
+    action: testFields.action || 'run_test',
     username: testFields.username || undefined,
-    ip_address: testFields.ip_address || undefined,
-    protocol: testFields.protocol || undefined,
-    oidc_cid: testFields.oidc_cid || undefined,
-    rule_name: testFields.rule_name || undefined,
-    attempts: testFields.attempts || undefined,
+    num_ips: testFields.num_ips || undefined,
+    country_code: testFields.country_code || undefined,
   }), [testFields]);
 
   // Helper to render string array metrics as chips with an expand/collapse toggle
@@ -614,68 +638,62 @@ const DistributedBruteForceTools: React.FC = () => {
             </Typography>
             <FormControlLabel 
               control={<Switch checked={useAdvancedBody} onChange={(e) => setUseAdvancedBody(e.target.checked)} />} 
-              label={<Box sx={{ display:'inline-flex', alignItems:'center' }}>Advanced mode (custom JSON)<InfoTooltip title="When enabled, the JSON body entered below is sent as-is." /></Box>} 
+              label={<Box sx={{ display:'inline-flex', alignItems:'center' }}>Advanced mode (custom JSON)<InfoTooltip title="When enabled, you can set action, username, num_ips, and country_code as JSON. The backend reads them from query params; the body is shown for reference." /></Box>} 
               sx={{ mb: 1 }}
             />
 
             {!useAdvancedBody && (
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid item xs={12} md={4}>
+                  <TextField
+                    select
+                    fullWidth
+                    label="Action"
+                    value={testFields.action}
+                    onChange={(e) => setTestFields({ ...testFields, action: e.target.value })}
+                    helperText="Choose what to run"
+                  >
+                    <MenuItem value="run_test">run_test</MenuItem>
+                    <MenuItem value="simulate_attack">simulate_attack</MenuItem>
+                    <MenuItem value="check_detection">check_detection</MenuItem>
+                  </TextField>
+                </Grid>
+                <Grid item xs={12} md={8}>
                   <TextField
                     fullWidth
+                    required
                     label="Username"
                     value={testFields.username}
                     onChange={(e) => setTestFields({ ...testFields, username: e.target.value })}
-                    InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Username of the account (optional)." /></InputAdornment>) }}
+                    InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Required for all actions." /></InputAdornment>) }}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
-                  <TextField
-                    fullWidth
-                    label="IP Address"
-                    value={testFields.ip_address}
-                    onChange={(e) => setTestFields({ ...testFields, ip_address: e.target.value })}
-                    InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="IP address (IPv4/IPv6) for testing." /></InputAdornment>) }}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Protocol"
-                    value={testFields.protocol}
-                    onChange={(e) => setTestFields({ ...testFields, protocol: e.target.value })}
-                    placeholder="smtp, imap, …"
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="OIDC Client ID"
-                    value={testFields.oidc_cid}
-                    onChange={(e) => setTestFields({ ...testFields, oidc_cid: e.target.value })}
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Rule Name"
-                    value={testFields.rule_name}
-                    onChange={(e) => setTestFields({ ...testFields, rule_name: e.target.value })}
-                    placeholder="e.g., 5x/1m"
-                  />
-                </Grid>
-                <Grid item xs={12} md={4}>
-                  <TextField
-                    fullWidth
-                    label="Attempts"
-                    type="number"
-                    value={testFields.attempts}
-                    onChange={(e) => setTestFields({ ...testFields, attempts: Number(e.target.value || 0) })}
-                  />
-                </Grid>
+                {testFields.action !== 'check_detection' && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Num IPs"
+                      type="number"
+                      value={testFields.num_ips}
+                      onChange={(e) => setTestFields({ ...testFields, num_ips: Number(e.target.value || 0) })}
+                      InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Number of IPs to simulate (default 20)." /></InputAdornment>) }}
+                    />
+                  </Grid>
+                )}
+                {testFields.action !== 'check_detection' && (
+                  <Grid item xs={12} md={4}>
+                    <TextField
+                      fullWidth
+                      label="Country Code"
+                      value={testFields.country_code}
+                      onChange={(e) => setTestFields({ ...testFields, country_code: e.target.value })}
+                      placeholder="e.g., US, DE"
+                    />
+                  </Grid>
+                )}
                 <Grid item xs={12}>
                   <TextField
-                    label="Generated JSON body (read-only)"
+                    label="Generated parameters (read-only)"
                     value={generatedTestJson}
                     fullWidth
                     multiline

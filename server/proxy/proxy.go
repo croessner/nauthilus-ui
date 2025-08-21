@@ -168,23 +168,50 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Set the path
 	target.Path = config.EndpointPath
 
-	// Build outgoing query parameters
+	// Build outgoing query parameters by forwarding all non-internal query params
 	q := target.Query()
 
-	if config.Operation != "" {
-		// Choose parameter name depending on endpoint
-		paramName := "operation"
-		if strings.HasSuffix(config.EndpointPath, "/distributed-brute-force-admin") {
-			paramName = "action"
-		}
-
-		q.Set(paramName, config.Operation)
+	incoming := ctx.Request.URL.Query()
+	internal := map[string]struct{}{
+		"url":           {},
+		"endpoint_path": {},
+		"authType":      {},
+		"authValue":     {},
 	}
 
-	// For distributed-brute-force-admin reset_account, forward username as query param if provided
-	if strings.HasSuffix(config.EndpointPath, "/distributed-brute-force-admin") && strings.EqualFold(config.Operation, "reset_account") {
-		if uname := ctx.Query("username"); uname != "" {
-			q.Set("username", uname)
+	// Forward all allowed incoming params, remapping operation->action
+	if len(incoming) > 0 {
+		// If both action and operation are present, prefer action
+		actionAlreadySet := false
+		if vals, ok := incoming["action"]; ok && len(vals) > 0 && vals[0] != "" {
+			actionAlreadySet = true
+		}
+		for key, vals := range incoming {
+			if _, skip := internal[key]; skip {
+				continue
+			}
+			if len(vals) == 0 {
+				continue
+			}
+			v := vals[0]
+			if v == "" {
+				continue
+			}
+			// Map legacy 'operation' to 'action' if action not already provided
+			if key == "operation" {
+				if !actionAlreadySet {
+					q.Set("action", v)
+				}
+				continue
+			}
+			q.Set(key, v)
+		}
+	}
+
+	// If an explicit Operation was provided via headers, set it as 'action' when not present
+	if config.Operation != "" {
+		if q.Get("action") == "" {
+			q.Set("action", config.Operation)
 		}
 	}
 
