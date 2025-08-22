@@ -125,7 +125,13 @@ const DistributedBruteForceTools: React.FC = () => {
   const [testBodyText, setTestBodyText] = useState<string>(prettyJson({ action: 'run_test', username: '', num_ips: 20, country_code: '' }));
   const [useAdvancedBody, setUseAdvancedBody] = useState<boolean>(false);
   const [testResponse, setTestResponse] = useState<string>('');
+  const [testResponseJson, setTestResponseJson] = useState<any | null>(null);
+  const [lastTestAction, setLastTestAction] = useState<string>('run_test');
+  const [showTestRaw, setShowTestRaw] = useState<boolean>(false);
   const [testLoading, setTestLoading] = useState<boolean>(false);
+
+  // Inline Test alert visibility (auto-hide with close X, like Admin tab)
+  const [testAlertOpen, setTestAlertOpen] = useState<boolean>(false);
 
   const [notif, setNotif] = useState<{open:boolean, severity:'success'|'error'|'info'|'warning', message:string}>({open:false, severity:'info', message:''});
 
@@ -197,6 +203,15 @@ const DistributedBruteForceTools: React.FC = () => {
       return () => clearTimeout(t);
     }
   }, [adminResponseJson, adminOperation]);
+
+  // Test tab: control visibility of header Alert, auto-hide after 10s like Admin tab
+  useEffect(() => {
+    if (testResponseJson) {
+      setTestAlertOpen(true);
+      const t = setTimeout(() => setTestAlertOpen(false), 10000);
+      return () => clearTimeout(t);
+    }
+  }, [testResponseJson]);
 
   // Sync hook states when configuration or runtime hook settings load/update
   useEffect(() => {
@@ -335,6 +350,11 @@ const DistributedBruteForceTools: React.FC = () => {
     setResp('');
     if (isAdmin) {
       setAdminResponseJson(null);
+    } else {
+      // Remember which action we executed and reset pretty JSON for Test
+      const executedAction = useAdvancedBody ? ((parseJson(testBodyText)?.action) || testFields.action || 'run_test') : (testFields.action || 'run_test');
+      setLastTestAction(String(executedAction));
+      setTestResponseJson(null);
     }
     try {
       const options: RequestInit = { method: 'GET' } as any;
@@ -348,6 +368,8 @@ const DistributedBruteForceTools: React.FC = () => {
       const json = await resp.json().catch(() => ({}));
       if (isAdmin) {
         setAdminResponseJson(json);
+      } else {
+        setTestResponseJson(json);
       }
       setResp(prettyJson(json));
       // Success toast at the top removed as per requirement: top hints are unnecessary here.
@@ -388,6 +410,38 @@ const DistributedBruteForceTools: React.FC = () => {
           </Box>
         )}
       </Box>
+    );
+  };
+
+  // Helper to render detection_result in tiles
+  const renderDetectionTiles = (dr: any) => {
+    const toBool = (v: any) => Boolean(v);
+    const toNum = (v: any) => (typeof v === 'number' ? v : Number(v || 0));
+    const boolTile = (label: string, value: any) => (
+      <Grid item xs={6} md={3}>
+        <Paper sx={{ p: 2 }}>
+          <Typography variant="subtitle2">{label}</Typography>
+          <Typography variant="h6" color={toBool(value) ? 'error.main' : 'text.primary'}>
+            {toBool(value) ? 'Yes' : 'No'}
+          </Typography>
+        </Paper>
+      </Grid>
+    );
+    return (
+      <Grid container spacing={2}>
+        <Grid item xs={6} md={3}>
+          <Paper sx={{ p: 2 }}>
+            <Typography variant="subtitle2">Threat Level</Typography>
+            <Typography variant="h6">{toNum(dr?.threat_level) || 0}</Typography>
+          </Paper>
+        </Grid>
+        {boolTile('Attack Detected', dr?.attack_detected)}
+        {boolTile('Account Under Attack', dr?.account_under_attack)}
+        {boolTile('Rate Limit Enabled', dr?.rate_limit_enabled)}
+        {boolTile('Captcha Enabled', dr?.captcha_enabled)}
+        {boolTile('Captcha Account', dr?.is_captcha_account)}
+        {boolTile('Monitoring Mode', dr?.monitoring_mode)}
+      </Grid>
     );
   };
 
@@ -783,13 +837,80 @@ const DistributedBruteForceTools: React.FC = () => {
             <Box sx={{ mt: 2 }}>
               <Divider sx={{ my: 1 }} />
               <Typography variant="subtitle2" sx={{ mb: 1 }}>Response</Typography>
-              <TextField
-                value={testResponse}
-                fullWidth
-                multiline
-                minRows={8}
-                InputProps={{ readOnly: true }}
-              />
+
+              {/* Pretty Test response rendering */}
+              {testResponseJson && (
+                <Box sx={{ mb: 2 }}>
+                  {(() => {
+                    const jr: any = testResponseJson || {};
+                    const act = (lastTestAction || '').toString();
+                    const isRun = act === 'run_test';
+                    const isCheck = act === 'check_detection';
+                    const status = jr?.status || 'info';
+                    const testRes = jr?.test_result;
+
+                    const alertSeverity: 'success'|'info'|'warning'|'error' = isRun
+                      ? (testRes === 'FAIL' ? 'warning' : 'success')
+                      : (status === 'success' ? 'success' : 'error');
+
+                    const headerMsg = (isRun ? (jr?.test_message || jr?.message) : jr?.message) || 'Response received';
+
+                    return (
+                      <>
+                        {testAlertOpen && (
+                          <Alert severity={alertSeverity} sx={{ mb: 2 }} onClose={() => setTestAlertOpen(false)}>
+                            {headerMsg}
+                          </Alert>
+                        )}
+
+                        {/* Special chip for run_test result */}
+                        {isRun && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mr: 1, display: 'inline-flex', alignItems:'center' }}>Test Result:</Typography>
+                            <Chip
+                              label={testRes || 'UNKNOWN'}
+                              color={testRes === 'FAIL' ? 'error' : 'success'}
+                              variant="filled"
+                              sx={{ fontWeight: 600 }}
+                            />
+                          </Box>
+                        )}
+
+                        {/* Detection tiles for run_test and check_detection */}
+                        {(isRun || isCheck) && (
+                          <Box sx={{ mb: 2 }}>
+                            <Typography variant="subtitle2" sx={{ mb: 1 }}>Detection Result</Typography>
+                            {renderDetectionTiles(jr?.detection_result || {})}
+                          </Box>
+                        )}
+
+                        {/* Context info */}
+                        <Box sx={{ color: 'text.secondary', mt: 1 }}>
+                          <Typography variant="caption">
+                            Status: {jr?.status || 'n/a'} | User: {jr?.username || 'n/a'}{jr?.num_ips != null ? ` | Num IPs: ${jr.num_ips}` : ''}{jr?.country_code ? ` | Country: ${jr.country_code}` : ''} | Session: {jr?.session || 'n/a'} | Time: {jr?.ts || 'n/a'}
+                          </Typography>
+                        </Box>
+                      </>
+                    );
+                  })()}
+                </Box>
+              )}
+
+              {/* Raw JSON toggle and content */}
+              <Box sx={{ mb: 1 }}>
+                <Button size="small" onClick={() => setShowTestRaw(v => !v)}>
+                  {showTestRaw ? 'Hide raw JSON' : 'Show raw JSON'}
+                </Button>
+              </Box>
+              {showTestRaw && (
+                <TextField
+                  value={testResponse}
+                  fullWidth
+                  multiline
+                  minRows={8}
+                  InputProps={{ readOnly: true }}
+                />
+              )}
             </Box>
           </Box>
         )}
