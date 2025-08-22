@@ -31,6 +31,7 @@ import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken } from '../utils/apiUtils';
+import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 
 const METHODS = ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] as const;
 
@@ -41,14 +42,9 @@ type KV = { key: string; value: string; id: string };
 const pretty = (v: any) => {
   try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v, null, 2); } catch { return String(v); }
 };
-
-const parseMaybe = (text: string) => {
-  try { return JSON.parse(text); } catch { return text; }
-};
-
 const storageKey = (username: string) => `ui:hooktester:last:${username}`;
 
-const HookTester: React.FC = () => {
+const HookTester = (): React.JSX.Element => {
   const { currentProfileName } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings } = useRuntime();
 
@@ -156,40 +152,7 @@ const HookTester: React.FC = () => {
   const removeHeaderRow = (id: string) => setHeadersRows((rows) => rows.filter(r => r.id !== id));
   const updateHeaderRow = (id: string, patch: Partial<KV>) => setHeadersRows((rows) => rows.map(r => r.id === id ? { ...r, ...patch } : r));
 
-  const effectiveEndpointSuggestions = useMemo(() => {
-    const opts: string[] = [];
-
-    const add = (v: any) => {
-      if (!v) return;
-      // handle primitive strings
-      if (typeof v === 'string') {
-        if (v.startsWith('/')) opts.push(v);
-        return;
-      }
-      // common fields
-      const ep = v.endpoint_path || v.http_location || v.path || v.endpoint || v.url_path;
-      if (typeof ep === 'string' && ep.startsWith('/')) opts.push(ep);
-    };
-
-    const h: any = runtimeHooks ?? {};
-    // runtimeHooks might be an array
-    if (Array.isArray(h)) {
-      h.forEach(add);
-    } else if (h && typeof h === 'object') {
-      // direct fields
-      Object.keys(h).forEach((k) => add(h[k]));
-      // nested arrays that often carry custom hooks
-      if (Array.isArray(h.custom_hooks)) h.custom_hooks.forEach(add);
-      if (Array.isArray(h.hooks)) h.hooks.forEach(add);
-      if (h.lua && Array.isArray(h.lua?.custom_hooks)) h.lua.custom_hooks.forEach(add);
-    }
-
-    // normalize: ensure "/api/v1/custom" prefix for all endpoints
-    const normalized = opts.map((p) => (p.startsWith('/api/v1/custom') ? p : `/api/v1/custom${p}`));
-
-    // ensure unique & sorted
-    return Array.from(new Set(normalized)).sort();
-  }, [runtimeHooks]);
+  const effectiveEndpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
 
   const resetForm = () => {
     setMethod('POST');
@@ -274,7 +237,7 @@ const HookTester: React.FC = () => {
       setRespHeaders(hdrs);
       setStatus({ code: resp.status, text: `${resp.statusText} (${dt.toFixed(0)} ms)` });
 
-      let text = '';
+      let text: string;
       try { text = await resp.text(); } catch { text = ''; }
       setRespBody(text);
 
@@ -308,7 +271,7 @@ const HookTester: React.FC = () => {
       // Build direct backend URL (not the proxy)
       const conn = getConnection();
       const baseUrl = conn?.backend_url || '';
-      if (!baseUrl) throw new Error('No backend URL configured in Runtime > Connection');
+      if (!baseUrl) { setNotif({ open: true, severity: 'error', message: 'No backend URL configured in Runtime > Connection' }); return; }
 
       // Ensure endpoint path is applied relative to backend_url
       const path = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;

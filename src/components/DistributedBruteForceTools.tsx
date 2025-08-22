@@ -32,6 +32,7 @@ import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams } from '../utils/apiUtils';
+import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 
 const prettyJson = (obj: any) => {
   try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
@@ -47,7 +48,7 @@ const defaultAdminOps = [
   { value: 'reset_account', label: 'Reset single account' },
 ];
 
-const DistributedBruteForceTools: React.FC = () => {
+const DistributedBruteForceTools = (): React.JSX.Element => {
   const { currentProfileName, config } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, saveRuntimeSettings, loadRuntimeSettings } = useRuntime();
 
@@ -57,33 +58,8 @@ const DistributedBruteForceTools: React.FC = () => {
   const [adminPath, setAdminPath] = useState<string>(config?.lua?.hooks?.distributed_brute_force_admin?.endpoint_path || runtimeHooks?.distributed_brute_force_admin?.endpoint_path || '/hooks/distributed-brute-force-admin');
   const [testPath, setTestPath] = useState<string>(config?.lua?.hooks?.distributed_brute_force_test?.endpoint_path || runtimeHooks?.distributed_brute_force_test?.endpoint_path || '/hooks/distributed-brute-force-test');
 
-  // Known hook endpoint suggestions (same logic as in HookTester)
-  const effectiveEndpointSuggestions = useMemo(() => {
-    const opts: string[] = [];
-
-    const add = (v: any) => {
-      if (!v) return;
-      if (typeof v === 'string') {
-        if (v.startsWith('/')) opts.push(v);
-        return;
-      }
-      const ep = v.endpoint_path || v.http_location || v.path || v.endpoint || v.url_path;
-      if (typeof ep === 'string' && ep.startsWith('/')) opts.push(ep);
-    };
-
-    const h: any = runtimeHooks ?? {};
-    if (Array.isArray(h)) {
-      h.forEach(add);
-    } else if (h && typeof h === 'object') {
-      Object.keys(h).forEach((k) => add(h[k]));
-      if (Array.isArray(h.custom_hooks)) h.custom_hooks.forEach(add);
-      if (Array.isArray(h.hooks)) h.hooks.forEach(add);
-      if (h.lua && Array.isArray(h.lua?.custom_hooks)) h.lua.custom_hooks.forEach(add);
-    }
-
-    const normalized = opts.map((p) => (p.startsWith('/api/v1/custom') ? p : `/api/v1/custom${p}`));
-    return Array.from(new Set(normalized)).sort();
-  }, [runtimeHooks]);
+  // Known hook endpoint suggestions (shared with HookTester)
+  const effectiveEndpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
 
   // Menus for picking endpoints for Admin/Test fields
   const [adminAnchorEl, setAdminAnchorEl] = useState<null | HTMLElement>(null);
@@ -289,7 +265,6 @@ const DistributedBruteForceTools: React.FC = () => {
     }
 
     // Build request body
-    let body: any;
     if (isAdmin) {
       // Admin hook does not accept arbitrary JSON body. Build minimal body per operation.
       if (adminOperation === 'reset_account') {
@@ -300,11 +275,6 @@ const DistributedBruteForceTools: React.FC = () => {
         }
         // The username MUST be sent as a query parameter to the backend
         url.searchParams.append('username', effectiveUsername);
-        // Do not send any payload fields in the body; backend reads query params only
-        body = {};
-      } else {
-        // Always send an empty body for admin operations
-        body = {};
       }
     } else {
       // Build test hook body but ensure required query parameters are provided
@@ -338,9 +308,6 @@ const DistributedBruteForceTools: React.FC = () => {
         const qpCountry = (typeof bodyObj.country_code === 'string' && bodyObj.country_code) ? bodyObj.country_code : (testFields.country_code || '');
         if (qpCountry) url.searchParams.append('country_code', qpCountry);
       }
-
-      // Do not send the JSON body; backend reads only query parameters
-      body = {};
     }
 
     const setLoading = isAdmin ? setAdminLoading : setTestLoading;
