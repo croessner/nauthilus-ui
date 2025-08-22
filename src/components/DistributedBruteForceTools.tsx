@@ -42,9 +42,9 @@ const parseJson = (text: string) => {
 };
 
 const defaultAdminOps = [
-  { value: 'get_metrics', label: 'get_metrics' },
-  { value: 'reset_protection', label: 'reset_protection' },
-  { value: 'reset_account', label: 'reset_account' },
+  { value: 'get_metrics', label: 'View metrics' },
+  { value: 'reset_protection', label: 'Reset global protection' },
+  { value: 'reset_account', label: 'Reset single account' },
 ];
 
 const DistributedBruteForceTools: React.FC = () => {
@@ -577,7 +577,7 @@ const DistributedBruteForceTools: React.FC = () => {
                   label="Operation"
                   value={adminOperation}
                   onChange={(e) => setAdminOperation(e.target.value)}
-                  helperText="Available operations: get_metrics, reset_protection, reset_account"
+                  helperText="Choose what to do. This sets the 'action' query parameter (e.g., get_metrics, reset_protection, reset_account)."
                 >
                   {defaultAdminOps.map(op => (
                     <MenuItem key={op.value} value={op.value}>{op.label}</MenuItem>
@@ -771,9 +771,9 @@ const DistributedBruteForceTools: React.FC = () => {
                     onChange={(e) => setTestFields({ ...testFields, action: e.target.value })}
                     helperText="Choose what to run"
                   >
-                    <MenuItem value="run_test">run_test</MenuItem>
-                    <MenuItem value="simulate_attack">simulate_attack</MenuItem>
-                    <MenuItem value="check_detection">check_detection</MenuItem>
+                    <MenuItem value="run_test">Run test</MenuItem>
+                    <MenuItem value="simulate_attack">Simulate distributed attack</MenuItem>
+                    <MenuItem value="check_detection">Check detection status</MenuItem>
                   </TextField>
                 </Grid>
                 <Grid item xs={12} md={8}>
