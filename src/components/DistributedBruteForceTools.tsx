@@ -644,7 +644,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                               };
                               return (
                                 <Alert severity="info" sx={{ mb: 2 }}>
-                                  System is in warm-up; sliding windows may not reflect steady-state yet. Gesamt: {overallPct}% — Zeit: {secondsPct}% · Min-User: {usersPct}% · Min-Attempts: {attemptsPct}%. Uptime: {fmtDur(elapsed)} of {fmtDur(windowSec)} window.
+                                  System is in warm-up; sliding windows may not reflect steady-state yet. Overall: {overallPct}% — Time: {secondsPct}% · Min Users: {usersPct}% · Min Attempts: {attemptsPct}%. Uptime: {fmtDur(elapsed)} of {fmtDur(windowSec)} window.
                                 </Alert>
                               );
                             })()}
