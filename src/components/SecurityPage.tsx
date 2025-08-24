@@ -1,6 +1,6 @@
 import React from 'react';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { Box, Card, CardContent, Grid, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, Table, TableBody, TableCell, TableHead, TableRow } from '@mui/material';
+import { Box, Card, CardContent, Grid, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, Table, TableBody, TableCell, TableHead, TableRow, Alert } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SecurityIcon from '@mui/icons-material/Security';
 import InfoTooltip from './common/InfoTooltip';
@@ -32,10 +32,17 @@ interface SecurityMetricsResponse {
 const prettyWindow = (w?: string) => (w && w.trim()) || 'n/a';
 
 const SecurityPage = (): React.JSX.Element => {
-  const { connection, loadRuntimeSettings } = useRuntime();
+  const { connection, hooks, loadRuntimeSettings } = useRuntime();
   const { currentProfileName } = useConfig();
   const [data, setData] = React.useState<SecurityMetricsResponse | null>(null);
   const [statusMessage, setStatusMessage] = React.useState<string>('');
+  // Warm-up diagnostics from admin hook metrics
+  const [warmup, setWarmup] = React.useState<{
+    warmup_complete?: boolean;
+    warmup_progress?: number;
+    uptime_seconds?: number;
+    warmup_window_seconds?: number;
+  } | null>(null);
 
   // Ensure runtime settings and connection are loaded
   const connectionRef = React.useRef(connection);
@@ -71,6 +78,8 @@ const SecurityPage = (): React.JSX.Element => {
     try {
       const backendUrl = getConnection()?.backend_url;
       if (!backendUrl) return;
+
+      // 1) Fetch Prometheus-derived security metrics for the page
       const proxyUrl = new URL('/proxy/security/metrics', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
       const { authType, authValue } = prepareAuthParams(getConnection());
@@ -81,18 +90,45 @@ const SecurityPage = (): React.JSX.Element => {
       const res = await authenticatedFetch(proxyUrl.toString());
       if (!res.ok) {
         setStatusMessage(`Failed to fetch security metrics: ${res.status} ${res.statusText}`);
-        return;
+      } else {
+        const json = await res.json() as SecurityMetricsResponse;
+        setData(json);
+        setStatusMessage('');
       }
-      const json = await res.json() as SecurityMetricsResponse;
-      setData(json);
-      setStatusMessage('');
+
+      // 2) Fetch warm-up diagnostics from the Admin hook metrics (non-blocking if fails)
+      try {
+        const adminProxy = new URL('/proxy/hooks/distributed-brute-force-admin', getProxyOrigin());
+        adminProxy.searchParams.append('url', backendUrl);
+        adminProxy.searchParams.append('endpoint_path', hooks?.distributed_brute_force_admin?.endpoint_path || '/hooks/distributed-brute-force-admin');
+        if (authType && authValue) {
+          adminProxy.searchParams.append('authType', authType);
+          adminProxy.searchParams.append('authValue', authValue);
+        }
+        adminProxy.searchParams.append('action', 'get_metrics');
+        const ares = await authenticatedFetch(adminProxy.toString());
+        if (ares.ok) {
+          const aj = await ares.json().catch(() => ({} as any));
+          const m = aj?.metrics || {};
+          setWarmup({
+            warmup_complete: m?.warmup_complete,
+            warmup_progress: typeof m?.warmup_progress === 'number' ? m.warmup_progress : Number(m?.warmup_progress),
+            uptime_seconds: typeof m?.uptime_seconds === 'number' ? m.uptime_seconds : Number(m?.uptime_seconds),
+            warmup_window_seconds: typeof m?.warmup_window_seconds === 'number' ? m.warmup_window_seconds : Number(m?.warmup_window_seconds),
+          });
+        } else {
+          setWarmup(null);
+        }
+      } catch {
+        setWarmup(null);
+      }
     } catch (err) {
       console.error('Failed to fetch security metrics:', err);
       setStatusMessage(`Failed to fetch security metrics: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       inFlightRef.current = false;
     }
-  }, [getConnection]);
+  }, [getConnection, hooks]);
 
   const REFRESH_SESSION_KEY = 'securityPage.refreshIntervalMs';
   const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(fetchMetrics, REFRESH_SESSION_KEY, 5000);
@@ -141,6 +177,31 @@ const SecurityPage = (): React.JSX.Element => {
         </Select>
         <Button variant="outlined" size="small" onClick={fetchMetrics}>Refresh</Button>
       </Stack>
+
+      {/* Warm-up notice from Admin metrics */}
+      {warmup && warmup.warmup_complete === false && (() => {
+        const toNum = (x: any) => (typeof x === 'number' ? x : Number(x));
+        const pct = Math.round(Math.min(100, Math.max(0, toNum(warmup.warmup_progress) * 100)));
+        const uptime = toNum(warmup.uptime_seconds) || 0;
+        const windowSec = toNum(warmup.warmup_window_seconds) || 0;
+        const fmtDur = (total: number) => {
+          let s = Math.max(0, Math.floor(total));
+          const d = Math.floor(s / 86400); s -= d * 86400;
+          const h = Math.floor(s / 3600); s -= h * 3600;
+          const m = Math.floor(s / 60); s -= m * 60;
+          const parts: string[] = [];
+          if (d) parts.push(`${d}d`);
+          if (h) parts.push(`${h}h`);
+          if (m) parts.push(`${m}m`);
+          if (!parts.length) parts.push(`${s}s`);
+          return parts.join(' ');
+        };
+        return (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {pct}% — Uptime: {fmtDur(uptime)} of {fmtDur(windowSec)} window.
+          </Alert>
+        );
+      })()}
 
       <Grid container spacing={2}>
         <Grid item xs={12}>

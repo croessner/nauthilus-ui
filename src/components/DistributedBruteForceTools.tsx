@@ -594,12 +594,34 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                         const blockedRegions = Array.isArray(m.blocked_regions) ? m.blocked_regions.length : 0;
                         const captchaAccounts = Array.isArray(m.captcha_accounts) ? m.captcha_accounts.length : 0;
                         const rateLimitedIPs = Array.isArray(m.rate_limited_ips) ? m.rate_limited_ips.length : 0;
+                        const warmupProgress = toNum(m.warmup_progress) || 0;
+                        const warmupProgressPct = Math.round(Math.min(100, Math.max(0, warmupProgress * 100)));
+                        const uptimeSeconds = toNum(m.uptime_seconds) || 0;
+                        const warmupWindowSeconds = toNum(m.warmup_window_seconds) || 0;
+                        const fmtDur = (total: number) => {
+                          let s = Math.max(0, Math.floor(total));
+                          const d = Math.floor(s / 86400); s -= d * 86400;
+                          const h = Math.floor(s / 3600); s -= h * 3600;
+                          const mnt = Math.floor(s / 60); s -= mnt * 60;
+                          const parts: string[] = [];
+                          if (d) parts.push(`${d}d`);
+                          if (h) parts.push(`${h}h`);
+                          if (mnt) parts.push(`${mnt}m`);
+                          if (!parts.length) parts.push(`${s}s`);
+                          return parts.join(' ');
+                        };
                         return (
                           <>
                             {/* Status message shown above detailed metrics */}
                             {adminMetricsStatusOpen && (
                               <Alert severity="success" sx={{ mb: 2 }} onClose={() => setAdminMetricsStatusOpen(false)}>
                                 {adminResponseJson?.message || 'Metrics retrieved successfully'}
+                              </Alert>
+                            )}
+                            {/* Warm-up banner when system is not fully warmed up */}
+                            {m && m.warmup_complete === false && (
+                              <Alert severity="info" sx={{ mb: 2 }}>
+                                System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {warmupProgressPct}% — Uptime: {fmtDur(uptimeSeconds)} of {fmtDur(warmupWindowSeconds)} window.
                               </Alert>
                             )}
                             <Grid container spacing={2}>
@@ -829,6 +851,33 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                             {headerMsg}
                           </Alert>
                         )}
+
+                        {/* Warm-up banner when system is not fully warmed up (from test hook response) */}
+                        {jr?.warmup && jr?.warmup?.warmup_complete === false && (() => {
+                          const toNum = (x: any) => (typeof x === 'number' ? x : Number(x));
+                          const warm = jr.warmup;
+                          const progress = toNum(warm.warmup_progress) || 0;
+                          const pct = Math.round(Math.min(100, Math.max(0, progress * 100)));
+                          const uptime = toNum(warm.uptime_seconds) || 0;
+                          const windowSec = toNum(warm.warmup_window_seconds) || 0;
+                          const fmtDur = (total: number) => {
+                            let s = Math.max(0, Math.floor(total));
+                            const d = Math.floor(s / 86400); s -= d * 86400;
+                            const h = Math.floor(s / 3600); s -= h * 3600;
+                            const m = Math.floor(s / 60); s -= m * 60;
+                            const parts: string[] = [];
+                            if (d) parts.push(`${d}d`);
+                            if (h) parts.push(`${h}h`);
+                            if (m) parts.push(`${m}m`);
+                            if (!parts.length) parts.push(`${s}s`);
+                            return parts.join(' ');
+                          };
+                          return (
+                            <Alert severity="info" sx={{ mb: 2 }}>
+                              System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {pct}% — Uptime: {fmtDur(uptime)} of {fmtDur(windowSec)} window.
+                            </Alert>
+                          );
+                        })()}
 
                         {/* Special chip for run_test result */}
                         {isRun && (
