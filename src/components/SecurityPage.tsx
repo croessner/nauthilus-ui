@@ -110,12 +110,8 @@ const SecurityPage = (): React.JSX.Element => {
         if (ares.ok) {
           const aj = await ares.json().catch(() => ({} as any));
           const m = aj?.metrics || {};
-          setWarmup({
-            warmup_complete: m?.warmup_complete,
-            warmup_progress: typeof m?.warmup_progress === 'number' ? m.warmup_progress : Number(m?.warmup_progress),
-            uptime_seconds: typeof m?.uptime_seconds === 'number' ? m.uptime_seconds : Number(m?.uptime_seconds),
-            warmup_window_seconds: typeof m?.warmup_window_seconds === 'number' ? m.warmup_window_seconds : Number(m?.warmup_window_seconds),
-          });
+          const w = (m?.warmup || {}) as any;
+          setWarmup(w && Object.keys(w).length ? w : null);
         } else {
           setWarmup(null);
         }
@@ -179,11 +175,16 @@ const SecurityPage = (): React.JSX.Element => {
       </Stack>
 
       {/* Warm-up notice from Admin metrics */}
-      {warmup && warmup.warmup_complete === false && (() => {
-        const toNum = (x: any) => (typeof x === 'number' ? x : Number(x));
-        const pct = Math.round(Math.min(100, Math.max(0, toNum(warmup.warmup_progress) * 100)));
-        const uptime = toNum(warmup.uptime_seconds) || 0;
-        const windowSec = toNum(warmup.warmup_window_seconds) || 0;
+      {warmup && warmup.warmed_up === false && (() => {
+        const toNum = (x: any) => (typeof x === 'number' ? x : Number(x || 0));
+        const prog = (warmup as any)?.progress || {};
+        const req = (warmup as any)?.requirements || {};
+        const secondsPct = Math.round(Math.min(100, Math.max(0, toNum(prog.seconds) * 100)));
+        const usersPct = Math.round(Math.min(100, Math.max(0, toNum(prog.users) * 100)));
+        const attemptsPct = Math.round(Math.min(100, Math.max(0, toNum(prog.attempts) * 100)));
+        const overallPct = Math.round(Math.min(100, Math.max(0, toNum(prog.overall) * 100)));
+        const elapsed = toNum((warmup as any)?.elapsed_seconds);
+        const windowSec = toNum(req.seconds);
         const fmtDur = (total: number) => {
           let s = Math.max(0, Math.floor(total));
           const d = Math.floor(s / 86400); s -= d * 86400;
@@ -198,7 +199,7 @@ const SecurityPage = (): React.JSX.Element => {
         };
         return (
           <Alert severity="info" sx={{ mb: 2 }}>
-            System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {pct}% — Uptime: {fmtDur(uptime)} of {fmtDur(windowSec)} window.
+            System is in warm-up; sliding windows may not reflect steady-state yet. Gesamt: {overallPct}% — Zeit: {secondsPct}% · Min-User: {usersPct}% · Min-Attempts: {attemptsPct}%. Uptime: {fmtDur(elapsed)} of {fmtDur(windowSec)} window.
           </Alert>
         );
       })()}

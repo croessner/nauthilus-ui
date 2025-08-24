@@ -619,11 +619,35 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                               </Alert>
                             )}
                             {/* Warm-up banner when system is not fully warmed up */}
-                            {m && m.warmup_complete === false && (
-                              <Alert severity="info" sx={{ mb: 2 }}>
-                                System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {warmupProgressPct}% — Uptime: {fmtDur(uptimeSeconds)} of {fmtDur(warmupWindowSeconds)} window.
-                              </Alert>
-                            )}
+                            {m && m.warmup && m.warmup.warmed_up === false && (() => {
+                              const toNum = (x: any) => (typeof x === 'number' ? x : Number(x || 0));
+                              const warm = m.warmup || {};
+                              const prog = warm.progress || {};
+                              const req = warm.requirements || {};
+                              const secondsPct = Math.round(Math.min(100, Math.max(0, toNum(prog.seconds) * 100)));
+                              const usersPct = Math.round(Math.min(100, Math.max(0, toNum(prog.users) * 100)));
+                              const attemptsPct = Math.round(Math.min(100, Math.max(0, toNum(prog.attempts) * 100)));
+                              const overallPct = Math.round(Math.min(100, Math.max(0, toNum(prog.overall) * 100)));
+                              const elapsed = toNum(warm.elapsed_seconds);
+                              const windowSec = toNum(req.seconds);
+                              const fmtDur = (total: number) => {
+                                let s = Math.max(0, Math.floor(total));
+                                const d = Math.floor(s / 86400); s -= d * 86400;
+                                const h = Math.floor(s / 3600); s -= h * 3600;
+                                const mnt = Math.floor(s / 60); s -= mnt * 60;
+                                const parts: string[] = [];
+                                if (d) parts.push(`${d}d`);
+                                if (h) parts.push(`${h}h`);
+                                if (mnt) parts.push(`${mnt}m`);
+                                if (!parts.length) parts.push(`${s}s`);
+                                return parts.join(' ');
+                              };
+                              return (
+                                <Alert severity="info" sx={{ mb: 2 }}>
+                                  System is in warm-up; sliding windows may not reflect steady-state yet. Gesamt: {overallPct}% — Zeit: {secondsPct}% · Min-User: {usersPct}% · Min-Attempts: {attemptsPct}%. Uptime: {fmtDur(elapsed)} of {fmtDur(windowSec)} window.
+                                </Alert>
+                              );
+                            })()}
                             <Grid container spacing={2}>
                               <Grid item xs={12} md={3}>
                                 <Paper sx={{ p: 2 }}>
