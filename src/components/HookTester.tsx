@@ -32,6 +32,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
+import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES } from '../utils/limits';
 
 const METHODS = ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] as const;
 
@@ -56,6 +57,10 @@ const HookTester = (): React.JSX.Element => {
   const [contentType, setContentType] = useState<string>('application/json');
   const [useJsonPretty, setUseJsonPretty] = useState<boolean>(true);
   const [loading, setLoading] = useState<boolean>(false);
+  const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
+  const bodyBytes = useMemo(() => byteLengthUtf8(body), [body]);
+  const bodyTooLarge = useMemo(() => bodyBytes > rawJsonMaxBytes, [bodyBytes, rawJsonMaxBytes]);
+  const bodyTooLargeJson = useMemo(() => /json/i.test(contentType) && bodyTooLarge, [contentType, bodyTooLarge]);
   const [status, setStatus] = useState<{code:number;text:string}|null>(null);
   const [respHeaders, setRespHeaders] = useState<[string,string][]>([]);
   const [reqHeaders, setReqHeaders] = useState<[string,string][]>([]);
@@ -462,6 +467,22 @@ const HookTester = (): React.JSX.Element => {
                     <Button size="small" startIcon={<RefreshIcon />} onClick={formatBody}>Format JSON</Button>
                     <Button size="small" onClick={pasteExample}>Insert example</Button>
                   </Stack>
+                  <Box sx={{ mt: 1 }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Raw JSON limit (bytes)"
+                      value={rawJsonMaxBytes}
+                      onChange={(e) => {
+                        const v = Number(e.target.value || 0);
+                        setRawJsonMaxBytesOverride(v);
+                        const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                        setRawJsonMaxBytes(clamped);
+                      }}
+                      inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                      helperText={`${RAW_JSON_MIN_BYTES}–${RAW_JSON_MAX_BYTES}`}
+                    />
+                  </Box>
                 </Grid>
                 <Grid item xs={12} md={8}>
                   <TextField
@@ -472,6 +493,8 @@ const HookTester = (): React.JSX.Element => {
                     value={body}
                     onChange={(e) => setBody(e.target.value)}
                     placeholder={contentType === 'application/json' ? '{\n  "action": "..."\n}' : ''}
+                    error={bodyTooLargeJson}
+                    helperText={/json/i.test(contentType) ? `${bodyBytes} / ${rawJsonMaxBytes} bytes${bodyTooLargeJson ? ' — exceeds limit' : ''}` : undefined}
                   />
                 </Grid>
               </>
@@ -480,7 +503,7 @@ const HookTester = (): React.JSX.Element => {
             <Grid item xs={12}>
               <Divider sx={{ my: 1 }} />
               <Stack direction="row" spacing={1}>
-                <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk}>
+                <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk || bodyTooLargeJson}>
                   Send
                 </Button>
                 <Button variant="outlined" onClick={resetForm} disabled={loading}>Reset</Button>
@@ -495,10 +518,12 @@ const HookTester = (): React.JSX.Element => {
       <Paper sx={{ p: 2, mt: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
           <Typography variant="h6">Response</Typography>
+          <Button size="small" onClick={() => setShowRaw(v => !v)} sx={{ textTransform: 'none' }}>
+            {showRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
+          </Button>
           {loading && <CircularProgress size={18} />}
           <Box flexGrow={1} />
           {status && <Chip color={status.code >= 200 && status.code < 300 ? 'success' : 'error'} label={`Status: ${status.code} ${status.text}`} />}
-          <FormControlLabel control={<Switch checked={showRaw} onChange={(e) => setShowRaw(e.target.checked)} />} label="Show raw" />
         </Box>
         {reqHeaders.length > 0 && (
           <Box sx={{ mb: 1 }}>

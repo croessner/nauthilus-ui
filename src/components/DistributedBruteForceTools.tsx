@@ -33,6 +33,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
+import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, getRawJsonMaxBytes } from '../utils/limits';
 
 const prettyJson = (obj: any) => {
   try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
@@ -99,6 +100,9 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     country_code: '',
   });
   const [testBodyText, setTestBodyText] = useState<string>(prettyJson({ action: 'run_test', username: '', num_ips: 20, country_code: '' }));
+  const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
+  const testBodyBytes = useMemo(() => byteLengthUtf8(testBodyText), [testBodyText]);
+  const testBodyTooLarge = testBodyBytes > rawJsonMaxBytes;
   const [useAdvancedBody, setUseAdvancedBody] = useState<boolean>(false);
   const [testResponse, setTestResponse] = useState<string>('');
   const [testResponseJson, setTestResponseJson] = useState<any | null>(null);
@@ -743,8 +747,8 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                 )}
                 {/* Raw JSON toggle */}
                 <Box sx={{ mb: 1 }}>
-                  <Button size="small" onClick={() => setShowAdminRaw(v => !v)}>
-                    {showAdminRaw ? 'Hide raw JSON' : 'Show raw JSON'}
+                  <Button size="small" onClick={() => setShowAdminRaw(v => !v)} sx={{ textTransform:'none' }}>
+                    {showAdminRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                   </Button>
                 </Box>
                 {showAdminRaw && (
@@ -826,21 +830,41 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
             )}
 
             {useAdvancedBody && (
-              <TextField
-                label="Request Body (JSON)"
-                value={testBodyText}
-                onChange={(e) => setTestBodyText(e.target.value)}
-                fullWidth
-                multiline
-                minRows={8}
-              />
+              <>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Raw JSON limit (bytes)"
+                    value={rawJsonMaxBytes}
+                    onChange={(e)=>{
+                      const v = Number(e.target.value || 0);
+                      setRawJsonMaxBytesOverride(v);
+                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                      setRawJsonMaxBytes(clamped);
+                    }}
+                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                    helperText={`${RAW_JSON_MIN_BYTES}–${RAW_JSON_MAX_BYTES}`}
+                  />
+                </Box>
+                <TextField
+                  label="Request Body (JSON)"
+                  value={testBodyText}
+                  onChange={(e) => setTestBodyText(e.target.value)}
+                  fullWidth
+                  multiline
+                  minRows={8}
+                  error={testBodyTooLarge}
+                  helperText={`${testBodyBytes} / ${rawJsonMaxBytes} bytes${testBodyTooLarge ? ' — exceeds limit' : ''}`}
+                />
+              </>
             )}
 
             <Box sx={{ mt: 2, display: 'flex', gap: 1 }}>
               <Button 
                 variant="contained" 
                 startIcon={testLoading ? <CircularProgress size={18} /> : <PlayArrowIcon />} 
-                disabled={testLoading}
+                disabled={testLoading || (useAdvancedBody && testBodyTooLarge)}
                 onClick={() => callHook('test')}
               >
                 {testLoading ? 'Running…' : 'Execute Test'}
@@ -938,8 +962,8 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
               {/* Raw JSON toggle and content */}
               <Box sx={{ mb: 1 }}>
-                <Button size="small" onClick={() => setShowTestRaw(v => !v)}>
-                  {showTestRaw ? 'Hide raw JSON' : 'Show raw JSON'}
+                <Button size="small" onClick={() => setShowTestRaw(v => !v)} sx={{ textTransform:'none' }}>
+                  {showTestRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                 </Button>
               </Box>
               {showTestRaw && (

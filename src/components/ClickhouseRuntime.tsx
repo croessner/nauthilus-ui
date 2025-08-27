@@ -13,6 +13,7 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
+import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES } from '../utils/limits';
 
 // Lightweight world map fallback: show aggregated list if map lib not present
 // We keep implementation minimal and dependency-free.
@@ -59,6 +60,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
 
   const [rawPreview, setRawPreview] = useState<string>('');
+  const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [rawSql, setRawSql] = useState<string>('');
 
@@ -69,6 +71,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   ], []);
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  const sortedAvailableFields = useMemo(() => [...availableFields].sort((a,b)=> a.localeCompare(b, undefined, { sensitivity: 'base' })), [availableFields]);
   const [fieldSelectorOpen, setFieldSelectorOpen] = useState<boolean>(false);
 
   // Load runtime on first mount to ensure connection and hooks are loaded like other pages
@@ -212,7 +215,25 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       } else {
         throw new Error('Hook returned no data');
       }
-      setRawPreview(preview.substring(0, 2000));
+      // Truncate preview according to configured raw JSON byte limit
+      const MAX_PREVIEW = rawJsonMaxBytes;
+      const encLen = typeof preview === 'string' ? byteLengthUtf8(preview) : 0;
+      let previewText = preview;
+      if (typeof preview === 'string' && encLen > MAX_PREVIEW) {
+        // approximate by substring; try to find a cut that is under limit
+        let end = preview.length;
+        // quick proportional cut
+        end = Math.floor(preview.length * (MAX_PREVIEW / encLen));
+        end = Math.max(0, Math.min(preview.length, end));
+        let cut = preview.substring(0, end);
+        // ensure we don't exceed limits after proportional cut
+        while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
+          end -= Math.max(1, Math.floor(end * 0.05));
+          cut = preview.substring(0, end);
+        }
+        previewText = `${cut}\n\n[Hinweis: Ausgabe zu groß – Vorschau wurde gekürzt.]`;
+      }
+      setRawPreview(previewText);
       setRows(parsed);
       // Auto-expand raw if no tabular rows parsed
       setShowRaw(parsed.length === 0 && Boolean(preview));
@@ -335,6 +356,22 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2, flexWrap:'wrap' }}>
         <Typography variant="h6" sx={{ fontWeight:700 }}>ClickHouse</Typography>
         <Box sx={{ flexGrow:1 }} />
+        {/* Raw JSON limit control to match other pages */}
+        <TextField
+          size="small"
+          type="number"
+          label="Raw JSON limit (bytes)"
+          value={rawJsonMaxBytes}
+          onChange={(e)=>{
+            const v = Number(e.target.value || 0);
+            setRawJsonMaxBytesOverride(v);
+            const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+            setRawJsonMaxBytes(clamped);
+          }}
+          inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+          helperText={`${RAW_JSON_MIN_BYTES}–${RAW_JSON_MAX_BYTES}`}
+          sx={{ mr:1, minWidth: 210 }}
+        />
         {/* Top-right refresh and interval (like Security) */}
         <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval">
           <MenuItem value={0}>OFF</MenuItem>
@@ -495,7 +532,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         <Collapse in={fieldSelectorOpen} unmountOnExit>
           <Typography variant="body2" color="text.secondary" sx={{ mb:1 }}>Choose the columns to display in the results table.</Typography>
           <Stack direction="row" spacing={1} sx={{ mb:1, flexWrap:'wrap', alignItems:'center' }}>
-            <Button size="small" onClick={()=>setSelectedFields(availableFields)}>Select all</Button>
+            <Button size="small" onClick={()=>setSelectedFields(sortedAvailableFields)}>Select all</Button>
             <Button size="small" onClick={()=>setSelectedFields([])}>Clear</Button>
             <Box sx={{ flexGrow:1 }} />
             <Button size="small" startIcon={<SaveIcon/>} variant="contained" onClick={async()=>{
@@ -513,7 +550,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             }}>Save settings</Button>
           </Stack>
           <Grid container spacing={1}>
-            {availableFields.map((name)=> (
+            {sortedAvailableFields.map((name)=> (
               <Grid item xs={12} sm={6} md={4} lg={3} key={name}>
                 <FormControlLabel
                   control={
@@ -605,13 +642,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             {rawPreview && (
               <>
                 <Divider sx={{ my:2 }} />
-                <Stack direction="row" alignItems="center" justifyContent="space-between">
-                  <Typography variant="caption" color="text.secondary">Raw JSON (preview)</Typography>
-                  <IconButton size="small" onClick={()=>setShowRaw(v=>!v)} aria-label={showRaw ? 'Collapse' : 'Expand'}>
-                    <ExpandMoreIcon sx={{ transform: showRaw ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-                  </IconButton>
+                <Stack direction="row" alignItems="center" gap={1}>
+                  <Button size="small" onClick={()=>setShowRaw(v=>!v)} sx={{ textTransform:'none' }}>
+                    {showRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
+                  </Button>
                 </Stack>
-                <Collapse in={showRaw} unmountOnExit>
+                {showRaw && (
                   <TextField
                     variant="outlined"
                     fullWidth
@@ -622,7 +658,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     InputProps={{ readOnly: true }}
                     sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
                   />
-                </Collapse>
+                )}
               </>
             )}
           </>

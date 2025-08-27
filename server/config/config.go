@@ -40,6 +40,11 @@ type Config struct {
 	// -1: never show, 0: always show (dismissable for the current session), N: days until re-show
 	CookieBannerReshowDays int
 
+	// UI input limits
+	// RawJsonMaxBytes controls the maximum allowed size (in bytes) for RAW JSON inputs in the UI.
+	// The frontend will apply sanity clamping to [1024, 1048576]. Default is 8192 (8 KiB).
+	RawJsonMaxBytes int
+
 	// WebAuthn configuration
 	// WebAuthnRPID is the Relying Party ID for WebAuthn.
 	WebAuthnRPID string
@@ -81,6 +86,9 @@ func LoadConfig() *Config {
 
 		// Cookie banner configuration
 		CookieBannerReshowDays: getEnvAsInt("REACT_APP_COOKIE_BANNER_RESHOW_DAYS", -1),
+
+		// UI input limits
+		RawJsonMaxBytes: getEnvAsInt("REACT_APP_RAW_JSON_MAX_BYTES", 8192),
 
 		// WebAuthn configuration
 		WebAuthnRPID:          getEnv("WEBAUTHN_RP_ID", ""),
