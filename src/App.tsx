@@ -844,9 +844,6 @@ const MainContent = (): React.JSX.Element => {
             flexWrap: 'wrap',
             gap: 1
           }}>
-            <Typography variant="h6" noWrap component="div" sx={{ mr: { xs: 1, sm: 2 } }}>
-              Configuration
-            </Typography>
 
             {/* Profile selector */}
             <FormControl 
