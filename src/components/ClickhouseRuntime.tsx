@@ -1,10 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox } from '@mui/material';
+import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox, InputAdornment } from '@mui/material';
 import PublicIcon from '@mui/icons-material/Public';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LinkIcon from '@mui/icons-material/Link';
 import SaveIcon from '@mui/icons-material/Save';
+import EventIcon from '@mui/icons-material/Event';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -63,6 +64,20 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [rawSql, setRawSql] = useState<string>('');
+
+  // Optional time range filter for ts field
+  const [tsStart, setTsStart] = useState<string>(''); // datetime-local string
+  const [tsEnd, setTsEnd] = useState<string>('');   // datetime-local string
+  const tsStartRef = useRef<HTMLInputElement | null>(null);
+  const tsEndRef = useRef<HTMLInputElement | null>(null);
+  const openPicker = useCallback((input?: HTMLInputElement | null) => {
+    if (!input) return;
+    const anyInput = input as any;
+    if (typeof anyInput.showPicker === 'function') {
+      try { anyInput.showPicker(); return; } catch {}
+    }
+    try { input.focus(); input.click(); } catch {}
+  }, []);
 
   // Column selection
   const DEFAULT_COLUMNS = useMemo(() => ['ts','client_ip','username','service','proto','geoip_country','authenticated','failed_login_count','gp_attempts','dyn_threat'], []);
@@ -133,6 +148,15 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (sql) proxyUrl.searchParams.set('sql', sql);
     }
     proxyUrl.searchParams.set('limit', String(limit));
+    // Optional ts range
+    if (tsStart) {
+      const d = new Date(tsStart);
+      if (!Number.isNaN(d.getTime())) proxyUrl.searchParams.set('ts_start', d.toISOString());
+    }
+    if (tsEnd) {
+      const d = new Date(tsEnd);
+      if (!Number.isNaN(d.getTime())) proxyUrl.searchParams.set('ts_end', d.toISOString());
+    }
     const { authType, authValue } = prepareAuthParams(connectionConfig || {});
     if (authType && authValue) {
       proxyUrl.searchParams.append('authType', authType);
@@ -185,6 +209,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       }
       if (action === 'raw_sql' && !rawSql.trim()) {
         throw new Error('SQL is required for action raw_sql.');
+      }
+      // Validate optional time range
+      if (tsStart && tsEnd) {
+        const s = new Date(tsStart).getTime();
+        const e = new Date(tsEnd).getTime();
+        if (!Number.isNaN(s) && !Number.isNaN(e) && e < s) {
+          throw new Error('Zeitbereich ungültig: Ende liegt vor Start.');
+        }
       }
       const conn = getConnection();
       if (!conn?.backend_url) {
@@ -258,7 +290,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } finally {
       setLoading(false);
     }
-  }, [getConnection, endpointPath, action, username, ip, limit, hookEnabled, rawSql]);
+  }, [getConnection, endpointPath, action, username, ip, limit, hookEnabled, rawSql, tsStart, tsEnd]);
 
   // Auto-refresh interval like Security page (default 30s)
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
@@ -275,35 +307,52 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Sort rows by selected column and direction
   const sortedRows = useMemo(() => {
     if (!sortBy) return filteredRows;
-    const arr = [...filteredRows];
-    const getVal = (r: Row) => r?.[sortBy as keyof Row];
-    const toNum = (v: any): number => {
-      if (v == null || v === '') return Number.NaN;
-      if (typeof v === 'number') return v;
+    // decorate with index to achieve stable sort
+    const decorated = filteredRows.map((r, i) => ({ r, i }));
+    const getVal = (row: Row) => row?.[sortBy as keyof Row];
+    const toFiniteNumber = (v: any): number | null => {
+      if (v == null || v === '') return null;
+      if (typeof v === 'number') return Number.isFinite(v) ? v : null;
       if (typeof v === 'boolean') return v ? 1 : 0;
       const n = Number(v);
-      if (!Number.isNaN(n)) return n;
+      if (Number.isFinite(n)) return n;
       const t = Date.parse(String(v));
-      if (!Number.isNaN(t)) return t;
-      return Number.NaN;
+      return Number.isFinite(t) ? t : null;
     };
-    arr.sort((a,b) => {
-      const av = getVal(a);
-      const bv = getVal(b);
-      // Try numeric/date compare first
-      const an = toNum(av);
-      const bn = toNum(bv);
+    const isMissing = (v: any) => v === null || v === undefined || v === '';
+
+    decorated.sort((a, b) => {
+      const av = getVal(a.r);
+      const bv = getVal(b.r);
+
+      // Handle missing values deterministically
+      const aMiss = isMissing(av);
+      const bMiss = isMissing(bv);
       let cmp = 0;
-      if (!Number.isNaN(an) || !Number.isNaN(bn)) {
-        cmp = (an < bn ? -1 : an > bn ? 1 : 0);
+      if (aMiss && bMiss) {
+        cmp = 0;
+      } else if (aMiss) {
+        cmp = 1; // missing last for asc
+      } else if (bMiss) {
+        cmp = -1;
       } else {
-        const as = String(av ?? '');
-        const bs = String(bv ?? '');
-        cmp = as.localeCompare(bs);
+        // Both present: try numeric/date first if both parse to finite numbers
+        const an = toFiniteNumber(av);
+        const bn = toFiniteNumber(bv);
+        if (an !== null && bn !== null) {
+          cmp = an < bn ? -1 : an > bn ? 1 : 0;
+        } else {
+          const as = String(av).toLowerCase();
+          const bs = String(bv).toLowerCase();
+          cmp = as < bs ? -1 : as > bs ? 1 : 0;
+        }
       }
+
+      if (cmp === 0) cmp = a.i - b.i; // stable tie-breaker
       return sortDir === 'asc' ? cmp : -cmp;
     });
-    return arr;
+
+    return decorated.map(d => d.r);
   }, [filteredRows, sortBy, sortDir]);
 
   // Aggregate countries for top 100; split success/failed by authenticated flag
@@ -449,7 +498,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           <Grid item xs={12} sm={4}>
             <TextField fullWidth label="IP" value={ip} onChange={e=>setIp(e.target.value)} disabled={action!=='by_ip'} />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={3}>
             <TextField
               fullWidth
               type="number"
@@ -462,12 +511,50 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               }}
             />
           </Grid>
-          <Grid item xs={12} sm={4}>
+          <Grid item xs={12} sm={3}>
             <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
               <MenuItem value="all">failed/success</MenuItem>
               <MenuItem value="failed">failed</MenuItem>
               <MenuItem value="success">success</MenuItem>
             </TextField>
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <TextField
+              fullWidth
+              type="datetime-local"
+              label="Start (ts)"
+              value={tsStart}
+              onChange={(e)=>setTsStart(e.target.value)}
+              inputRef={tsStartRef}
+              InputLabelProps={{ shrink: true }}
+              InputProps={{ endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Start-Zeit wählen">
+                    <EventIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) }}
+              helperText="Optional"
+            />
+          </Grid>
+          <Grid item xs={12} sm={3}>
+            <TextField
+              fullWidth
+              type="datetime-local"
+              label="Ende (ts)"
+              value={tsEnd}
+              onChange={(e)=>setTsEnd(e.target.value)}
+              inputRef={tsEndRef}
+              InputLabelProps={{ shrink: true }}
+              InputProps={{ endAdornment: (
+                <InputAdornment position="end">
+                  <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="End-Zeit wählen">
+                    <EventIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              ) }}
+              helperText="Optional"
+            />
           </Grid>
           <Grid item xs={12}>
             <TextField
@@ -599,13 +686,53 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
                   <tr>
-                    {selectedFields.map(h => {
+                    {selectedFields.map((h, idx) => {
                       const active = sortBy === h;
                       const indicator = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
                       return (
                         <th
                           key={h}
+                          draggable
+                          onDragStart={(e) => {
+                            try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
+                            (e.currentTarget as any).dataset.dragging = 'true';
+                            // Reduce click triggering after drag
+                            (e.currentTarget as any)._dragStartedAt = Date.now();
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault();
+                            (e.currentTarget as any).style.background = 'rgba(25,118,210,0.08)';
+                          }}
+                          onDragLeave={(e) => {
+                            (e.currentTarget as any).style.background = '';
+                          }}
+                          onDrop={async (e) => {
+                            e.preventDefault();
+                            (e.currentTarget as any).style.background = '';
+                            let fromIdx = Number(e.dataTransfer.getData('text/plain'));
+                            const toIdx = idx;
+                            if (!Number.isFinite(fromIdx) || fromIdx === toIdx) return;
+                            const next = [...selectedFields];
+                            const [moved] = next.splice(fromIdx, 1);
+                            next.splice(toIdx, 0, moved);
+                            setSelectedFields(next);
+                            // Persist new order automatically
+                            try {
+                              const userId = await getCurrentUserId();
+                              const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+                              await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
+                                ...(runtimeHooks || {}),
+                                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next }
+                              } as any);
+                              setNotif({ open:true, severity:'success', message:'Spaltenreihenfolge gespeichert' });
+                            } catch(e:any) {
+                              setNotif({ open:true, severity:'error', message:`Speichern fehlgeschlagen: ${e?.message || String(e)}` });
+                            }
+                          }}
                           onClick={() => {
+                            // prevent sort if click immediately after drag start
+                            const t = (Date.now() - ((document?.activeElement as any)?._dragStartedAt || 0));
+                            if (t >= 0 && t < 300) return;
                             if (sortBy === h) {
                               setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
                             } else {
@@ -613,8 +740,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                               setSortDir('asc');
                             }
                           }}
-                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'pointer', userSelect:'none' }}
-                          title="Sort by this column"
+                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none' }}
+                          title="Drag & Drop zum Umordnen, Klick zum Sortieren"
                         >
                           {h}{indicator}
                         </th>
