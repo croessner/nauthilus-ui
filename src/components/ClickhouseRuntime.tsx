@@ -996,10 +996,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       </Paper>
       <Snackbar
         open={notif.open}
-        autoHideDuration={4000}
+        autoHideDuration={10000}
         onClose={() => setNotif((n)=>({ ...n, open:false }))}
-        message={notif.message}
-      />
+        anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setNotif((n)=>({ ...n, open:false }))} severity={notif.severity} sx={{ width: '100%' }}>
+          {notif.message}
+        </Alert>
+      </Snackbar>
     </Box>
   );
 };
