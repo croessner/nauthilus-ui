@@ -489,7 +489,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return { mapped, unmapped, radius: r };
   }, [countryAgg, normalizeCountryKey, COUNTRY_CENTROIDS]);
 
-  const [mapOpen, setMapOpen] = useState<boolean>(false);
+  const [mapOpen, setMapOpen] = useState<boolean>(true);
 
   // Build quick lookup for stats by ISO code for coloring
   const isoStats = useMemo(() => {
@@ -789,8 +789,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     <Typography variant="caption">{c.total}</Typography>
                   </Stack>
                   <Stack direction="row" spacing={1} mt={0.5}>
-                    <Chip size="small" label={`success ${c.success}`} color="success" />
-                    <Chip size="small" label={`failed ${c.failed}`} color="error" />
+                    <Chip size="small" label={`success ${c.success}`} sx={{ bgcolor: '#0072B2', color: '#fff' }} />
+                    <Chip size="small" label={`failed ${c.failed}`} sx={{ bgcolor: '#D55E00', color: '#fff' }} />
                   </Stack>
                 </Paper>
               </Grid>
