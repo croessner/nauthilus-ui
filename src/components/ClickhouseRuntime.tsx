@@ -197,38 +197,50 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     setPage(1);
     try {
       if (!hookEnabled) {
-        throw new Error('Hook is disabled. Enable it in Hook Configuration.');
+        setError('Hook is disabled. Enable it in Hook Configuration.');
+        return;
       }
       if (!endpointPath) {
-        throw new Error('Hook endpoint path is empty.');
+        setError('Hook endpoint path is empty.');
+        return;
       }
       if (action === 'by_user' && !username) {
-        throw new Error('Username is required for action by_user.');
+        setError('Username is required for action by_user.');
+        return;
       }
       if (action === 'by_ip' && !ip) {
-        throw new Error('IP is required for action by_ip.');
+        setError('IP is required for action by_ip.');
+        return;
       }
       if (action === 'raw_sql' && !rawSql.trim()) {
-        throw new Error('SQL is required for action raw_sql.');
+        setError('SQL is required for action raw_sql.');
+        return;
       }
       // Validate optional time range
       if (tsStart && tsEnd) {
         const s = new Date(tsStart).getTime();
         const e = new Date(tsEnd).getTime();
         if (!Number.isNaN(s) && !Number.isNaN(e) && e < s) {
-          throw new Error('Invalid time range: end is before start.');
+          setError('Invalid time range: end is before start.');
+          return;
         }
       }
       const conn = getConnection();
       if (!conn?.backend_url) {
-        throw new Error('No backend URL configured (Runtime → Connection).');
+        setError('No backend URL configured (Runtime → Connection).');
+        return;
       }
       const url = buildHookUrl(conn);
       const resp = await authenticatedFetch(url, { method: 'POST' });
-      if (!resp.ok) throw new Error(await extractErrorMessage(resp));
+      if (!resp.ok) {
+        const msg = await extractErrorMessage(resp);
+        setError(msg);
+        return;
+      }
       const resJson = await resp.json();
       if (resJson?.status !== 'success' || !resJson?.clickhouse) {
-        throw new Error(resJson?.message || 'Hook returned no data');
+        setError(resJson?.message || 'Hook returned no data');
+        return;
       }
       const ch = resJson.clickhouse;
       let preview = '';
@@ -246,15 +258,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
         parsed = parseHookResult(ch.raw);
       } else {
-        throw new Error('Hook returned no data');
+        setError('Hook returned no data');
+        return;
       }
       // Truncate preview according to configured raw JSON byte limit
       const MAX_PREVIEW = rawJsonMaxBytes;
-      const encLen = typeof preview === 'string' ? byteLengthUtf8(preview) : 0;
+      const encLen = byteLengthUtf8(preview);
       let previewText = preview;
-      if (typeof preview === 'string' && encLen > MAX_PREVIEW) {
+      if (encLen > MAX_PREVIEW) {
         // approximate by substring; try to find a cut that is under limit
-        let end = preview.length;
+        let end: number;
         // quick proportional cut
         end = Math.floor(preview.length * (MAX_PREVIEW / encLen));
         end = Math.max(0, Math.min(preview.length, end));
@@ -329,7 +342,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       // Handle missing values deterministically
       const aMiss = isMissing(av);
       const bMiss = isMissing(bv);
-      let cmp = 0;
+      let cmp: number;
       if (aMiss && bMiss) {
         cmp = 0;
       } else if (aMiss) {
