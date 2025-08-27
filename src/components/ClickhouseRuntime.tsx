@@ -123,7 +123,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     proxyUrl.searchParams.set('action', action);
     if (action === 'by_user' && username) proxyUrl.searchParams.set('username', username);
     if (action === 'by_ip' && ip) proxyUrl.searchParams.set('ip', ip);
-    if (action === 'raw_sql' && rawSql) proxyUrl.searchParams.set('sql', rawSql);
+    if (action === 'raw_sql' && rawSql) {
+      let sql = rawSql.trim();
+      // Strip trailing semicolons to satisfy backend safety checks
+      sql = sql.replace(/;+$/, '');
+      if (sql) proxyUrl.searchParams.set('sql', sql);
+    }
     proxyUrl.searchParams.set('limit', String(limit));
     const { authType, authValue } = prepareAuthParams(connectionConfig || {});
     if (authType && authValue) {
@@ -153,7 +158,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return [];
   };
 
-  const runQuery = useCallback(async () => {
+  const runQuery = useCallback(async (force: boolean = false) => {
+    // Guard: raw_sql should only execute on explicit Run click
+    if (action === 'raw_sql' && !force) {
+      return; // do not auto-run or refresh-trigger raw SQL
+    }
     setLoading(true);
     setError('');
     setRows([]);
@@ -192,13 +201,21 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         preview = JSON.stringify(ch.query_result, null, 2);
         parsed = parseHookResult(ch.query_result);
       } else if (typeof ch.raw === 'string') {
-        preview = ch.raw;
+        // Try to pretty-print JSON if possible
+        try {
+          const maybeJson = JSON.parse(ch.raw);
+          preview = JSON.stringify(maybeJson, null, 2);
+        } catch {
+          preview = ch.raw;
+        }
         parsed = parseHookResult(ch.raw);
       } else {
         throw new Error('Hook returned no data');
       }
       setRawPreview(preview.substring(0, 2000));
       setRows(parsed);
+      // Auto-expand raw if no tabular rows parsed
+      setShowRaw(parsed.length === 0 && Boolean(preview));
       // Update available fields using meta if present, otherwise from row keys
       try {
         let metaNames: string[] = [];
@@ -220,7 +237,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } finally {
       setLoading(false);
     }
-  }, [getConnection, endpointPath, action, username, ip, limit, hookEnabled]);
+  }, [getConnection, endpointPath, action, username, ip, limit, hookEnabled, rawSql]);
 
   // Auto-refresh interval like Security page (default 30s)
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
@@ -396,9 +413,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <TextField fullWidth label="IP" value={ip} onChange={e=>setIp(e.target.value)} disabled={action!=='by_ip'} />
           </Grid>
           <Grid item xs={12} sm={4}>
-            <TextField select fullWidth label="Limit" value={limit} onChange={e=>setLimit(Number(e.target.value))}>
-              {[50,100,200,500,1000].map(n=> <MenuItem key={n} value={n}>{n}</MenuItem>)}
-            </TextField>
+            <TextField
+              fullWidth
+              type="number"
+              label="Limit"
+              value={limit}
+              inputProps={{ min: 1, max: 1000, step: 1 }}
+              onChange={(e)=>{
+                const v = Number(e.target.value);
+                setLimit(Number.isFinite(v) ? v : 0);
+              }}
+            />
           </Grid>
           <Grid item xs={12} sm={4}>
             <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
@@ -421,7 +446,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             />
           </Grid>
           <Grid item xs={12} sm={8}>
-            <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={runQuery} disabled={loading}>
+            <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
               Run
             </Button>
             <Button sx={{ ml:1 }} variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setError(''); }} disabled={loading}>
@@ -514,7 +539,23 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         {loading ? (
           <Box sx={{ display:'flex', justifyContent:'center', my:3 }}><CircularProgress/></Box>
         ) : rows.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">No rows.</Typography>
+          rawPreview ? (
+            <>
+              <TextField
+                label="Raw output"
+                variant="outlined"
+                fullWidth
+                multiline
+                minRows={6}
+                maxRows={20}
+                value={rawPreview}
+                InputProps={{ readOnly: true }}
+                sx={{ '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
+              />
+            </>
+          ) : (
+            <Typography variant="body2" color="text.secondary">No rows.</Typography>
+          )
         ) : (
           <>
             <Box sx={{ overflowX:'auto' }}>
@@ -561,22 +602,29 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </TextField>
               <Pagination color="primary" page={page} onChange={(_,p)=>setPage(p)} count={Math.max(1, Math.ceil(sortedRows.length / pageSize))} />
             </Box>
-          </>
-        )}
-        {rawPreview && (
-          <>
-            <Divider sx={{ my:2 }} />
-            <Stack direction="row" alignItems="center" justifyContent="space-between">
-              <Typography variant="caption" color="text.secondary">Raw JSON (preview)</Typography>
-              <IconButton size="small" onClick={()=>setShowRaw(v=>!v)} aria-label={showRaw ? 'Collapse' : 'Expand'}>
-                <ExpandMoreIcon sx={{ transform: showRaw ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-              </IconButton>
-            </Stack>
-            <Collapse in={showRaw} unmountOnExit>
-              <Paper variant="outlined" sx={{ p:1, mt:1, maxHeight:200, overflow:'auto', fontFamily:'monospace', fontSize:12 }}>
-                {rawPreview}
-              </Paper>
-            </Collapse>
+            {rawPreview && (
+              <>
+                <Divider sx={{ my:2 }} />
+                <Stack direction="row" alignItems="center" justifyContent="space-between">
+                  <Typography variant="caption" color="text.secondary">Raw JSON (preview)</Typography>
+                  <IconButton size="small" onClick={()=>setShowRaw(v=>!v)} aria-label={showRaw ? 'Collapse' : 'Expand'}>
+                    <ExpandMoreIcon sx={{ transform: showRaw ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                  </IconButton>
+                </Stack>
+                <Collapse in={showRaw} unmountOnExit>
+                  <TextField
+                    variant="outlined"
+                    fullWidth
+                    multiline
+                    minRows={6}
+                    maxRows={12}
+                    value={rawPreview}
+                    InputProps={{ readOnly: true }}
+                    sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
+                  />
+                </Collapse>
+              </>
+            )}
           </>
         )}
       </Paper>
