@@ -48,16 +48,16 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 			return
 		}
 
-		// Only enforce authentication for API endpoints
-		if !strings.HasPrefix(path, "/api/") {
-			slog.Info("JWT Middleware: Skipping auth for non-API endpoint", "path", path)
+		// Enforce authentication for API and Proxy endpoints; allow skip only for other non-API routes (e.g., static)
+		if !strings.HasPrefix(path, "/api/") && !strings.HasPrefix(path, "/proxy/") {
+			slog.Info("JWT Middleware: Skipping auth for non-API, non-proxy endpoint", "path", path)
 			ctx.Next()
 
 			return
 		}
 
-		// CRITICAL FIX: Ensure we're actually enforcing authentication for API endpoints
-		slog.Info("JWT Middleware: Strictly enforcing authentication for API endpoint", "path", path)
+		// Enforce authentication for protected endpoints (API or Proxy)
+		slog.Info("JWT Middleware: Enforcing authentication for protected endpoint", "path", path)
 
 		// For debugging: log all headers
 		headers := ctx.Request.Header

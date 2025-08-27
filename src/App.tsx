@@ -91,6 +91,7 @@ import UserProfile from './components/UserProfile';
 import BruteForceConfig from './components/BruteForceConfig';
 import DistributedBruteForceTools from './components/DistributedBruteForceTools';
 import HookTester from './components/HookTester';
+import ClickhouseRuntime from './components/ClickhouseRuntime';
 import MFASettings from './components/MFASettings';
 import LegalPage from './components/LegalPage';
 import { authenticatedFetch } from './utils/apiUtils';
@@ -267,6 +268,7 @@ const MainContent = (): React.JSX.Element => {
     { text: 'Security', icon: <SecurityIcon />, path: '/security' },
     { text: 'Brute-Force', icon: <SecurityIcon />, path: '/bruteforce' },
     { text: 'Distributed BF', icon: <SecurityIcon />, path: '/distributed-bf' },
+    { text: 'ClickHouse', icon: <StorageIcon />, path: '/runtime-clickhouse' },
     { text: 'Hook Tester', icon: <CodeIcon />, path: '/hook-tester' },
   ];
 
@@ -1154,6 +1156,7 @@ const MainContent = (): React.JSX.Element => {
               <Route path="/security" element={<SecurityPage />} />
               <Route path="/lua" element={<LuaConfig />} />
               <Route path="/hook-tester" element={<HookTester />} />
+              <Route path="/runtime-clickhouse" element={<ClickhouseRuntime />} />
               <Route path="/ldap" element={<LDAPConfig />} />
               <Route path="/config-preview" element={<ConfigPreview />} />
               <Route path="/licenses" element={<LicensesPage />} />
