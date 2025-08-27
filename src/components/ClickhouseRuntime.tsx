@@ -15,6 +15,7 @@ import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthPar
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES } from '../utils/limits';
+import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
 
 // Lightweight world map fallback: show aggregated list if map lib not present
 // We keep implementation minimal and dependency-free.
@@ -215,7 +216,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         const s = new Date(tsStart).getTime();
         const e = new Date(tsEnd).getTime();
         if (!Number.isNaN(s) && !Number.isNaN(e) && e < s) {
-          throw new Error('Zeitbereich ungültig: Ende liegt vor Start.');
+          throw new Error('Invalid time range: end is before start.');
         }
       }
       const conn = getConnection();
@@ -263,7 +264,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           end -= Math.max(1, Math.floor(end * 0.05));
           cut = preview.substring(0, end);
         }
-        previewText = `${cut}\n\n[Hinweis: Ausgabe zu groß – Vorschau wurde gekürzt.]`;
+        previewText = `${cut}\n\n[Note: Output too large – preview has been truncated.]`;
       }
       setRawPreview(previewText);
       setRows(parsed);
@@ -400,6 +401,121 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [selectedFields, sortBy]);
 
+  // ---- Map helpers/state (for collapsible world map) ----
+  // Approximate country centroids (lon, lat) for plotting markers
+  const COUNTRY_CENTROIDS: Record<string, { lon: number; lat: number; aliases?: string[] }> = useMemo(() => ({
+    US: { lon: -98, lat: 39, aliases: ['USA','United States','United States of America','US'] },
+    CA: { lon: -106, lat: 56, aliases: ['Canada','CA'] },
+    MX: { lon: -102, lat: 23, aliases: ['Mexico','MX'] },
+    BR: { lon: -51, lat: -10, aliases: ['Brazil','BR'] },
+    AR: { lon: -64, lat: -34, aliases: ['Argentina','AR'] },
+    CL: { lon: -71, lat: -30, aliases: ['Chile','CL'] },
+    CO: { lon: -74, lat: 4, aliases: ['Colombia','CO'] },
+    VE: { lon: -66, lat: 8, aliases: ['Venezuela','VE'] },
+    GB: { lon: -2, lat: 54, aliases: ['UK','United Kingdom','Great Britain','GB','England'] },
+    IE: { lon: -8, lat: 53, aliases: ['Ireland','IE'] },
+    FR: { lon: 2, lat: 46, aliases: ['France','FR'] },
+    ES: { lon: -4, lat: 40, aliases: ['Spain','ES'] },
+    PT: { lon: -8, lat: 39.5, aliases: ['Portugal','PT'] },
+    DE: { lon: 10, lat: 51, aliases: ['Germany','Deutschland','DE'] },
+    AT: { lon: 14, lat: 47.5, aliases: ['Austria','AT'] },
+    CH: { lon: 8.2, lat: 46.8, aliases: ['Switzerland','Schweiz','CH'] },
+    IT: { lon: 12.5, lat: 42.5, aliases: ['Italy','IT'] },
+    NL: { lon: 5.3, lat: 52.2, aliases: ['Netherlands','NL'] },
+    BE: { lon: 4.7, lat: 50.8, aliases: ['Belgium','BE'] },
+    PL: { lon: 19, lat: 52, aliases: ['Poland','PL'] },
+    CZ: { lon: 15.5, lat: 49.8, aliases: ['Czechia','Czech Republic','CZ'] },
+    SE: { lon: 15, lat: 62, aliases: ['Sweden','SE'] },
+    NO: { lon: 8, lat: 61, aliases: ['Norway','NO'] },
+    FI: { lon: 26, lat: 64, aliases: ['Finland','FI'] },
+    DK: { lon: 10, lat: 56, aliases: ['Denmark','DK'] },
+    RU: { lon: 100, lat: 60, aliases: ['Russia','RU','Russian Federation'] },
+    UA: { lon: 31, lat: 49, aliases: ['Ukraine','UA'] },
+    RO: { lon: 25, lat: 46, aliases: ['Romania','RO'] },
+    HU: { lon: 19, lat: 47, aliases: ['Hungary','HU'] },
+    GR: { lon: 22, lat: 39, aliases: ['Greece','GR'] },
+    TR: { lon: 35, lat: 39, aliases: ['Turkey','TR','Türkiye'] },
+    IL: { lon: 35, lat: 31.5, aliases: ['Israel','IL'] },
+    SA: { lon: 45, lat: 24, aliases: ['Saudi Arabia','SA'] },
+    AE: { lon: 54, lat: 24, aliases: ['United Arab Emirates','UAE','AE'] },
+    IN: { lon: 78, lat: 22, aliases: ['India','IN'] },
+    PK: { lon: 70, lat: 30, aliases: ['Pakistan','PK'] },
+    CN: { lon: 104, lat: 35, aliases: ['China','CN','PRC'] },
+    JP: { lon: 138, lat: 36.2, aliases: ['Japan','JP'] },
+    KR: { lon: 127.5, lat: 36.5, aliases: ['South Korea','Republic of Korea','KR','Korea, Republic of'] },
+    ID: { lon: 113, lat: -0.8, aliases: ['Indonesia','ID'] },
+    AU: { lon: 134, lat: -25, aliases: ['Australia','AU'] },
+    NZ: { lon: 170, lat: -42, aliases: ['New Zealand','NZ'] },
+    ZA: { lon: 24, lat: -29, aliases: ['South Africa','ZA'] },
+    EG: { lon: 30, lat: 27, aliases: ['Egypt','EG'] },
+    NG: { lon: 8, lat: 9.6, aliases: ['Nigeria','NG'] },
+    KE: { lon: 37.9, lat: 0.2, aliases: ['Kenya','KE'] },
+    MA: { lon: -6, lat: 32, aliases: ['Morocco','MA'] },
+    TN: { lon: 10, lat: 34, aliases: ['Tunisia','TN'] },
+    DZ: { lon: 2.6, lat: 28, aliases: ['Algeria','DZ'] },
+  }), []);
+
+  const normalizeCountryKey = useCallback((label: string): string | null => {
+    if (!label) return null;
+    const v = String(label).trim();
+    if ((COUNTRY_CENTROIDS as any)[v]) return v as keyof typeof COUNTRY_CENTROIDS as string;
+    const up = v.toUpperCase();
+    if ((COUNTRY_CENTROIDS as any)[up]) return up;
+    for (const [iso, def] of Object.entries(COUNTRY_CENTROIDS)) {
+      if (def.aliases?.some(a => a.toLowerCase() === v.toLowerCase())) return iso;
+    }
+    return null;
+  }, [COUNTRY_CENTROIDS]);
+
+  const mapData = useMemo(() => {
+    const mapped: { iso: string; country: string; lon: number; lat: number; success: number; failed: number; total: number }[] = [];
+    const unmapped: { country: string; success: number; failed: number; total: number }[] = [];
+    for (const c of countryAgg) {
+      const iso = normalizeCountryKey(c.country);
+      const rec = { success: c.success, failed: c.failed, total: c.total } as const;
+      if (iso) {
+        const def = COUNTRY_CENTROIDS[iso];
+        mapped.push({ iso, country: c.country, lon: def.lon, lat: def.lat, ...rec });
+      } else {
+        unmapped.push({ country: c.country, ...rec });
+      }
+    }
+    const maxTotal = mapped.reduce((m, x) => Math.max(m, x.total), 1);
+    const r = (t: number) => {
+      const minR = 4, maxR = 16;
+      const f = Math.sqrt(Math.max(0, t) / Math.max(1, maxTotal));
+      return Math.max(minR, Math.min(maxR, minR + (maxR - minR) * f));
+    };
+    return { mapped, unmapped, radius: r };
+  }, [countryAgg, normalizeCountryKey, COUNTRY_CENTROIDS]);
+
+  const [mapOpen, setMapOpen] = useState<boolean>(false);
+
+  // Build quick lookup for stats by ISO code for coloring
+  const isoStats = useMemo(() => {
+    const m = new Map<string, { success: number; failed: number; total: number }>();
+    for (const it of mapData.mapped) {
+      m.set(it.iso, { success: it.success, failed: it.failed, total: it.total });
+    }
+    return m;
+  }, [mapData]);
+
+  // Color helper: interpolate between orange (failed) and blue (success) — colorblind friendly (Okabe-Ito inspired)
+  const ratioToFill = useCallback((ratio: number) => {
+    const clamp = (v:number,min=0,max=1)=> Math.max(min, Math.min(max, v));
+    const r = clamp(ratio);
+    // From failed (orange) to success (blue)
+    const from = { r: 213, g: 94,  b: 0   }; // #D55E00 (orange)
+    const to   = { r: 0,   g: 114, b: 178 }; // #0072B2 (blue)
+    const mix = (a:number,b:number,t:number)=> Math.round(a + (b - a) * t);
+    const rr = mix(from.r, to.r, r);
+    const gg = mix(from.g, to.g, r);
+    const bb = mix(from.b, to.b, r);
+    const hex = (n:number)=> n.toString(16).padStart(2,'0');
+    return `#${hex(rr)}${hex(gg)}${hex(bb)}`;
+  }, []);
+
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2, flexWrap:'wrap' }}>
@@ -529,7 +645,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               InputLabelProps={{ shrink: true }}
               InputProps={{ endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Start-Zeit wählen">
+                  <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Pick start time">
                     <EventIcon fontSize="small" />
                   </IconButton>
                 </InputAdornment>
@@ -541,14 +657,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <TextField
               fullWidth
               type="datetime-local"
-              label="Ende (ts)"
+              label="End (ts)"
               value={tsEnd}
               onChange={(e)=>setTsEnd(e.target.value)}
               inputRef={tsEndRef}
               InputLabelProps={{ shrink: true }}
               InputProps={{ endAdornment: (
                 <InputAdornment position="end">
-                  <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="End-Zeit wählen">
+                  <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="Pick end time">
                     <EventIcon fontSize="small" />
                   </IconButton>
                 </InputAdornment>
@@ -581,6 +697,80 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       </Paper>
 
       {error && <Alert severity="error" sx={{ mb:2 }}>{error}</Alert>}
+
+      {/* World Map (collapsible) */}
+      <Paper sx={{ p:2, mb:2 }}>
+        <Stack direction="row" alignItems="center" justifyContent="space-between">
+          <Stack direction="row" alignItems="center" gap={1}>
+            <PublicIcon/>
+            <Typography variant="subtitle1">Map (failed/success)</Typography>
+          </Stack>
+          <IconButton size="small" onClick={()=>setMapOpen(v=>!v)} aria-label={mapOpen ? 'Collapse' : 'Expand'}>
+            <ExpandMoreIcon sx={{ transform: mapOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+          </IconButton>
+        </Stack>
+        <Collapse in={mapOpen} timeout="auto" unmountOnExit>
+          {mapData.mapped.length === 0 ? (
+            <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
+          ) : (
+            <Box sx={{ width:'100%', overflowX:'auto', mt:1 }}>
+              {/* Using react-simple-maps world-110m TopoJSON */}
+              <ComposableMap projection="geoMercator" width={980} height={400} style={{ width: '100%', height: 'auto' }}>
+                <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                  {({ geographies }) => (
+                    <>
+                      {geographies.map(geo => {
+                        const props: any = (geo as any).properties || {};
+                        const name = String(props.name || props.NAME || props.NAME_LONG || '').trim();
+                        const iso = name ? normalizeCountryKey(name) : null;
+                        let fill = '#f0f0f0';
+                        if (iso && isoStats.has(iso)) {
+                          const s = isoStats.get(iso)!;
+                          const ratio = s.total > 0 ? s.success / s.total : 0;
+                          fill = ratioToFill(ratio);
+                        }
+                        return (
+                          <Geography key={geo.rsmKey} geography={geo} fill={fill} stroke="#ccc" />
+                        );
+                      })}
+                      {mapData.mapped.map((pt, idx) => {
+                        const R = mapData.radius(pt.total);
+                        const total = Math.max(1, pt.total);
+                        const succFrac = pt.success / total;
+                        const color = ratioToFill(succFrac);
+                        return (
+                          <Marker key={`b${idx}`} coordinates={[pt.lon, pt.lat]}>
+                            <g>
+                              <circle cx={0} cy={0} r={R} fill={color} stroke="#333" strokeWidth={0.5} />
+                              <title>{`${pt.country}: total ${pt.total}\nsuccess ${pt.success} | failed ${pt.failed}`}</title>
+                            </g>
+                          </Marker>
+                        );
+                      })}
+                    </>
+                  )}
+                </Geographies>
+              </ComposableMap>
+              <Stack direction="row" spacing={2} alignItems="center" sx={{ mt:1, flexWrap:'wrap' }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Box sx={{ width:12, height:12, bgcolor:'#0072B2', borderRadius:0.5 }} />
+                  <Typography variant="caption">success (blue)</Typography>
+                </Stack>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Box sx={{ width:12, height:12, bgcolor:'#D55E00', borderRadius:0.5 }} />
+                  <Typography variant="caption">failed (orange)</Typography>
+                </Stack>
+                {mapData.unmapped.length > 0 && (
+                  <Typography variant="caption" color="text.secondary">Unmapped: {mapData.unmapped.length}</Typography>
+                )}
+                <Typography variant="caption" color="text.secondary" sx={{ ml:2 }}>
+                  Country and circle color encode success ratio (orange = more failed, blue = more success)
+                </Typography>
+              </Stack>
+            </Box>
+          )}
+        </Collapse>
+      </Paper>
 
       <Paper sx={{ p:2, mb:2 }}>
         <Box display="flex" alignItems="center" gap={1} mb={1}>
@@ -724,9 +914,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                                 ...(runtimeHooks || {}),
                                 clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next }
                               } as any);
-                              setNotif({ open:true, severity:'success', message:'Spaltenreihenfolge gespeichert' });
+                              setNotif({ open:true, severity:'success', message:'Column order saved' });
                             } catch(e:any) {
-                              setNotif({ open:true, severity:'error', message:`Speichern fehlgeschlagen: ${e?.message || String(e)}` });
+                              setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
                             }
                           }}
                           onClick={() => {
@@ -741,7 +931,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             }
                           }}
                           style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none' }}
-                          title="Drag & Drop zum Umordnen, Klick zum Sortieren"
+                          title="Drag & drop to reorder, click to sort"
                         >
                           {h}{indicator}
                         </th>
