@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox, InputAdornment } from '@mui/material';
+import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox, InputAdornment, Slider } from '@mui/material';
 import PublicIcon from '@mui/icons-material/Public';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -15,7 +15,7 @@ import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthPar
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES } from '../utils/limits';
-import { ComposableMap, Geographies, Geography, Marker } from 'react-simple-maps';
+import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 
 // Lightweight world map fallback: show aggregated list if map lib not present
 // We keep implementation minimal and dependency-free.
@@ -503,6 +503,35 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   }, [countryAgg, normalizeCountryKey, COUNTRY_CENTROIDS]);
 
   const [mapOpen, setMapOpen] = useState<boolean>(true);
+  // Zoom & pan state for the world map
+  const MAP_MIN_ZOOM = 0.3;
+  const MAP_MAX_ZOOM = 8;
+  const MAP_DEFAULT_ZOOM = 1; // full world
+  const [mapZoom, setMapZoom] = useState<number>(MAP_DEFAULT_ZOOM);
+  const [mapSlider, setMapSlider] = useState<number>(50); // 0..100, 50% => full world
+  const [mapCenter, setMapCenter] = useState<[number, number]>([0, 0]);
+
+  // Map slider conversion helpers: piecewise linear so that 0%=>min, 50%=>default(1), 100%=>max
+  const sliderToZoom = useCallback((s: number): number => {
+    const clamped = Math.max(0, Math.min(100, s));
+    if (clamped <= 50) {
+      const t = clamped / 50; // 0..1
+      return MAP_MIN_ZOOM + (MAP_DEFAULT_ZOOM - MAP_MIN_ZOOM) * t;
+    }
+    const t = (clamped - 50) / 50; // 0..1
+    return MAP_DEFAULT_ZOOM + (MAP_MAX_ZOOM - MAP_DEFAULT_ZOOM) * t;
+  }, []);
+  const zoomToSlider = useCallback((z: number): number => {
+    const clamped = Math.max(MAP_MIN_ZOOM, Math.min(MAP_MAX_ZOOM, z));
+    if (clamped <= MAP_DEFAULT_ZOOM) {
+      // Map [min, default] -> [0, 50]
+      const t = (clamped - MAP_MIN_ZOOM) / (MAP_DEFAULT_ZOOM - MAP_MIN_ZOOM);
+      return t * 50;
+    }
+    // Map (default, max] -> (50, 100]
+    const t = (clamped - MAP_DEFAULT_ZOOM) / (MAP_MAX_ZOOM - MAP_DEFAULT_ZOOM);
+    return 50 + t * 50;
+  }, []);
 
   // Build quick lookup for stats by ISO code for coloring
   const isoStats = useMemo(() => {
@@ -726,13 +755,35 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           {mapData.mapped.length === 0 ? (
             <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
           ) : (
-            <Box sx={{ width:'100%', overflowX:'auto', mt:1 }}>
+            <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
+              {/* Zoom slider positioned top-right over the map */}
+              <Box sx={{ position:'absolute', top:8, right:8, zIndex:1, bgcolor:'rgba(255,255,255,0.8)', p:1, borderRadius:1, boxShadow:1 }}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>-</Typography>
+                  <Slider
+                    size="small"
+                    value={mapSlider}
+                    onChange={(_, v)=> {
+                      const s = Array.isArray(v) ? v[0] : (v as number);
+                      setMapSlider(s);
+                      setMapZoom(sliderToZoom(s));
+                    }}
+                    min={0}
+                    max={100}
+                    step={1}
+                    sx={{ width: 160 }}
+                    aria-label="Map zoom"
+                  />
+                  <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>+</Typography>
+                </Stack>
+              </Box>
               {/* Using react-simple-maps world-110m TopoJSON */}
               <ComposableMap projection="geoMercator" width={980} height={400} style={{ width: '100%', height: 'auto' }}>
-                <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
-                  {({ geographies }) => (
-                    <>
-                      {geographies.map(geo => {
+                <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
+                  <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                    {({ geographies }) => (
+                      <>
+                        {geographies.map(geo => {
                         const props: any = (geo as any).properties || {};
                         const name = String(props.name || props.NAME || props.NAME_LONG || '').trim();
                         const iso = name ? normalizeCountryKey(name) : null;
@@ -763,6 +814,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     </>
                   )}
                 </Geographies>
+                </ZoomableGroup>
               </ComposableMap>
               <Stack direction="row" spacing={2} alignItems="center" sx={{ mt:1, flexWrap:'wrap' }}>
                 <Stack direction="row" spacing={1} alignItems="center">
