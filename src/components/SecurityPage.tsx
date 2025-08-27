@@ -175,7 +175,7 @@ const SecurityPage = (): React.JSX.Element => {
       </Stack>
 
       {/* Warm-up notice from Admin metrics */}
-      {warmup && warmup.warmed_up === false && (() => {
+      {warmup && (warmup as any)?.warmed_up === false && (() => {
         const toNum = (x: any) => (typeof x === 'number' ? x : Number(x || 0));
         const prog = (warmup as any)?.progress || {};
         const req = (warmup as any)?.requirements || {};

@@ -15,7 +15,8 @@ export function usePersistedAutoRefresh(
     try {
       const v = typeof window !== 'undefined' ? window.sessionStorage.getItem(sessionKey) : null;
       const n = v ? parseInt(v, 10) : NaN;
-      return Number.isFinite(n) && n > 0 ? n : defaultMs;
+      // Accept 0 as a valid value (OFF). Use default only if NaN or negative.
+      return Number.isFinite(n) && n >= 0 ? n : defaultMs;
     } catch {
       return defaultMs;
     }
@@ -32,6 +33,10 @@ export function usePersistedAutoRefresh(
   React.useEffect(() => {
     // initial invocation
     void callback();
+    // When refreshMs <= 0, treat as OFF: no interval ticks.
+    if (refreshMs <= 0) {
+      return;
+    }
     const id = setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       void callback();
