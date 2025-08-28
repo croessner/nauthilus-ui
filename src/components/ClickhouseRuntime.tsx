@@ -339,19 +339,122 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   }, [rows, authFilter]);
 
   // Search filter on top of authFilter for the table only (not affecting map/aggregates)
+  // Supports boolean logic: AND/OR/NOT, parentheses, symbols (&&, ||, !).
   const searchFilteredRows = useMemo(() => {
-    const q = (searchQuery || '').trim().toLowerCase();
-    if (!q) return filteredRows;
+    const raw = (searchQuery || '').trim();
+    if (!raw) return filteredRows;
+
+    type TokType = 'WORD'|'AND'|'OR'|'NOT'|'LPAREN'|'RPAREN';
+    type Tok = { t: TokType; v?: string };
+
+    const normalizeOp = (s: string): TokType | null => {
+      const x = s.toLowerCase();
+      if (x === 'and' || x === '&&' || x === '&') return 'AND';
+      if (x === 'or'  || x === '||' || x === '|') return 'OR';
+      if (x === 'not' || x === '!' ) return 'NOT';
+      return null;
+    };
+
+    const tokenize = (input: string): Tok[] => {
+      const out: Tok[] = [];
+      let i = 0;
+      const n = input.length;
+      while (i < n) {
+        const ch = input[i];
+        if (/\s/.test(ch)) { i++; continue; }
+        if (ch === '(') { out.push({ t: 'LPAREN' }); i++; continue; }
+        if (ch === ')') { out.push({ t: 'RPAREN' }); i++; continue; }
+        if (ch === '"' || ch === '\'') {
+          const q = ch; i++;
+          let buf = '';
+          while (i < n && input[i] !== q) { buf += input[i++]; }
+          if (i < n && input[i] === q) i++; // skip closing quote
+          if (buf.trim().length > 0) out.push({ t: 'WORD', v: buf });
+          continue;
+        }
+        // Operators by symbol
+        if (ch === '&' || ch === '|' || ch === '!') {
+          // try two-char first
+          const two = input.slice(i, i+2);
+          const op2 = normalizeOp(two);
+          if (op2) { out.push({ t: op2 }); i += 2; continue; }
+          const op1 = normalizeOp(ch);
+          if (op1) { out.push({ t: op1 }); i += 1; continue; }
+        }
+        // Word or keyword
+        let j = i;
+        while (j < n && !/\s|\(|\)|&|\||!|"|\'/.test(input[j])) j++;
+        const word = input.slice(i, j);
+        const op = normalizeOp(word);
+        if (op) out.push({ t: op });
+        else if (word.length) out.push({ t: 'WORD', v: word });
+        i = j;
+      }
+      return out;
+    };
+
+    const toRpn = (toks: Tok[]): Tok[] => {
+      const out: Tok[] = [];
+      const ops: Tok[] = [];
+      const prec = (t: TokType) => t === 'NOT' ? 3 : t === 'AND' ? 2 : t === 'OR' ? 1 : 0;
+      const isOp = (t: Tok): boolean => t.t === 'AND' || t.t === 'OR' || t.t === 'NOT';
+      for (let i = 0; i < toks.length; i++) {
+        const tk = toks[i];
+        if (tk.t === 'WORD') { out.push(tk); continue; }
+        if (tk.t === 'LPAREN') { ops.push(tk); continue; }
+        if (tk.t === 'RPAREN') {
+          while (ops.length && ops[ops.length-1].t !== 'LPAREN') out.push(ops.pop()!);
+          if (ops.length && ops[ops.length-1].t === 'LPAREN') ops.pop();
+          continue;
+        }
+        if (isOp(tk)) {
+          const p = prec(tk.t);
+          while (ops.length && isOp(ops[ops.length-1]) && prec(ops[ops.length-1].t) >= p) {
+            out.push(ops.pop()!);
+          }
+          ops.push(tk);
+        }
+      }
+      while (ops.length) out.push(ops.pop()!);
+      return out;
+    };
+
+    const toks = tokenize(raw);
+    let rpn: Tok[] = [];
+    try { rpn = toRpn(toks); } catch { rpn = []; }
+
     const hasSelection = (selectedFields || []).length > 0;
+
+    const evalOnText = (text: string): boolean => {
+      if (!rpn.length) {
+        // Fallback to simple include on full string of tokens
+        const q = raw.toLowerCase();
+        return text.includes(q);
+      }
+      const st: boolean[] = [];
+      for (const tk of rpn) {
+        if (tk.t === 'WORD') {
+          const term = (tk.v || '').toLowerCase();
+          st.push(term ? text.includes(term) : true);
+        } else if (tk.t === 'NOT') {
+          const a = st.pop() ?? false; st.push(!a);
+        } else if (tk.t === 'AND') {
+          const b = st.pop() ?? false; const a = st.pop() ?? false; st.push(a && b);
+        } else if (tk.t === 'OR') {
+          const b = st.pop() ?? false; const a = st.pop() ?? false; st.push(a || b);
+        }
+      }
+      return st.pop() ?? false;
+    };
+
     return filteredRows.filter((row) => {
       const keys = hasSelection ? selectedFields : Object.keys(row || {});
-      for (const k of keys) {
+      // Build a single lowercased string for efficient includes
+      const text = keys.map(k => {
         const v = (row as any)?.[k];
-        if (v === null || v === undefined) continue;
-        const s = String(v).toLowerCase();
-        if (s.includes(q)) return true;
-      }
-      return false;
+        return v === null || v === undefined ? '' : String(v);
+      }).join(' ').toLowerCase();
+      return evalOnText(text);
     });
   }, [filteredRows, searchQuery, selectedFields]);
 
@@ -979,9 +1082,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <TextField
                 size="small"
                 label="Search"
-                placeholder="Type to filter rows in visible columns"
+                placeholder="Filter (AND/OR/NOT; parentheses supported)"
                 value={searchQuery}
                 onChange={(e)=> setSearchQuery(e.target.value)}
+                helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !.'
                 InputProps={{
                   endAdornment: searchQuery ? (
                     <InputAdornment position="end">
