@@ -97,3 +97,25 @@ export function byteLengthUtf8(str: string): number {
     return str.length; // last-resort fallback
   }
 }
+
+/**
+ * Truncate a large string to a byte limit and return a user-facing banner + content, consistent across pages.
+ * The limit is clamped into [RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES].
+ */
+export function applyPreviewLimit(full: string, limit: number): string {
+  const MAX_PREVIEW = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(limit) ? limit : RAW_JSON_MIN_BYTES));
+  const totalBytes = byteLengthUtf8(full);
+  if (totalBytes <= MAX_PREVIEW) {
+    return `[Raw preview — limit ${MAX_PREVIEW} bytes — showing ${totalBytes} of ${totalBytes} bytes]\n\n${full}`;
+  }
+  // approximate truncation by substring while staying under byte limit
+  let end = Math.floor(full.length * (MAX_PREVIEW / Math.max(1, totalBytes)));
+  end = Math.max(0, Math.min(full.length, end));
+  let cut = full.substring(0, end);
+  while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
+    end -= Math.max(1, Math.floor(end * 0.05));
+    cut = full.substring(0, end);
+  }
+  const shownBytes = byteLengthUtf8(cut);
+  return `[Raw preview — limit ${MAX_PREVIEW} bytes — showing ${shownBytes} of ${totalBytes} bytes]\n\n${cut}\n\n[Note: Output too large – preview has been truncated.]`;
+}

@@ -14,7 +14,7 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES } from '../utils/limits';
+import { getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 
 // Lightweight world map fallback: show aggregated list if map lib not present
@@ -217,23 +217,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return [];
   };
 
-  const applyPreviewLimit = useCallback((full: string, limit: number): string => {
-    const MAX_PREVIEW = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(limit) ? limit : RAW_JSON_MIN_BYTES));
-    const totalBytes = byteLengthUtf8(full);
-    if (totalBytes <= MAX_PREVIEW) {
-      return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${totalBytes} of ${totalBytes} bytes]\n\n${full}`;
-    }
-    // approximate truncation by substring while staying under byte limit
-    let end = Math.floor(full.length * (MAX_PREVIEW / Math.max(1, totalBytes)));
-    end = Math.max(0, Math.min(full.length, end));
-    let cut = full.substring(0, end);
-    while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
-      end -= Math.max(1, Math.floor(end * 0.05));
-      cut = full.substring(0, end);
-    }
-    const shownBytes = byteLengthUtf8(cut);
-    return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${shownBytes} of ${totalBytes} bytes]\n\n${cut}\n\n[Note: Output too large – preview has been truncated.]`;
-  }, []);
 
   const runQuery = useCallback(async (force: boolean = false) => {
     // Guard: raw_sql should only execute on explicit Run click

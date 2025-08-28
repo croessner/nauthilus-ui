@@ -34,7 +34,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
-import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, getRawJsonMaxBytes } from '../utils/limits';
+import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 
 const prettyJson = (obj: any) => {
   try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
@@ -44,23 +44,6 @@ const parseJson = (text: string) => {
   try { return JSON.parse(text); } catch { return null; }
 };
 
-// Apply a byte-based preview limit identical to ClickHouse page
-const applyPreviewLimit = (full: string, limit: number): string => {
-  const MAX_PREVIEW = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(limit) ? limit : RAW_JSON_MIN_BYTES));
-  const totalBytes = byteLengthUtf8(full);
-  if (totalBytes <= MAX_PREVIEW) {
-    return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${totalBytes} of ${totalBytes} bytes]\n\n${full}`;
-  }
-  let end = Math.floor(full.length * (MAX_PREVIEW / Math.max(1, totalBytes)));
-  end = Math.max(0, Math.min(full.length, end));
-  let cut = full.substring(0, end);
-  while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
-    end -= Math.max(1, Math.floor(end * 0.05));
-    cut = full.substring(0, end);
-  }
-  const shownBytes = byteLengthUtf8(cut);
-  return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${shownBytes} of ${totalBytes} bytes]\n\n${cut}\n\n[Note: Output too large – preview has been truncated.]`;
-};
 
 const defaultAdminOps = [
   { value: 'get_metrics', label: 'View metrics' },
