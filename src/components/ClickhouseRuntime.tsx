@@ -641,227 +641,238 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         </Menu>
       </Paper>
 
-      {/* Query section below hook configuration */}
-      <Paper sx={{ p:2, mb:2 }}>
-        <Typography variant="subtitle1" sx={{ mb: 1 }}>Query</Typography>
-        <Grid container spacing={2} sx={{ mt:1 }}>
-          <Grid item xs={12} sm={4}>
-            <TextField select fullWidth label="Action" value={action} onChange={e=>setAction(e.target.value as Action)}>
-              <MenuItem value="recent">recent</MenuItem>
-              <MenuItem value="by_user">by_user</MenuItem>
-              <MenuItem value="by_ip">by_ip</MenuItem>
-              <MenuItem value="raw_sql">raw_sql</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField fullWidth label="Username" value={username} onChange={e=>setUsername(e.target.value)} disabled={action!=='by_user'} />
-          </Grid>
-          <Grid item xs={12} sm={4}>
-            <TextField fullWidth label="IP" value={ip} onChange={e=>setIp(e.target.value)} disabled={action!=='by_ip'} />
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <TextField select fullWidth label="Limit" value={limit} onChange={(e)=> setLimit(Number(e.target.value))}>
-              {[50,100,200,500,1000,2000,5000,10000].map(n=> (
-                <MenuItem key={n} value={n}>{n}</MenuItem>
-              ))}
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
-              <MenuItem value="all">failed/success</MenuItem>
-              <MenuItem value="failed">failed</MenuItem>
-              <MenuItem value="success">success</MenuItem>
-            </TextField>
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <TextField
-              fullWidth
-              type="datetime-local"
-              label="Start (ts)"
-              value={tsStart}
-              onChange={(e)=>setTsStart(e.target.value)}
-              inputRef={tsStartRef}
-              InputLabelProps={{ shrink: true }}
-              InputProps={{ endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Pick start time">
-                    <EventIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) }}
-              helperText="Optional"
-            />
-          </Grid>
-          <Grid item xs={12} sm={3}>
-            <TextField
-              fullWidth
-              type="datetime-local"
-              label="End (ts)"
-              value={tsEnd}
-              onChange={(e)=>setTsEnd(e.target.value)}
-              inputRef={tsEndRef}
-              InputLabelProps={{ shrink: true }}
-              InputProps={{ endAdornment: (
-                <InputAdornment position="end">
-                  <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="Pick end time">
-                    <EventIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              ) }}
-              helperText="Optional"
-            />
-          </Grid>
-          <Grid item xs={12}>
-            <TextField
-              fullWidth
-              multiline
-              minRows={3}
-              maxRows={12}
-              label="SQL (SELECT ...)"
-              placeholder="SELECT ... FROM ... WHERE ..."
-              value={rawSql}
-              onChange={(e)=>setRawSql(e.target.value)}
-              disabled={action !== 'raw_sql'}
-            />
-          </Grid>
-          <Grid item xs={12} sm={8}>
-            <Stack direction="row" spacing={1} alignItems="center">
-              <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
-                Run
-              </Button>
-              <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
-                Reset
-              </Button>
-            </Stack>
-          </Grid>
-        </Grid>
-      </Paper>
-
-      {error && <Alert severity="error" sx={{ mb:2 }}>{error}</Alert>}
-
-      {/* World Map (collapsible) */}
-      <Paper sx={{ p:2, mb:2 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Stack direction="row" alignItems="center" gap={1}>
-            <PublicIcon/>
-            <Typography variant="subtitle1">Map (failed/success)</Typography>
-          </Stack>
-          <IconButton size="small" onClick={()=>setMapOpen(v=>!v)} aria-label={mapOpen ? 'Collapse' : 'Expand'}>
-            <ExpandMoreIcon sx={{ transform: mapOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-          </IconButton>
-        </Stack>
-        <Collapse in={mapOpen} timeout="auto" unmountOnExit>
-          {mapData.mapped.length === 0 ? (
-            <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
-          ) : (
-            <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
-              {/* Zoom slider positioned top-right over the map */}
-              <Box sx={{ position:'absolute', top:8, right:8, zIndex:1, bgcolor:'rgba(255,255,255,0.8)', p:1, borderRadius:1, boxShadow:1 }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>-</Typography>
-                  <Slider
-                    size="small"
-                    value={mapSlider}
-                    onChange={(_, v)=> {
-                      const s = Array.isArray(v) ? v[0] : (v as number);
-                      setMapSlider(s);
-                      setMapZoom(sliderToZoom(s));
-                    }}
-                    min={0}
-                    max={100}
-                    step={1}
-                    sx={{ width: 160 }}
-                    aria-label="Map zoom"
-                  />
-                  <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>+</Typography>
-                </Stack>
-              </Box>
-              {/* Using react-simple-maps world-110m TopoJSON */}
-              <ComposableMap projection="geoMercator" width={980} height={400} style={{ width: '100%', height: 'auto' }}>
-                <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
-                  <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
-                    {({ geographies }) => (
-                      <>
-                        {geographies.map(geo => {
-                        const props: any = (geo as any).properties || {};
-                        const name = String(props.name || props.NAME || props.NAME_LONG || '').trim();
-                        const iso = name ? normalizeCountryKey(name) : null;
-                        let fill = '#f0f0f0';
-                        if (iso && isoStats.has(iso)) {
-                          const s = isoStats.get(iso)!;
-                          const ratio = s.total > 0 ? s.success / s.total : 0;
-                          fill = ratioToFill(ratio);
-                        }
-                        return (
-                          <Geography key={geo.rsmKey} geography={geo} fill={fill} stroke="#ccc" />
-                        );
-                      })}
-                      {mapData.mapped.map((pt, idx) => {
-                        const R = mapData.radius(pt.total);
-                        const total = Math.max(1, pt.total);
-                        const succFrac = pt.success / total;
-                        const color = ratioToFill(succFrac);
-                        return (
-                          <Marker key={`b${idx}`} coordinates={[pt.lon, pt.lat]}>
-                            <g>
-                              <circle cx={0} cy={0} r={R} fill={color} stroke="#333" strokeWidth={0.5} />
-                              <title>{`${pt.country}: total ${pt.total}\nsuccess ${pt.success} | failed ${pt.failed}`}</title>
-                            </g>
-                          </Marker>
-                        );
-                      })}
-                    </>
-                  )}
-                </Geographies>
-                </ZoomableGroup>
-              </ComposableMap>
-              <Stack direction="row" spacing={2} alignItems="center" sx={{ mt:1, flexWrap:'wrap' }}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Box sx={{ width:12, height:12, bgcolor:'#0072B2', borderRadius:0.5 }} />
-                  <Typography variant="caption">success (blue)</Typography>
-                </Stack>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Box sx={{ width:12, height:12, bgcolor:'#D55E00', borderRadius:0.5 }} />
-                  <Typography variant="caption">failed (orange)</Typography>
-                </Stack>
-                {mapData.unmapped.length > 0 && (
-                  <Typography variant="caption" color="text.secondary">Unmapped: {mapData.unmapped.length}</Typography>
-                )}
-                <Typography variant="caption" color="text.secondary" sx={{ ml:2 }}>
-                  Country and circle color encode success ratio (orange = more failed, blue = more success)
-                </Typography>
+      {/* Responsive layout: Query and Top Countries on the left, Map on the right */}
+      <Grid container spacing={2}>
+        {/* Right column: Map (takes about half width on md+ screens) */}
+        <Grid item xs={12} md={6} sx={{ order: { xs: 2, md: 2 } }} >
+          {/* World Map (collapsible) */}
+          <Paper sx={{ p:2, mb:2 }}>
+            <Stack direction="row" alignItems="center" justifyContent="space-between">
+              <Stack direction="row" alignItems="center" gap={1}>
+                <PublicIcon/>
+                <Typography variant="subtitle1">Map (failed/success)</Typography>
               </Stack>
-            </Box>
-          )}
-        </Collapse>
-      </Paper>
+              <IconButton size="small" onClick={()=>setMapOpen(v=>!v)} aria-label={mapOpen ? 'Collapse' : 'Expand'}>
+                <ExpandMoreIcon sx={{ transform: mapOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+              </IconButton>
+            </Stack>
+            <Collapse in={mapOpen} timeout="auto" unmountOnExit>
+              {mapData.mapped.length === 0 ? (
+                <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
+              ) : (
+                <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
+                  {/* Zoom slider positioned top-right over the map */}
+                  <Box sx={{ position:'absolute', top:8, right:8, zIndex:1, bgcolor:'rgba(255,255,255,0.8)', p:1, borderRadius:1, boxShadow:1 }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>-</Typography>
+                      <Slider
+                        size="small"
+                        value={mapSlider}
+                        onChange={(_, v)=> {
+                          const s = Array.isArray(v) ? v[0] : (v as number);
+                          setMapSlider(s);
+                          setMapZoom(sliderToZoom(s));
+                        }}
+                        min={0}
+                        max={100}
+                        step={1}
+                        sx={{ width: 160 }}
+                        aria-label="Map zoom"
+                      />
+                      <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>+</Typography>
+                    </Stack>
+                  </Box>
+                  {/* Using react-simple-maps world-110m TopoJSON */}
+                  <ComposableMap projection="geoMercator" width={980} height={400} style={{ width: '100%', height: 'auto' }}>
+                    <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
+                      <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                        {({ geographies }) => (
+                          <>
+                            {geographies.map(geo => {
+                            const props: any = (geo as any).properties || {};
+                            const name = String(props.name || props.NAME || props.NAME_LONG || '').trim();
+                            const iso = name ? normalizeCountryKey(name) : null;
+                            let fill = '#f0f0f0';
+                            if (iso && isoStats.has(iso)) {
+                              const s = isoStats.get(iso)!;
+                              const ratio = s.total > 0 ? s.success / s.total : 0;
+                              fill = ratioToFill(ratio);
+                            }
+                            return (
+                              <Geography key={geo.rsmKey} geography={geo} fill={fill} stroke="#ccc" />
+                            );
+                          })}
+                          {mapData.mapped.map((pt, idx) => {
+                            const R = mapData.radius(pt.total);
+                            const total = Math.max(1, pt.total);
+                            const succFrac = pt.success / total;
+                            const color = ratioToFill(succFrac);
+                            return (
+                              <Marker key={`b${idx}`} coordinates={[pt.lon, pt.lat]}>
+                                <g>
+                                  <circle cx={0} cy={0} r={R} fill={color} stroke="#333" strokeWidth={0.5} />
+                                  <title>{`${pt.country}: total ${pt.total}\nsuccess ${pt.success} | failed ${pt.failed}`}</title>
+                                </g>
+                              </Marker>
+                            );
+                          })}
+                        </>
+                      )}
+                    </Geographies>
+                    </ZoomableGroup>
+                  </ComposableMap>
+                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mt:1, flexWrap:'wrap' }}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ width:12, height:12, bgcolor:'#0072B2', borderRadius:0.5 }} />
+                      <Typography variant="caption">success (blue)</Typography>
+                    </Stack>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Box sx={{ width:12, height:12, bgcolor:'#D55E00', borderRadius:0.5 }} />
+                      <Typography variant="caption">failed (orange)</Typography>
+                    </Stack>
+                    {mapData.unmapped.length > 0 && (
+                      <Typography variant="caption" color="text.secondary">Unmapped: {mapData.unmapped.length}</Typography>
+                    )}
+                    <Typography variant="caption" color="text.secondary" sx={{ ml:2 }}>
+                      Country and circle color encode success ratio (orange = more failed, blue = more success)
+                    </Typography>
+                  </Stack>
+                </Box>
+              )}
+            </Collapse>
+          </Paper>
+        </Grid>
 
-      <Paper sx={{ p:2, mb:2 }}>
-        <Box display="flex" alignItems="center" gap={1} mb={1}>
-          <PublicIcon/>
-          <Typography variant="subtitle1">Top countries (success vs failed)</Typography>
-        </Box>
-        {countryAgg.length === 0 ? (
-          <Typography variant="body2" color="text.secondary">No data to display.</Typography>
-        ) : (
-          <Grid container spacing={1}>
-            {countryAgg.map((c)=> (
-              <Grid key={c.country} item xs={12} sm={6} md={4} lg={3}>
-                <Paper variant="outlined" sx={{ p:1 }}>
-                  <Stack direction="row" justifyContent="space-between">
-                    <Typography fontWeight={600}>{c.country}</Typography>
-                    <Typography variant="caption">{c.total}</Typography>
-                  </Stack>
-                  <Stack direction="row" spacing={1} mt={0.5}>
-                    <Chip size="small" label={`success ${c.success}`} sx={{ bgcolor: '#0072B2', color: '#fff' }} />
-                    <Chip size="small" label={`failed ${c.failed}`} sx={{ bgcolor: '#D55E00', color: '#fff' }} />
-                  </Stack>
-                </Paper>
+        {/* Left column: Query (above) and Top Countries (below) */}
+        <Grid item xs={12} md={6} sx={{ order: { xs: 1, md: 1 } }}>
+          {/* Query */}
+          <Paper sx={{ p:2, mb:2 }}>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>Query</Typography>
+            <Grid container spacing={2} sx={{ mt:1 }}>
+              <Grid item xs={12} sm={4}>
+                <TextField select fullWidth label="Action" value={action} onChange={e=>setAction(e.target.value as Action)}>
+                  <MenuItem value="recent">recent</MenuItem>
+                  <MenuItem value="by_user">by_user</MenuItem>
+                  <MenuItem value="by_ip">by_ip</MenuItem>
+                  <MenuItem value="raw_sql">raw_sql</MenuItem>
+                </TextField>
               </Grid>
-            ))}
-          </Grid>
-        )}
-      </Paper>
+              <Grid item xs={12} sm={4}>
+                <TextField fullWidth label="Username" value={username} onChange={e=>setUsername(e.target.value)} disabled={action!=='by_user'} />
+              </Grid>
+              <Grid item xs={12} sm={4}>
+                <TextField fullWidth label="IP" value={ip} onChange={e=>setIp(e.target.value)} disabled={action!=='by_ip'} />
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <TextField select fullWidth label="Limit" value={limit} onChange={(e)=> setLimit(Number(e.target.value))}>
+                  {[50,100,200,500,1000,2000,5000,10000].map(n=> (
+                    <MenuItem key={n} value={n}>{n}</MenuItem>
+                  ))}
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
+                  <MenuItem value="all">failed/success</MenuItem>
+                  <MenuItem value="failed">failed</MenuItem>
+                  <MenuItem value="success">success</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <TextField
+                  fullWidth
+                  type="datetime-local"
+                  label="Start (ts)"
+                  value={tsStart}
+                  onChange={(e)=>setTsStart(e.target.value)}
+                  inputRef={tsStartRef}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Pick start time">
+                        <EventIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) }}
+                  helperText="Optional"
+                />
+              </Grid>
+              <Grid item xs={12} sm={3}>
+                <TextField
+                  fullWidth
+                  type="datetime-local"
+                  label="End (ts)"
+                  value={tsEnd}
+                  onChange={(e)=>setTsEnd(e.target.value)}
+                  inputRef={tsEndRef}
+                  InputLabelProps={{ shrink: true }}
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="Pick end time">
+                        <EventIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) }}
+                  helperText="Optional"
+                />
+              </Grid>
+              <Grid item xs={12}>
+                <TextField
+                  fullWidth
+                  multiline
+                  minRows={3}
+                  maxRows={12}
+                  label="SQL (SELECT ...)"
+                  placeholder="SELECT ... FROM ... WHERE ..."
+                  value={rawSql}
+                  onChange={(e)=>setRawSql(e.target.value)}
+                  disabled={action !== 'raw_sql'}
+                />
+              </Grid>
+              <Grid item xs={12} sm={8}>
+                <Stack direction="row" spacing={1} alignItems="center">
+                  <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
+                    Run
+                  </Button>
+                  <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
+                    Reset
+                  </Button>
+                </Stack>
+              </Grid>
+            </Grid>
+          </Paper>
+
+          {/* Query error under the Query box */}
+          {error && <Alert severity="error" sx={{ mb:2 }}>{error}</Alert>}
+
+          {/* Top Countries under Query */}
+          <Paper sx={{ p:2, mb:2 }}>
+            <Box display="flex" alignItems="center" gap={1} mb={1}>
+              <PublicIcon/>
+              <Typography variant="subtitle1">Top countries (success vs failed)</Typography>
+            </Box>
+            {countryAgg.length === 0 ? (
+              <Typography variant="body2" color="text.secondary">No data to display.</Typography>
+            ) : (
+              <Grid container spacing={1}>
+                {countryAgg.map((c)=> (
+                  <Grid key={c.country} item xs={12} sm={6} md={6} lg={6}>
+                    <Paper variant="outlined" sx={{ p:1 }}>
+                      <Stack direction="row" justifyContent="space-between">
+                        <Typography fontWeight={600}>{c.country}</Typography>
+                        <Typography variant="caption">{c.total}</Typography>
+                      </Stack>
+                      <Stack direction="row" spacing={1} mt={0.5}>
+                        <Chip size="small" label={`success ${c.success}`} sx={{ bgcolor: '#0072B2', color: '#fff' }} />
+                        <Chip size="small" label={`failed ${c.failed}`} sx={{ bgcolor: '#D55E00', color: '#fff' }} />
+                      </Stack>
+                    </Paper>
+                  </Grid>
+                ))}
+              </Grid>
+            )}
+          </Paper>
+        </Grid>
+      </Grid>
 
       <Paper sx={{ p:2, mb:2 }}>
         <Stack direction="row" alignItems="center" justifyContent="space-between">
