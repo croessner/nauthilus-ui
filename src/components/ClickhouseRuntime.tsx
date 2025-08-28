@@ -9,6 +9,7 @@ import EventIcon from '@mui/icons-material/Event';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import ClearIcon from '@mui/icons-material/Clear';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams } from '../utils/apiUtils';
@@ -60,6 +61,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [authFilter, setAuthFilter] = useState<'all'|'failed'|'success'>('all');
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
+  // Search-as-you-type for results table
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const [rawPreview, setRawPreview] = useState<string>('');
   const [rawPreviewFull, setRawPreviewFull] = useState<string>('');
@@ -154,6 +157,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (typeof ui.tsEnd === 'string') setTsEnd(ui.tsEnd);
       if (typeof ui.rawSql === 'string') setRawSql(ui.rawSql);
       if (typeof ui.mapOpen === 'boolean') setMapOpen(Boolean(ui.mapOpen));
+      if (typeof (ui as any).searchQuery === 'string') setSearchQuery((ui as any).searchQuery);
       const r = Number((ui as any).refreshMs);
       if (Number.isFinite(r)) {
         try { setRefreshMs(r); } catch {}
@@ -334,11 +338,29 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return rows.filter(r => r.authenticated !== true);
   }, [rows, authFilter]);
 
+  // Search filter on top of authFilter for the table only (not affecting map/aggregates)
+  const searchFilteredRows = useMemo(() => {
+    const q = (searchQuery || '').trim().toLowerCase();
+    if (!q) return filteredRows;
+    const hasSelection = (selectedFields || []).length > 0;
+    return filteredRows.filter((row) => {
+      const keys = hasSelection ? selectedFields : Object.keys(row || {});
+      for (const k of keys) {
+        const v = (row as any)?.[k];
+        if (v === null || v === undefined) continue;
+        const s = String(v).toLowerCase();
+        if (s.includes(q)) return true;
+      }
+      return false;
+    });
+  }, [filteredRows, searchQuery, selectedFields]);
+
   // Sort rows by selected column and direction
   const sortedRows = useMemo(() => {
-    if (!sortBy) return filteredRows;
+    const base = searchFilteredRows;
+    if (!sortBy) return base;
     // decorate with index to achieve stable sort
-    const decorated = filteredRows.map((r, i) => ({ r, i }));
+    const decorated = base.map((r, i) => ({ r, i }));
     const getVal = (row: Row) => row?.[sortBy as keyof Row];
     const toFiniteNumber = (v: any): number | null => {
       if (v == null || v === '') return null;
@@ -383,7 +405,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     });
 
     return decorated.map(d => d.r);
-  }, [filteredRows, sortBy, sortDir]);
+  }, [searchFilteredRows, sortBy, sortDir]);
 
   // Aggregate countries for top 100; split success/failed by authenticated flag
   const countryAgg = useMemo(() => {
@@ -409,6 +431,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   useEffect(() => {
     setPage(1);
   }, [authFilter, sortBy, sortDir]);
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery]);
 
   // When availableFields arrive and no selection yet, pick sensible defaults
   useEffect(() => {
@@ -614,14 +641,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <IconButton onClick={(e)=>setAnchorEl(e.currentTarget)} size="small" disabled={!endpointSuggestions.length} aria-label="pick-endpoint"><LinkIcon/></IconButton>
           </Box>
         ) }} sx={{ mt: 1 }} />
-        <Box sx={{ display:'flex', justifyContent:'flex-end', mt:1 }}>
+        <Box sx={{ display:'flex', justifyContent:'flex-end', mt:2 }}>
           <Button size="small" startIcon={<SaveIcon />} variant="contained" onClick={async()=>{
             try {
               const userId = await getCurrentUserId();
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
               const colsToSave = (selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []);
               const ui = {
-                action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, refreshMs
+                action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs
               } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
@@ -891,7 +918,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, refreshMs } as any;
+                const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
                   clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
@@ -948,6 +975,28 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           )
         ) : (
           <>
+            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1, flexWrap:'wrap' }}>
+              <TextField
+                size="small"
+                label="Search"
+                placeholder="Type to filter rows in visible columns"
+                value={searchQuery}
+                onChange={(e)=> setSearchQuery(e.target.value)}
+                InputProps={{
+                  endAdornment: searchQuery ? (
+                    <InputAdornment position="end">
+                      <IconButton size="small" onClick={() => setSearchQuery('')} aria-label="Clear search">
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    </InputAdornment>
+                  ) : undefined
+                }}
+                sx={{ minWidth: 260 }}
+              />
+              <Typography variant="caption" color="text.secondary">
+                Matches: {searchFilteredRows.length} / {filteredRows.length}
+              </Typography>
+            </Stack>
             <Box sx={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse' }}>
                 <thead>
@@ -986,7 +1035,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                              const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, refreshMs } as any;
+                              const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
                               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                 ...(runtimeHooks || {}),
                                 clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, ui }
