@@ -613,7 +613,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           <Box sx={{ display:'flex', alignItems:'center' }}>
             <IconButton onClick={(e)=>setAnchorEl(e.currentTarget)} size="small" disabled={!endpointSuggestions.length} aria-label="pick-endpoint"><LinkIcon/></IconButton>
           </Box>
-        ) }} />
+        ) }} sx={{ mt: 1 }} />
         <Box sx={{ display:'flex', justifyContent:'flex-end', mt:1 }}>
           <Button size="small" startIcon={<SaveIcon />} variant="contained" onClick={async()=>{
             try {
