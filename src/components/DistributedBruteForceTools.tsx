@@ -18,6 +18,7 @@ import {
   Tooltip,
   IconButton,
   Chip,
+  Stack,
   Snackbar,
   Menu
 } from '@mui/material';
@@ -41,6 +42,24 @@ const prettyJson = (obj: any) => {
 
 const parseJson = (text: string) => {
   try { return JSON.parse(text); } catch { return null; }
+};
+
+// Apply a byte-based preview limit identical to ClickHouse page
+const applyPreviewLimit = (full: string, limit: number): string => {
+  const MAX_PREVIEW = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(limit) ? limit : RAW_JSON_MIN_BYTES));
+  const totalBytes = byteLengthUtf8(full);
+  if (totalBytes <= MAX_PREVIEW) {
+    return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${totalBytes} of ${totalBytes} bytes]\n\n${full}`;
+  }
+  let end = Math.floor(full.length * (MAX_PREVIEW / Math.max(1, totalBytes)));
+  end = Math.max(0, Math.min(full.length, end));
+  let cut = full.substring(0, end);
+  while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
+    end -= Math.max(1, Math.floor(end * 0.05));
+    cut = full.substring(0, end);
+  }
+  const shownBytes = byteLengthUtf8(cut);
+  return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${shownBytes} of ${totalBytes} bytes]\n\n${cut}\n\n[Note: Output too large – preview has been truncated.]`;
 };
 
 const defaultAdminOps = [
@@ -101,6 +120,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
   });
   const [testBodyText, setTestBodyText] = useState<string>(prettyJson({ action: 'run_test', username: '', num_ips: 20, country_code: '' }));
   const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
+  const [rawLimitInput, setRawLimitInput] = useState<string>(String(getEffectiveRawJsonMaxBytes()));
   const testBodyBytes = useMemo(() => byteLengthUtf8(testBodyText), [testBodyText]);
   const testBodyTooLarge = testBodyBytes > rawJsonMaxBytes;
   const [useAdvancedBody, setUseAdvancedBody] = useState<boolean>(false);
@@ -109,6 +129,11 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
   const [lastTestAction, setLastTestAction] = useState<string>('run_test');
   const [showTestRaw, setShowTestRaw] = useState<boolean>(false);
   const [testLoading, setTestLoading] = useState<boolean>(false);
+  // ClickHouse-like limited raw preview states
+  const [adminRawPreviewFull, setAdminRawPreviewFull] = useState<string>('');
+  const [adminRawPreview, setAdminRawPreview] = useState<string>('');
+  const [testRawPreviewFull, setTestRawPreviewFull] = useState<string>('');
+  const [testRawPreview, setTestRawPreview] = useState<string>('');
 
   // Inline Test alert visibility (auto-hide with close X, like Admin tab)
   const [testAlertOpen, setTestAlertOpen] = useState<boolean>(false);
@@ -220,15 +245,62 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     setTestPath(newTestPath);
   }, [config, runtimeHooks]);
 
+  // Initialize UI state from persisted runtime settings (once per mount)
+  const didInitUiRef = useRef(false);
+  useEffect(() => {
+    if (didInitUiRef.current) return;
+    const ui: any = (runtimeHooks as any)?.distributed_brute_force_ui || {};
+    if (ui && typeof ui === 'object') {
+      const t = Number(ui.tab);
+      if (Number.isFinite(t)) setTab(t);
+      if (typeof ui.adminOperation === 'string') setAdminOperation(ui.adminOperation);
+      if (typeof ui.adminUsername === 'string') setAdminUsername(ui.adminUsername);
+      if (ui.testFields && typeof ui.testFields === 'object') {
+        setTestFields(prev => {
+          const nips = Number((ui.testFields as any).num_ips);
+          return ({
+            action: typeof ui.testFields.action === 'string' ? ui.testFields.action : prev.action,
+            username: typeof ui.testFields.username === 'string' ? ui.testFields.username : prev.username,
+            num_ips: Number.isFinite(nips) ? nips : prev.num_ips,
+            country_code: typeof ui.testFields.country_code === 'string' ? ui.testFields.country_code : prev.country_code,
+          });
+        });
+      }
+      if (typeof ui.useAdvancedBody === 'boolean') setUseAdvancedBody(Boolean(ui.useAdvancedBody));
+    }
+    didInitUiRef.current = true;
+  }, [runtimeHooks]);
+
+  // Keep raw limit input synced with applied limit
+  useEffect(() => {
+    setRawLimitInput(String(rawJsonMaxBytes));
+  }, [rawJsonMaxBytes]);
+
+  // Recompute limited previews when limit or full previews change
+  useEffect(() => {
+    if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, rawJsonMaxBytes));
+  }, [adminRawPreviewFull, rawJsonMaxBytes]);
+  useEffect(() => {
+    if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, rawJsonMaxBytes));
+  }, [testRawPreviewFull, rawJsonMaxBytes]);
+
   const hasValidConnection = Boolean(runtimeConnection?.backend_url);
 
   const saveHooksRuntime = async () => {
     try {
       const userId = await getCurrentUserId();
+      const ui = {
+        tab,
+        adminOperation,
+        adminUsername,
+        testFields,
+        useAdvancedBody,
+      } as any;
       await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
         ...(runtimeHooks || {}),
         distributed_brute_force_admin: { enabled: adminEnabled, endpoint_path: adminPath },
         distributed_brute_force_test: { enabled: testEnabled, endpoint_path: testPath },
+        distributed_brute_force_ui: ui,
       });
       setNotif({ open: true, severity: 'success', message: 'Hook settings saved' });
     } catch (e:any) {
@@ -319,6 +391,11 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
     setLoading(true);
     setResp('');
+    // Clear raw previews at start
+    setAdminRawPreviewFull('');
+    setAdminRawPreview('');
+    setTestRawPreviewFull('');
+    setTestRawPreview('');
     if (isAdmin) {
       setAdminResponseJson(null);
     } else {
@@ -342,7 +419,16 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
       } else {
         setTestResponseJson(json);
       }
-      setResp(prettyJson(json));
+      const pretty = prettyJson(json);
+      setResp(pretty);
+      // Update ClickHouse-like raw previews
+      if (isAdmin) {
+        setAdminRawPreviewFull(pretty);
+        setAdminRawPreview(applyPreviewLimit(pretty, rawJsonMaxBytes));
+      } else {
+        setTestRawPreviewFull(pretty);
+        setTestRawPreview(applyPreviewLimit(pretty, rawJsonMaxBytes));
+      }
       // Success toast at the top removed as per requirement: top hints are unnecessary here.
       // Keep inline alerts for admin operations and rely on response panels for feedback.
     } catch (e:any) {
@@ -745,19 +831,46 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                     )}
                   </Box>
                 )}
-                {/* Raw JSON toggle */}
-                <Box sx={{ mb: 1 }}>
+                {/* Raw JSON toggle and limit control (ClickHouse-style) */}
+                <Stack direction="row" alignItems="center" gap={1}>
                   <Button size="small" onClick={() => setShowAdminRaw(v => !v)} sx={{ textTransform:'none' }}>
                     {showAdminRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                   </Button>
-                </Box>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Raw JSON limit (bytes)"
+                    value={rawLimitInput}
+                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                      const v = Number((rawLimitInput || '').trim());
+                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                      setRawJsonMaxBytesOverride(clamped);
+                      setRawJsonMaxBytes(clamped);
+                      if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+                      if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+                    } }}
+                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                    sx={{ minWidth: 210 }}
+                  />
+                  <Button size="small" variant="outlined" onClick={()=>{
+                    const v = Number((rawLimitInput || '').trim());
+                    const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                    setRawJsonMaxBytesOverride(clamped);
+                    setRawJsonMaxBytes(clamped);
+                    if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+                    if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+                  }}>Apply</Button>
+                </Stack>
                 {showAdminRaw && (
                   <TextField
-                    value={adminResponse}
+                    value={adminRawPreview}
                     fullWidth
                     multiline
                     minRows={8}
                     InputProps={{ readOnly: true }}
+                    sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
                   />
                 )}
               </Grid>
@@ -831,22 +944,6 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
             {useAdvancedBody && (
               <>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Raw JSON limit (bytes)"
-                    value={rawJsonMaxBytes}
-                    onChange={(e)=>{
-                      const v = Number(e.target.value || 0);
-                      setRawJsonMaxBytesOverride(v);
-                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                      setRawJsonMaxBytes(clamped);
-                    }}
-                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                    helperText={`${RAW_JSON_MIN_BYTES}–${RAW_JSON_MAX_BYTES}`}
-                  />
-                </Box>
                 <TextField
                   label="Request Body (JSON)"
                   value={testBodyText}
@@ -960,19 +1057,46 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                 </Box>
               )}
 
-              {/* Raw JSON toggle and content */}
-              <Box sx={{ mb: 1 }}>
+              {/* Raw JSON toggle and limit control (ClickHouse-style) */}
+              <Stack direction="row" alignItems="center" gap={1}>
                 <Button size="small" onClick={() => setShowTestRaw(v => !v)} sx={{ textTransform:'none' }}>
                   {showTestRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                 </Button>
-              </Box>
+                <Box sx={{ flexGrow: 1 }} />
+                <TextField
+                  size="small"
+                  type="number"
+                  label="Raw JSON limit (bytes)"
+                  value={rawLimitInput}
+                  onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                  onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                    const v = Number((rawLimitInput || '').trim());
+                    const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                    setRawJsonMaxBytesOverride(clamped);
+                    setRawJsonMaxBytes(clamped);
+                    if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+                    if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+                  } }}
+                  inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                  sx={{ minWidth: 210 }}
+                />
+                <Button size="small" variant="outlined" onClick={()=>{
+                  const v = Number((rawLimitInput || '').trim());
+                  const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                  setRawJsonMaxBytesOverride(clamped);
+                  setRawJsonMaxBytes(clamped);
+                  if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+                  if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+                }}>Apply</Button>
+              </Stack>
               {showTestRaw && (
                 <TextField
-                  value={testResponse}
+                  value={testRawPreview}
                   fullWidth
                   multiline
                   minRows={8}
                   InputProps={{ readOnly: true }}
+                  sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
                 />
               )}
             </Box>

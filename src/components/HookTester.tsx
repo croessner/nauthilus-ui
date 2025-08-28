@@ -43,6 +43,25 @@ type KV = { key: string; value: string; id: string };
 const pretty = (v: any) => {
   try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v, null, 2); } catch { return String(v); }
 };
+
+// Apply a byte-based preview limit identical to ClickHouse page
+const applyPreviewLimit = (full: string, limit: number): string => {
+  const MAX_PREVIEW = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(limit) ? limit : RAW_JSON_MIN_BYTES));
+  const totalBytes = byteLengthUtf8(full);
+  if (totalBytes <= MAX_PREVIEW) {
+    return `[Raw preview — limit ${MAX_PREVIEW} bytes — showing ${totalBytes} of ${totalBytes} bytes]\n\n${full}`;
+  }
+  let end = Math.floor(full.length * (MAX_PREVIEW / Math.max(1, totalBytes)));
+  end = Math.max(0, Math.min(full.length, end));
+  let cut = full.substring(0, end);
+  while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
+    end -= Math.max(1, Math.floor(end * 0.05));
+    cut = full.substring(0, end);
+  }
+  const shownBytes = byteLengthUtf8(cut);
+  return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${shownBytes} of ${totalBytes} bytes]\n\n${cut}\n\n[Note: Output too large – preview has been truncated.]`;
+};
+
 const storageKey = (username: string) => `ui:hooktester:last:${username}`;
 
 const HookTester = (): React.JSX.Element => {
@@ -65,8 +84,11 @@ const HookTester = (): React.JSX.Element => {
   const [respHeaders, setRespHeaders] = useState<[string,string][]>([]);
   const [reqHeaders, setReqHeaders] = useState<[string,string][]>([]);
   const [respBody, setRespBody] = useState<string>('');
-  const [showRaw, setShowRaw] = useState<boolean>(false);
   const [notif, setNotif] = useState<{open:boolean;severity:'success'|'error'|'info'|'warning';message:string}>({open:false,severity:'info',message:''});
+  // ClickHouse-like limited raw preview state for response
+  const [rawLimitInput, setRawLimitInput] = useState<string>(String(getEffectiveRawJsonMaxBytes()));
+  const [respRawPreviewFull, setRespRawPreviewFull] = useState<string>('');
+  const [respRawPreview, setRespRawPreview] = useState<string>('');
   // Collapsible panels
   const [showRequestPanel, setShowRequestPanel] = useState<boolean>(true);
   // Collapsible headers in response
@@ -147,6 +169,16 @@ const HookTester = (): React.JSX.Element => {
     try { window.localStorage.setItem(storageKey(username), JSON.stringify(payload)); } catch {}
   }, [method, endpointPath, query, headersRows, body, contentType, useJsonPretty]);
 
+  // Keep raw limit input in sync with applied limit
+  useEffect(() => {
+    setRawLimitInput(String(rawJsonMaxBytes));
+  }, [rawJsonMaxBytes]);
+
+  // Recompute limited response preview when inputs change
+  useEffect(() => {
+    if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, rawJsonMaxBytes));
+  }, [respRawPreviewFull, rawJsonMaxBytes]);
+
   const hasBody = useMemo(() => !['GET','HEAD','OPTIONS'].includes(method), [method]);
 
   const addRow = () => setQuery((rows) => [...rows, { key: '', value: '', id: crypto.randomUUID() }]);
@@ -198,6 +230,9 @@ const HookTester = (): React.JSX.Element => {
       setRespHeaders([]);
       setReqHeaders([]);
       setRespBody('');
+      // Clear raw previews at start
+      setRespRawPreviewFull('');
+      setRespRawPreview('');
 
       const url = buildURL();
       const conn = getConnection();
@@ -245,6 +280,10 @@ const HookTester = (): React.JSX.Element => {
       let text: string;
       try { text = await resp.text(); } catch { text = ''; }
       setRespBody(text);
+      // Update ClickHouse-style raw previews
+      const prettyText = pretty(text);
+      setRespRawPreviewFull(prettyText);
+      setRespRawPreview(applyPreviewLimit(prettyText, rawJsonMaxBytes));
 
       if (!resp.ok) {
         let msg = text;
@@ -467,22 +506,6 @@ const HookTester = (): React.JSX.Element => {
                     <Button size="small" startIcon={<RefreshIcon />} onClick={formatBody}>Format JSON</Button>
                     <Button size="small" onClick={pasteExample}>Insert example</Button>
                   </Stack>
-                  <Box sx={{ mt: 1 }}>
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Raw JSON limit (bytes)"
-                      value={rawJsonMaxBytes}
-                      onChange={(e) => {
-                        const v = Number(e.target.value || 0);
-                        setRawJsonMaxBytesOverride(v);
-                        const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                        setRawJsonMaxBytes(clamped);
-                      }}
-                      inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                      helperText={`${RAW_JSON_MIN_BYTES}–${RAW_JSON_MAX_BYTES}`}
-                    />
-                  </Box>
                 </Grid>
                 <Grid item xs={12} md={8}>
                   <TextField
@@ -518,9 +541,6 @@ const HookTester = (): React.JSX.Element => {
       <Paper sx={{ p: 2, mt: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
           <Typography variant="h6">Response</Typography>
-          <Button size="small" onClick={() => setShowRaw(v => !v)} sx={{ textTransform: 'none' }}>
-            {showRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
-          </Button>
           {loading && <CircularProgress size={18} />}
           <Box flexGrow={1} />
           {status && <Chip color={status.code >= 200 && status.code < 300 ? 'success' : 'error'} label={`Status: ${status.code} ${status.text}`} />}
@@ -556,9 +576,41 @@ const HookTester = (): React.JSX.Element => {
           </Box>
         )}
         <Typography variant="subtitle2">Body</Typography>
-        <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto', maxHeight: showRequestPanel ? 400 : 650 }}>
-          {showRaw ? respBody : pretty(respBody)}
-        </Box>
+        <Stack direction="row" alignItems="center" gap={1}>
+          <Box sx={{ flexGrow: 1 }} />
+          <TextField
+            size="small"
+            type="number"
+            label="Raw JSON limit (bytes)"
+            value={rawLimitInput}
+            onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+            onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+              const v = Number((rawLimitInput || '').trim());
+              const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+              setRawJsonMaxBytesOverride(clamped);
+              setRawJsonMaxBytes(clamped);
+              if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, clamped));
+            } }}
+            inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+            sx={{ minWidth: 210 }}
+          />
+          <Button size="small" variant="outlined" onClick={()=>{
+            const v = Number((rawLimitInput || '').trim());
+            const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+            setRawJsonMaxBytesOverride(clamped);
+            setRawJsonMaxBytes(clamped);
+            if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, clamped));
+          }}>Apply</Button>
+        </Stack>
+        <TextField
+          variant="outlined"
+          fullWidth
+          multiline
+          minRows={8}
+          value={respRawPreview || pretty(respBody)}
+          InputProps={{ readOnly: true }}
+          sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
+        />
       </Paper>
 
       <Snackbar open={notif.open} autoHideDuration={4000} onClose={() => setNotif({ ...notif, open: false })}>

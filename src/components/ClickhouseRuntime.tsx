@@ -62,9 +62,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
 
   const [rawPreview, setRawPreview] = useState<string>('');
+  const [rawPreviewFull, setRawPreviewFull] = useState<string>('');
   const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
+  const [rawLimitInput, setRawLimitInput] = useState<string>(String(getEffectiveRawJsonMaxBytes()));
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [rawSql, setRawSql] = useState<string>('');
+
+  // Keep text input in sync when the applied limit changes
+  useEffect(() => { setRawLimitInput(String(rawJsonMaxBytes)); }, [rawJsonMaxBytes]);
 
   // Optional time range filter for ts field
   const [tsStart, setTsStart] = useState<string>(''); // datetime-local string
@@ -131,6 +136,32 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [runtimeHooks]);
 
+  // Initialize UI state from persisted runtime settings (once per mount)
+  const didInitUiRef = useRef(false);
+  useEffect(() => {
+    if (didInitUiRef.current) return;
+    const ui = (runtimeHooks as any)?.clickhouse_query?.ui || {};
+    if (ui && typeof ui === 'object') {
+      if (ui.action) setAction(ui.action as Action);
+      if (typeof ui.username === 'string') setUsername(ui.username);
+      if (typeof ui.ip === 'string') setIp(ui.ip);
+      const lim = Number((ui as any).limit);
+      if (Number.isFinite(lim)) setLimit(lim);
+      if (ui.authFilter === 'all' || ui.authFilter === 'failed' || ui.authFilter === 'success') setAuthFilter(ui.authFilter);
+      const ps = Number((ui as any).pageSize);
+      if (Number.isFinite(ps)) setPageSize(ps);
+      if (typeof ui.tsStart === 'string') setTsStart(ui.tsStart);
+      if (typeof ui.tsEnd === 'string') setTsEnd(ui.tsEnd);
+      if (typeof ui.rawSql === 'string') setRawSql(ui.rawSql);
+      if (typeof ui.mapOpen === 'boolean') setMapOpen(Boolean(ui.mapOpen));
+      const r = Number((ui as any).refreshMs);
+      if (Number.isFinite(r)) {
+        try { setRefreshMs(r); } catch {}
+      }
+    }
+    didInitUiRef.current = true;
+  }, [runtimeHooks]);
+
   const handlePickSuggestion = (ep: string) => { setEndpointPath(ep); setAnchorEl(null); };
 
   const buildHookUrl = (connectionConfig: any) => {
@@ -185,6 +216,24 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } catch {}
     return [];
   };
+
+  const applyPreviewLimit = useCallback((full: string, limit: number): string => {
+    const MAX_PREVIEW = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(limit) ? limit : RAW_JSON_MIN_BYTES));
+    const totalBytes = byteLengthUtf8(full);
+    if (totalBytes <= MAX_PREVIEW) {
+      return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${totalBytes} of ${totalBytes} bytes]\n\n${full}`;
+    }
+    // approximate truncation by substring while staying under byte limit
+    let end = Math.floor(full.length * (MAX_PREVIEW / Math.max(1, totalBytes)));
+    end = Math.max(0, Math.min(full.length, end));
+    let cut = full.substring(0, end);
+    while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
+      end -= Math.max(1, Math.floor(end * 0.05));
+      cut = full.substring(0, end);
+    }
+    const shownBytes = byteLengthUtf8(cut);
+    return `[Raw JSON preview — limit ${MAX_PREVIEW} bytes — showing ${shownBytes} of ${totalBytes} bytes]\n\n${cut}\n\n[Note: Output too large – preview has been truncated.]`;
+  }, []);
 
   const runQuery = useCallback(async (force: boolean = false) => {
     // Guard: raw_sql should only execute on explicit Run click
@@ -261,25 +310,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         setError('Hook returned no data');
         return;
       }
-      // Truncate preview according to configured raw JSON byte limit
-      const MAX_PREVIEW = rawJsonMaxBytes;
-      const encLen = byteLengthUtf8(preview);
-      let previewText = preview;
-      if (encLen > MAX_PREVIEW) {
-        // approximate by substring; try to find a cut that is under limit
-        let end: number;
-        // quick proportional cut
-        end = Math.floor(preview.length * (MAX_PREVIEW / encLen));
-        end = Math.max(0, Math.min(preview.length, end));
-        let cut = preview.substring(0, end);
-        // ensure we don't exceed limits after proportional cut
-        while (byteLengthUtf8(cut) > MAX_PREVIEW && end > 0) {
-          end -= Math.max(1, Math.floor(end * 0.05));
-          cut = preview.substring(0, end);
-        }
-        previewText = `${cut}\n\n[Note: Output too large – preview has been truncated.]`;
-      }
-      setRawPreview(previewText);
+      // Store full preview and apply current limit for display
+      setRawPreviewFull(preview);
+      setRawPreview(applyPreviewLimit(preview, rawJsonMaxBytes));
       setRows(parsed);
       // Auto-expand raw if no tabular rows parsed
       setShowRaw(parsed.length === 0 && Boolean(preview));
@@ -560,25 +593,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb:2, flexWrap:'wrap' }}>
+      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb:3, flexWrap:'wrap' }}>
         <Typography variant="h6" sx={{ fontWeight:700 }}>ClickHouse</Typography>
         <Box sx={{ flexGrow:1 }} />
-        {/* Raw JSON limit control to match other pages */}
-        <TextField
-          size="small"
-          type="number"
-          label="Raw JSON limit (bytes)"
-          value={rawJsonMaxBytes}
-          onChange={(e)=>{
-            const v = Number(e.target.value || 0);
-            setRawJsonMaxBytesOverride(v);
-            const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-            setRawJsonMaxBytes(clamped);
-          }}
-          inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-          helperText={`${RAW_JSON_MIN_BYTES}–${RAW_JSON_MAX_BYTES}`}
-          sx={{ mr:1, minWidth: 210 }}
-        />
         {/* Top-right refresh and interval (like Security) */}
         <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval">
           <MenuItem value={0}>OFF</MenuItem>
@@ -620,9 +637,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               const userId = await getCurrentUserId();
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
               const colsToSave = (selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []);
+              const ui = {
+                action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, refreshMs
+              } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
-                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: colsToSave }
+                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: colsToSave, ui }
               } as any);
               setNotif({ open:true, severity:'success', message:'Hook settings saved' });
             } catch(e:any) {
@@ -640,8 +660,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
       {/* Query section below hook configuration */}
       <Paper sx={{ p:2, mb:2 }}>
-        <Typography variant="subtitle1">Query</Typography>
-        <Grid container spacing={1} sx={{ mt:1 }}>
+        <Typography variant="subtitle1" sx={{ mb: 1 }}>Query</Typography>
+        <Grid container spacing={2} sx={{ mt:1 }}>
           <Grid item xs={12} sm={4}>
             <TextField select fullWidth label="Action" value={action} onChange={e=>setAction(e.target.value as Action)}>
               <MenuItem value="recent">recent</MenuItem>
@@ -657,17 +677,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <TextField fullWidth label="IP" value={ip} onChange={e=>setIp(e.target.value)} disabled={action!=='by_ip'} />
           </Grid>
           <Grid item xs={12} sm={3}>
-            <TextField
-              fullWidth
-              type="number"
-              label="Limit"
-              value={limit}
-              inputProps={{ min: 1, max: 1000, step: 1 }}
-              onChange={(e)=>{
-                const v = Number(e.target.value);
-                setLimit(Number.isFinite(v) ? v : 0);
-              }}
-            />
+            <TextField select fullWidth label="Limit" value={limit} onChange={(e)=> setLimit(Number(e.target.value))}>
+              {[50,100,200,500,1000,2000,5000,10000].map(n=> (
+                <MenuItem key={n} value={n}>{n}</MenuItem>
+              ))}
+            </TextField>
           </Grid>
           <Grid item xs={12} sm={3}>
             <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
@@ -728,12 +742,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             />
           </Grid>
           <Grid item xs={12} sm={8}>
-            <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
-              Run
-            </Button>
-            <Button sx={{ ml:1 }} variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setError(''); }} disabled={loading}>
-              Reset
-            </Button>
+            <Stack direction="row" spacing={1} alignItems="center">
+              <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
+                Run
+              </Button>
+              <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
+                Reset
+              </Button>
+            </Stack>
           </Grid>
         </Grid>
       </Paper>
@@ -881,9 +897,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+                const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, refreshMs } as any;
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
-                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields }
+                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
                 } as any);
                 setNotif({ open:true, severity:'success', message:'Column selection saved' });
               } catch(e:any) {
@@ -975,9 +992,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+                              const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, refreshMs } as any;
                               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                 ...(runtimeHooks || {}),
-                                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next }
+                                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, ui }
                               } as any);
                               setNotif({ open:true, severity:'success', message:'Column order saved' });
                             } catch(e:any) {
@@ -1028,6 +1046,30 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   <Button size="small" onClick={()=>setShowRaw(v=>!v)} sx={{ textTransform:'none' }}>
                     {showRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                   </Button>
+                  <Box sx={{ flexGrow: 1 }} />
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Raw JSON limit (bytes)"
+                    value={rawLimitInput}
+                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                      const v = Number((rawLimitInput || '').trim());
+                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                      setRawJsonMaxBytesOverride(clamped);
+                      setRawJsonMaxBytes(clamped);
+                      if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
+                    } }}
+                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                    sx={{ minWidth: 210 }}
+                  />
+                  <Button size="small" variant="outlined" onClick={()=>{
+                    const v = Number((rawLimitInput || '').trim());
+                    const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                    setRawJsonMaxBytesOverride(clamped);
+                    setRawJsonMaxBytes(clamped);
+                    if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
+                  }}>Apply</Button>
                 </Stack>
                 {showRaw && (
                   <TextField
