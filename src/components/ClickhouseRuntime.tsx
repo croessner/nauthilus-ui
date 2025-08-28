@@ -661,8 +661,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
               ) : (
                 <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
-                  {/* Zoom slider positioned top-right over the map */}
-                  <Box sx={{ position:'absolute', top:8, right:8, zIndex:1, bgcolor:'rgba(255,255,255,0.8)', p:1, borderRadius:1, boxShadow:1 }}>
+                  {/* Zoom slider displayed above the map (not overlay) for better visibility on small screens */}
+                  <Box sx={{ display:'flex', justifyContent:'flex-end', mb:1 }}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>-</Typography>
                       <Slider
