@@ -364,6 +364,22 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
     const isCmpStart = (c: string) => c === '=' || c === '!' || c === '<' || c === '>';
 
+    // Parse JS-like regex literal: /pattern/flags (supports escaped / as \/)
+    const parseRegexLiteral = (s: string): RegExp | null => {
+      if (!s || s[0] !== '/' || s.length < 2) return null;
+      let i = 1;
+      let end = -1;
+      while (i < s.length) {
+        const ch = s[i];
+        if (ch === '/' && s[i-1] !== '\\') { end = i; break; }
+        i++;
+      }
+      if (end <= 1) return null; // need at least one char for pattern
+      const pattern = s.slice(1, end);
+      let flags = s.slice(end + 1);
+      try { return new RegExp(pattern, flags); } catch { return null; }
+    };
+
     const tokenize = (input: string): Tok[] => {
       const out: Tok[] = [];
       let i = 0;
@@ -462,6 +478,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     const hasSelection = (selectedFields || []).length > 0;
 
     const parseLiteral = (s: string): any => {
+      // Regex literal support
+      const re = parseRegexLiteral(s);
+      if (re) return re;
       const v = s;
       const low = (v || '').toLowerCase();
       if (low === 'true') return true;
@@ -484,6 +503,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     };
 
     const compare = (l: any, r: any, op: string): boolean => {
+      // Regex compare: only for equality/inequality, test against raw string
+      if (r instanceof RegExp) {
+        const lsRaw = l == null ? '' : String(l);
+        if (op === '==' || op === '=') return r.test(lsRaw);
+        if (op === '!=') return !r.test(lsRaw);
+        // Other operators not supported for regex
+        return false;
+      }
       // Try numeric/date compare if both side parse
       const ln = toFiniteNumber(l);
       const rn = toFiniteNumber(r);
@@ -508,11 +535,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
     return filteredRows.filter((row) => {
       const keys = hasSelection ? selectedFields : Object.keys(row || {});
-      // Build a single lowercased string for efficient includes
-      const text = keys.map(k => {
+      // Build both raw and lowercased strings for matching
+      const textRaw = keys.map(k => {
         const v = (row as any)?.[k];
         return v === null || v === undefined ? '' : String(v);
-      }).join(' ').toLowerCase();
+      }).join(' ');
+      const text = textRaw.toLowerCase();
 
       if (!rpn.length) {
         const q = raw.toLowerCase();
@@ -522,12 +550,15 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const st: any[] = [];
       const asBool = (val: any): boolean => {
         if (typeof val === 'boolean') return val;
+        if (val instanceof RegExp) return val.test(textRaw);
         const term = String(val ?? '').toLowerCase();
         return term ? text.includes(term) : true;
       };
       for (const tk of rpn) {
         if (tk.t === 'WORD') {
-          st.push(tk.v ?? '');
+          // Interpret WORD either as regex literal or plain string
+          const maybeRe = parseRegexLiteral(tk.v ?? '');
+          st.push(maybeRe || (tk.v ?? ''));
         } else if (tk.t === 'NOT') {
           const a = asBool(st.pop()); st.push(!a);
         } else if (tk.t === 'AND') {
@@ -539,7 +570,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           const leftRaw = st.pop();
           const field = String(leftRaw || '');
           const rowVal = (row as any)?.[field];
-          const value = parseLiteral(String(rightRaw ?? ''));
+          const value = (rightRaw instanceof RegExp) ? rightRaw : parseLiteral(String(rightRaw ?? ''));
           st.push(compare(rowVal, value, tk.v || '=='));
         }
       }
@@ -1183,7 +1214,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 placeholder="Filter (AND/OR/NOT; parentheses supported)"
                 value={searchQuery}
                 onChange={(e)=> setSearchQuery(e.target.value)}
-                helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, <, >, <=, >= (e.g., authenticated==true, failed_login_count != "").'
+                helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, <, >, <=, >= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\\./", features=="/rbl/", "/[a-z]+/").'
                 InputProps={{
                   endAdornment: searchQuery ? (
                     <InputAdornment position="end">
