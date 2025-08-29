@@ -23,7 +23,7 @@ import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 're
 
 type Row = Record<string, any>;
 
-type Action = 'recent' | 'by_user' | 'by_ip' | 'raw_sql';
+type Action = 'recent' | 'by_user' | 'by_account' | 'by_ip' | 'raw_sql';
 
 const ClickhouseRuntime = (): React.JSX.Element => {
   const { currentProfileName } = useConfig();
@@ -49,6 +49,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Query controls
   const [action, setAction] = useState<Action>('recent');
   const [username, setUsername] = useState<string>('');
+  const [account, setAccount] = useState<string>('');
   const [ip, setIp] = useState<string>('');
   const [limit, setLimit] = useState<number>(100);
   const [loading, setLoading] = useState<boolean>(false);
@@ -89,9 +90,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   }, []);
 
   // Column selection
-  const DEFAULT_COLUMNS = useMemo(() => ['ts','client_ip','username','service','proto','geoip_country','authenticated','failed_login_count','gp_attempts','dyn_threat'], []);
+  const DEFAULT_COLUMNS = useMemo(() => ['ts','client_ip','username','service','features','proto','geoip_country','authenticated','failed_login_count','gp_attempts','dyn_threat'], []);
   const KNOWN_FIELDS = useMemo(() => [
-    'ts','session','service','client_ip','client_port','client_net','client_id','hostname','proto','user_agent','local_ip','local_port','display_name','account','account_field','unique_user_id','username','password_hash','pwnd_info','brute_force_bucket','brute_force_counter','oidc_cid','failed_login_count','failed_login_rank','failed_login_recognized','geoip_guid','geoip_country','geoip_iso_codes','geoip_status','gp_attempts','gp_unique_ips','gp_unique_users','gp_ips_per_user','prot_active','prot_reason','prot_backoff','prot_delay_ms','dyn_threat','dyn_response','debug','repeating','user_found','authenticated','no_auth','xssl_protocol','xssl_cipher','ssl_fingerprint'
+    'ts','session','service','features','client_ip','client_port','client_net','client_id','hostname','proto','user_agent','local_ip','local_port','display_name','account','account_field','unique_user_id','username','password_hash','pwnd_info','brute_force_bucket','brute_force_counter','oidc_cid','failed_login_count','failed_login_rank','failed_login_recognized','geoip_guid','geoip_country','geoip_iso_codes','geoip_status','gp_attempts','gp_unique_ips','gp_unique_users','gp_ips_per_user','prot_active','prot_reason','prot_backoff','prot_delay_ms','dyn_threat','dyn_response','debug','repeating','user_found','authenticated','no_auth','xssl_protocol','xssl_cipher','ssl_fingerprint'
   ], []);
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
@@ -147,6 +148,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     if (ui && typeof ui === 'object') {
       if (ui.action) setAction(ui.action as Action);
       if (typeof ui.username === 'string') setUsername(ui.username);
+      if (typeof ui.account === 'string') setAccount(ui.account);
       if (typeof ui.ip === 'string') setIp(ui.ip);
       const lim = Number((ui as any).limit);
       if (Number.isFinite(lim)) setLimit(lim);
@@ -176,6 +178,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     // Add action-specific query params directly
     proxyUrl.searchParams.set('action', action);
     if (action === 'by_user' && username) proxyUrl.searchParams.set('username', username);
+    if (action === 'by_account' && account) proxyUrl.searchParams.set('account', account);
     if (action === 'by_ip' && ip) proxyUrl.searchParams.set('ip', ip);
     if (action === 'raw_sql' && rawSql) {
       let sql = rawSql.trim();
@@ -243,6 +246,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (action === 'by_user' && !username) {
         setError('Username is required for action by_user.');
         return;
+      }
+      if (action === 'by_account' && !account) {
+          setError('Account is required for action by_account.');
+          return;
       }
       if (action === 'by_ip' && !ip) {
         setError('IP is required for action by_ip.');
@@ -324,7 +331,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } finally {
       setLoading(false);
     }
-  }, [getConnection, endpointPath, action, username, ip, limit, hookEnabled, rawSql, tsStart, tsEnd]);
+  }, [getConnection, endpointPath, action, username, account, ip, limit, hookEnabled, rawSql, tsStart, tsEnd]);
 
   // Auto-refresh interval like Security page (default 30s)
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
@@ -751,7 +758,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
               const colsToSave = (selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []);
               const ui = {
-                action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs
+                action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs
               } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
@@ -883,16 +890,23 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 <TextField select fullWidth label="Action" value={action} onChange={e=>setAction(e.target.value as Action)}>
                   <MenuItem value="recent">recent</MenuItem>
                   <MenuItem value="by_user">by_user</MenuItem>
+                  <MenuItem value="by_account">by_account</MenuItem>
                   <MenuItem value="by_ip">by_ip</MenuItem>
                   <MenuItem value="raw_sql">raw_sql</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField fullWidth label="Username" value={username} onChange={e=>setUsername(e.target.value)} disabled={action!=='by_user'} />
-              </Grid>
-              <Grid item xs={12} sm={4}>
-                <TextField fullWidth label="IP" value={ip} onChange={e=>setIp(e.target.value)} disabled={action!=='by_ip'} />
-              </Grid>
+              {(action === 'by_user' || action === 'by_account' || action === 'by_ip') && (
+                <Grid item xs={12} sm={4}>
+                  <TextField
+                    fullWidth
+                    label={action === 'by_user' ? 'Username' : action === 'by_account' ? 'Account' : 'IP'}
+                    value={action === 'by_user' ? username : action === 'by_account' ?  account : ip}
+                    onChange={(e)=> action === 'by_user' ? setUsername(e.target.value) : action === 'by_account' ? setAccount(e.target.value) : setIp(e.target.value)}
+                  />
+                </Grid>
+              )}
+            </Grid>
+            <Grid container spacing={2} sx={{ mt:1 }}>
               <Grid item xs={12} sm={3}>
                 <TextField select fullWidth label="Limit" value={limit} onChange={(e)=> setLimit(Number(e.target.value))}>
                   {[50,100,200,500,1000,2000,5000,10000].map(n=> (
@@ -1021,7 +1035,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
                   clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
@@ -1139,7 +1153,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                              const ui = { action, username, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
                               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                 ...(runtimeHooks || {}),
                                 clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, ui }
