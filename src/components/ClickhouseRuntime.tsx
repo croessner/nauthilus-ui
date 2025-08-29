@@ -346,12 +346,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   }, [rows, authFilter]);
 
   // Search filter on top of authFilter for the table only (not affecting map/aggregates)
-  // Supports boolean logic: AND/OR/NOT, parentheses, symbols (&&, ||, !).
+  // Supports boolean logic: AND/OR/NOT, parentheses, symbols (&&, ||, !), quoted phrases, and field comparisons (key==value, !=, <, >, <=, >=).
   const searchFilteredRows = useMemo(() => {
     const raw = (searchQuery || '').trim();
     if (!raw) return filteredRows;
 
-    type TokType = 'WORD'|'AND'|'OR'|'NOT'|'LPAREN'|'RPAREN';
+    type TokType = 'WORD'|'AND'|'OR'|'NOT'|'LPAREN'|'RPAREN'|'CMP';
     type Tok = { t: TokType; v?: string };
 
     const normalizeOp = (s: string): TokType | null => {
@@ -361,6 +361,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (x === 'not' || x === '!' ) return 'NOT';
       return null;
     };
+
+    const isCmpStart = (c: string) => c === '=' || c === '!' || c === '<' || c === '>';
 
     const tokenize = (input: string): Tok[] => {
       const out: Tok[] = [];
@@ -376,10 +378,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           let buf = '';
           while (i < n && input[i] !== q) { buf += input[i++]; }
           if (i < n && input[i] === q) i++; // skip closing quote
-          if (buf.trim().length > 0) out.push({ t: 'WORD', v: buf });
+          // Keep even empty string tokens (e.g., "")
+          out.push({ t: 'WORD', v: buf });
           continue;
         }
-        // Operators by symbol
+        // Comparison operators by symbol: ==, !=, <=, >=, <, >, =
+        if (isCmpStart(ch)) {
+          const two = input.slice(i, i+2);
+          if (two === '==' || two === '!=' || two === '<=' || two === '>=') { out.push({ t: 'CMP', v: two }); i += 2; continue; }
+          if (ch === '<' || ch === '>' || ch === '=') { out.push({ t: 'CMP', v: ch }); i += 1; continue; }
+        }
+        // Logical operators by symbol
         if (ch === '&' || ch === '|' || ch === '!') {
           // try two-char first
           const two = input.slice(i, i+2);
@@ -390,7 +399,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
         // Word or keyword
         let j = i;
-        while (j < n && !/\s|\(|\)|&|\||!|"|\'/.test(input[j])) j++;
+        while (j < n && !/\s|\(|\)|&|\||!|"|\'|=|<|>/.test(input[j])) j++;
         const word = input.slice(i, j);
         const op = normalizeOp(word);
         if (op) out.push({ t: op });
@@ -400,11 +409,30 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return out;
     };
 
+    // Transform pattern: WORD(field) NOT WORD(value)  => WORD(field) WORD(value) CMP('!=')
+    const rewriteNotComparisons = (toks: Tok[]): Tok[] => {
+      const out: Tok[] = [];
+      for (let i = 0; i < toks.length; i++) {
+        const a = toks[i];
+        const b = toks[i+1];
+        const c = toks[i+2];
+        if (a && b && c && a.t === 'WORD' && b.t === 'NOT' && c.t === 'WORD') {
+          out.push({ t: 'WORD', v: a.v });
+          out.push({ t: 'WORD', v: c.v });
+          out.push({ t: 'CMP', v: '!=' });
+          i += 2;
+          continue;
+        }
+        out.push(a);
+      }
+      return out;
+    };
+
     const toRpn = (toks: Tok[]): Tok[] => {
       const out: Tok[] = [];
       const ops: Tok[] = [];
-      const prec = (t: TokType) => t === 'NOT' ? 3 : t === 'AND' ? 2 : t === 'OR' ? 1 : 0;
-      const isOp = (t: Tok): boolean => t.t === 'AND' || t.t === 'OR' || t.t === 'NOT';
+      const prec = (t: TokType) => t === 'NOT' ? 3 : t === 'CMP' ? 3 : t === 'AND' ? 2 : t === 'OR' ? 1 : 0;
+      const isOp = (t: Tok): boolean => t.t === 'AND' || t.t === 'OR' || t.t === 'NOT' || t.t === 'CMP';
       for (let i = 0; i < toks.length; i++) {
         const tk = toks[i];
         if (tk.t === 'WORD') { out.push(tk); continue; }
@@ -426,32 +454,56 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return out;
     };
 
-    const toks = tokenize(raw);
+    let toks = tokenize(raw);
+    toks = rewriteNotComparisons(toks);
     let rpn: Tok[] = [];
     try { rpn = toRpn(toks); } catch { rpn = []; }
 
     const hasSelection = (selectedFields || []).length > 0;
 
-    const evalOnText = (text: string): boolean => {
-      if (!rpn.length) {
-        // Fallback to simple include on full string of tokens
-        const q = raw.toLowerCase();
-        return text.includes(q);
+    const parseLiteral = (s: string): any => {
+      const v = s;
+      const low = (v || '').toLowerCase();
+      if (low === 'true') return true;
+      if (low === 'false') return false;
+      if (low === 'null' || low === 'undefined') return '';
+      // number
+      const num = Number(v);
+      if (!Number.isNaN(num) && v !== '') return num;
+      return v;
+    };
+
+    const toFiniteNumber = (val: any): number | null => {
+      if (val == null || val === '') return null;
+      if (typeof val === 'number') return Number.isFinite(val) ? val : null;
+      if (typeof val === 'boolean') return val ? 1 : 0;
+      const n = Number(val);
+      if (Number.isFinite(n)) return n;
+      const t = Date.parse(String(val));
+      return Number.isFinite(t) ? t : null;
+    };
+
+    const compare = (l: any, r: any, op: string): boolean => {
+      // Try numeric/date compare if both side parse
+      const ln = toFiniteNumber(l);
+      const rn = toFiniteNumber(r);
+      if (ln !== null && rn !== null) {
+        if (op === '==' || op === '=') return ln === rn;
+        if (op === '!=') return ln !== rn;
+        if (op === '<') return ln < rn;
+        if (op === '>') return ln > rn;
+        if (op === '<=') return ln <= rn;
+        if (op === '>=') return ln >= rn;
       }
-      const st: boolean[] = [];
-      for (const tk of rpn) {
-        if (tk.t === 'WORD') {
-          const term = (tk.v || '').toLowerCase();
-          st.push(term ? text.includes(term) : true);
-        } else if (tk.t === 'NOT') {
-          const a = st.pop() ?? false; st.push(!a);
-        } else if (tk.t === 'AND') {
-          const b = st.pop() ?? false; const a = st.pop() ?? false; st.push(a && b);
-        } else if (tk.t === 'OR') {
-          const b = st.pop() ?? false; const a = st.pop() ?? false; st.push(a || b);
-        }
-      }
-      return st.pop() ?? false;
+      const ls = (l == null ? '' : String(l)).toLowerCase();
+      const rs = (r == null ? '' : String(r)).toLowerCase();
+      if (op === '==' || op === '=') return ls === rs;
+      if (op === '!=') return ls !== rs;
+      if (op === '<') return ls < rs;
+      if (op === '>') return ls > rs;
+      if (op === '<=') return ls <= rs;
+      if (op === '>=') return ls >= rs;
+      return false;
     };
 
     return filteredRows.filter((row) => {
@@ -461,7 +513,39 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         const v = (row as any)?.[k];
         return v === null || v === undefined ? '' : String(v);
       }).join(' ').toLowerCase();
-      return evalOnText(text);
+
+      if (!rpn.length) {
+        const q = raw.toLowerCase();
+        return text.includes(q);
+      }
+
+      const st: any[] = [];
+      const asBool = (val: any): boolean => {
+        if (typeof val === 'boolean') return val;
+        const term = String(val ?? '').toLowerCase();
+        return term ? text.includes(term) : true;
+      };
+      for (const tk of rpn) {
+        if (tk.t === 'WORD') {
+          st.push(tk.v ?? '');
+        } else if (tk.t === 'NOT') {
+          const a = asBool(st.pop()); st.push(!a);
+        } else if (tk.t === 'AND') {
+          const b = asBool(st.pop()); const a = asBool(st.pop()); st.push(a && b);
+        } else if (tk.t === 'OR') {
+          const b = asBool(st.pop()); const a = asBool(st.pop()); st.push(a || b);
+        } else if (tk.t === 'CMP') {
+          const rightRaw = st.pop();
+          const leftRaw = st.pop();
+          const field = String(leftRaw || '');
+          const rowVal = (row as any)?.[field];
+          const value = parseLiteral(String(rightRaw ?? ''));
+          st.push(compare(rowVal, value, tk.v || '=='));
+        }
+      }
+
+      // Reduce remaining stack entries by AND
+      return st.reduce((acc, it) => acc && asBool(it), true);
     });
   }, [filteredRows, searchQuery, selectedFields]);
 
@@ -1099,7 +1183,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 placeholder="Filter (AND/OR/NOT; parentheses supported)"
                 value={searchQuery}
                 onChange={(e)=> setSearchQuery(e.target.value)}
-                helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !.'
+                helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, <, >, <=, >= (e.g., authenticated==true, failed_login_count != "").'
                 InputProps={{
                   endAdornment: searchQuery ? (
                     <InputAdornment position="end">
