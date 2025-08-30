@@ -140,6 +140,23 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [runtimeHooks]);
 
+  // Ensure hook configuration (enabled + endpoint_path) syncs once runtimeHooks are loaded
+  const didSyncHookConfigRef = useRef<string | null>(null);
+  useEffect(() => {
+    // Reset guard when profile changes
+    if (didSyncHookConfigRef.current !== currentProfileName) {
+      didSyncHookConfigRef.current = null;
+    }
+    if (didSyncHookConfigRef.current) return;
+    const cq: any = (runtimeHooks as any)?.clickhouse_query;
+    if (!cq || typeof cq !== 'object') return;
+    // Mark as synced for this profile
+    didSyncHookConfigRef.current = currentProfileName;
+    // Only update if values are present in runtime settings
+    if (typeof cq.enabled === 'boolean') setHookEnabled(Boolean(cq.enabled));
+    if (typeof cq.endpoint_path === 'string' && cq.endpoint_path) setEndpointPath(cq.endpoint_path);
+  }, [runtimeHooks, currentProfileName]);
+
   // Initialize UI state from persisted runtime settings (once per mount)
   const didInitUiRef = useRef(false);
   useEffect(() => {
