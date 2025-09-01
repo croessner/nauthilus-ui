@@ -1061,14 +1061,27 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   value={tsStart}
                   onChange={(e)=>setTsStart(e.target.value)}
                   inputRef={tsStartRef}
+                  placeholder="YYYY-MM-DDThh:mm"
                   InputLabelProps={{ shrink: true }}
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Pick start time">
-                        <EventIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Pick start time">
+                          <EventIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      '& input[type="datetime-local"]': {
+                        WebkitTextFillColor: 'currentColor',
+                        color: 'text.primary',
+                        fontFamily: 'monospace',
+                        fontSize: { xs: 12, sm: 14 },
+                        pr: 3, // leave room for the calendar icon
+                      }
+                    }
+                  }}
+                  inputProps={{ step: 60 }}
                   helperText="Optional"
                 />
               </Grid>
@@ -1080,14 +1093,27 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   value={tsEnd}
                   onChange={(e)=>setTsEnd(e.target.value)}
                   inputRef={tsEndRef}
+                  placeholder="YYYY-MM-DDThh:mm"
                   InputLabelProps={{ shrink: true }}
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end">
-                      <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="Pick end time">
-                        <EventIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  ) }}
+                  InputProps={{
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="Pick end time">
+                          <EventIcon fontSize="small" />
+                        </IconButton>
+                      </InputAdornment>
+                    ),
+                    sx: {
+                      '& input[type="datetime-local"]': {
+                        WebkitTextFillColor: 'currentColor',
+                        color: 'text.primary',
+                        fontFamily: 'monospace',
+                        fontSize: { xs: 12, sm: 14 },
+                        pr: 3,
+                      }
+                    }
+                  }}
+                  inputProps={{ step: 60 }}
                   helperText="Optional"
                 />
               </Grid>
