@@ -76,8 +76,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   useEffect(() => { setRawLimitInput(String(rawJsonMaxBytes)); }, [rawJsonMaxBytes]);
 
   // Optional time range filter for ts field
-  const [tsStart, setTsStart] = useState<string>(''); // datetime-local string
-  const [tsEnd, setTsEnd] = useState<string>('');   // datetime-local string
+  const [tsStart, setTsStart] = useState<string>(''); // datetime-local string (user-entered)
+  const [tsEnd, setTsEnd] = useState<string>('');   // datetime-local string (user-entered)
+  const [tsTzMode, setTsTzMode] = useState<'local'|'utc'>('local'); // how to interpret timestamps
   const tsStartRef = useRef<HTMLInputElement | null>(null);
   const tsEndRef = useRef<HTMLInputElement | null>(null);
   const openPicker = useCallback((input?: HTMLInputElement | null) => {
@@ -174,6 +175,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (Number.isFinite(ps)) setPageSize(ps);
       if (typeof ui.tsStart === 'string') setTsStart(ui.tsStart);
       if (typeof ui.tsEnd === 'string') setTsEnd(ui.tsEnd);
+      if (ui.tsTzMode === 'utc' || ui.tsTzMode === 'local') setTsTzMode(ui.tsTzMode);
       if (typeof ui.rawSql === 'string') setRawSql(ui.rawSql);
       if (typeof ui.mapOpen === 'boolean') setMapOpen(Boolean(ui.mapOpen));
       if (typeof (ui as any).searchQuery === 'string') setSearchQuery((ui as any).searchQuery);
@@ -211,13 +213,42 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       proxyUrl.searchParams.set('status', 'all');
     }
     // Optional ts range
+    const formatLocalIsoWithOffset = (d: Date): string => {
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const yyyy = d.getFullYear();
+      const mm = pad(d.getMonth() + 1);
+      const dd = pad(d.getDate());
+      const hh = pad(d.getHours());
+      const mi = pad(d.getMinutes());
+      const ss = pad(d.getSeconds());
+      const offsetMin = -d.getTimezoneOffset(); // minutes east of UTC
+      const sign = offsetMin >= 0 ? '+' : '-';
+      const oh = pad(Math.floor(Math.abs(offsetMin) / 60));
+      const om = pad(Math.abs(offsetMin) % 60);
+      // Keep 'T' between date and time and a space before offset to mirror stored values
+      return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss} ${sign}${oh}:${om}`;
+    };
     if (tsStart) {
       const d = new Date(tsStart);
-      if (!Number.isNaN(d.getTime())) proxyUrl.searchParams.set('ts_start', d.toISOString());
+      if (!Number.isNaN(d.getTime())) {
+        if (tsTzMode === 'utc') {
+          const iso = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+          proxyUrl.searchParams.set('ts_start', iso);
+        } else {
+          proxyUrl.searchParams.set('ts_start', formatLocalIsoWithOffset(d));
+        }
+      }
     }
     if (tsEnd) {
       const d = new Date(tsEnd);
-      if (!Number.isNaN(d.getTime())) proxyUrl.searchParams.set('ts_end', d.toISOString());
+      if (!Number.isNaN(d.getTime())) {
+        if (tsTzMode === 'utc') {
+          const iso = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
+          proxyUrl.searchParams.set('ts_end', iso);
+        } else {
+          proxyUrl.searchParams.set('ts_end', formatLocalIsoWithOffset(d));
+        }
+      }
     }
     const { authType, authValue } = prepareAuthParams(connectionConfig || {});
     if (authType && authValue) {
@@ -891,7 +922,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
               const colsToSave = (selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []);
               const ui = {
-                action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs
+                action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTzMode, rawSql, mapOpen, searchQuery, refreshMs
               } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
@@ -1052,6 +1083,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   <MenuItem value="all">failed/success</MenuItem>
                   <MenuItem value="failed">failed</MenuItem>
                   <MenuItem value="success">success</MenuItem>
+                </TextField>
+              </Grid>
+              <Grid item xs={12} sm={6}>
+                <TextField select fullWidth label="Time zone" value={tsTzMode} onChange={(e)=> setTsTzMode(e.target.value as any)} helperText="Controls how Start/End are interpreted and sent">
+                  <MenuItem value="local">Local time (with offset)</MenuItem>
+                  <MenuItem value="utc">UTC (Z)</MenuItem>
                 </TextField>
               </Grid>
             </Grid>
@@ -1216,7 +1253,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTzMode, rawSql, mapOpen, searchQuery, refreshMs } as any;
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
                   clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
@@ -1334,7 +1371,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTzMode, rawSql, mapOpen, searchQuery, refreshMs } as any;
                               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                 ...(runtimeHooks || {}),
                                 clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, ui }
