@@ -78,7 +78,49 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Optional time range filter for ts field
   const [tsStart, setTsStart] = useState<string>(''); // datetime-local string (user-entered)
   const [tsEnd, setTsEnd] = useState<string>('');   // datetime-local string (user-entered)
-  const [tsTzMode, setTsTzMode] = useState<'local'|'utc'>('local'); // how to interpret timestamps
+  // Time zone handling: full list of IANA zones plus UTC. Selected zone controls conversion of inputs and display
+  // deprecated tsTzMode replaced by tsTimeZone
+  const [tsTimeZone, setTsTimeZone] = useState<string>(Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC');
+  const tzList = useMemo(() => {
+    const zones: string[] = (Intl as any).supportedValuesOf ? (Intl as any).supportedValuesOf('timeZone') : [];
+    const withUtc = Array.from(new Set(['UTC', ...zones])).filter(Boolean);
+    // Build label with current offset
+    const now = new Date();
+    const formatter = (tz: string) => {
+      try {
+        const f = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset', year:'numeric' });
+        // shortOffset like GMT+2
+        const parts = f.formatToParts(now);
+        const tzn = parts.find(p=>p.type==='timeZoneName')?.value || '';
+        const off = tzn.replace(/^GMT/, '') || '+00';
+        const offNorm = /[+-]\d/.test(off) ? (off.length===2? off+':00' : off.replace('−','-')) : '+00:00';
+        return `${offNorm} ${tz}`;
+      } catch { return `+00:00 ${tz}`; }
+    };
+    return withUtc.map(z => ({ id: z, label: formatter(z) }))
+      .sort((a,b)=> a.label.localeCompare(b.label));
+  }, []);
+
+  // Compute normalized UTC offset like +02:00 for a given Date and time zone
+  const getOffsetForTz = useCallback((d: Date, tz: string): string => {
+    try {
+      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+      const tzn = fmt.formatToParts(d).find(p=>p.type==='timeZoneName')?.value || '';
+      const off = tzn.replace(/^GMT/, '') || '+00';
+      return /[+-]\d/.test(off) ? (off.length===2? off+':00' : off.replace('−','-')) : '+00:00';
+    } catch {
+      return '+00:00';
+    }
+  }, []);
+
+  // Convenience: parse datetime-local input to Date in selected tz context by reusing build helpers
+  const getOffsetsForInputs = useCallback((): { start?: string; end?: string } => {
+    const now = new Date();
+    const startOff = tsStart ? getOffsetForTz(now, tsTimeZone) : undefined;
+    const endOff = tsEnd ? getOffsetForTz(now, tsTimeZone) : undefined;
+    return { start: startOff, end: endOff };
+  }, [tsStart, tsEnd, tsTimeZone, getOffsetForTz]);
+
   const tsStartRef = useRef<HTMLInputElement | null>(null);
   const tsEndRef = useRef<HTMLInputElement | null>(null);
   const openPicker = useCallback((input?: HTMLInputElement | null) => {
@@ -175,7 +217,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (Number.isFinite(ps)) setPageSize(ps);
       if (typeof ui.tsStart === 'string') setTsStart(ui.tsStart);
       if (typeof ui.tsEnd === 'string') setTsEnd(ui.tsEnd);
-      if (ui.tsTzMode === 'utc' || ui.tsTzMode === 'local') setTsTzMode(ui.tsTzMode);
+      if (typeof ui.tsTimeZone === 'string') setTsTimeZone(ui.tsTimeZone);
       if (typeof ui.rawSql === 'string') setRawSql(ui.rawSql);
       if (typeof ui.mapOpen === 'boolean') setMapOpen(Boolean(ui.mapOpen));
       if (typeof (ui as any).searchQuery === 'string') setSearchQuery((ui as any).searchQuery);
@@ -213,41 +255,56 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       proxyUrl.searchParams.set('status', 'all');
     }
     // Optional ts range
-    const formatLocalIsoWithOffset = (d: Date): string => {
-      const pad = (n: number) => String(n).padStart(2, '0');
-      const yyyy = d.getFullYear();
-      const mm = pad(d.getMonth() + 1);
-      const dd = pad(d.getDate());
-      const hh = pad(d.getHours());
-      const mi = pad(d.getMinutes());
-      const ss = pad(d.getSeconds());
-      const offsetMin = -d.getTimezoneOffset(); // minutes east of UTC
-      const sign = offsetMin >= 0 ? '+' : '-';
-      const oh = pad(Math.floor(Math.abs(offsetMin) / 60));
-      const om = pad(Math.abs(offsetMin) % 60);
-      // Keep 'T' between date and time and a space before offset to mirror stored values
-      return `${yyyy}-${mm}-${dd}T${hh}:${mi}:${ss} ${sign}${oh}:${om}`;
+    const pad = (n: number) => String(n).padStart(2, '0');
+    const parseLocalInput = (v: string) => {
+      const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?$/.exec(v);
+      if (!m) return null;
+      const y = Number(m[1]); const mo = Number(m[2]); const d = Number(m[3]);
+      const h = Number(m[4]); const mi = Number(m[5]); const s = Number(m[6] || '0');
+      return { y, mo, d, h, mi, s };
+    };
+    const utcIsoFromWallInZone = (input: string, tz: string): string | null => {
+      const parts = parseLocalInput(input);
+      if (!parts) return null;
+      const targetUtcMs = Date.UTC(parts.y, parts.mo-1, parts.d, parts.h, parts.mi, parts.s);
+      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, hour12:false, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit' });
+      const partsFromMs = (ms: number) => {
+        const p = fmt.formatToParts(new Date(ms));
+        const get = (type: string) => Number(p.find(q=>q.type===type)?.value || 0);
+        return { y:get('year'), mo:get('month'), d:get('day'), h:get('hour'), mi:get('minute'), s:get('second') };
+      };
+      const toMs = (p: any) => Date.UTC(p.y, p.mo-1, p.d, p.h, p.mi, p.s);
+      const wantMs = Date.UTC(parts.y, parts.mo-1, parts.d, parts.h, parts.mi, parts.s);
+      const p0 = partsFromMs(targetUtcMs);
+      const msFormatted0 = toMs(p0);
+      let guess = targetUtcMs + (wantMs - msFormatted0);
+      const p1 = partsFromMs(guess);
+      const msFormatted1 = toMs(p1);
+      guess = guess + (wantMs - msFormatted1);
+      return new Date(guess).toISOString().replace(/\.\d{3}Z$/, 'Z');
+    };
+    const utcIsoFromUtcWall = (input: string): string | null => {
+      const parts = parseLocalInput(input);
+      if (!parts) return null;
+      const ms = Date.UTC(parts.y, parts.mo-1, parts.d, parts.h, parts.mi, parts.s);
+      return new Date(ms).toISOString().replace(/\.\d{3}Z$/, 'Z');
     };
     if (tsStart) {
-      const d = new Date(tsStart);
-      if (!Number.isNaN(d.getTime())) {
-        if (tsTzMode === 'utc') {
-          const iso = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
-          proxyUrl.searchParams.set('ts_start', iso);
-        } else {
-          proxyUrl.searchParams.set('ts_start', formatLocalIsoWithOffset(d));
-        }
+      if (tsTimeZone === 'UTC') {
+        const iso = utcIsoFromUtcWall(tsStart);
+        if (iso) proxyUrl.searchParams.set('ts_start', iso);
+      } else {
+        const iso = utcIsoFromWallInZone(tsStart, tsTimeZone);
+        if (iso) proxyUrl.searchParams.set('ts_start', iso);
       }
     }
     if (tsEnd) {
-      const d = new Date(tsEnd);
-      if (!Number.isNaN(d.getTime())) {
-        if (tsTzMode === 'utc') {
-          const iso = d.toISOString().replace(/\.\d{3}Z$/, 'Z');
-          proxyUrl.searchParams.set('ts_end', iso);
-        } else {
-          proxyUrl.searchParams.set('ts_end', formatLocalIsoWithOffset(d));
-        }
+      if (tsTimeZone === 'UTC') {
+        const iso = utcIsoFromUtcWall(tsEnd);
+        if (iso) proxyUrl.searchParams.set('ts_end', iso);
+      } else {
+        const iso = utcIsoFromWallInZone(tsEnd, tsTimeZone);
+        if (iso) proxyUrl.searchParams.set('ts_end', iso);
       }
     }
     const { authType, authValue } = prepareAuthParams(connectionConfig || {});
@@ -701,6 +758,44 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return sortedRows.slice(start, start+pageSize);
   }, [sortedRows, page, pageSize]);
 
+  const formatTsForZone = useCallback((val: any, tz: string): string => {
+    if (val == null) return '';
+    const s = String(val).trim();
+    if (!s) return '';
+    // Detect if already has timezone info
+    const hasTz = /[zZ]$/.test(s) || /[+-]\d{2}:?\d{2}$/.test(s);
+    let isoLike = s;
+    if (!hasTz) {
+      // Assume ClickHouse returned UTC like 'YYYY-MM-DD HH:MM:SS[.ffffff]'
+      isoLike = s.replace(' ', 'T');
+      // Trim microseconds to milliseconds to avoid parse issues
+      isoLike = isoLike.replace(/\.(\d{3})\d+$/, '.$1');
+      isoLike += 'Z';
+    }
+    let d: Date | null = null;
+    try { d = new Date(isoLike); } catch { d = null; }
+    if (!d || isNaN(d.getTime())) return s;
+    if (tz === 'UTC') return String(val);
+    try {
+      const fmt = new Intl.DateTimeFormat('en-CA', { timeZone: tz, year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit', second:'2-digit', hour12:false });
+      const parts = fmt.formatToParts(d);
+      const get = (t:string) => parts.find(p=>p.type===t)?.value || '';
+      const yyyy = get('year');
+      const mm = get('month');
+      const dd = get('day');
+      const hh = get('hour');
+      const mi = get('minute');
+      const ss = get('second');
+      // Also add offset label
+      const offFmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
+      const off = offFmt.formatToParts(d).find(p=>p.type==='timeZoneName')?.value?.replace(/^GMT/, '') || '';
+      const offNorm = /[+-]\d/.test(off) ? (off.length===2? off+':00' : off.replace('−','-')) : '+00:00';
+      return `${yyyy}-${mm}-${dd} ${hh}:${mi}:${ss} ${offNorm}`;
+    } catch {
+      return d.toISOString().replace(/\.(\d{3})Z$/, 'Z');
+    }
+  }, []);
+
   // Reset to first page when filter or sort changes
   useEffect(() => {
     setPage(1);
@@ -922,7 +1017,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
               const colsToSave = (selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []);
               const ui = {
-                action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTzMode, rawSql, mapOpen, searchQuery, refreshMs
+                action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs
               } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
@@ -1086,9 +1181,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </TextField>
               </Grid>
               <Grid item xs={12} sm={6}>
-                <TextField select fullWidth label="Time zone" value={tsTzMode} onChange={(e)=> setTsTzMode(e.target.value as any)} helperText="Controls how Start/End are interpreted and sent">
-                  <MenuItem value="local">Local time (with offset)</MenuItem>
-                  <MenuItem value="utc">UTC (Z)</MenuItem>
+                <TextField select fullWidth label="Time zone" value={tsTimeZone} onChange={(e)=> setTsTimeZone(String(e.target.value))} helperText="DST is applied automatically for this time zone; Start/End are interpreted in this zone and converted to UTC for the query.">
+                  {tzList.map((z)=> (
+                    <MenuItem key={z.id} value={z.id}>{z.label}</MenuItem>
+                  ))}
                 </TextField>
               </Grid>
             </Grid>
@@ -1201,6 +1297,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </Stack>
               </Grid>
             </Grid>
+            <Typography variant="caption" color="text.secondary" sx={{ mt:1, display:'block' }}>
+              Hinweis: Sommer-/Winterzeit (DST) wird automatisch anhand der gewählten Zeitzone berücksichtigt. Eine separate Checkbox ist nicht nötig.
+            </Typography>
           </Paper>
 
           {/* Query error under the Query box */}
@@ -1253,7 +1352,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTzMode, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs } as any;
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
                   clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
@@ -1371,7 +1470,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTzMode, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs } as any;
                               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                 ...(runtimeHooks || {}),
                                 clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, ui }
@@ -1404,9 +1503,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 <tbody>
                   {pagedRows.map((r, idx) => (
                     <tr key={idx}>
-                      {selectedFields.map((h) => (
-                        <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee' }}>{String((r as any)?.[h] ?? '')}</td>
-                      ))}
+                      {selectedFields.map((h) => {
+                        const raw = (r as any)?.[h];
+                        const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
+                        return (
+                          <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee' }}>{text}</td>
+                        );
+                      })}
                     </tr>
                   ))}
                 </tbody>
