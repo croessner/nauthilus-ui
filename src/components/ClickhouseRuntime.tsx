@@ -953,7 +953,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     </Stack>
                   </Box>
                   {/* Using react-simple-maps world-110m TopoJSON */}
-                  <ComposableMap projection="geoMercator" width={980} height={400} style={{ width: '100%', height: 'auto' }}>
+                  <ComposableMap projection="geoMercator" width={980} height={600} style={{ width: '100%', height: 'auto' }}>
                     <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
                       <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
                         {({ geographies }) => (
