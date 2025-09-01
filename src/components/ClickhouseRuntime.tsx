@@ -1053,7 +1053,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   <MenuItem value="success">success</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12} sm={3}>
+            </Grid>
+            <Grid container spacing={2} sx={{ mt:1 }}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   type="datetime-local"
@@ -1066,6 +1068,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
+                        {tsStart ? (
+                          <IconButton size="small" onClick={()=>setTsStart('')} aria-label="Clear start time">
+                            <ClearIcon fontSize="small" />
+                          </IconButton>
+                        ) : null}
                         <IconButton size="small" onClick={()=>openPicker(tsStartRef.current)} aria-label="Pick start time">
                           <EventIcon fontSize="small" />
                         </IconButton>
@@ -1085,7 +1092,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   helperText="Optional"
                 />
               </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={12} sm={6}>
                 <TextField
                   fullWidth
                   type="datetime-local"
@@ -1098,6 +1105,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   InputProps={{
                     endAdornment: (
                       <InputAdornment position="end">
+                        {tsEnd ? (
+                          <IconButton size="small" onClick={()=>setTsEnd('')} aria-label="Clear end time">
+                            <ClearIcon fontSize="small" />
+                          </IconButton>
+                        ) : null}
                         <IconButton size="small" onClick={()=>openPicker(tsEndRef.current)} aria-label="Pick end time">
                           <EventIcon fontSize="small" />
                         </IconButton>
