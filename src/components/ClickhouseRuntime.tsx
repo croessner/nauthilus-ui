@@ -1062,7 +1062,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   type="datetime-local"
                   label="Start (ts)"
                   value={tsStart}
-                  onChange={(e)=>setTsStart(e.target.value)}
+                  onChange={(e)=>{ const v = e.target.value; setTsStart(v); if (v && v.trim() !== '') { try { setRefreshMs(0); } catch {} } }}
                   inputRef={tsStartRef}
                   placeholder="YYYY-MM-DDThh:mm"
                   InputLabelProps={{ shrink: true }}
