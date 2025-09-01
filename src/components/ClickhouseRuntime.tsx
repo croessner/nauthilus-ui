@@ -1085,6 +1085,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                         fontFamily: 'monospace',
                         fontSize: { xs: 12, sm: 14 },
                         pr: 3, // leave room for the calendar icon
+                      },
+                      // Hide native calendar icon to avoid double icons with our custom button
+                      '& input[type="datetime-local"]::-webkit-calendar-picker-indicator': {
+                        display: 'none',
+                        opacity: 0,
                       }
                     }
                   }}
@@ -1122,6 +1127,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                         fontFamily: 'monospace',
                         fontSize: { xs: 12, sm: 14 },
                         pr: 3,
+                      },
+                      // Hide native calendar icon to avoid double icons with our custom button
+                      '& input[type="datetime-local"]::-webkit-calendar-picker-indicator': {
+                        display: 'none',
+                        opacity: 0,
                       }
                     }
                   }}
