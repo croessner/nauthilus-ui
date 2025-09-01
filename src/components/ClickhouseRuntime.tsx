@@ -204,6 +204,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (sql) proxyUrl.searchParams.set('sql', sql);
     }
     proxyUrl.searchParams.set('limit', String(limit));
+    // Server-side status filter
+    if (authFilter === 'failed' || authFilter === 'success') {
+      proxyUrl.searchParams.set('status', authFilter);
+    } else {
+      proxyUrl.searchParams.set('status', 'all');
+    }
     // Optional ts range
     if (tsStart) {
       const d = new Date(tsStart);
@@ -348,19 +354,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } finally {
       setLoading(false);
     }
-  }, [getConnection, endpointPath, action, username, account, ip, limit, hookEnabled, rawSql, tsStart, tsEnd]);
+  }, [getConnection, endpointPath, action, username, account, ip, limit, hookEnabled, rawSql, tsStart, tsEnd, authFilter]);
 
   // Auto-refresh interval like Security page (default 30s)
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
   const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(runQuery, REFRESH_SESSION_KEY, 0);
 
-  // Filter rows by authentication status
-  const filteredRows = useMemo(() => {
-    if (authFilter === 'all') return rows;
-    if (authFilter === 'success') return rows.filter(r => r.authenticated === true);
-    // failed: anything that is not strictly true
-    return rows.filter(r => r.authenticated !== true);
-  }, [rows, authFilter]);
+  // Rows after server-side filters; keep reference for search/sort
+  const filteredRows = useMemo(() => rows, [rows]);
 
   // Search filter on top of authFilter for the table only (not affecting map/aggregates)
   // Supports boolean logic: AND/OR/NOT, parentheses, symbols (&&, ||, !), quoted phrases, and field comparisons (key==value, !=, <, >, <=, >=).
