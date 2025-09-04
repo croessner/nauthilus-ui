@@ -20,7 +20,7 @@ import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthPar
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
 import { getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
-import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
+import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from '../lib/reactSimpleMaps';
 
 // Lightweight world map fallback: show aggregated list if map lib not present
 // We keep implementation minimal and dependency-free.
