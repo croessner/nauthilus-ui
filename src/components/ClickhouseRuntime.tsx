@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox, InputAdornment, Slider } from '@mui/material';
+import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox, InputAdornment, Slider, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
 import PublicIcon from '@mui/icons-material/Public';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -10,6 +10,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ClearIcon from '@mui/icons-material/Clear';
+import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
+import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
+import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams } from '../utils/apiUtils';
@@ -24,6 +28,12 @@ import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 're
 type Row = Record<string, any>;
 
 type Action = 'recent' | 'by_user' | 'by_account' | 'by_ip' | 'raw_sql';
+
+type Bookmark = { id: string; name: string; value: string; createdAt?: number; updatedAt?: number };
+
+type BookmarkState = { raw_sql: Bookmark[]; search: Bookmark[] };
+
+const MAX_BOOKMARKS = 5;
 
 const ClickhouseRuntime = (): React.JSX.Element => {
   const { currentProfileName } = useConfig();
@@ -73,6 +83,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [rawLimitInput, setRawLimitInput] = useState<string>(String(getEffectiveRawJsonMaxBytes()));
   const [showRaw, setShowRaw] = useState<boolean>(false);
   const [rawSql, setRawSql] = useState<string>('');
+  // Bookmarks (persisted per user/runtime)
+  const [bookmarks, setBookmarks] = useState<BookmarkState>({ raw_sql: [], search: [] });
+  const [bmMenuAnchorSql, setBmMenuAnchorSql] = useState<null | HTMLElement>(null);
+  const [bmMenuAnchorSearch, setBmMenuAnchorSearch] = useState<null | HTMLElement>(null);
+  // Bookmark dialogs (use same style as Profile-Management)
+  const [bmDialogOpen, setBmDialogOpen] = useState(false);
+  const [bmDialogMode, setBmDialogMode] = useState<'create'|'rename'|'delete'>('create');
+  const [bmDialogKind, setBmDialogKind] = useState<keyof BookmarkState>('raw_sql');
+  const [bmDialogTargetId, setBmDialogTargetId] = useState<string|undefined>(undefined);
+  const [bmDialogName, setBmDialogName] = useState<string>('');
+  const [bmDialogError, setBmDialogError] = useState<string>('');
 
   // Keep text input in sync when the applied limit changes
   useEffect(() => { setRawLimitInput(String(rawJsonMaxBytes)); }, [rawJsonMaxBytes]);
@@ -102,26 +123,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return withUtc.map(z => ({ id: z, label: formatter(z) }))
       .sort((a,b)=> a.label.localeCompare(b.label));
   }, []);
-
-  // Compute normalized UTC offset like +02:00 for a given Date and time zone
-  const getOffsetForTz = useCallback((d: Date, tz: string): string => {
-    try {
-      const fmt = new Intl.DateTimeFormat('en-US', { timeZone: tz, timeZoneName: 'shortOffset' });
-      const tzn = fmt.formatToParts(d).find(p=>p.type==='timeZoneName')?.value || '';
-      const off = tzn.replace(/^GMT/, '') || '+00';
-      return /[+-]\d/.test(off) ? (off.length===2? off+':00' : off.replace('−','-')) : '+00:00';
-    } catch {
-      return '+00:00';
-    }
-  }, []);
-
-  // Convenience: parse datetime-local input to Date in selected tz context by reusing build helpers
-  const getOffsetsForInputs = useCallback((): { start?: string; end?: string } => {
-    const now = new Date();
-    const startOff = tsStart ? getOffsetForTz(now, tsTimeZone) : undefined;
-    const endOff = tsEnd ? getOffsetForTz(now, tsTimeZone) : undefined;
-    return { start: startOff, end: endOff };
-  }, [tsStart, tsEnd, tsTimeZone, getOffsetForTz]);
 
   const tsStartRef = useRef<HTMLInputElement | null>(null);
   const tsEndRef = useRef<HTMLInputElement | null>(null);
@@ -200,6 +201,94 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     window.addEventListener('touchend', onEnd);
   }, [getColWidth, persistColumnWidths]);
 
+  // --- Bookmarks helpers ---
+  const persistBookmarks = useCallback(async (next: BookmarkState) => {
+    try {
+      const userId = await getCurrentUserId();
+      const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+      const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+      await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
+        ...(runtimeHooks || {}),
+        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, columnWidths, bookmarks: next, ui }
+      } as any);
+      setBookmarks(next);
+      setNotif({ open:true, severity:'success', message:'Bookmarks saved' });
+    } catch(e:any) {
+      setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
+    }
+  }, [runtimeHooks, action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, columnWidths, saveRuntimeSettings]);
+
+
+  const loadBookmark = useCallback((kind: keyof BookmarkState, id: string) => {
+    const list = bookmarks[kind] || [];
+    const bm = list.find(b => b.id === id);
+    if (!bm) return;
+    if (kind === 'raw_sql') setRawSql(bm.value);
+    else setSearchQuery(bm.value);
+    setNotif({ open:true, severity:'success', message:'Bookmark loaded' });
+  }, [bookmarks]);
+
+
+  const deleteBookmark = useCallback(async (kind: keyof BookmarkState, id: string) => {
+    const list = bookmarks[kind] || [];
+    const bm = list.find(b => b.id === id);
+    if (!bm) return;
+    const next = { ...bookmarks, [kind]: list.filter(b => b.id !== id) } as BookmarkState;
+    await persistBookmarks(next);
+  }, [bookmarks, persistBookmarks]);
+
+  // New helpers used by dialogs (no prompt/confirm)
+  const createBookmark = useCallback(async (kind: keyof BookmarkState, value: string, name: string) => {
+    const trimmed = (value || '').trim();
+    const nm = (name || '').trim();
+    if (!trimmed || !nm) return;
+    const list = bookmarks[kind] || [];
+    const now = Date.now();
+    const id = `${now.toString(36)}-${Math.random().toString(36).slice(2,6)}`;
+    const next: BookmarkState = { ...bookmarks, [kind]: [...list, { id, name: nm, value: trimmed, createdAt: now, updatedAt: now }] } as BookmarkState;
+    await persistBookmarks(next);
+  }, [bookmarks, persistBookmarks]);
+
+  const applyRenameBookmark = useCallback(async (kind: keyof BookmarkState, id: string, name: string) => {
+    const nm = (name || '').trim();
+    if (!nm) return;
+    const list = bookmarks[kind] || [];
+    const idx = list.findIndex(b => b.id === id);
+    if (idx < 0) return;
+    const current = list[idx];
+    const now = Date.now();
+    const updated = { ...current, name: nm, updatedAt: now };
+    const nextList = [...list]; nextList.splice(idx,1,updated);
+    const next = { ...bookmarks, [kind]: nextList } as BookmarkState;
+    await persistBookmarks(next);
+  }, [bookmarks, persistBookmarks]);
+
+  const handleBmDialogConfirm = useCallback(async () => {
+    setBmDialogError('');
+    if (bmDialogMode === 'create') {
+      const value = bmDialogKind === 'raw_sql' ? rawSql : searchQuery;
+      const list = bookmarks[bmDialogKind] || [];
+      if (!value.trim()) { setBmDialogError('Content is empty.'); return; }
+      if (!bmDialogName.trim()) { setBmDialogError('Please enter a name.'); return; }
+      if (list.length >= MAX_BOOKMARKS) { setBmDialogError(`Maximum ${MAX_BOOKMARKS} bookmarks allowed.`); return; }
+      await createBookmark(bmDialogKind, value, bmDialogName);
+      setBmDialogOpen(false);
+    } else if (bmDialogMode === 'rename') {
+      if (!bmDialogTargetId) return;
+      if (!bmDialogName.trim()) { setBmDialogError('Please enter a new name.'); return; }
+      await applyRenameBookmark(bmDialogKind, bmDialogTargetId, bmDialogName);
+      setBmDialogOpen(false);
+    } else if (bmDialogMode === 'delete') {
+      if (!bmDialogTargetId) return;
+      await deleteBookmark(bmDialogKind, bmDialogTargetId);
+      setBmDialogOpen(false);
+    }
+  }, [bmDialogMode, bmDialogKind, bmDialogTargetId, bmDialogName, rawSql, searchQuery, bookmarks, createBookmark, applyRenameBookmark, deleteBookmark]);
+
+  const handleBmDialogClose = useCallback(() => {
+    setBmDialogOpen(false);
+  }, []);
+
   // Load runtime on first mount to ensure connection and hooks are loaded like other pages
   const didRunRef = useRef<string | null>(null);
   useEffect(() => {
@@ -267,7 +356,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const didInitUiRef = useRef(false);
   useEffect(() => {
     if (didInitUiRef.current) return;
-    const ui = (runtimeHooks as any)?.clickhouse_query?.ui || {};
+    const cq: any = (runtimeHooks as any)?.clickhouse_query || {};
+    const ui = cq?.ui || {};
     if (ui && typeof ui === 'object') {
       if (ui.action) setAction(ui.action as Action);
       if (typeof ui.username === 'string') setUsername(ui.username);
@@ -288,6 +378,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (Number.isFinite(r)) {
         try { setRefreshMs(r); } catch {}
       }
+    }
+    // Load bookmarks if present
+    const bm = cq?.bookmarks;
+    if (bm && typeof bm === 'object') {
+      const rs = Array.isArray((bm as any).raw_sql) ? (bm as any).raw_sql : [];
+      const ss = Array.isArray((bm as any).search) ? (bm as any).search : [];
+      setBookmarks({ raw_sql: rs, search: ss });
     }
     didInitUiRef.current = true;
   }, [runtimeHooks]);
@@ -318,7 +415,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       proxyUrl.searchParams.set('status', 'all');
     }
     // Optional ts range
-    const pad = (n: number) => String(n).padStart(2, '0');
     const parseLocalInput = (v: string) => {
       const m = /^([0-9]{4})-([0-9]{2})-([0-9]{2})T([0-9]{2}):([0-9]{2})(?::([0-9]{2}))?$/.exec(v);
       if (!m) return null;
@@ -1357,7 +1453,40 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
                     Reset
                   </Button>
+                  <IconButton size="small" aria-label="SQL bookmarks" onClick={(e)=> setBmMenuAnchorSql(e.currentTarget)}>
+                    <BookmarkBorderIcon/>
+                  </IconButton>
                 </Stack>
+                <Menu anchorEl={bmMenuAnchorSql} open={Boolean(bmMenuAnchorSql)} onClose={()=> setBmMenuAnchorSql(null)}>
+                  <MenuItem onClick={()=>{ 
+                    const list = bookmarks.raw_sql || []; 
+                    if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
+                    setBmDialogMode('create'); setBmDialogKind('raw_sql'); setBmDialogTargetId(undefined);
+                    const def = `SQL ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSql(null);
+                  }}>
+                    <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current SQL
+                  </MenuItem>
+                  <Divider />
+                  {(bookmarks.raw_sql || []).length === 0 ? (
+                    <MenuItem disabled>No bookmarks</MenuItem>
+                  ) : (
+                    (bookmarks.raw_sql || []).map(bm => (
+                      <MenuItem key={bm.id} onClick={()=>{ loadBookmark('raw_sql', bm.id); setBmMenuAnchorSql(null); }}>
+                        <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
+                          <Box sx={{ flexGrow:1, minWidth:160 }}>
+                            <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
+                          </Box>
+                          <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('raw_sql'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
+                            <DriveFileRenameOutlineIcon fontSize="small" />
+                          </IconButton>
+                          <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('raw_sql'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
+                            <DeleteOutlineIcon fontSize="small" />
+                          </IconButton>
+                        </Box>
+                      </MenuItem>
+                    ))
+                  )}
+                </Menu>
               </Grid>
             </Grid>
             <Typography variant="caption" color="text.secondary" sx={{ mt:1, display:'block' }}>
@@ -1481,16 +1610,51 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 onChange={(e)=> setSearchQuery(e.target.value)}
                 helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, <, >, <=, >= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\\./", features=="/rbl/", "/[a-z]+/").'
                 InputProps={{
-                  endAdornment: searchQuery ? (
+                  endAdornment: (
                     <InputAdornment position="end">
-                      <IconButton size="small" onClick={() => setSearchQuery('')} aria-label="Clear search">
-                        <ClearIcon fontSize="small" />
+                      {searchQuery && (
+                        <IconButton size="small" onClick={() => setSearchQuery('')} aria-label="Clear search">
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      <IconButton size="small" aria-label="Search bookmarks" onClick={(e)=> setBmMenuAnchorSearch(e.currentTarget)}>
+                        <BookmarkBorderIcon fontSize="small" />
                       </IconButton>
                     </InputAdornment>
-                  ) : undefined
+                  )
                 }}
                 sx={{ minWidth: 260 }}
               />
+              <Menu anchorEl={bmMenuAnchorSearch} open={Boolean(bmMenuAnchorSearch)} onClose={()=> setBmMenuAnchorSearch(null)}>
+                <MenuItem onClick={()=>{
+                  const list = bookmarks.search || [];
+                  if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
+                  setBmDialogMode('create'); setBmDialogKind('search'); setBmDialogTargetId(undefined);
+                  const def = `Search ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSearch(null);
+                }}>
+                  <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current search
+                </MenuItem>
+                <Divider />
+                {(bookmarks.search || []).length === 0 ? (
+                  <MenuItem disabled>No bookmarks</MenuItem>
+                ) : (
+                  (bookmarks.search || []).map(bm => (
+                    <MenuItem key={bm.id} onClick={()=>{ loadBookmark('search', bm.id); setBmMenuAnchorSearch(null); }}>
+                      <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
+                        <Box sx={{ flexGrow:1, minWidth:160 }}>
+                          <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
+                        </Box>
+                        <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
+                          <DriveFileRenameOutlineIcon fontSize="small" />
+                        </IconButton>
+                        <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
+                          <DeleteOutlineIcon fontSize="small" />
+                        </IconButton>
+                      </Box>
+                    </MenuItem>
+                  ))
+                )}
+              </Menu>
               <Typography variant="caption" color="text.secondary">
                 Matches: {searchFilteredRows.length} / {filteredRows.length}
               </Typography>
@@ -1641,6 +1805,44 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           </>
         )}
       </Paper>
+      {/* Bookmark Create/Rename/Delete Dialog */}
+      <Dialog open={bmDialogOpen} onClose={handleBmDialogClose}>
+        <DialogTitle>
+          {bmDialogMode === 'create' ? (bmDialogKind === 'raw_sql' ? 'Save SQL bookmark' : 'Save search bookmark') :
+           bmDialogMode === 'rename' ? 'Rename bookmark' : 'Delete bookmark'}
+        </DialogTitle>
+        <DialogContent>
+          {bmDialogMode === 'delete' ? (
+            <DialogContentText>
+              Are you sure you want to delete the bookmark "{bmDialogName}"? This action cannot be undone.
+            </DialogContentText>
+          ) : (
+            <TextField
+              autoFocus
+              margin="dense"
+              fullWidth
+              label="Name"
+              value={bmDialogName}
+              onChange={(e)=>{ setBmDialogName(e.target.value); setBmDialogError(''); }}
+              error={Boolean(bmDialogError)}
+              helperText={bmDialogError || ' '}
+            />
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleBmDialogClose}>Cancel</Button>
+          {bmDialogMode === 'delete' ? (
+            <Button onClick={handleBmDialogConfirm} color="error">Delete</Button>
+          ) : bmDialogMode === 'rename' ? (
+            <Button onClick={handleBmDialogConfirm} color="primary" disabled={!bmDialogName.trim()}>Rename</Button>
+          ) : (
+            <Button onClick={handleBmDialogConfirm} color="primary" disabled={!bmDialogName.trim()}>
+              Save
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
+
       <Snackbar
         open={notif.open}
         autoHideDuration={10000}

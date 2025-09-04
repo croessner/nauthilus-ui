@@ -704,13 +704,18 @@ Notes:
 - No changes to package.json were necessary.
 - If you still need ad-hoc endpoint/CORS checks, consider adding short, documented curl commands in README.md instead of keeping scripts in the repo.
 
-## 2025-09-04: ClickHouse Results — Persist table preferences per user in Runtime (Go backend)
+## 2025-09-04: ClickHouse — Bookmarks for raw SQL and Search-as-you-type (per user)
 
-- Results table preferences are now saved per user and profile in the Runtime collection on the backend via RuntimeContext.saveRuntimeSettings:
-  - Persisted under hooks.clickhouse_query: columns (order), columnWidths, and ui (filters like action, username/account/ip, authFilter, pageSize, tsStart/tsEnd/tsTimeZone, rawSql, searchQuery, etc.).
-  - Loaded on startup via RuntimeContext.loadRuntimeSettings to restore the table configuration.
-- Frontend files:
-  - src/components/ClickhouseRuntime.tsx — saving and loading of clickhouse_query.{columns,columnWidths,ui}.
-  - src/contexts/RuntimeContext.tsx — persists to /api/runtime/{userId}/{profileName} (Go backend).
-- This ensures that the logged-in user’s table layout (including resizable column widths) and filters are retained across sessions and devices.
+- Cleanup: Removed unused helpers in ClickhouseRuntime.tsx (getOffsetsForInputs, addBookmark, renameBookmark, pad, getOffsetForTz) after verifying no usages remained. This does not affect functionality.
+
+- Added per-user “Lesezeichen” (bookmarks) for both raw SQL queries and the results Search-as-you-type filter.
+- Each user can store up to 5 bookmarks per type (raw_sql, search); items can be saved, loaded, renamed, and deleted.
+- Persistence: stored in Runtime settings under hooks.clickhouse_query.bookmarks with shape { raw_sql: Bookmark[], search: Bookmark[] }.
+- UI:
+  - Raw SQL section: a small bookmark button opens a menu to save current SQL, load existing ones, rename, and delete.
+  - Results > Search field: a bookmark button in the input’s adornment provides the same actions for the search filter.
+  - Naming, renaming, and deleting now use proper Material UI Dialogs (consistent with the top menu Profile-Management dialogs), including validation and clear confirm/cancel actions.
+- Existing runtime persistence for columns, widths, and UI state remains unchanged; bookmarks are merged/preserved when saving other settings.
+- Files:
+  - src/components/ClickhouseRuntime.tsx — implemented bookmark state, persistence via RuntimeContext.saveRuntimeSettings, Bookmark dialogs, and UI controls.
 
