@@ -703,3 +703,14 @@ In some environments, WebAuthn finish-login returned 401 (Unauthorized), and it 
 Notes:
 - No changes to package.json were necessary.
 - If you still need ad-hoc endpoint/CORS checks, consider adding short, documented curl commands in README.md instead of keeping scripts in the repo.
+
+## 2025-09-04: ClickHouse Results — Persist table preferences per user in Runtime (Go backend)
+
+- Results table preferences are now saved per user and profile in the Runtime collection on the backend via RuntimeContext.saveRuntimeSettings:
+  - Persisted under hooks.clickhouse_query: columns (order), columnWidths, and ui (filters like action, username/account/ip, authFilter, pageSize, tsStart/tsEnd/tsTimeZone, rawSql, searchQuery, etc.).
+  - Loaded on startup via RuntimeContext.loadRuntimeSettings to restore the table configuration.
+- Frontend files:
+  - src/components/ClickhouseRuntime.tsx — saving and loading of clickhouse_query.{columns,columnWidths,ui}.
+  - src/contexts/RuntimeContext.tsx — persists to /api/runtime/{userId}/{profileName} (Go backend).
+- This ensures that the logged-in user’s table layout (including resizable column widths) and filters are retained across sessions and devices.
+

@@ -64,6 +64,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   // Search-as-you-type for results table
   const [searchQuery, setSearchQuery] = useState<string>('');
+  // Column widths (px), persisted in runtime settings under clickhouse_query.columnWidths
+  const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
   const [rawPreview, setRawPreview] = useState<string>('');
   const [rawPreviewFull, setRawPreviewFull] = useState<string>('');
@@ -142,6 +144,62 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const sortedAvailableFields = useMemo(() => [...availableFields].sort((a,b)=> a.localeCompare(b, undefined, { sensitivity: 'base' })), [availableFields]);
   const [fieldSelectorOpen, setFieldSelectorOpen] = useState<boolean>(false);
 
+  // Resizing state
+  const resizingRef = useRef<{ col: string | null; startX: number; startW: number } | null>(null);
+  const colWidthsRef = useRef<Record<string, number>>({});
+  useEffect(() => { colWidthsRef.current = columnWidths; }, [columnWidths]);
+  const MIN_COL_W = 60;
+  const MAX_COL_W = 800;
+  const getDefaultColWidth = useCallback((h: string) => {
+    // Heuristic default width
+    const short = ['ts','authenticated','failed_login_count','gp_attempts','dyn_threat'];
+    if (short.includes(h)) return 120;
+    if (/ip|port|iso|tz|proto/i.test(h)) return 140;
+    if (/user|account|service|host/i.test(h)) return 180;
+    return 220;
+  }, []);
+  const getColWidth = useCallback((h: string) => (colWidthsRef.current[h] || getDefaultColWidth(h)), [getDefaultColWidth]);
+
+  const persistColumnWidths = useCallback(async (next: Record<string, number>) => {
+    try {
+      const userId = await getCurrentUserId();
+      const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+      const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+      await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
+        ...(runtimeHooks || {}),
+        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, columnWidths: next, ui }
+      } as any);
+      setNotif({ open:true, severity:'success', message:'Column width saved' });
+    } catch(e:any) {
+      setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
+    }
+  }, [runtimeHooks, action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, saveRuntimeSettings]);
+
+  const onResizeStart = useCallback((col: string, clientX: number) => {
+    const startW = getColWidth(col);
+    resizingRef.current = { col, startX: clientX, startW };
+    const onMove = (ev: MouseEvent | TouchEvent) => {
+      const x = (ev as TouchEvent).touches ? (ev as TouchEvent).touches[0].clientX : (ev as MouseEvent).clientX;
+      if (!resizingRef.current) return;
+      const dx = x - resizingRef.current.startX;
+      const w = Math.max(MIN_COL_W, Math.min(MAX_COL_W, Math.round(resizingRef.current.startW + dx)));
+      const next = { ...colWidthsRef.current, [resizingRef.current.col!]: w };
+      setColumnWidths(next);
+    };
+    const onEnd = async () => {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onEnd);
+      window.removeEventListener('touchmove', onMove);
+      window.removeEventListener('touchend', onEnd);
+      const st = resizingRef.current; resizingRef.current = null;
+      if (st) await persistColumnWidths(colWidthsRef.current);
+    };
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onEnd);
+    window.addEventListener('touchmove', onMove, { passive: false } as any);
+    window.addEventListener('touchend', onEnd);
+  }, [getColWidth, persistColumnWidths]);
+
   // Load runtime on first mount to ensure connection and hooks are loaded like other pages
   const didRunRef = useRef<string | null>(null);
   useEffect(() => {
@@ -177,9 +235,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   // Load persisted columns when runtimeHooks changes
   useEffect(() => {
-    const cols = (runtimeHooks as any)?.clickhouse_query?.columns;
+    const cq: any = (runtimeHooks as any)?.clickhouse_query;
+    const cols = cq?.columns;
     if (Array.isArray(cols) && cols.length) {
       setSelectedFields(cols as string[]);
+    }
+    const savedWidths = cq?.columnWidths;
+    if (savedWidths && typeof savedWidths === 'object') {
+      setColumnWidths(savedWidths as Record<string, number>);
     }
   }, [runtimeHooks]);
 
@@ -1352,7 +1415,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
                   clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
@@ -1433,12 +1496,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </Typography>
             </Stack>
             <Box sx={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse' }}>
+              <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
                   <tr>
                     {selectedFields.map((h, idx) => {
                       const active = sortBy === h;
                       const indicator = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
+                      const w = getColWidth(h);
                       return (
                         <th
                           key={h}
@@ -1470,10 +1534,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs } as any;
+                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
                               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                 ...(runtimeHooks || {}),
-                                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, ui }
+                                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, columnWidths, ui }
                               } as any);
                               setNotif({ open:true, severity:'success', message:'Column order saved' });
                             } catch(e:any) {
@@ -1491,10 +1555,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                               setSortDir('asc');
                             }
                           }}
-                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none' }}
-                          title="Drag & drop to reorder, click to sort"
+                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none', position:'relative', width: w, minWidth:w, maxWidth:w, whiteSpace:'nowrap' as const }}
+                          title="Drag & drop to reorder, click to sort. Drag handle to resize"
                         >
-                          {h}{indicator}
+                          <span style={{ display:'inline-block', maxWidth:w-12, overflow:'hidden', textOverflow:'ellipsis', verticalAlign:'bottom' }}>{h}{indicator}</span>
+                          <span
+                            onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); onResizeStart(h, e.clientX); }}
+                            onTouchStart={(e)=>{ try{ const t = e.touches[0]; onResizeStart(h, t.clientX); e.preventDefault(); e.stopPropagation(); }catch{}}}
+                            style={{ position:'absolute', top:0, right:0, width:8, cursor:'col-resize', userSelect:'none', height:'100%' }}
+                            title="Resize column"
+                          />
                         </th>
                       );
                     })}
@@ -1506,8 +1576,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                       {selectedFields.map((h) => {
                         const raw = (r as any)?.[h];
                         const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
+                        const w = getColWidth(h);
                         return (
-                          <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee' }}>{text}</td>
+                          <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee', width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={String(text)}>{text}</td>
                         );
                       })}
                     </tr>
