@@ -1,5 +1,34 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Paper, Typography, Grid, TextField, Button, MenuItem, Divider, CircularProgress, Alert, IconButton, Menu, Chip, Stack, Pagination, Snackbar, Switch, FormControlLabel, Select, Collapse, Checkbox, InputAdornment, Slider, Dialog, DialogTitle, DialogContent, DialogActions, DialogContentText } from '@mui/material';
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
+import {
+    Alert,
+    Box,
+    Button,
+    Checkbox,
+    Chip,
+    CircularProgress,
+    Collapse,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogContentText,
+    DialogTitle,
+    Divider,
+    FormControlLabel,
+    Grid,
+    IconButton,
+    InputAdornment,
+    Menu,
+    MenuItem,
+    Pagination,
+    Paper,
+    Select,
+    Slider,
+    Snackbar,
+    Stack,
+    Switch,
+    TextField,
+    Typography
+} from '@mui/material';
 import PublicIcon from '@mui/icons-material/Public';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -15,13 +44,19 @@ import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { useConfig } from '../contexts/ConfigContext';
-import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams } from '../utils/apiUtils';
-import { getKnownHookEndpointSuggestions } from '../utils/hooks';
-import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
-import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from '../lib/reactSimpleMaps';
+import {useConfig} from '../contexts/ConfigContext';
+import {getCurrentUserId, useRuntime} from '../contexts/RuntimeContext';
+import {authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams} from '../utils/apiUtils';
+import {getKnownHookEndpointSuggestions} from '../utils/hooks';
+import {usePersistedAutoRefresh} from '../hooks/usePersistedAutoRefresh';
+import {
+    applyPreviewLimit,
+    getEffectiveRawJsonMaxBytes,
+    RAW_JSON_MAX_BYTES,
+    RAW_JSON_MIN_BYTES,
+    setRawJsonMaxBytesOverride
+} from '../utils/limits';
+import {ComposableMap, Geographies, Geography, Marker, ZoomableGroup} from '../lib/reactSimpleMaps';
 
 type Row = Record<string, any>;
 
@@ -184,12 +219,19 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return 220;
   }, []);
   const getColWidth = useCallback((h: string) => (colWidthsRef.current[h] || getDefaultColWidth(h)), [getDefaultColWidth]);
+  // Keep a snapshot of non-raw_sql widths to restore when leaving raw_sql
+  const normalWidthsRef = useRef<Record<string, number> | null>(null);
 
   const persistColumnWidths = useCallback(async (next: Record<string, number>) => {
     try {
       const userId = await getCurrentUserId();
       const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
       const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+      if (action === 'raw_sql') {
+        // Do not persist column widths for ad-hoc raw SQL results
+        setNotif({ open:true, severity:'info', message:'Column width change not persisted for raw SQL results' });
+        return;
+      }
       await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
         ...(runtimeHooks || {}),
         clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, columnWidths: next, ui }
@@ -235,9 +277,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const userId = await getCurrentUserId();
       const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
       const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+      const cols = action === 'raw_sql' ? ((prevCQ?.columns) || []) : selectedFields;
       await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
         ...(runtimeHooks || {}),
-        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, columnWidths, bookmarks: next, ui }
+        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: cols, bookmarks: next, ui }
       } as any);
       setBookmarks(next);
       setNotif({ open:true, severity:'success', message:'Bookmarks saved' });
@@ -380,11 +423,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     if (typeof cq.endpoint_path === 'string' && cq.endpoint_path) setEndpointPath(cq.endpoint_path);
   }, [runtimeHooks, currentProfileName]);
 
-  // Initialize UI state from persisted runtime settings (once per mount)
-  const didInitUiRef = useRef(false);
+  // Initialize UI state from persisted runtime settings (once per profile, after hooks have data)
+  const didInitUiForProfileRef = useRef<string | null>(null);
   useEffect(() => {
-    if (didInitUiRef.current) return;
+    // If we already initialized for this profile, skip
+    if (didInitUiForProfileRef.current === currentProfileName) return;
     const cq: any = (runtimeHooks as any)?.clickhouse_query || {};
+    const hasData = cq && typeof cq === 'object' && Object.keys(cq).length > 0;
+    if (!hasData) return; // wait until runtimeHooks deliver data
     const ui = cq?.ui || {};
     if (ui && typeof ui === 'object') {
       if (ui.action) setAction(ui.action as Action);
@@ -414,8 +460,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const ss = Array.isArray((bm as any).search) ? (bm as any).search : [];
       setBookmarks({ raw_sql: rs, search: ss });
     }
-    didInitUiRef.current = true;
-  }, [runtimeHooks]);
+    // Mark initialized for this profile (only after we saw some data)
+    didInitUiForProfileRef.current = currentProfileName;
+  }, [runtimeHooks, currentProfileName]);
 
   const handlePickSuggestion = (ep: string) => { setEndpointPath(ep); setAnchorEl(null); };
 
@@ -622,6 +669,22 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
         if (Array.isArray(metaNames) && metaNames.length) {
           setAvailableFields(metaNames);
+          // In raw_sql mode, always display exactly the columns returned by SQL (no mixing with defaults/persisted)
+          if (action === 'raw_sql') {
+            setSelectedFields(metaNames);
+            // Save current normal widths once before overriding for raw_sql
+            if (!normalWidthsRef.current) {
+              normalWidthsRef.current = { ...colWidthsRef.current };
+            }
+            // Auto-size widths to fit header names for raw_sql (not persisted)
+            const approxChar = 8; // px per char
+            const padding = 24; // left+right padding and sort indicator
+            const nextWidths: Record<string, number> = { ...colWidthsRef.current };
+            for (const name of metaNames) {
+                nextWidths[name] = Math.max(MIN_COL_W, Math.min(MAX_COL_W, Math.round(name.length * approxChar + padding)));
+            }
+            setColumnWidths(nextWidths);
+          }
         }
       } catch {}
     } catch (e:any) {
@@ -1006,6 +1069,36 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [availableFields]);
 
+  // When switching away from raw_sql, restore normal columns and view
+  useEffect(() => {
+    if (action !== 'raw_sql') {
+      // Reset available fields back to known fields; actual meta will refine after next query
+      setAvailableFields(KNOWN_FIELDS);
+      // Determine selected fields from persisted settings or defaults
+      const persisted = ((runtimeHooks as any)?.clickhouse_query?.columns || []) as string[];
+      const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
+      let next = Array.isArray(persisted) && persisted.length ? intersect(persisted, KNOWN_FIELDS) : [];
+      if (next.length === 0) next = intersect(DEFAULT_COLUMNS, KNOWN_FIELDS);
+      if (next.length === 0) next = KNOWN_FIELDS.slice(0, Math.min(10, KNOWN_FIELDS.length));
+      setSelectedFields(next);
+      // Restore normal column widths if we had overridden them for raw_sql
+      if (normalWidthsRef.current) {
+        setColumnWidths(normalWidthsRef.current);
+        normalWidthsRef.current = null;
+      } else {
+        // Try to restore from persisted runtime settings if available
+        const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+        if (prevCQ && prevCQ.columnWidths && typeof prevCQ.columnWidths === 'object') {
+          setColumnWidths(prevCQ.columnWidths as Record<string, number>);
+        } else {
+          // Fallback: keep current widths; getColWidth will use defaults for unknowns
+        }
+      }
+      // Hide raw JSON area when not in raw mode
+      setShowRaw(false);
+    }
+  }, [action]);
+
   // If sorted column becomes invisible, clear sortBy
   useEffect(() => {
     if (sortBy && !selectedFields.includes(sortBy)) {
@@ -1202,7 +1295,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             try {
               const userId = await getCurrentUserId();
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-              const colsToSave = (selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []);
+              // Avoid overwriting normal columns with ad-hoc raw SQL columns
+              const colsToSave = action === 'raw_sql'
+                ? (prevCQ?.columns || [])
+                : ((selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []));
               const ui = {
                 action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs
               } as any;
@@ -1567,17 +1663,27 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           <Stack direction="row" spacing={1} sx={{ mb:1, flexWrap:'wrap', alignItems:'center' }}>
             <Button size="small" onClick={()=>setSelectedFields(sortedAvailableFields)}>Select all</Button>
             <Button size="small" onClick={()=>setSelectedFields([])}>Clear</Button>
+            <Button size="small" onClick={()=>{
+              // Set to defaults: exactly DEFAULT_COLUMNS intersected with currently available fields
+              const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
+              const next = intersect(DEFAULT_COLUMNS, availableFields);
+              setSelectedFields(next);
+            }}>Set to defaults</Button>
             <Box sx={{ flexGrow:1 }} />
             <Button size="small" startIcon={<SaveIcon/>} variant="contained" onClick={async()=>{
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
                 const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
-                await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
-                  ...(runtimeHooks || {}),
-                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
-                } as any);
-                setNotif({ open:true, severity:'success', message:'Column selection saved' });
+                if (action === 'raw_sql') {
+                  setNotif({ open:true, severity:'info', message:'Column selection not persisted for raw SQL results' });
+                } else {
+                  await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
+                    ...(runtimeHooks || {}),
+                    clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
+                  } as any);
+                  setNotif({ open:true, severity:'success', message:'Column selection saved' });
+                }
               } catch(e:any) {
                 setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
               }
@@ -1730,11 +1836,15 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
                               const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
-                              await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
-                                ...(runtimeHooks || {}),
-                                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, columnWidths, ui }
-                              } as any);
-                              setNotif({ open:true, severity:'success', message:'Column order saved' });
+                              if (action === 'raw_sql') {
+                                setNotif({ open:true, severity:'info', message:'Column order change not persisted for raw SQL results' });
+                              } else {
+                                await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
+                                  ...(runtimeHooks || {}),
+                                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, columnWidths, ui }
+                                } as any);
+                                setNotif({ open:true, severity:'success', message:'Column order saved' });
+                              }
                             } catch(e:any) {
                               setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
                             }
@@ -1749,10 +1859,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                               setSortDir('asc');
                             }
                           }}
-                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none', position:'relative', width: w, minWidth:w, maxWidth:w, whiteSpace:'nowrap' as const }}
+                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none', position:'relative', width: w, minWidth:w, maxWidth:w, whiteSpace: (action === 'raw_sql' ? 'normal' : 'nowrap') as 'normal' | 'nowrap', wordBreak: (action === 'raw_sql' ? 'break-all' : 'normal') as any }}
                           title="Drag & drop to reorder, click to sort. Drag handle to resize"
                         >
-                          <span style={{ display:'inline-block', maxWidth:w-12, overflow:'hidden', textOverflow:'ellipsis', verticalAlign:'bottom' }} title={h}>{h}{indicator}</span>
+                          <span style={{ display:'inline-block', maxWidth: (action === 'raw_sql' ? undefined : (w-12)), overflow: (action === 'raw_sql' ? 'visible' : 'hidden'), textOverflow: (action === 'raw_sql' ? 'clip' : 'ellipsis'), verticalAlign:'bottom', whiteSpace: (action === 'raw_sql' ? 'normal' : 'nowrap') as 'normal' | 'nowrap' }} title={h}>{h}{indicator}</span>
                           <span
                             onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); onResizeStart(h, e.clientX); }}
                             onTouchStart={(e)=>{ try{ const t = e.touches[0]; onResizeStart(h, t.clientX); e.preventDefault(); e.stopPropagation(); }catch{}}}
@@ -1769,7 +1879,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     <React.Fragment key={idx}>
                       <tr>
                         <td style={{ padding:'0 4px', borderBottom:'1px solid #eee', textAlign:'center', verticalAlign:'middle' }}>
-                          <IconButton size="small" onClick={()=>toggleExpanded(idx)} aria-label="Expand row" aria-expanded={!!expanded[idx]} sx={{ transition:'transform 0.2s', transform: expanded[idx] ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                          <IconButton size="small" onClick={()=>toggleExpanded(idx)} aria-label="Expand row" aria-expanded={expanded[idx]} sx={{ transition:'transform 0.2s', transform: expanded[idx] ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                             <ChevronRightIcon fontSize="small" />
                           </IconButton>
                         </td>
