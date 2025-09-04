@@ -173,6 +173,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Resizing state
   const resizingRef = useRef<{ col: string | null; startX: number; startW: number } | null>(null);
   const colWidthsRef = useRef<Record<string, number>>({});
+  // Any drag/resize should temporarily suppress header click-to-sort to avoid accidental sorting
+  const suppressSortUntilRef = useRef<number>(0);
   useEffect(() => { colWidthsRef.current = columnWidths; }, [columnWidths]);
   const MIN_COL_W = 60;
   const MAX_COL_W = 800;
@@ -203,6 +205,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   const onResizeStart = useCallback((col: string, clientX: number) => {
     const startW = getColWidth(col);
+    // Immediately suppress sorting for a short period; mouseup may occur over a different header
+    suppressSortUntilRef.current = Date.now() + 800;
     resizingRef.current = { col, startX: clientX, startW };
     const onMove = (ev: MouseEvent | TouchEvent) => {
       const x = (ev as TouchEvent).touches ? (ev as TouchEvent).touches[0].clientX : (ev as MouseEvent).clientX;
@@ -218,6 +222,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       window.removeEventListener('touchmove', onMove);
       window.removeEventListener('touchend', onEnd);
       const st = resizingRef.current; resizingRef.current = null;
+      // Extend suppression a bit to cover the click synthesized on mouseup
+      suppressSortUntilRef.current = Date.now() + 400;
       if (st) await persistColumnWidths(colWidthsRef.current);
     };
     window.addEventListener('mousemove', onMove);
@@ -1700,8 +1706,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           onDragStart={(e) => {
                             try { e.dataTransfer.setData('text/plain', String(idx)); } catch {}
                             (e.currentTarget as any).dataset.dragging = 'true';
-                            // Reduce click triggering after drag
-                            (e.currentTarget as any)._dragStartedAt = Date.now();
+                            // Suppress header sort shortly after a drag starts (reorder)
+                            suppressSortUntilRef.current = Date.now() + 600;
                           }}
                           onDragOver={(e) => {
                             e.preventDefault();
@@ -1713,6 +1719,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           onDrop={async (e) => {
                             e.preventDefault();
                             (e.currentTarget as any).style.background = '';
+                            // Suppress sort just after dropping to avoid accidental clicks
+                            suppressSortUntilRef.current = Date.now() + 500;
                             let fromIdx = Number(e.dataTransfer.getData('text/plain'));
                             const toIdx = idx;
                             if (!Number.isFinite(fromIdx) || fromIdx === toIdx) return;
@@ -1735,9 +1743,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             }
                           }}
                           onClick={() => {
-                            // prevent sort if click immediately after drag start
-                            const t = (Date.now() - ((document?.activeElement as any)?._dragStartedAt || 0));
-                            if (t >= 0 && t < 300) return;
+                            // Prevent accidental sort after resize or drag-reorder
+                            if (Date.now() < suppressSortUntilRef.current) return;
                             if (sortBy === h) {
                               setSortDir(prev => (prev === 'asc' ? 'desc' : 'asc'));
                             } else {
@@ -1748,7 +1755,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none', position:'relative', width: w, minWidth:w, maxWidth:w, whiteSpace:'nowrap' as const }}
                           title="Drag & drop to reorder, click to sort. Drag handle to resize"
                         >
-                          <span style={{ display:'inline-block', maxWidth:w-12, overflow:'hidden', textOverflow:'ellipsis', verticalAlign:'bottom' }}>{h}{indicator}</span>
+                          <span style={{ display:'inline-block', maxWidth:w-12, overflow:'hidden', textOverflow:'ellipsis', verticalAlign:'bottom' }} title={h}>{h}{indicator}</span>
                           <span
                             onMouseDown={(e)=>{ e.preventDefault(); e.stopPropagation(); onResizeStart(h, e.clientX); }}
                             onTouchStart={(e)=>{ try{ const t = e.touches[0]; onResizeStart(h, t.clientX); e.preventDefault(); e.stopPropagation(); }catch{}}}
