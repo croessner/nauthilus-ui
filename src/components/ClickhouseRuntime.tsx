@@ -14,6 +14,7 @@ import BookmarkBorderIcon from '@mui/icons-material/BookmarkBorder';
 import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams } from '../utils/apiUtils';
@@ -95,6 +96,18 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
   }, [rawLimitInput, rawPreviewFull]);
   const [rawSql, setRawSql] = useState<string>('');
+  // Expanded rows by index
+  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
+  const toggleExpanded = useCallback((idx:number)=>{
+    setExpanded(prev=>({ ...prev, [idx]: !prev[idx] }));
+  }, []);
+  const isEmptyValue = useCallback((v:any)=>{
+    if (v === null || v === undefined) return true;
+    if (typeof v === 'string') return v.trim() === '';
+    if (Array.isArray(v)) return v.length === 0;
+    if (typeof v === 'object') return Object.keys(v).length === 0;
+    return false;
+  }, []);
   // Bookmarks (persisted per user/runtime)
   const [bookmarks, setBookmarks] = useState<BookmarkState>({ raw_sql: [], search: [] });
   const [bmMenuAnchorSql, setBmMenuAnchorSql] = useState<null | HTMLElement>(null);
@@ -1675,6 +1688,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
                   <tr>
+                    <th style={{ width:32, minWidth:32, maxWidth:32 }} />
                     {selectedFields.map((h, idx) => {
                       const active = sortBy === h;
                       const indicator = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -1748,16 +1762,44 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </thead>
                 <tbody>
                   {pagedRows.map((r, idx) => (
-                    <tr key={idx}>
-                      {selectedFields.map((h) => {
-                        const raw = (r as any)?.[h];
-                        const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
-                        const w = getColWidth(h);
-                        return (
-                          <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee', width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={String(text)}>{text}</td>
-                        );
-                      })}
-                    </tr>
+                    <React.Fragment key={idx}>
+                      <tr>
+                        <td style={{ padding:'0 4px', borderBottom:'1px solid #eee', textAlign:'center', verticalAlign:'middle' }}>
+                          <IconButton size="small" onClick={()=>toggleExpanded(idx)} aria-label="Expand row" aria-expanded={!!expanded[idx]} sx={{ transition:'transform 0.2s', transform: expanded[idx] ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                            <ChevronRightIcon fontSize="small" />
+                          </IconButton>
+                        </td>
+                        {selectedFields.map((h) => {
+                          const raw = (r as any)?.[h];
+                          const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
+                          const w = getColWidth(h);
+                          return (
+                            <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee', width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={String(text)}>{text}</td>
+                          );
+                        })}
+                      </tr>
+                      {expanded[idx] && (
+                        <tr>
+                          <td style={{ borderBottom:'1px solid #eee' }} />
+                          <td colSpan={selectedFields.length} style={{ padding:'8px 8px', borderBottom:'1px solid #eee' }}>
+                            <Box sx={{ p:1.25, bgcolor:'rgba(25,118,210,0.06)', border:'1px solid', borderColor:'primary.light', borderRadius:1 }}>
+                              <Grid container spacing={0.5}>
+                                {selectedFields.filter(k => !isEmptyValue((r as any)?.[k])).map(k => {
+                                  const raw = (r as any)?.[k];
+                                  const text = k === 'ts' ? formatTsForZone(raw, tsTimeZone) : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw));
+                                  return (
+                                    <React.Fragment key={k}>
+                                      <Grid item xs={4} sm={3} md={2}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{k}</Typography></Grid>
+                                      <Grid item xs={8} sm={9} md={10}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{text}</Typography></Grid>
+                                    </React.Fragment>
+                                  );
+                                })}
+                              </Grid>
+                            </Box>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   ))}
                 </tbody>
               </table>
