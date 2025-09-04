@@ -82,6 +82,18 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [rawJsonMaxBytes, setRawJsonMaxBytes] = useState<number>(getEffectiveRawJsonMaxBytes());
   const [rawLimitInput, setRawLimitInput] = useState<string>(String(getEffectiveRawJsonMaxBytes()));
   const [showRaw, setShowRaw] = useState<boolean>(false);
+
+  // Helper to apply raw JSON limit consistently (DRY)
+  const applyRawLimitFromInput = useCallback(() => {
+    const v = Number((rawLimitInput || '').trim());
+    const clamped = Math.max(
+      RAW_JSON_MIN_BYTES,
+      Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES)
+    );
+    setRawJsonMaxBytesOverride(clamped);
+    setRawJsonMaxBytes(clamped);
+    if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
+  }, [rawLimitInput, rawPreviewFull]);
   const [rawSql, setRawSql] = useState<string>('');
   // Bookmarks (persisted per user/runtime)
   const [bookmarks, setBookmarks] = useState<BookmarkState>({ raw_sql: [], search: [] });
@@ -680,7 +692,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
         // Word or keyword
         let j = i;
-        while (j < n && !/\s|\(|\)|&|\||!|"|\'|=|<|>/.test(input[j])) j++;
+        while (j < n && !/\s|\(|\)|&|\||!|"|'|=|<|>/.test(input[j])) j++;
         const word = input.slice(i, j);
         const op = normalizeOp(word);
         if (op) out.push({ t: op });
@@ -931,7 +943,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       isoLike = isoLike.replace(/\.(\d{3})\d+$/, '.$1');
       isoLike += 'Z';
     }
-    let d: Date | null = null;
+    let d: Date | null;
     try { d = new Date(isoLike); } catch { d = null; }
     if (!d || isNaN(d.getTime())) return s;
     if (tz === 'UTC') return String(val);
@@ -1771,21 +1783,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     value={rawLimitInput}
                     onChange={(e)=>{ setRawLimitInput(e.target.value); }}
                     onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
-                      const v = Number((rawLimitInput || '').trim());
-                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                      setRawJsonMaxBytesOverride(clamped);
-                      setRawJsonMaxBytes(clamped);
-                      if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
+                      applyRawLimitFromInput();
                     } }}
                     inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
                     sx={{ minWidth: 210 }}
                   />
                   <Button size="small" variant="outlined" onClick={()=>{
-                    const v = Number((rawLimitInput || '').trim());
-                    const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                    setRawJsonMaxBytesOverride(clamped);
-                    setRawJsonMaxBytes(clamped);
-                    if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
+                    applyRawLimitFromInput();
                   }}>Apply</Button>
                 </Stack>
                 {showRaw && (
