@@ -23,9 +23,6 @@ import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
 import { getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from '../lib/reactSimpleMaps';
 
-// Lightweight world map fallback: show aggregated list if map lib not present
-// We keep implementation minimal and dependency-free.
-
 type Row = Record<string, any>;
 
 type Action = 'recent' | 'by_user' | 'by_account' | 'by_ip' | 'raw_sql';
@@ -1796,8 +1793,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                                   const text = k === 'ts' ? formatTsForZone(raw, tsTimeZone) : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw));
                                   return (
                                     <React.Fragment key={k}>
-                                      <Grid item xs={4} sm={3} md={2}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{k}</Typography></Grid>
-                                      <Grid item xs={8} sm={9} md={10}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{text}</Typography></Grid>
+                                      <Grid item xs={1} sm={3} md={2}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{k}</Typography></Grid>
+                                      <Grid item xs={11} sm={9} md={10}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{text}</Typography></Grid>
                                     </React.Fragment>
                                   );
                                 })}
