@@ -17,7 +17,8 @@ import {
   Snackbar,
   Switch,
   FormControlLabel,
-  Menu
+  Menu,
+  Dialog
 } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -28,6 +29,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
+import VisibilityIcon from '@mui/icons-material/Visibility';
+import CodeIcon from '@mui/icons-material/Code';
+import OpenInFullIcon from '@mui/icons-material/OpenInFull';
+import CloseIcon from '@mui/icons-material/Close';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
@@ -46,6 +51,28 @@ const pretty = (v: any) => {
 
 
 const storageKey = (username: string) => `ui:hooktester:last:${username}`;
+
+// Ensure rendered HTML in iframe uses a light theme with readable defaults
+function ensureLightHtml(html: string): string {
+  const css = `:root{color-scheme: light;} html,body{background:#fff !important;color:#111 !important;} body{margin:8px;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial,sans-serif;line-height:1.5;font-size:14px;} img,video,svg,canvas{max-width:100%;height:auto;} pre{background:#f6f8fa;border-radius:4px;padding:8px;overflow:auto;} code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;} table{border-collapse:collapse;} th,td{border:1px solid #ddd;padding:4px 6px;} a{color:#0645ad;}`;
+  const injection = `<meta name="color-scheme" content="light"><style>${css}</style>`;
+  let s = html || '';
+  if (!s) {
+    return `<!doctype html><html lang="en"><head>${injection}</head><body></body></html>`;
+  }
+  if (/<head[\s>]/i.test(s)) {
+    return s.replace(/<head([^>]*)>/i, `<head$1>${injection}`);
+  }
+  if (/<html[\s>]/i.test(s)) {
+    // noinspection HtmlRequiredLangAttribute
+      return s.replace(/<html([^>]*)>/i, `<html$1><head>${injection}</head>`);
+  }
+  if (/<body[\s>]/i.test(s)) {
+    return `<!doctype html><html lang="en"><head>${injection}</head>${s}</html>`;
+  }
+  // Fragment
+  return `<!doctype html><html lang="en"><head>${injection}</head><body>${s}</body></html>`;
+}
 
 const HookTester = (): React.JSX.Element => {
   const { currentProfileName } = useConfig();
@@ -72,6 +99,10 @@ const HookTester = (): React.JSX.Element => {
   const [rawLimitInput, setRawLimitInput] = useState<string>(String(getEffectiveRawJsonMaxBytes()));
   const [respRawPreviewFull, setRespRawPreviewFull] = useState<string>('');
   const [respRawPreview, setRespRawPreview] = useState<string>('');
+  // Response content-type and view mode
+  const [respContentType, setRespContentType] = useState<string | null>(null);
+  const [respViewMode, setRespViewMode] = useState<'raw'|'rendered'>('raw');
+  const [respFullscreen, setRespFullscreen] = useState<boolean>(false);
   // Collapsible panels
   const [showRequestPanel, setShowRequestPanel] = useState<boolean>(true);
   // Collapsible headers in response
@@ -143,454 +174,558 @@ const HookTester = (): React.JSX.Element => {
     if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, rawJsonMaxBytes));
   }, [respRawPreviewFull, rawJsonMaxBytes]);
 
+  // Apply raw JSON limit changes (DRY for Enter key and Apply button)
+  const applyRawLimitChange = useCallback(() => {
+    const v = Number((rawLimitInput || '').trim());
+    const clamped = Math.max(
+      RAW_JSON_MIN_BYTES,
+      Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES)
+    );
+    setRawJsonMaxBytesOverride(clamped);
+    setRawJsonMaxBytes(clamped);
+    if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, clamped));
+  }, [rawLimitInput, respRawPreviewFull]);
+
   const hasBody = useMemo(() => !['GET','HEAD','OPTIONS'].includes(method), [method]);
 
-  const addRow = () => setQuery((rows) => [...rows, { key: '', value: '', id: crypto.randomUUID() }]);
-  const removeRow = (id: string) => setQuery((rows) => rows.filter(r => r.id !== id));
-  const updateRow = (id: string, patch: Partial<KV>) => setQuery((rows) => rows.map(r => r.id === id ? { ...r, ...patch } : r));
+  // Response content-type helpers
+  const normalizedRespCT = useMemo(() => (respContentType || '').toLowerCase(), [respContentType]);
+  const isHtmlResp = useMemo(() => /^(text\/html|application\/xhtml\+xml)$/.test(normalizedRespCT), [normalizedRespCT]);
+  const isTextResp = useMemo(() => /^text\//.test(normalizedRespCT), [normalizedRespCT]);
+        useMemo(() => Boolean(normalizedRespCT) && (isHtmlResp || isTextResp), [normalizedRespCT, isHtmlResp, isTextResp]);
+        // Heuristic fallback when Content-Type header is missing or unhelpful
+        const bodyLooksHtml = useMemo(() => {
+            const s = (respBody || '').trim().slice(0, 500).toLowerCase();
+            if (!s) return false;
+            return s.startsWith('<!doctype html') || s.startsWith('<html') || (s.startsWith('<') && s.includes('</'));
+        }, [respBody]);
+        const bodyLooksText = useMemo(() => {
+            if (bodyLooksHtml) return false;
+            const s = (respBody || '');
+            if (!s) return false;
+            // Consider as generic text if first 1000 chars are printable (allowing tab, CR, LF)
+            const max = Math.min(1000, s.length);
+            for (let i = 0; i < max; i++) {
+                const c = s.charCodeAt(i);
+                if (c < 32 && c !== 9 && c !== 10 && c !== 13) return false;
+            }
+            return true;
+        }, [respBody, bodyLooksHtml]);
+        const isHtmlEffective = useMemo(() => isHtmlResp || bodyLooksHtml, [isHtmlResp, bodyLooksHtml]);
+        const canRenderEffective = useMemo(() => isHtmlEffective || isTextResp || bodyLooksText, [isHtmlEffective, isTextResp, bodyLooksText]);
 
-  const addHeaderRow = () => setHeadersRows((rows) => [...rows, { key: '', value: '', id: crypto.randomUUID() }]);
-  const removeHeaderRow = (id: string) => setHeadersRows((rows) => rows.filter(r => r.id !== id));
-  const updateHeaderRow = (id: string, patch: Partial<KV>) => setHeadersRows((rows) => rows.map(r => r.id === id ? { ...r, ...patch } : r));
+        const addRow = () => setQuery((rows) => [...rows, { key: '', value: '', id: crypto.randomUUID() }]);
+        const removeRow = (id: string) => setQuery((rows) => rows.filter(r => r.id !== id));
+        const updateRow = (id: string, patch: Partial<KV>) => setQuery((rows) => rows.map(r => r.id === id ? { ...r, ...patch } : r));
 
-  const effectiveEndpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
+        const addHeaderRow = () => setHeadersRows((rows) => [...rows, { key: '', value: '', id: crypto.randomUUID() }]);
+        const removeHeaderRow = (id: string) => setHeadersRows((rows) => rows.filter(r => r.id !== id));
+        const updateHeaderRow = (id: string, patch: Partial<KV>) => setHeadersRows((rows) => rows.map(r => r.id === id ? { ...r, ...patch } : r));
 
-  const resetForm = () => {
-    setMethod('POST');
-    setEndpointPath('');
-    setQuery([{ key: '', value: '', id: crypto.randomUUID() }]);
-    setHeadersRows([{ key: '', value: '', id: crypto.randomUUID() }]);
-    setBody('{}');
-    setContentType('application/json');
-    setUseJsonPretty(true);
-    setStatus(null);
-    setRespBody('');
-    setRespHeaders([]);
-    setReqHeaders([]);
-  };
+        const effectiveEndpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
 
-  const buildURL = () => {
-    const base = new URL('/proxy/hooks/any', getProxyOrigin());
-    const conn = getConnection();
-    const target = conn?.backend_url || '';
-    if (!target) throw new Error('No backend URL configured in Runtime > Connection');
+        const resetForm = () => {
+            setMethod('POST');
+            setEndpointPath('');
+            setQuery([{ key: '', value: '', id: crypto.randomUUID() }]);
+            setHeadersRows([{ key: '', value: '', id: crypto.randomUUID() }]);
+            setBody('{}');
+            setContentType('application/json');
+            setUseJsonPretty(true);
+            setStatus(null);
+            setRespBody('');
+            setRespHeaders([]);
+            setReqHeaders([]);
+        };
 
-    const params = new URLSearchParams();
-    params.set('url', target);
-    if (endpointPath) params.set('endpoint_path', endpointPath);
-    // add query rows
-    for (const row of query) {
-      if (row.key && row.value) params.append(row.key, row.value);
-    }
+        const buildURL = () => {
+            const base = new URL('/proxy/hooks/any', getProxyOrigin());
+            const conn = getConnection();
+            const target = conn?.backend_url || '';
+            if (!target) throw new Error('No backend URL configured in Runtime > Connection');
 
-    base.search = params.toString();
-    return base.toString();
-  };
+            const params = new URLSearchParams();
+            params.set('url', target);
+            if (endpointPath) params.set('endpoint_path', endpointPath);
+            // add query rows
+            for (const row of query) {
+                if (row.key && row.value) params.append(row.key, row.value);
+            }
 
-  const send = async () => {
-    try {
-      setLoading(true);
-      setStatus(null);
-      setRespHeaders([]);
-      setReqHeaders([]);
-      setRespBody('');
-      // Clear raw previews at start
-      setRespRawPreviewFull('');
-      setRespRawPreview('');
+            base.search = params.toString();
+            return base.toString();
+        };
 
-      const url = buildURL();
-      const conn = getConnection();
-      const { authType, authValue } = prepareAuthParams(conn || {});
+        const send = async () => {
+            try {
+                setLoading(true);
+                setStatus(null);
+                setRespHeaders([]);
+                setReqHeaders([]);
+                setRespBody('');
+                // Clear raw previews at start
+                setRespRawPreviewFull('');
+                setRespRawPreview('');
+                // Reset response content-type and view mode
+                setRespContentType(null);
+                setRespViewMode('raw');
+                setRespFullscreen(false);
 
-      const headers: Record<string, string> = {
-        'x-auth-type': authType || '',
-        'x-auth-value': authValue || '',
-      };
-      if (hasBody) headers['Content-Type'] = contentType || 'application/json';
+                const url = buildURL();
+                const conn = getConnection();
+                const { authType, authValue } = prepareAuthParams(conn || {});
 
-      // Merge custom headers (user provided)
-      for (const row of headersRows) {
-        if (!row.key) continue;
-        // Avoid letting user override Authorization (handled by authenticatedFetch) but allow other headers including x-auth-* overrides if desired
-        if (row.key.toLowerCase() === 'authorization') continue;
-        headers[row.key] = row.value ?? '';
-      }
+                const headers: Record<string, string> = {
+                    'x-auth-type': authType || '',
+                    'x-auth-value': authValue || '',
+                };
+                if (hasBody) headers['Content-Type'] = contentType || 'application/json';
 
-      // Capture request headers for display (mask Authorization token)
-      const reqList: [string, string][] = Object.entries(headers).map(([k, v]) => [k, String(v)]);
-      const token = getAuthToken?.();
-      if (token) {
-        const masked = token.length <= 12 ? '***' : `${token.slice(0, 6)}…${token.slice(-4)}`;
-        reqList.push(['Authorization', `Bearer ${masked}`]);
-      }
-      setReqHeaders(reqList);
+                // Merge custom headers (user provided)
+                for (const row of headersRows) {
+                    if (!row.key) continue;
+                    // Avoid letting user override Authorization (handled by authenticatedFetch) but allow other headers including x-auth-* overrides if desired
+                    if (row.key.toLowerCase() === 'authorization') continue;
+                    headers[row.key] = row.value ?? '';
+                }
 
-      const init: RequestInit = { method };
-      init.headers = headers;
-      if (hasBody) {
-        // If JSON, keep as entered (user can break it), we do not auto-stringify
-        init.body = body || '';
-      }
+                // Capture request headers for display (mask Authorization token)
+                const reqList: [string, string][] = Object.entries(headers).map(([k, v]) => [k, String(v)]);
+                const token = getAuthToken?.();
+                if (token) {
+                    const masked = token.length <= 12 ? '***' : `${token.slice(0, 6)}…${token.slice(-4)}`;
+                    reqList.push(['Authorization', `Bearer ${masked}`]);
+                }
+                setReqHeaders(reqList);
 
-      const t0 = performance.now();
-      const resp = await authenticatedFetch(url, init);
-      const dt = performance.now() - t0;
+                const init: RequestInit = { method };
+                init.headers = headers;
+                if (hasBody) {
+                    // If JSON, keep as entered (user can break it), we do not auto-stringify
+                    init.body = body || '';
+                }
 
-      const hdrs: [string,string][] = [];
-      resp.headers.forEach((v, k) => hdrs.push([k, v]));
-      setRespHeaders(hdrs);
-      setStatus({ code: resp.status, text: `${resp.statusText} (${dt.toFixed(0)} ms)` });
+                const t0 = performance.now();
+                const resp = await authenticatedFetch(url, init);
+                const dt = performance.now() - t0;
 
-      let text: string;
-      try { text = await resp.text(); } catch { text = ''; }
-      setRespBody(text);
-      // Update ClickHouse-style raw previews
-      const prettyText = pretty(text);
-      setRespRawPreviewFull(prettyText);
-      setRespRawPreview(applyPreviewLimit(prettyText, rawJsonMaxBytes));
+                const hdrs: [string,string][] = [];
+                resp.headers.forEach((v, k) => hdrs.push([k, v]));
+                setRespHeaders(hdrs);
+                // Capture response content-type (main type, lowercased)
+                const ctRaw = resp.headers.get('content-type') || '';
+                const ctMain = ctRaw.split(';')[0]?.trim().toLowerCase() || '';
+                setRespContentType(ctMain || null);
+                setStatus({ code: resp.status, text: `${resp.statusText} (${dt.toFixed(0)} ms)` });
 
-      if (!resp.ok) {
-        let msg = text;
-        try { msg = await extractErrorMessage(resp); } catch { /* ignore */ }
-        setNotif({ open: true, severity: 'error', message: msg || `HTTP ${resp.status}` });
-      } else {
-        setNotif({ open: true, severity: 'success', message: `OK (${resp.status})` });
-      }
-    } catch (e: any) {
-      setNotif({ open: true, severity: 'error', message: e?.message || String(e) });
-    } finally {
-      setLoading(false);
-    }
-  };
+                let text: string;
+                try { text = await resp.text(); } catch { text = ''; }
+                setRespBody(text);
+                // Update ClickHouse-style raw previews
+                const prettyText = pretty(text);
+                setRespRawPreviewFull(prettyText);
+                setRespRawPreview(applyPreviewLimit(prettyText, rawJsonMaxBytes));
 
-  const pasteExample = () => {
-    // Provide a small example based on method
-    if (method === 'GET') {
-      setEndpointPath('/api/v1/custom/hooks/distributed-brute-force-test');
-      setQuery([{ key: 'action', value: 'get_metrics', id: crypto.randomUUID() }]);
-    } else {
-      setEndpointPath('/api/v1/custom/hooks/distributed-brute-force-test');
-      setBody(pretty({ action: 'run_test', username: 'alice', num_ips: 10 }));
-    }
-  };
+                if (!resp.ok) {
+                    let msg = text;
+                    try { msg = await extractErrorMessage(resp); } catch { /* ignore */ }
+                    setNotif({ open: true, severity: 'error', message: msg || `HTTP ${resp.status}` });
+                } else {
+                    setNotif({ open: true, severity: 'success', message: `OK (${resp.status})` });
+                }
+            } catch (e: any) {
+                setNotif({ open: true, severity: 'error', message: e?.message || String(e) });
+            } finally {
+                setLoading(false);
+            }
+        };
 
-  const copyCurl = async () => {
-    try {
-      // Build direct backend URL (not the proxy)
-      const conn = getConnection();
-      const baseUrl = conn?.backend_url || '';
-      if (!baseUrl) { setNotif({ open: true, severity: 'error', message: 'No backend URL configured in Runtime > Connection' }); return; }
+        const pasteExample = () => {
+            // Provide a small example based on method
+            if (method === 'GET') {
+                setEndpointPath('/api/v1/custom/hooks/distributed-brute-force-test');
+                setQuery([{ key: 'action', value: 'get_metrics', id: crypto.randomUUID() }]);
+            } else {
+                setEndpointPath('/api/v1/custom/hooks/distributed-brute-force-test');
+                setBody(pretty({ action: 'run_test', username: 'alice', num_ips: 10 }));
+            }
+        };
 
-      // Ensure endpoint path is applied relative to backend_url
-      const path = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
-      const target = new URL(path, baseUrl);
+        const copyCurl = async () => {
+            try {
+                // Build direct backend URL (not the proxy)
+                const conn = getConnection();
+                const baseUrl = conn?.backend_url || '';
+                if (!baseUrl) { setNotif({ open: true, severity: 'error', message: 'No backend URL configured in Runtime > Connection' }); return; }
 
-      // Append query params
-      for (const row of query) {
-        if (row.key && row.value !== undefined) {
-          target.searchParams.append(row.key, row.value);
-        }
-      }
+                // Ensure endpoint path is applied relative to backend_url
+                const path = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+                const target = new URL(path, baseUrl);
 
-      const { authType, authValue } = prepareAuthParams(conn || {});
-      const parts: string[] = ['curl', '-i', '-X', method, `'${target.toString()}'`];
+                // Append query params
+                for (const row of query) {
+                    if (row.key && row.value !== undefined) {
+                        target.searchParams.append(row.key, row.value);
+                    }
+                }
 
-      // Add Authorization header for direct backend access
-      if (authType && authValue) {
-        if (authType.toLowerCase() === 'bearer') {
-          parts.push('-H', `'Authorization: Bearer ${authValue}'`);
-        } else if (authType.toLowerCase() === 'basic') {
-          parts.push('-H', `'Authorization: Basic ${authValue}'`);
-        }
-      }
+                const { authType, authValue } = prepareAuthParams(conn || {});
+                const parts: string[] = ['curl', '-i', '-X', method, `'${target.toString()}'`];
 
-      // Include user-provided custom headers (skip Authorization to avoid duplicates)
-      for (const row of headersRows) {
-        if (!row.key) continue;
-        if (row.key.toLowerCase() === 'authorization') continue;
-        parts.push('-H', `'${row.key}: ${row.value || ''}'`);
-      }
+                // Add Authorization header for direct backend access
+                if (authType && authValue) {
+                    if (authType.toLowerCase() === 'bearer') {
+                        parts.push('-H', `'Authorization: Bearer ${authValue}'`);
+                    } else if (authType.toLowerCase() === 'basic') {
+                        parts.push('-H', `'Authorization: Basic ${authValue}'`);
+                    }
+                }
 
-      // Include content type and body for methods that support a body
-      if (hasBody) {
-        parts.push('-H', `'Content-Type: ${contentType}'`, '--data', `'${(body || '').replace(/'/g, "'\\''")}'`);
-      }
+                // Include user-provided custom headers (skip Authorization to avoid duplicates)
+                for (const row of headersRows) {
+                    if (!row.key) continue;
+                    if (row.key.toLowerCase() === 'authorization') continue;
+                    parts.push('-H', `'${row.key}: ${row.value || ''}'`);
+                }
 
-      await navigator.clipboard.writeText(parts.join(' '));
-      setNotif({ open: true, severity: 'success', message: 'cURL copied to clipboard' });
-    } catch (e) {
-      setNotif({ open: true, severity: 'error', message: e instanceof Error ? e.message : 'Failed to copy cURL' });
-    }
-  };
+                // Include content type and body for methods that support a body
+                if (hasBody) {
+                    parts.push('-H', `'Content-Type: ${contentType}'`, '--data', `'${(body || '').replace(/'/g, "'\\''")}'`);
+                }
 
-  const formatBody = () => {
-    if (!body) return;
-    try {
-      const j = JSON.parse(body);
-      setBody(JSON.stringify(j, null, 2));
-    } catch {
-      // ignore non-JSON
-    }
-  };
+                await navigator.clipboard.writeText(parts.join(' '));
+                setNotif({ open: true, severity: 'success', message: 'cURL copied to clipboard' });
+            } catch (e) {
+                setNotif({ open: true, severity: 'error', message: e instanceof Error ? e.message : 'Failed to copy cURL' });
+            }
+        };
 
-  const connectionOk = Boolean(runtimeConnection?.backend_url);
+        const formatBody = () => {
+            if (!body) return;
+            try {
+                const j = JSON.parse(body);
+                setBody(JSON.stringify(j, null, 2));
+            } catch {
+                // ignore non-JSON
+            }
+        };
 
-  // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
-  useEffect(() => {
-    if (runtimeConnection?.backend_url) {
-      void checkConnection(runtimeConnection);
-    }
-  }, [runtimeConnection?.backend_url, checkConnection]);
+        const connectionOk = Boolean(runtimeConnection?.backend_url);
 
-  return (
-    <Box>
-      <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>Hook Tester</Typography>
-      <Typography variant="body2" color="text.secondary" gutterBottom>
-        Test arbitrary hooks of your Nauthilus backend. Choose the HTTP method and endpoint path, optionally send a body or query parameters, and inspect status code, headers, and response body.
-      </Typography>
+        // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
+        useEffect(() => {
+            if (runtimeConnection?.backend_url) {
+                void checkConnection(runtimeConnection);
+            }
+        }, [runtimeConnection?.backend_url, checkConnection]);
 
-      {/* Connection status (match Connection/Distributed BF pages) */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
-        {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
-        {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
-        {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
-        {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
-        {connStatus === 'disconnected' && (
-          <Typography color="error.main">{statusMessage}</Typography>
-        )}
-        <Tooltip title="Check connection">
+        return (
+            <Box>
+                <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>Hook Tester</Typography>
+                <Typography variant="body2" color="text.secondary" gutterBottom>
+                    Test arbitrary hooks of your Nauthilus backend. Choose the HTTP method and endpoint path, optionally send a body or query parameters, and inspect status code, headers, and response body.
+                </Typography>
+
+                {/* Connection status (match Connection/Distributed BF pages) */}
+                <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+                    <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+                    {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+                    {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+                    {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+                    {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+                    {connStatus === 'disconnected' && (
+                        <Typography color="error.main">{statusMessage}</Typography>
+                    )}
+                    <Tooltip title="Check connection">
           <span>
             <IconButton onClick={checkConnection} disabled={connStatus === 'checking'} sx={{ ml: 1 }}>
               <RefreshIcon />
             </IconButton>
           </span>
-        </Tooltip>
-      </Box>
+                    </Tooltip>
+                </Box>
 
-      {!connectionOk && (
-        <Alert severity="warning" sx={{ mb: 2 }}>
-          No backend configured. Please set a Backend URL first under Runtime → Connection.
-        </Alert>
-      )}
+                {!connectionOk && (
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                        No backend configured. Please set a Backend URL first under Runtime → Connection.
+                    </Alert>
+                )}
 
-      <Paper sx={{ p: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-          <Typography variant="h6" sx={{ flexGrow: 1 }}>Request</Typography>
-          <IconButton size="small" aria-label={showRequestPanel ? 'collapse request panel' : 'expand request panel'} onClick={() => setShowRequestPanel(v => !v)}>
-            {showRequestPanel ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-          </IconButton>
-        </Box>
-        {showRequestPanel && (
-          <Grid container spacing={2}>
-            <Grid item xs={12} md={2}>
-              <TextField select fullWidth label="Method" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
-                {METHODS.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
-              </TextField>
-            </Grid>
-            <Grid item xs={12} md={10}>
-              <TextField
-                fullWidth
-                label="Endpoint Path (e.g., /api/v1/custom/hooks/distributed-brute-force-test)"
-                value={endpointPath}
-                onChange={(e) => setEndpointPath(e.target.value)}
-                placeholder="/api/v1/custom/..."
-                InputProps={{ endAdornment: (
-                  <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
+                <Paper sx={{ p: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                        <Typography variant="h6" sx={{ flexGrow: 1 }}>Request</Typography>
+                        <IconButton size="small" aria-label={showRequestPanel ? 'collapse request panel' : 'expand request panel'} onClick={() => setShowRequestPanel(v => !v)}>
+                            {showRequestPanel ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                        </IconButton>
+                    </Box>
+                    {showRequestPanel && (
+                        <Grid container spacing={2}>
+                            <Grid item xs={12} md={2}>
+                                <TextField select fullWidth label="Method" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
+                                    {METHODS.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
+                                </TextField>
+                            </Grid>
+                            <Grid item xs={12} md={10}>
+                                <TextField
+                                    fullWidth
+                                    label="Endpoint Path (e.g., /api/v1/custom/hooks/distributed-brute-force-test)"
+                                    value={endpointPath}
+                                    onChange={(e) => setEndpointPath(e.target.value)}
+                                    placeholder="/api/v1/custom/..."
+                                    InputProps={{ endAdornment: (
+                                            <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
                     <span>
                       <IconButton size="small" disabled={effectiveEndpointSuggestions.length === 0} onClick={(e) => setAnchorEl(e.currentTarget)} aria-label="pick-endpoint">
                         <LinkIcon fontSize="small" />
                       </IconButton>
                     </span>
-                  </Tooltip>
-                )}}
-                helperText={'Path relative to the Backend URL'}
-              />
-              <Menu anchorEl={anchorEl} open={menuOpen} onClose={closeMenu}>
-                {effectiveEndpointSuggestions.map((ep) => (
-                  <MenuItem key={ep} onClick={() => pickEndpoint(ep)}>{ep}</MenuItem>
-                ))}
-              </Menu>
-            </Grid>
+                                            </Tooltip>
+                                        )}}
+                                    helperText={'Path relative to the Backend URL'}
+                                />
+                                <Menu anchorEl={anchorEl} open={menuOpen} onClose={closeMenu}>
+                                    {effectiveEndpointSuggestions.map((ep) => (
+                                        <MenuItem key={ep} onClick={() => pickEndpoint(ep)}>{ep}</MenuItem>
+                                    ))}
+                                </Menu>
+                            </Grid>
 
-            {/* Query Params */}
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-                <Typography variant="subtitle1">Query Parameters</Typography>
-                <Chip size="small" label={`${query.filter(q => q.key).length}`} />
-                <Box flexGrow={1} />
-                <Button size="small" onClick={addRow}>Add param</Button>
-              </Box>
-              <Grid container spacing={1}>
-                {query.map((row) => (
-                  <React.Fragment key={row.id}>
-                    <Grid item xs={5} md={3}>
-                      <TextField size="small" fullWidth label="key" value={row.key} onChange={(e) => updateRow(row.id, { key: e.target.value })} />
-                    </Grid>
-                    <Grid item xs={7} md={7}>
-                      <TextField size="small" fullWidth label="value" value={row.value} onChange={(e) => updateRow(row.id, { value: e.target.value })} />
-                    </Grid>
-                    <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
-                      <IconButton onClick={() => removeRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
-                    </Grid>
-                  </React.Fragment>
-                ))}
-              </Grid>
-            </Grid>
+                            {/* Query Params */}
+                            <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                                    <Typography variant="subtitle1">Query Parameters</Typography>
+                                    <Chip size="small" label={`${query.filter(q => q.key).length}`} />
+                                    <Box flexGrow={1} />
+                                    <Button size="small" onClick={addRow}>Add param</Button>
+                                </Box>
+                                <Grid container spacing={1}>
+                                    {query.map((row) => (
+                                        <React.Fragment key={row.id}>
+                                            <Grid item xs={5} md={3}>
+                                                <TextField size="small" fullWidth label="key" value={row.key} onChange={(e) => updateRow(row.id, { key: e.target.value })} />
+                                            </Grid>
+                                            <Grid item xs={7} md={7}>
+                                                <TextField size="small" fullWidth label="value" value={row.value} onChange={(e) => updateRow(row.id, { value: e.target.value })} />
+                                            </Grid>
+                                            <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <IconButton onClick={() => removeRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
+                                            </Grid>
+                                        </React.Fragment>
+                                    ))}
+                                </Grid>
+                            </Grid>
 
-            {/* Custom Request Headers */}
-            <Grid item xs={12}>
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
-                <Typography variant="subtitle1">Request Headers</Typography>
-                <Chip size="small" label={`${headersRows.filter(h => h.key).length}`} />
-                <Box flexGrow={1} />
-                <Button size="small" onClick={addHeaderRow}>Add header</Button>
-              </Box>
-              <Grid container spacing={1}>
-                {headersRows.map((row) => (
-                  <React.Fragment key={row.id}>
-                    <Grid item xs={5} md={3}>
-                      <TextField size="small" fullWidth label="Header name" value={row.key} onChange={(e) => updateHeaderRow(row.id, { key: e.target.value })} />
-                    </Grid>
-                    <Grid item xs={7} md={7}>
-                      <TextField size="small" fullWidth label="Header value" value={row.value} onChange={(e) => updateHeaderRow(row.id, { value: e.target.value })} />
-                    </Grid>
-                    <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
-                      <IconButton onClick={() => removeHeaderRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
-                    </Grid>
-                  </React.Fragment>
-                ))}
-              </Grid>
-            </Grid>
+                            {/* Custom Request Headers */}
+                            <Grid item xs={12}>
+                                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
+                                    <Typography variant="subtitle1">Request Headers</Typography>
+                                    <Chip size="small" label={`${headersRows.filter(h => h.key).length}`} />
+                                    <Box flexGrow={1} />
+                                    <Button size="small" onClick={addHeaderRow}>Add header</Button>
+                                </Box>
+                                <Grid container spacing={1}>
+                                    {headersRows.map((row) => (
+                                        <React.Fragment key={row.id}>
+                                            <Grid item xs={5} md={3}>
+                                                <TextField size="small" fullWidth label="Header name" value={row.key} onChange={(e) => updateHeaderRow(row.id, { key: e.target.value })} />
+                                            </Grid>
+                                            <Grid item xs={7} md={7}>
+                                                <TextField size="small" fullWidth label="Header value" value={row.value} onChange={(e) => updateHeaderRow(row.id, { value: e.target.value })} />
+                                            </Grid>
+                                            <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                                                <IconButton onClick={() => removeHeaderRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
+                                            </Grid>
+                                        </React.Fragment>
+                                    ))}
+                                </Grid>
+                            </Grid>
 
-            {/* Body */}
-            {hasBody && (
-              <>
-                <Grid item xs={12} md={4}>
-                  <TextField select fullWidth label="Content-Type" value={contentType} onChange={(e) => setContentType(e.target.value)}>
-                    <MenuItem value="application/json">application/json</MenuItem>
-                    <MenuItem value="text/plain">text/plain</MenuItem>
-                    <MenuItem value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</MenuItem>
-                  </TextField>
-                  <FormControlLabel control={<Switch checked={useJsonPretty} onChange={(e)=>setUseJsonPretty(e.target.checked)} />} label="Format JSON on paste" />
-                  <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
-                    <Button size="small" startIcon={<RefreshIcon />} onClick={formatBody}>Format JSON</Button>
-                    <Button size="small" onClick={pasteExample}>Insert example</Button>
-                  </Stack>
-                </Grid>
-                <Grid item xs={12} md={8}>
-                  <TextField
-                    fullWidth
-                    multiline
-                    minRows={8}
-                    label="Request Body"
-                    value={body}
-                    onChange={(e) => setBody(e.target.value)}
-                    placeholder={contentType === 'application/json' ? '{\n  "action": "..."\n}' : ''}
-                    error={bodyTooLargeJson}
-                    helperText={/json/i.test(contentType) ? `${bodyBytes} / ${rawJsonMaxBytes} bytes${bodyTooLargeJson ? ' — exceeds limit' : ''}` : undefined}
-                  />
-                </Grid>
-              </>
-            )}
+                            {/* Body */}
+                            {hasBody && (
+                                <>
+                                    <Grid item xs={12} md={4}>
+                                        <TextField select fullWidth label="Content-Type" value={contentType} onChange={(e) => setContentType(e.target.value)}>
+                                            <MenuItem value="application/json">application/json</MenuItem>
+                                            <MenuItem value="text/plain">text/plain</MenuItem>
+                                            <MenuItem value="application/x-www-form-urlencoded">application/x-www-form-urlencoded</MenuItem>
+                                        </TextField>
+                                        <FormControlLabel control={<Switch checked={useJsonPretty} onChange={(e)=>setUseJsonPretty(e.target.checked)} />} label="Format JSON on paste" />
+                                        <Stack direction="row" spacing={1} sx={{ mt: 1 }}>
+                                            <Button size="small" startIcon={<RefreshIcon />} onClick={formatBody}>Format JSON</Button>
+                                            <Button size="small" onClick={pasteExample}>Insert example</Button>
+                                        </Stack>
+                                    </Grid>
+                                    <Grid item xs={12} md={8}>
+                                        <TextField
+                                            fullWidth
+                                            multiline
+                                            minRows={8}
+                                            label="Request Body"
+                                            value={body}
+                                            onChange={(e) => setBody(e.target.value)}
+                                            placeholder={contentType === 'application/json' ? '{\n  "action": "..."\n}' : ''}
+                                            error={bodyTooLargeJson}
+                                            helperText={/json/i.test(contentType) ? `${bodyBytes} / ${rawJsonMaxBytes} bytes${bodyTooLargeJson ? ' — exceeds limit' : ''}` : undefined}
+                                        />
+                                    </Grid>
+                                </>
+                            )}
 
-            <Grid item xs={12}>
-              <Divider sx={{ my: 1 }} />
-              <Stack direction="row" spacing={1}>
-                <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk || bodyTooLargeJson}>
-                  Send
-                </Button>
-                <Button variant="outlined" onClick={resetForm} disabled={loading}>Reset</Button>
-                <Button variant="text" startIcon={<ContentCopyIcon />} onClick={copyCurl} disabled={!endpointPath}>Copy cURL</Button>
-              </Stack>
-            </Grid>
-          </Grid>
-        )}
-      </Paper>
+                            <Grid item xs={12}>
+                                <Divider sx={{ my: 1 }} />
+                                <Stack direction="row" spacing={1}>
+                                    <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk || bodyTooLargeJson}>
+                                        Send
+                                    </Button>
+                                    <Button variant="outlined" onClick={resetForm} disabled={loading}>Reset</Button>
+                                    <Button variant="text" startIcon={<ContentCopyIcon />} onClick={copyCurl} disabled={!endpointPath}>Copy cURL</Button>
+                                </Stack>
+                            </Grid>
+                        </Grid>
+                    )}
+                </Paper>
 
-      {/* Response */}
-      <Paper sx={{ p: 2, mt: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-          <Typography variant="h6">Response</Typography>
-          {loading && <CircularProgress size={18} />}
-          <Box flexGrow={1} />
-          {status && <Chip color={status.code >= 200 && status.code < 300 ? 'success' : 'error'} label={`Status: ${status.code} ${status.text}`} />}
-        </Box>
-        {reqHeaders.length > 0 && (
-          <Box sx={{ mb: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Request Headers</Typography>
-              <IconButton size="small" aria-label={showReqHeaders ? 'collapse request headers' : 'expand request headers'} onClick={() => setShowReqHeaders(v => !v)}>
-                {showReqHeaders ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-              </IconButton>
+                {/* Response */}
+                <Paper sx={{ p: 2, mt: 2 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                        <Typography variant="h6">Response</Typography>
+                        {loading && <CircularProgress size={18} />}
+                        <Box flexGrow={1} />
+                        {(() => {
+                            const label = respContentType ? `CT: ${respContentType}` : (bodyLooksHtml ? 'CT: text/html (derived)' : (bodyLooksText ? 'CT: text/plain (derived)' : null));
+                            return label ? <Chip variant="outlined" label={label} /> : null;
+                        })()}
+                        {canRenderEffective && (
+                            <Tooltip title={respViewMode === 'raw' ? 'Show rendered content' : 'Show raw'}>
+              <span>
+                <IconButton size="small" onClick={() => setRespViewMode(v => v === 'raw' ? 'rendered' : 'raw')} aria-label="toggle-rendered-view">
+                  {respViewMode === 'raw' ? <VisibilityIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
+                </IconButton>
+              </span>
+                            </Tooltip>
+                        )}
+                        {status && <Chip color={status.code >= 200 && status.code < 300 ? 'success' : 'error'} label={`Status: ${status.code} ${status.text}`} />}
+                    </Box>
+                    {reqHeaders.length > 0 && (
+                        <Box sx={{ mb: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Request Headers</Typography>
+                                <IconButton size="small" aria-label={showReqHeaders ? 'collapse request headers' : 'expand request headers'} onClick={() => setShowReqHeaders(v => !v)}>
+                                    {showReqHeaders ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                </IconButton>
+                            </Box>
+                            {showReqHeaders && (
+                                <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
+                                    {reqHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
+                                </Box>
+                            )}
+                        </Box>
+                    )}
+                    {respHeaders.length > 0 && (
+                        <Box sx={{ mb: 1 }}>
+                            <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Response Headers</Typography>
+                                <IconButton size="small" aria-label={showRespHeaders ? 'collapse response headers' : 'expand response headers'} onClick={() => setShowRespHeaders(v => !v)}>
+                                    {showRespHeaders ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
+                                </IconButton>
+                            </Box>
+                            {showRespHeaders && (
+                                <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
+                                    {respHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
+                                </Box>
+                            )}
+                        </Box>
+                    )}
+                    <Typography variant="subtitle2">Body</Typography>
+                    {canRenderEffective && respViewMode === 'rendered' ? (
+                        isHtmlEffective ? (
+                            <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', position: 'relative' }}>
+                                <Tooltip title="Fullscreen">
+                                    <IconButton size="small" aria-label="open-full-view" onClick={() => setRespFullscreen(true)}
+                                                sx={{ position: 'absolute', top: 6, right: 6, bgcolor: 'rgba(255,255,255,0.9)', color: '#111', border: '1px solid', borderColor: 'divider', boxShadow: 1, '&:hover': { bgcolor: '#fff' }, zIndex: 1 }}>
+                                        <OpenInFullIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Box component="iframe"
+                                     sandbox="allow-same-origin allow-scripts"
+                                     srcDoc={ensureLightHtml(respBody || '')}
+                                     title="Rendered HTML"
+                                     style={{ width: '100%', height: 400, border: 'none', backgroundColor: '#fff' }} />
+                            </Box>
+                        ) : (
+                            <Box sx={{ m: 0, mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, position: 'relative', overflow: 'hidden' }}>
+                                <Tooltip title="Fullscreen">
+                                    <IconButton size="small" aria-label="open-full-view" onClick={() => setRespFullscreen(true)}
+                                                sx={{ position: 'absolute', top: 6, right: 6, bgcolor: 'background.paper', zIndex: 1 }}>
+                                        <OpenInFullIcon fontSize="small" />
+                                    </IconButton>
+                                </Tooltip>
+                                <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto', fontFamily: 'monospace', fontSize: 12 }}>
+                                    {respBody}
+                                </Box>
+                            </Box>
+                        )
+                    ) : (
+                        <>
+                            <Stack direction="row" alignItems="center" gap={1}>
+                                <Box sx={{ flexGrow: 1 }} />
+                                <TextField
+                                    size="small"
+                                    type="number"
+                                    label="Raw JSON limit (bytes)"
+                                    value={rawLimitInput}
+                                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') { applyRawLimitChange(); } }}
+                                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                                    sx={{ minWidth: 210 }}
+                                />
+                                <Button size="small" variant="outlined" onClick={applyRawLimitChange}>Apply</Button>
+                            </Stack>
+                            <TextField
+                                variant="outlined"
+                                fullWidth
+                                multiline
+                                minRows={8}
+                                value={respRawPreview || pretty(respBody)}
+                                InputProps={{ readOnly: true }}
+                                sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
+                            />
+                        </>
+                    )}
+                </Paper>
+
+                <Dialog open={respFullscreen} onClose={() => setRespFullscreen(false)} fullScreen>
+                    <Box sx={{ position: 'fixed', inset: 0, bgcolor: '#fff', display: 'flex', flexDirection: 'column' }}>
+                        <Box sx={{ display: 'flex', alignItems: 'center', p: 1, borderBottom: '1px solid', borderColor: 'divider', color: '#111' }}>
+                            <Typography variant="subtitle1" sx={{ flexGrow: 1, color: '#111' }}>Fullscreen</Typography>
+                            <Tooltip title="Close fullscreen">
+                                <IconButton onClick={() => setRespFullscreen(false)} aria-label="close-full-view" sx={{ color: '#111' }}>
+                                    <CloseIcon />
+                                </IconButton>
+                            </Tooltip>
+                        </Box>
+                        {isHtmlEffective ? (
+                            <Box component="iframe"
+                                 sandbox="allow-same-origin allow-scripts"
+                                 srcDoc={ensureLightHtml(respBody || '')}
+                                 title="Rendered HTML Full"
+                                 style={{ width: '100%', height: '100%', border: 'none', backgroundColor: '#fff' }} />
+                        ) : (
+                            <Box component="pre" sx={{ m: 0, p: 2, flex: 1, overflow: 'auto', fontFamily: 'monospace', fontSize: 14, bgcolor: 'background.default' }}>
+                                {respBody}
+                            </Box>
+                        )}
+                    </Box>
+                </Dialog>
+
+                <Snackbar open={notif.open} autoHideDuration={4000} onClose={() => setNotif({ ...notif, open: false })}>
+                    <Alert severity={notif.severity} onClose={() => setNotif({ ...notif, open: false })}>
+                        {notif.message}
+                    </Alert>
+                </Snackbar>
             </Box>
-            {showReqHeaders && (
-              <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
-                {reqHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
-              </Box>
-            )}
-          </Box>
-        )}
-        {respHeaders.length > 0 && (
-          <Box sx={{ mb: 1 }}>
-            <Box sx={{ display: 'flex', alignItems: 'center' }}>
-              <Typography variant="subtitle2" sx={{ flexGrow: 1 }}>Response Headers</Typography>
-              <IconButton size="small" aria-label={showRespHeaders ? 'collapse response headers' : 'expand response headers'} onClick={() => setShowRespHeaders(v => !v)}>
-                {showRespHeaders ? <ExpandLessIcon fontSize="small" /> : <ExpandMoreIcon fontSize="small" />}
-              </IconButton>
-            </Box>
-            {showRespHeaders && (
-              <Box component="pre" sx={{ m: 0, p: 1, bgcolor: 'background.default', borderRadius: 1, overflow: 'auto' }}>
-                {respHeaders.map(([k,v]) => `${k}: ${v}`).join('\n')}
-              </Box>
-            )}
-          </Box>
-        )}
-        <Typography variant="subtitle2">Body</Typography>
-        <Stack direction="row" alignItems="center" gap={1}>
-          <Box sx={{ flexGrow: 1 }} />
-          <TextField
-            size="small"
-            type="number"
-            label="Raw JSON limit (bytes)"
-            value={rawLimitInput}
-            onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-            onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
-              const v = Number((rawLimitInput || '').trim());
-              const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-              setRawJsonMaxBytesOverride(clamped);
-              setRawJsonMaxBytes(clamped);
-              if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, clamped));
-            } }}
-            inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-            sx={{ minWidth: 210 }}
-          />
-          <Button size="small" variant="outlined" onClick={()=>{
-            const v = Number((rawLimitInput || '').trim());
-            const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-            setRawJsonMaxBytesOverride(clamped);
-            setRawJsonMaxBytes(clamped);
-            if (respRawPreviewFull) setRespRawPreview(applyPreviewLimit(respRawPreviewFull, clamped));
-          }}>Apply</Button>
-        </Stack>
-        <TextField
-          variant="outlined"
-          fullWidth
-          multiline
-          minRows={8}
-          value={respRawPreview || pretty(respBody)}
-          InputProps={{ readOnly: true }}
-          sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
-        />
-      </Paper>
-
-      <Snackbar open={notif.open} autoHideDuration={4000} onClose={() => setNotif({ ...notif, open: false })}>
-        <Alert severity={notif.severity} onClose={() => setNotif({ ...notif, open: false })}>
-          {notif.message}
-        </Alert>
-      </Snackbar>
-    </Box>
-  );
-};
+        );
+    }
+;
 
 export default HookTester;
