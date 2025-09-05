@@ -59,7 +59,7 @@ import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import { ConfigProvider, useConfig } from './contexts/ConfigContext';
-import { RuntimeProvider } from './contexts/RuntimeContext';
+import { RuntimeProvider, useRuntime, getCurrentUserId } from './contexts/RuntimeContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UserProvider, useUser } from './contexts/UserContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -94,7 +94,7 @@ import HookTester from './components/HookTester';
 import ClickhouseRuntime from './components/ClickhouseRuntime';
 import MFASettings from './components/MFASettings';
 import LegalPage from './components/LegalPage';
-import { authenticatedFetch } from './utils/apiUtils';
+import { authenticatedFetch, resetSettingsState, loadSettings as loadSettingsUtil } from './utils/apiUtils';
 import CookieBanner from './components/CookieBanner';
 
 // Define drawer widths for different modes
@@ -221,6 +221,7 @@ const MainContent = (): React.JSX.Element => {
     deleteProfile
   } = useConfig();
   const { mode, toggleColorMode } = useTheme();
+  const { connection: runtimeConnection, loadRuntimeSettings } = useRuntime();
 
   // Effect to measure and update AppBar height
   useEffect(() => {
@@ -271,6 +272,30 @@ const MainContent = (): React.JSX.Element => {
     { text: 'ClickHouse', icon: <StorageIcon />, path: '/runtime-clickhouse' },
     { text: 'Hook Tester', icon: <CodeIcon />, path: '/hook-tester' },
   ];
+
+  // Paths that should force a fresh Runtime settings reload on each click (load on enter)
+  const runtimeReloadPaths = new Set<string>([
+    '/runtime-clickhouse',
+    '/distributed-bf',
+    '/hook-tester',
+  ]);
+
+  // Helper to force runtime settings reload on menu click (DRY)
+  const triggerRuntimeReload = async (): Promise<void> => {
+    try {
+      // Invalidate previous load status and trigger immediate reload
+      resetSettingsState();
+      await loadSettingsUtil(
+        getCurrentUserId,
+        loadRuntimeSettings,
+        currentProfileName,
+        async () => { /* no-op connection check in navigation */ },
+        () => runtimeConnection
+      );
+    } catch {
+      // ignore navigation-triggered reload errors
+    }
+  };
 
   // Define application menu items
   const applicationMenuItems: NavigationMenuItem[] = [
@@ -392,6 +417,9 @@ const MainContent = (): React.JSX.Element => {
       setNavigationDialogOpen(true);
     } else {
       // If no unsaved changes, navigate directly
+      if (runtimeReloadPaths.has(path)) {
+        void triggerRuntimeReload();
+      }
       navigate(path);
     }
   };
@@ -401,7 +429,11 @@ const MainContent = (): React.JSX.Element => {
     if (pendingNavigation) {
       // Reset the unsaved changes flag since the user chose to proceed without saving
       setHasUnsavedChanges(false);
-      navigate(pendingNavigation);
+      const path = pendingNavigation;
+      if (runtimeReloadPaths.has(path)) {
+        void triggerRuntimeReload();
+      }
+      navigate(path);
       setNavigationDialogOpen(false);
       setPendingNavigation(null);
     }

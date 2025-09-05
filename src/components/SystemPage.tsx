@@ -1,8 +1,11 @@
 import React from 'react';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Tooltip, IconButton } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import RefreshIcon from '@mui/icons-material/Refresh';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import ErrorIcon from '@mui/icons-material/Error';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
 import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
@@ -193,6 +196,7 @@ const SystemPage = (): React.JSX.Element => {
   const { currentProfileName, config } = useConfig();
   const [data, setData] = React.useState<MetricsResponse | null>(null);
   const [statusMessage, setStatusMessage] = React.useState<string>('');
+  const [connStatus, setConnStatus] = React.useState<'unknown'|'connected'|'disconnected'|'checking'>('unknown');
 
   // Bootstrapping: ensure runtime settings are loaded and connection checked (debounced)
   const connectionRef = React.useRef(connection);
@@ -200,7 +204,7 @@ const SystemPage = (): React.JSX.Element => {
   const getConnection = React.useCallback(() => connectionRef.current, []);
 
   const checkConnection = React.useCallback(async (conn: any) => {
-    await checkConnectionUtil(conn, () => {}, (msg: string) => setStatusMessage(msg));
+    await checkConnectionUtil(conn, setConnStatus, (msg: string) => setStatusMessage(msg));
   }, []);
 
   React.useEffect(() => {
@@ -220,6 +224,13 @@ const SystemPage = (): React.JSX.Element => {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentProfileName]);
+
+  // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
+  React.useEffect(() => {
+    if (connection?.backend_url) {
+      void checkConnection(connection);
+    }
+  }, [connection?.backend_url, checkConnection]);
 
   const inFlightRef = React.useRef(false);
   const fetchMetrics = React.useCallback(async () => {
@@ -329,6 +340,25 @@ const SystemPage = (): React.JSX.Element => {
         </Select>
         <Button variant="outlined" size="small" onClick={fetchMetrics}>Refresh</Button>
       </Stack>
+
+      {/* Connection status (unified banner) */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+        {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+        {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+        {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+        {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+        {connStatus === 'disconnected' && (
+          <Typography color="error.main">{statusMessage}</Typography>
+        )}
+        <Tooltip title="Check connection">
+          <span>
+            <IconButton onClick={() => { void checkConnection(getConnection()); }} disabled={connStatus === 'checking'} sx={{ ml: 1 }}>
+              <RefreshIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
 
       <Grid container spacing={2}>
         <Grid item xs={12}>

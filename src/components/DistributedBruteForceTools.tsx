@@ -238,6 +238,13 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
   const hasValidConnection = Boolean(runtimeConnection?.backend_url);
 
+  // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
+  useEffect(() => {
+    if (runtimeConnection?.backend_url) {
+      void checkConnection(runtimeConnection);
+    }
+  }, [runtimeConnection?.backend_url, checkConnection]);
+
   const saveHooksRuntime = async () => {
     try {
       const userId = await getCurrentUserId();
@@ -456,39 +463,40 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
   return (
     <>
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <SecurityIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6">Distributed Brute-Force Tools</Typography>
-          <InfoTooltip title="Configuration and testing of the distributed brute-force Lua hooks (Admin and Test)." />
-        </Box>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>Distributed Brute-Force Tools</Typography>
+        <SecurityIcon fontSize="small" />
+        <InfoTooltip title="Configuration and testing of the distributed brute-force Lua hooks (Admin and Test)." />
+      </Stack>
 
-        {/* Connection status (match Connection page style) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
-          {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
-          {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
-          {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
-          {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
-          {connStatus === 'disconnected' && (
-            <Typography color="error.main">
-              {statusMessage}
-            </Typography>
-          )}
-          <Tooltip title="Check connection">
-            <span>
-              <IconButton
-                onClick={async () => {
-                  await checkConnection();
-                }}
-                disabled={connStatus === 'checking' || !hasValidConnection}
-                sx={{ ml: 1 }}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Box>
+      {/* Connection status (unified banner) */}
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+        {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+        {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+        {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+        {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+        {connStatus === 'disconnected' && (
+          <Typography color="error.main">
+            {statusMessage}
+          </Typography>
+        )}
+        <Tooltip title="Check connection">
+          <span>
+            <IconButton
+              onClick={async () => {
+                await checkConnection();
+              }}
+              disabled={connStatus === 'checking'}
+              sx={{ ml: 1 }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+
+      <Paper sx={{ p: 3 }}>
 
         {/* Auto-hide connection success message */}
         {/* Clear success message after a few seconds to match other runtime pages */}

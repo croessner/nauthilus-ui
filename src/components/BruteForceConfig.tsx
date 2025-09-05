@@ -26,9 +26,10 @@ import {
   FormControlLabel,
   Alert,
   Snackbar,
-  TablePagination,
+  Pagination,
   Divider,
   InputAdornment,
+  Stack,
   Tooltip
 } from '@mui/material';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -579,36 +580,37 @@ const BruteForceConfig: React.FC = () => {
         </Alert>
       )}
 
-      <Paper sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <SecurityIcon sx={{ mr: 1, color: 'primary.main' }} />
-          <Typography variant="h6">Brute Force Protection Management</Typography><InfoTooltip title="View and manage blocked IPs and affected accounts. Free entries when false positives occur." />
-        </Box>
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>Brute Force Protection Management</Typography>
+        <SecurityIcon fontSize="small" />
+        <InfoTooltip title="View and manage blocked IPs and affected accounts. Free entries when false positives occur." />
+      </Stack>
 
-        {/* Connection status (match Connection page style) */}
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
-          {connectionStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
-          {connectionStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
-          {connectionStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
-          {connectionStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
-          {connectionStatus === 'disconnected' && (
-            <Typography color="error.main">
-              {statusMessage}
-            </Typography>
-          )}
-          <Tooltip title="Check connection">
-            <span>
-              <IconButton 
-                onClick={() => checkConnection(runtimeConnection)} 
-                disabled={connectionStatus === 'checking' || !hasValidConnection}
-                sx={{ ml: 1 }}
-              >
-                <RefreshIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
-        </Box>
+      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+        <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+        {connectionStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+        {connectionStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+        {connectionStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+        {connectionStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+        {connectionStatus === 'disconnected' && (
+          <Typography color="error.main">
+            {statusMessage}
+          </Typography>
+        )}
+        <Tooltip title="Check connection">
+          <span>
+            <IconButton 
+              onClick={() => checkConnection(runtimeConnection)} 
+              disabled={connectionStatus === 'checking' || !hasValidConnection}
+              sx={{ ml: 1 }}
+            >
+              <RefreshIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
+      </Box>
+
+      <Paper sx={{ p: 3 }}>
 
         {connectionStatus === 'connected' ? (
           <>
@@ -713,16 +715,12 @@ const BruteForceConfig: React.FC = () => {
                         </React.Fragment>
                       ))}
                     </List>
-                    <TablePagination
-                      component="div"
-                      count={filterBlockedIps(bruteForceList.blocked_ips).length}
-                      page={page}
-                      onPageChange={handleChangePage}
-                      rowsPerPage={rowsPerPage}
-                      onRowsPerPageChange={handleChangeRowsPerPage}
-                      rowsPerPageOptions={rowsPerPageOptions}
-                      labelRowsPerPage="IPs per page:"
-                    />
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mt={2}>
+                      <TextField select size="small" label="Rows per page" value={rowsPerPage} onChange={handleChangeRowsPerPage}>
+                        {rowsPerPageOptions.map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                      </TextField>
+                      <Pagination color="primary" page={page + 1} onChange={(_, p) => setPage(p - 1)} count={Math.max(1, Math.ceil(filterBlockedIps(bruteForceList.blocked_ips).length / rowsPerPage))} showFirstButton showLastButton />
+                    </Box>
                   </>
                 ) : (
                   <EmptyState 
@@ -773,16 +771,12 @@ const BruteForceConfig: React.FC = () => {
                         </React.Fragment>
                       ))}
                     </List>
-                    <TablePagination
-                      component="div"
-                      count={filterAffectedAccounts(bruteForceList.affected_accounts).length}
-                      page={page}
-                      onPageChange={handleChangePage}
-                      rowsPerPage={rowsPerPage}
-                      onRowsPerPageChange={handleChangeRowsPerPage}
-                      rowsPerPageOptions={rowsPerPageOptions}
-                      labelRowsPerPage="Accounts per page:"
-                    />
+                    <Box display="flex" alignItems="center" justifyContent="space-between" mt={2}>
+                      <TextField select size="small" label="Rows per page" value={rowsPerPage} onChange={handleChangeRowsPerPage}>
+                        {rowsPerPageOptions.map((n) => <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                      </TextField>
+                      <Pagination color="primary" page={page + 1} onChange={(_, p) => setPage(p - 1)} count={Math.max(1, Math.ceil(filterAffectedAccounts(bruteForceList.affected_accounts).length / rowsPerPage))} showFirstButton showLastButton />
+                    </Box>
                   </>
                 ) : (
                   <EmptyState 

@@ -27,8 +27,10 @@ import {
     Stack,
     Switch,
     TextField,
-    Typography
+    Typography,
+    Tooltip
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import PublicIcon from '@mui/icons-material/Public';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -69,6 +71,7 @@ type BookmarkState = { raw_sql: Bookmark[]; search: Bookmark[] };
 const MAX_BOOKMARKS = 5;
 
 const ClickhouseRuntime = (): React.JSX.Element => {
+  const theme = useTheme();
   const { currentProfileName } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings, saveRuntimeSettings } = useRuntime();
 
@@ -377,6 +380,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       );
     })();
   }, [currentProfileName, loadRuntimeSettings, getConnection, checkConnection]);
+
+  // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
+  useEffect(() => {
+    if (runtimeConnection?.backend_url) {
+      void checkConnection(runtimeConnection);
+    }
+  }, [runtimeConnection?.backend_url, checkConnection]);
 
   useEffect(() => {
     if (connStatus === 'connected' && statusMessage.includes('Connected')) {
@@ -1244,9 +1254,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   return (
     <Box>
-      <Stack direction="row" alignItems="center" spacing={1.5} sx={{ mb:3, flexWrap:'wrap' }}>
-        <Typography variant="h6" sx={{ fontWeight:700 }}>ClickHouse</Typography>
-        <Box sx={{ flexGrow:1 }} />
+      <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
+        <Typography variant="h5" sx={{ fontWeight: 700 }}>ClickHouse</Typography>
+        <Box sx={{ flexGrow: 1 }} />
         {/* Top-right refresh and interval (like Security) */}
         <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval">
           <MenuItem value={0}>OFF</MenuItem>
@@ -1258,7 +1268,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         <Button variant="outlined" size="small" startIcon={<RefreshIcon/>} onClick={()=>{ void runQuery(); }}>Refresh</Button>
       </Stack>
 
-      {/* Connection status (match other pages) */}
+      {/* Connection status (unified banner) */}
       <Box sx={{ display:'flex', alignItems:'center', mb:2 }}>
         <Typography variant="subtitle1" sx={{ mr:2 }}>Connection Status:</Typography>
         {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr:1 }} />}
@@ -1268,6 +1278,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         {connStatus === 'disconnected' && (
           <Typography color="error.main">{statusMessage}</Typography>
         )}
+        <Tooltip title="Check connection">
+          <span>
+            <IconButton onClick={() => { void checkConnection(getConnection()); }} disabled={connStatus === 'checking'} sx={{ ml: 1 }}>
+              <RefreshIcon />
+            </IconButton>
+          </span>
+        </Tooltip>
       </Box>
 
       {/* Hook configuration */}
@@ -1855,7 +1872,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                               setSortDir('asc');
                             }
                           }}
-                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:'1px solid #ddd', cursor:'grab', userSelect:'none', position:'relative', width: w, minWidth:w, maxWidth:w, whiteSpace: (action === 'raw_sql' ? 'normal' : 'nowrap') as 'normal' | 'nowrap', wordBreak: (action === 'raw_sql' ? 'break-all' : 'normal') as any }}
+                          style={{ textAlign:'left', padding:'6px 8px', borderBottom:`1px solid ${theme.palette.divider}`, cursor:'grab', userSelect:'none', position:'relative', width: w, minWidth:w, maxWidth:w, whiteSpace: (action === 'raw_sql' ? 'normal' : 'nowrap') as 'normal' | 'nowrap', wordBreak: (action === 'raw_sql' ? 'break-all' : 'normal') as any }}
                           title="Drag & drop to reorder, click to sort. Drag handle to resize"
                         >
                           <span style={{ display:'inline-block', maxWidth: (action === 'raw_sql' ? undefined : (w-12)), overflow: (action === 'raw_sql' ? 'visible' : 'hidden'), textOverflow: (action === 'raw_sql' ? 'clip' : 'ellipsis'), verticalAlign:'bottom', whiteSpace: (action === 'raw_sql' ? 'normal' : 'nowrap') as 'normal' | 'nowrap' }} title={h}>{h}{indicator}</span>
@@ -1874,7 +1891,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   {pagedRows.map((r, idx) => (
                     <React.Fragment key={idx}>
                       <tr>
-                        <td style={{ padding:'0 4px', borderBottom:'1px solid #eee', textAlign:'center', verticalAlign:'middle' }}>
+                        <td style={{ padding:'0 4px', borderBottom:`1px solid ${theme.palette.divider}`, textAlign:'center', verticalAlign:'middle' }}>
                           <IconButton size="small" onClick={()=>toggleExpanded(idx)} aria-label="Expand row" aria-expanded={expanded[idx]} sx={{ transition:'transform 0.2s', transform: expanded[idx] ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                             <ChevronRightIcon fontSize="small" />
                           </IconButton>
@@ -1884,14 +1901,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
                           const w = getColWidth(h);
                           return (
-                            <td key={h} style={{ padding:'6px 8px', borderBottom:'1px solid #eee', width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={String(text)}>{text}</td>
+                            <td key={h} style={{ padding:'6px 8px', borderBottom:`1px solid ${theme.palette.divider}`, width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={String(text)}>{text}</td>
                           );
                         })}
                       </tr>
                       {expanded[idx] && (
                         <tr>
-                          <td style={{ borderBottom:'1px solid #eee' }} />
-                          <td colSpan={selectedFields.length} style={{ padding:'8px 8px', borderBottom:'1px solid #eee' }}>
+                          <td style={{ borderBottom:`1px solid ${theme.palette.divider}` }} />
+                          <td colSpan={selectedFields.length} style={{ padding:'8px 8px', borderBottom:`1px solid ${theme.palette.divider}` }}>
                             <Box sx={{ p:1.25, bgcolor:'rgba(25,118,210,0.06)', border:'1px solid', borderColor:'primary.light', borderRadius:1 }}>
                               <Grid container spacing={0.5}>
                                 {selectedFields.filter(k => !isEmptyValue((r as any)?.[k])).map(k => {
@@ -1918,7 +1935,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); }}>
                 {[10,25,50,100].map(n=> <MenuItem key={n} value={n}>{n}</MenuItem>)}
               </TextField>
-              <Pagination color="primary" page={page} onChange={(_,p)=>setPage(p)} count={Math.max(1, Math.ceil(sortedRows.length / pageSize))} />
+              <Pagination color="primary" page={page} onChange={(_,p)=>setPage(p)} count={Math.max(1, Math.ceil(sortedRows.length / pageSize))} showFirstButton showLastButton />
             </Box>
             {rawPreview && (
               <>

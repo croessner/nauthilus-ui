@@ -18,6 +18,7 @@ import {
   DialogContentText,
   DialogActions,
   InputAdornment,
+  Stack,
 } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -335,38 +336,40 @@ const ConnectionConfig: React.FC = () => {
       >
         {({ errors, touched, values, handleChange, setFieldValue }) => (
           <Form>
-            <FormSection
-              title="Connection Configuration"
-              description="Configure connection to the Nauthilus backend."
-            >
-              <Grid container spacing={3}>
-                {/* Connection Status */}
-                <Grid item xs={12}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-                    <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
-                    {connectionStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
-                    {connectionStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
-                    {connectionStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
-                    {connectionStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
-                    {connectionStatus === 'disconnected' && (
-                      <Typography color="error.main">
-                        {statusMessage}
-                      </Typography>
-                    )}
-                    <Tooltip title="Check connection">
-                      <span>
-                        <IconButton 
-                          onClick={() => checkConnection(values)} 
-                          disabled={connectionStatus === 'checking' || !values.backend_url}
-                          sx={{ ml: 1 }}
-                        >
-                          <RefreshIcon />
-                        </IconButton>
-                      </span>
-                    </Tooltip>
-                  </Box>
+            <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
+              <Typography variant="h5" sx={{ fontWeight: 700 }}>Connection</Typography>
+            </Stack>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+              Configure connection to the Nauthilus backend.
+            </Typography>
 
-                </Grid>
+            {/* Connection status (unified banner) */}
+            <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
+              <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
+              {connectionStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
+              {connectionStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
+              {connectionStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
+              {connectionStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
+              {connectionStatus === 'disconnected' && (
+                <Typography color="error.main">
+                  {statusMessage}
+                </Typography>
+              )}
+              <Tooltip title="Check connection">
+                <span>
+                  <IconButton 
+                    onClick={() => checkConnection(values)} 
+                    disabled={connectionStatus === 'checking' || !values.backend_url}
+                    sx={{ ml: 1 }}
+                  >
+                    <RefreshIcon />
+                  </IconButton>
+                </span>
+              </Tooltip>
+            </Box>
+
+            <FormSection>
+              <Grid container spacing={3}>
 
 
                 {/* Backend URL */}

@@ -335,9 +335,16 @@ const HookTester = (): React.JSX.Element => {
 
   const connectionOk = Boolean(runtimeConnection?.backend_url);
 
+  // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
+  useEffect(() => {
+    if (runtimeConnection?.backend_url) {
+      void checkConnection(runtimeConnection);
+    }
+  }, [runtimeConnection?.backend_url, checkConnection]);
+
   return (
     <Box>
-      <Typography variant="h5" gutterBottom>Hook Tester</Typography>
+      <Typography variant="h5" sx={{ fontWeight: 700 }} gutterBottom>Hook Tester</Typography>
       <Typography variant="body2" color="text.secondary" gutterBottom>
         Test arbitrary hooks of your Nauthilus backend. Choose the HTTP method and endpoint path, optionally send a body or query parameters, and inspect status code, headers, and response body.
       </Typography>
@@ -354,7 +361,7 @@ const HookTester = (): React.JSX.Element => {
         )}
         <Tooltip title="Check connection">
           <span>
-            <IconButton onClick={checkConnection} disabled={connStatus === 'checking' || !connectionOk} sx={{ ml: 1 }}>
+            <IconButton onClick={checkConnection} disabled={connStatus === 'checking'} sx={{ ml: 1 }}>
               <RefreshIcon />
             </IconButton>
           </span>

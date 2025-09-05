@@ -127,7 +127,8 @@ export const checkConnection = async (
   setStatusMessage: (message: string) => void
 ) => {
   if (!connectionConfig.backend_url) {
-    setConnectionStatus('unknown');
+    // Treat missing URL as a disconnected state to avoid lingering "Not checked"
+    setConnectionStatus('disconnected');
     setStatusMessage('No backend URL configured');
     return;
   }
