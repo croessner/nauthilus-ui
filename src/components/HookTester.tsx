@@ -30,7 +30,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken } from '../utils/apiUtils';
+import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 
@@ -91,42 +91,23 @@ const HookTester = (): React.JSX.Element => {
   useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
   const getConnection = useCallback(() => connectionRef.current, []);
 
-  // Connection check (similar to Distributed BF and Connection pages)
-  const checkConnection = useCallback(async () => {
-    const conn = getConnection();
-    if (!conn?.backend_url) {
-      setConnStatus('unknown');
-      setStatusMessage('No backend URL configured');
-      return;
-    }
-    setConnStatus('checking');
-    setStatusMessage('Checking connection...');
-    try {
-      const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
-      proxyUrl.searchParams.append('url', conn.backend_url!);
-      const resp = await authenticatedFetch(proxyUrl.toString(), { method: 'GET' });
-      if (resp.ok) {
-        setConnStatus('connected');
-        setStatusMessage('Connected to Nauthilus backend (ping successful)');
-      } else {
-        const msg = await extractErrorMessage(resp);
-        setConnStatus('disconnected');
-        setStatusMessage(`Failed to connect: ${msg}`);
-      }
-    } catch (e: any) {
-      setConnStatus('disconnected');
-      setStatusMessage(`Connection error: ${e?.message || String(e)}`);
-    }
+  // Connection check via shared utility (DRY)
+  const checkConnection = useCallback(async (connParam?: any) => {
+    await checkConnectionUtil(connParam ?? getConnection(), setConnStatus, setStatusMessage);
   }, [getConnection]);
 
-  // Bootstrap: load runtime settings on mount/profile change and then check connection
+  // Bootstrap: load runtime settings and check connection via shared helper
   useEffect(() => {
     (async () => {
-      const userId = await getCurrentUserId();
-      await loadRuntimeSettings(userId, currentProfileName);
-      await checkConnection();
+      await loadSettingsUtil(
+        getCurrentUserId,
+        loadRuntimeSettings,
+        currentProfileName,
+        async (conn) => { await checkConnection(conn); },
+        getConnection
+      );
     })().catch(() => { /* ignore */ });
-  }, [currentProfileName, loadRuntimeSettings, /* eslint-disable-line react-hooks/exhaustive-deps */]);
+  }, [currentProfileName, loadRuntimeSettings, getConnection, checkConnection]);
 
   // Load last session from localStorage
   const username = 'default-user'; // aligned with getCurrentUserId()

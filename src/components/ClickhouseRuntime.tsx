@@ -46,7 +46,7 @@ import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import {useConfig} from '../contexts/ConfigContext';
 import {getCurrentUserId, useRuntime} from '../contexts/RuntimeContext';
-import {authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams} from '../utils/apiUtils';
+import {authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil} from '../utils/apiUtils';
 import {getKnownHookEndpointSuggestions} from '../utils/hooks';
 import {usePersistedAutoRefresh} from '../hooks/usePersistedAutoRefresh';
 import {
@@ -360,31 +360,23 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     setBmDialogOpen(false);
   }, []);
 
-  // Load runtime on first mount to ensure connection and hooks are loaded like other pages
-  const didRunRef = useRef<string | null>(null);
+  // Connection check via shared utility (DRY)
+  const checkConnection = useCallback(async (connParam?: any) => {
+    await checkConnectionUtil(connParam ?? getConnection(), setConnStatus, setStatusMessage);
+  }, [getConnection]);
+
+  // Load runtime settings and check connection on mount/profile change
   useEffect(() => {
-    if (didRunRef.current === currentProfileName) return;
-    didRunRef.current = currentProfileName;
     (async () => {
-      try {
-        setConnStatus('checking');
-        const userId = await getCurrentUserId();
-        await loadRuntimeSettings(userId, currentProfileName);
-        setConnStatus('connected');
-        setStatusMessage('Connected to Nauthilus backend (ping successful)');
-        // adopt defaults after runtime loaded
-        if ((runtimeHooks as any)?.clickhouse_query?.endpoint_path) {
-          setEndpointPath((runtimeHooks as any).clickhouse_query.endpoint_path);
-        }
-        if (typeof (runtimeHooks as any)?.clickhouse_query?.enabled === 'boolean') {
-          setHookEnabled(Boolean((runtimeHooks as any).clickhouse_query.enabled));
-        }
-      } catch (e:any) {
-        setConnStatus('disconnected');
-        setStatusMessage(`Failed to load runtime: ${e?.message || String(e)}`);
-      }
+      await loadSettingsUtil(
+        getCurrentUserId,
+        loadRuntimeSettings,
+        currentProfileName,
+        async (conn) => { await checkConnection(conn); },
+        getConnection
+      );
     })();
-  }, [currentProfileName, loadRuntimeSettings]);
+  }, [currentProfileName, loadRuntimeSettings, getConnection, checkConnection]);
 
   useEffect(() => {
     if (connStatus === 'connected' && statusMessage.includes('Connected')) {

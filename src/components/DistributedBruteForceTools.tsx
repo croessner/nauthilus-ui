@@ -32,7 +32,7 @@ import LinkIcon from '@mui/icons-material/Link';
 import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams } from '../utils/apiUtils';
+import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 
@@ -52,14 +52,14 @@ const defaultAdminOps = [
 ];
 
 const DistributedBruteForceTools = (): React.JSX.Element => {
-  const { currentProfileName, config } = useConfig();
+  const { currentProfileName } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, saveRuntimeSettings, loadRuntimeSettings } = useRuntime();
 
   const [tab, setTab] = useState(0);
-  const [adminEnabled, setAdminEnabled] = useState<boolean>(Boolean(config?.lua?.hooks?.distributed_brute_force_admin?.enabled || runtimeHooks?.distributed_brute_force_admin?.enabled));
-  const [testEnabled, setTestEnabled] = useState<boolean>(Boolean(config?.lua?.hooks?.distributed_brute_force_test?.enabled || runtimeHooks?.distributed_brute_force_test?.enabled));
-  const [adminPath, setAdminPath] = useState<string>(config?.lua?.hooks?.distributed_brute_force_admin?.endpoint_path || runtimeHooks?.distributed_brute_force_admin?.endpoint_path || '/hooks/distributed-brute-force-admin');
-  const [testPath, setTestPath] = useState<string>(config?.lua?.hooks?.distributed_brute_force_test?.endpoint_path || runtimeHooks?.distributed_brute_force_test?.endpoint_path || '/hooks/distributed-brute-force-test');
+  const [adminEnabled, setAdminEnabled] = useState<boolean>(Boolean(runtimeHooks?.distributed_brute_force_admin?.enabled));
+  const [testEnabled, setTestEnabled] = useState<boolean>(Boolean(runtimeHooks?.distributed_brute_force_test?.enabled));
+  const [adminPath, setAdminPath] = useState<string>(runtimeHooks?.distributed_brute_force_admin?.endpoint_path || '/hooks/distributed-brute-force-admin');
+  const [testPath, setTestPath] = useState<string>(runtimeHooks?.distributed_brute_force_test?.endpoint_path || '/hooks/distributed-brute-force-test');
 
   // Known hook endpoint suggestions (shared with HookTester)
   const effectiveEndpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
@@ -131,32 +131,9 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
   useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
   const getRuntimeConnection = useCallback(() => connectionRef.current, []);
 
-  // Centralized connection check to avoid duplication in effects and UI handlers
-  const checkConnection = useCallback(async () => {
-    const conn = getRuntimeConnection();
-    if (!conn?.backend_url) {
-      setConnStatus('unknown');
-      setStatusMessage('No backend URL configured');
-      return;
-    }
-    setConnStatus('checking');
-    setStatusMessage('Checking connection...');
-    try {
-      const proxyUrl = new URL('/proxy/ping', getProxyOrigin());
-      proxyUrl.searchParams.append('url', conn.backend_url!);
-      const resp = await authenticatedFetch(proxyUrl.toString(), { method: 'GET' });
-      if (resp.ok) {
-        setConnStatus('connected');
-        setStatusMessage('Connected to Nauthilus backend (ping successful)');
-      } else {
-        setConnStatus('disconnected');
-        const msg = await extractErrorMessage(resp);
-        setStatusMessage(`Failed to connect: ${msg}`);
-      }
-    } catch (e: any) {
-      setConnStatus('disconnected');
-      setStatusMessage(`Connection error: ${e?.message || String(e)}`);
-    }
+  // Centralized connection check via shared utility (DRY)
+  const checkConnection = useCallback(async (connParam?: any) => {
+    await checkConnectionUtil(connParam ?? getRuntimeConnection(), setConnStatus, setStatusMessage);
   }, [getRuntimeConnection]);
 
   useEffect(() => {
@@ -201,23 +178,15 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     }
   }, [testResponseJson]);
 
-  // Sync hook states when configuration or runtime hook settings load/update
+  // Sync hook states when runtime hook settings load/update
   useEffect(() => {
-    const newAdminEnabled = Boolean(
-      config?.lua?.hooks?.distributed_brute_force_admin?.enabled ??
-      runtimeHooks?.distributed_brute_force_admin?.enabled
-    );
-    const newTestEnabled = Boolean(
-      config?.lua?.hooks?.distributed_brute_force_test?.enabled ??
-      runtimeHooks?.distributed_brute_force_test?.enabled
-    );
+    const newAdminEnabled = Boolean(runtimeHooks?.distributed_brute_force_admin?.enabled);
+    const newTestEnabled = Boolean(runtimeHooks?.distributed_brute_force_test?.enabled);
     const newAdminPath = (
-      config?.lua?.hooks?.distributed_brute_force_admin?.endpoint_path ||
       runtimeHooks?.distributed_brute_force_admin?.endpoint_path ||
       '/hooks/distributed-brute-force-admin'
     );
     const newTestPath = (
-      config?.lua?.hooks?.distributed_brute_force_test?.endpoint_path ||
       runtimeHooks?.distributed_brute_force_test?.endpoint_path ||
       '/hooks/distributed-brute-force-test'
     );
@@ -226,7 +195,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     setTestEnabled(newTestEnabled);
     setAdminPath(newAdminPath);
     setTestPath(newTestPath);
-  }, [config, runtimeHooks]);
+  }, [runtimeHooks]);
 
   // Initialize UI state from persisted runtime settings (once per mount)
   const didInitUiRef = useRef(false);
