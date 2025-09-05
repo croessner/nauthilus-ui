@@ -1488,6 +1488,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                       </InputAdornment>
                     ),
                     sx: {
+                      minHeight: { xs: 44, sm: 48 },
+                      alignItems: 'center',
                       '& input[type="datetime-local"]': {
                         WebkitTextFillColor: 'currentColor',
                         color: 'text.primary',
@@ -1530,6 +1532,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                       </InputAdornment>
                     ),
                     sx: {
+                      minHeight: { xs: 44, sm: 48 },
+                      alignItems: 'center',
                       '& input[type="datetime-local"]': {
                         WebkitTextFillColor: 'currentColor',
                         color: 'text.primary',
