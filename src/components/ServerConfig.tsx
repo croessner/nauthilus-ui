@@ -1416,11 +1416,11 @@ const ServerConfig = (): React.JSX.Element | null => {
                     <MenuItem value="feature">feature</MenuItem>
                     <MenuItem value="filter">filter</MenuItem>
                     <MenuItem value="hook">hook</MenuItem>
+                    <MenuItem value="http">http</MenuItem>
                     <MenuItem value="ldap">ldap</MenuItem>
                     <MenuItem value="lua">lua</MenuItem>
                     <MenuItem value="mail">mail</MenuItem>
                     <MenuItem value="metrics">metrics</MenuItem>
-                    <MenuItem value="neural">neural</MenuItem>
                     <MenuItem value="oauth2">oauth2</MenuItem>
                     <MenuItem value="password">password</MenuItem>
                     <MenuItem value="rbl">rbl</MenuItem>

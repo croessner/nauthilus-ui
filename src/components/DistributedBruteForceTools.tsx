@@ -792,36 +792,46 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   </Box>
                 )}
                 {/* Raw JSON toggle and limit control (ClickHouse-style) */}
-                <Stack direction="row" alignItems="center" gap={1}>
+                <Stack direction="row" alignItems="center" gap={1} sx={{ flexWrap: 'wrap' }}>
                   <Button size="small" onClick={() => setShowAdminRaw(v => !v)} sx={{ textTransform:'none' }}>
                     {showAdminRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                   </Button>
-                  <Box sx={{ flexGrow: 1 }} />
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Raw JSON limit (bytes)"
-                    value={rawLimitInput}
-                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                  {/* Right-side controls: wrap below on small screens */}
+                  <Box sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    flexBasis: { xs: '100%', sm: 'auto' },
+                    flexGrow: { xs: 1, sm: 0 },
+                    justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                    ml: { sm: 'auto' },
+                    pt: 1,
+                    pb: 0.5
+                  }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Raw JSON limit (bytes)"
+                      value={rawLimitInput}
+                      onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                      onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                        const v = Number((rawLimitInput || '').trim());
+                        const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                        setRawJsonMaxBytesOverride(clamped);
+                        setRawJsonMaxBytes(clamped);
+                        if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+                        if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+                      } }}
+                      inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                      sx={{ minWidth: { xs: 160, sm: 210 } }}
+                    />
+                    <Button size="small" variant="outlined" onClick={()=>{
                       const v = Number((rawLimitInput || '').trim());
                       const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
                       setRawJsonMaxBytesOverride(clamped);
                       setRawJsonMaxBytes(clamped);
                       if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
                       if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                    } }}
-                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                    sx={{ minWidth: 210 }}
-                  />
-                  <Button size="small" variant="outlined" onClick={()=>{
-                    const v = Number((rawLimitInput || '').trim());
-                    const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                    setRawJsonMaxBytesOverride(clamped);
-                    setRawJsonMaxBytes(clamped);
-                    if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
-                    if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                  }}>Apply</Button>
+                    }}>Apply</Button>
+                  </Box>
                 </Stack>
                 {showAdminRaw && (
                   <TextField
@@ -1018,36 +1028,46 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
               )}
 
               {/* Raw JSON toggle and limit control (ClickHouse-style) */}
-              <Stack direction="row" alignItems="center" gap={1}>
+              <Stack direction="row" alignItems="center" gap={1} sx={{ flexWrap: 'wrap' }}>
                 <Button size="small" onClick={() => setShowTestRaw(v => !v)} sx={{ textTransform:'none' }}>
                   {showTestRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                 </Button>
-                <Box sx={{ flexGrow: 1 }} />
-                <TextField
-                  size="small"
-                  type="number"
-                  label="Raw JSON limit (bytes)"
-                  value={rawLimitInput}
-                  onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-                  onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                {/* Right-side controls: wrap below on small screens */}
+                <Box sx={{
+                  display: 'flex', alignItems: 'center', gap: 1,
+                  flexBasis: { xs: '100%', sm: 'auto' },
+                  flexGrow: { xs: 1, sm: 0 },
+                  justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                  ml: { sm: 'auto' },
+                  pt: 1,
+                  pb: 0.5
+                }}>
+                  <TextField
+                    size="small"
+                    type="number"
+                    label="Raw JSON limit (bytes)"
+                    value={rawLimitInput}
+                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                      const v = Number((rawLimitInput || '').trim());
+                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
+                      setRawJsonMaxBytesOverride(clamped);
+                      setRawJsonMaxBytes(clamped);
+                      if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+                      if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+                    } }}
+                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                    sx={{ minWidth: { xs: 160, sm: 210 } }}
+                  />
+                  <Button size="small" variant="outlined" onClick={()=>{
                     const v = Number((rawLimitInput || '').trim());
                     const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
                     setRawJsonMaxBytesOverride(clamped);
                     setRawJsonMaxBytes(clamped);
                     if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
                     if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                  } }}
-                  inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                  sx={{ minWidth: 210 }}
-                />
-                <Button size="small" variant="outlined" onClick={()=>{
-                  const v = Number((rawLimitInput || '').trim());
-                  const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                  setRawJsonMaxBytesOverride(clamped);
-                  setRawJsonMaxBytes(clamped);
-                  if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
-                  if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                }}>Apply</Button>
+                  }}>Apply</Button>
+                </Box>
               </Stack>
               {showTestRaw && (
                 <TextField

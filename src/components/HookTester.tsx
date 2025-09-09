@@ -587,24 +587,35 @@ const HookTester = (): React.JSX.Element => {
 
                 {/* Response */}
                 <Paper sx={{ p: 2, mt: 2 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
-                        <Typography variant="h6">Response</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1, flexWrap: 'wrap' }}>
+                        <Typography variant="h6" sx={{ mr: 1 }}>Response</Typography>
                         {loading && <CircularProgress size={18} />}
-                        <Box flexGrow={1} />
-                        {(() => {
-                            const label = respContentType ? `CT: ${respContentType}` : (bodyLooksHtml ? 'CT: text/html (derived)' : (bodyLooksText ? 'CT: text/plain (derived)' : null));
-                            return label ? <Chip variant="outlined" label={label} /> : null;
-                        })()}
-                        {canRenderEffective && (
-                            <Tooltip title={respViewMode === 'raw' ? 'Show rendered content' : 'Show raw'}>
-              <span>
-                <IconButton size="small" onClick={() => setRespViewMode(v => v === 'raw' ? 'rendered' : 'raw')} aria-label="toggle-rendered-view">
-                  {respViewMode === 'raw' ? <VisibilityIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
-                </IconButton>
-              </span>
-                            </Tooltip>
-                        )}
-                        {status && <Chip color={status.code >= 200 && status.code < 300 ? 'success' : 'error'} label={`Status: ${status.code} ${status.text}`} />}
+                        {/* Right-side controls container: on small screens it wraps to next line */}
+                        <Box sx={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1,
+                          // On small screens, take full width and start on next line; on md+ keep inline to the right
+                          flexBasis: { xs: '100%', sm: 'auto' },
+                          flexGrow: { xs: 1, sm: 0 },
+                          justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                          ml: { sm: 'auto' }
+                        }}>
+                          {(() => {
+                              const label = respContentType ? `CT: ${respContentType}` : (bodyLooksHtml ? 'CT: text/html (derived)' : (bodyLooksText ? 'CT: text/plain (derived)' : null));
+                              return label ? <Chip variant="outlined" label={label} /> : null;
+                          })()}
+                          {canRenderEffective && (
+                              <Tooltip title={respViewMode === 'raw' ? 'Show rendered content' : 'Show raw'}>
+                  <span>
+                    <IconButton size="small" onClick={() => setRespViewMode(v => v === 'raw' ? 'rendered' : 'raw')} aria-label="toggle-rendered-view">
+                      {respViewMode === 'raw' ? <VisibilityIcon fontSize="small" /> : <CodeIcon fontSize="small" />}
+                    </IconButton>
+                  </span>
+                              </Tooltip>
+                          )}
+                          {status && <Chip color={status.code >= 200 && status.code < 300 ? 'success' : 'error'} label={`Status: ${status.code} ${status.text}`} />}
+                        </Box>
                     </Box>
                     {reqHeaders.length > 0 && (
                         <Box sx={{ mb: 1 }}>
@@ -636,7 +647,34 @@ const HookTester = (): React.JSX.Element => {
                             )}
                         </Box>
                     )}
-                    <Typography variant="subtitle2">Body</Typography>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flexWrap: 'wrap', mb: 0.5 }}>
+                        <Typography variant="subtitle2" sx={{ mr: 1 }}>Body</Typography>
+                        {/* Keep controls aligned with the Response header on wide screens and wrap below on small */}
+                        <Box sx={{
+                          display: 'flex', alignItems: 'center', gap: 1,
+                          flexBasis: { xs: '100%', sm: 'auto' },
+                          flexGrow: { xs: 1, sm: 0 },
+                          justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                          ml: { sm: 'auto' }
+                        }}>
+                          {/* Raw JSON limit controls for raw preview mode; align with Body header on wide, wrap under on narrow */}
+                          {!(canRenderEffective && respViewMode === 'rendered') && (
+                            <Stack direction="row" alignItems="center" gap={1} sx={{ width: { xs: '100%', sm: 'auto' }, pt: 1, pb: 0.5 }}>
+                              <TextField
+                                size="small"
+                                type="number"
+                                label="Raw JSON limit (bytes)"
+                                value={rawLimitInput}
+                                onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                                onKeyDown={(e)=>{ if ((e as any).key === 'Enter') { applyRawLimitChange(); } }}
+                                inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                                sx={{ minWidth: { xs: 160, sm: 210 } }}
+                              />
+                              <Button size="small" variant="outlined" onClick={applyRawLimitChange}>Apply</Button>
+                            </Stack>
+                          )}
+                        </Box>
+                    </Box>
                     {canRenderEffective && respViewMode === 'rendered' ? (
                         isHtmlEffective ? (
                             <Box sx={{ mt: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1, overflow: 'hidden', position: 'relative' }}>
@@ -667,20 +705,6 @@ const HookTester = (): React.JSX.Element => {
                         )
                     ) : (
                         <>
-                            <Stack direction="row" alignItems="center" gap={1}>
-                                <Box sx={{ flexGrow: 1 }} />
-                                <TextField
-                                    size="small"
-                                    type="number"
-                                    label="Raw JSON limit (bytes)"
-                                    value={rawLimitInput}
-                                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-                                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') { applyRawLimitChange(); } }}
-                                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                                    sx={{ minWidth: 210 }}
-                                />
-                                <Button size="small" variant="outlined" onClick={applyRawLimitChange}>Apply</Button>
-                            </Stack>
                             <TextField
                                 variant="outlined"
                                 fullWidth

@@ -1940,26 +1940,35 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             {rawPreview && (
               <>
                 <Divider sx={{ my:2 }} />
-                <Stack direction="row" alignItems="center" gap={1}>
+                <Stack direction="row" alignItems="center" gap={1} sx={{ flexWrap: 'wrap' }}>
                   <Button size="small" onClick={()=>setShowRaw(v=>!v)} sx={{ textTransform:'none' }}>
                     {showRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                   </Button>
-                  <Box sx={{ flexGrow: 1 }} />
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Raw JSON limit (bytes)"
-                    value={rawLimitInput}
-                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                  <Box sx={{
+                    display: 'flex', alignItems: 'center', gap: 1,
+                    flexBasis: { xs: '100%', sm: 'auto' },
+                    flexGrow: { xs: 1, sm: 0 },
+                    justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+                    ml: { sm: 'auto' },
+                    pt: 1,
+                    pb: 0.5
+                  }}>
+                    <TextField
+                      size="small"
+                      type="number"
+                      label="Raw JSON limit (bytes)"
+                      value={rawLimitInput}
+                      onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+                      onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
+                        applyRawLimitFromInput();
+                      } }}
+                      inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
+                      sx={{ minWidth: { xs: 160, sm: 210 } }}
+                    />
+                    <Button size="small" variant="outlined" onClick={()=>{
                       applyRawLimitFromInput();
-                    } }}
-                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                    sx={{ minWidth: 210 }}
-                  />
-                  <Button size="small" variant="outlined" onClick={()=>{
-                    applyRawLimitFromInput();
-                  }}>Apply</Button>
+                    }}>Apply</Button>
+                  </Box>
                 </Stack>
                 {showRaw && (
                   <TextField

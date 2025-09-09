@@ -53,7 +53,8 @@ type AttestedCredentialData struct {
 	AAGUID       []byte `json:"aaguid"`
 	CredentialID []byte `json:"credential_id"`
 
-	// The raw credential public key bytes received from the attestation data.
+	// The raw credential public key bytes received from the attestation data. This is the CBOR representation of the
+	// credentials public key.
 	CredentialPublicKey []byte `json:"public_key"`
 }
 
@@ -65,6 +66,9 @@ type AttestedCredentialData struct {
 type CredentialMediationRequirement string
 
 const (
+	// MediationDefault lets the browser choose the mediation flow completely as if it wasn't specified at all.
+	MediationDefault CredentialMediationRequirement = ""
+
 	// MediationSilent indicates user mediation is suppressed for the given operation. If the operation can be performed
 	// without user involvement, wonderful. If user involvement is necessary, then the operation will return null rather
 	// than involving the user.
@@ -385,7 +389,7 @@ func ResidentKeyNotRequired() *bool {
 
 // Verify on AuthenticatorData handles Steps 13 through 15 & 17 for Registration
 // and Steps 15 through 18 for Assertion.
-func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerificationRequired bool, userPresenceRequired bool) error {
+func (a *AuthenticatorData) Verify(rpIdHash []byte, appIDHash []byte, userVerificationRequired bool, userPresenceRequired bool) (err error) {
 
 	// Registration Step 13 & Assertion Step 15
 	// Verify that the RP ID hash in authData is indeed the SHA-256
