@@ -144,7 +144,9 @@ func readAllDecoded(resp *http.Response) ([]byte, error) {
 		return nil, err
 	}
 
-	defer rc.Close()
+	defer func(rc io.ReadCloser) {
+		_ = rc.Close()
+	}(rc)
 
 	return io.ReadAll(rc)
 }
@@ -332,6 +334,28 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 	// Copy the response headers
 	copyHeaders(ctx.Writer.Header(), resp.Header)
+
+	// Ensure all backend headers are accessible to browser JS (CORS)
+	{
+		// Start with defaults already used in middleware/handler
+		baseExpose := []string{"Content-Length", "Content-Range", "ETag", "Last-Modified", "Accept-Ranges", "Location", "Content-Type"}
+
+		// Collect backend header names
+		seen := map[string]struct{}{}
+		for _, h := range baseExpose {
+			seen[strings.ToLower(h)] = struct{}{}
+		}
+
+		for k := range resp.Header {
+			lk := strings.ToLower(k)
+			if _, ok := seen[lk]; !ok {
+				baseExpose = append(baseExpose, k)
+				seen[lk] = struct{}{}
+			}
+		}
+
+		ctx.Header("Access-Control-Expose-Headers", strings.Join(baseExpose, ", "))
+	}
 
 	// Set the status code
 	ctx.Writer.WriteHeader(resp.StatusCode)
