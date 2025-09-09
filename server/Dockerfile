@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # Build stage for Go server
-FROM golang:1.24-alpine AS go-build
+FROM golang:1.25-alpine AS go-build
 
 # Add build arguments for multi-architecture support
 ARG TARGETPLATFORM
