@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"bufio"
+	"compress/gzip"
 	"encoding/json"
 	"io"
 	"log/slog"
@@ -86,6 +87,7 @@ func getOperation(ctx *gin.Context) string {
 	if operation == "" {
 		operation = ctx.Query("operation")
 	}
+
 	// Fallback to "action" naming if provided by client
 	if operation == "" {
 		operation = ctx.GetHeader("x-action")
@@ -118,6 +120,33 @@ func copyHeaders(dst http.Header, src http.Header) {
 			dst.Add(key, value)
 		}
 	}
+}
+
+// getDecodedBody returns a reader that transparently decodes gzip if needed
+func getDecodedBody(resp *http.Response) (io.ReadCloser, error) {
+	ce := strings.ToLower(resp.Header.Get("Content-Encoding"))
+	if ce == "gzip" {
+		gzr, err := gzip.NewReader(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		return gzr, nil
+	}
+
+	return resp.Body, nil
+}
+
+// readAllDecoded reads entire response body handling gzip when present
+func readAllDecoded(resp *http.Response) ([]byte, error) {
+	rc, err := getDecodedBody(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rc.Close()
+
+	return io.ReadAll(rc)
 }
 
 // handleProxyRequest handles the common proxy flow
@@ -629,6 +658,9 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		return
 	}
 
+	// Explicitly request identity to avoid gzipped metrics when possible
+	req.Header.Set("Accept-Encoding", "identity")
+
 	// Add backend auth if provided
 	authType, authValue := getAuthParams(ctx)
 	if authType != "" && authValue != "" {
@@ -649,14 +681,25 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := readAllDecoded(resp)
 		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Backend returned status " + strconv.Itoa(resp.StatusCode) + ": " + string(body)})
 
 		return
 	}
 
 	// Parse OpenMetrics/Prometheus text format
-	scanner := bufio.NewScanner(resp.Body)
+	decodedBody, err := getDecodedBody(resp)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Failed to decode metrics: " + err.Error()})
+
+		return
+	}
+
+	defer func(decodedBody io.ReadCloser) {
+		_ = decodedBody.Close()
+	}(decodedBody)
+
+	scanner := bufio.NewScanner(decodedBody)
 	// Simple regex to capture: name{labels} value or name value
 	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
 	labelVersion := regexp.MustCompile(`(?:^|[,{])\s*version\s*=\s*"([^"]+)"`)
@@ -872,6 +915,9 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 		return
 	}
 
+	// Explicitly request identity to avoid gzipped metrics when possible
+	req.Header.Set("Accept-Encoding", "identity")
+
 	// Add backend auth if provided
 	authType, authValue := getAuthParams(ctx)
 	if authType != "" && authValue != "" {
@@ -891,14 +937,25 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 	}()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		body, _ := io.ReadAll(resp.Body)
+		body, _ := readAllDecoded(resp)
 		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Backend returned status " + strconv.Itoa(resp.StatusCode) + ": " + string(body)})
 
 		return
 	}
 
 	// Parse OpenMetrics/Prometheus text format focusing on security_* metrics
-	scanner := bufio.NewScanner(resp.Body)
+	decodedBody, err := getDecodedBody(resp)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Failed to decode metrics: " + err.Error()})
+
+		return
+	}
+
+	defer func(decodedBody io.ReadCloser) {
+		_ = decodedBody.Close()
+	}(decodedBody)
+
+	scanner := bufio.NewScanner(decodedBody)
 	metricLine := regexp.MustCompile(`^([a-zA-Z_:][a-zA-Z0-9_:]*)(\{[^}]*})?\s+([+-]?(?:\d+\.?\d*|\.?\d+)(?:[eE][+-]?\d+)?)`)
 	labelKVP := regexp.MustCompile(`([a-zA-Z_][a-zA-Z0-9_]*)\s*=\s*"([^"]*)"`)
 
