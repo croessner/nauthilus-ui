@@ -1118,21 +1118,29 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         // Additionally, sync runtime collection hooks.custom_hooks right after loading configuration
         try {
           const userId = await getCurrentUserId();
-          // Fetch existing runtime settings to preserve current connection
+          const runtimeUrl = `/api/runtime/${userId}/${currentProfileName}`;
+          const newCustomHooks = newConfig.lua?.custom_hooks || [];
+
           try {
-            const rt = await axios.get(`/api/runtime/${userId}/${currentProfileName}`);
-            const existingConnection = rt?.data?.connection || {};
-            // Upsert runtime with preserved connection and fresh custom_hooks from the loaded config
-            await axios.post(`/api/runtime/${userId}/${currentProfileName}`, {
-              connection: existingConnection,
-              hooks: { custom_hooks: newConfig.lua?.custom_hooks || [] }
-            });
-            console.log('Runtime hooks synchronized from loaded configuration');
+            // Fetch existing runtime settings to preserve ALL user/runtime data
+            const rt = await axios.get(runtimeUrl);
+            const existing = rt?.data || {};
+
+            // Merge: keep everything, only update hooks.custom_hooks
+            const merged = {
+              ...existing,
+              hooks: {
+                ...(existing.hooks || {}),
+                custom_hooks: newCustomHooks,
+              },
+            };
+
+            await axios.post(runtimeUrl, merged);
+            console.log('Runtime hooks synchronized from loaded configuration (merged, preserved user settings)');
           } catch (rtErr) {
-            // If fetching runtime fails, still try to upsert using empty connection
-            await axios.post(`/api/runtime/${userId}/${currentProfileName}`, {
-              connection: {},
-              hooks: { custom_hooks: newConfig.lua?.custom_hooks || [] }
+            // If fetching runtime fails, create minimal doc with just custom_hooks (non-destructive since no prior doc)
+            await axios.post(runtimeUrl, {
+              hooks: { custom_hooks: newCustomHooks },
             });
             console.warn('Runtime GET failed; created runtime with custom_hooks only');
           }
