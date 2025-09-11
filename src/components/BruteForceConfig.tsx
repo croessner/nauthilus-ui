@@ -81,16 +81,6 @@ interface BruteForceListResponse {
   affected_accounts: AffectedAccount[];
 }
 
-// Response from the API
-interface BruteForceApiResponse {
-  ip_addresses?: {
-    [key: string]: string;
-  };
-  accounts?: {
-    [key: string]: string[];
-  };
-  error: null | string;
-}
 
 const BruteForceConfig: React.FC = () => {
   const { config, currentProfileName } = useConfig();
@@ -110,6 +100,12 @@ const BruteForceConfig: React.FC = () => {
     message: '',
     severity: 'info'
   });
+
+  // Result dialog state for displaying backend JSON responses
+  const [resultDialogOpen, setResultDialogOpen] = useState<boolean>(false);
+  const [resultDialogTitle, setResultDialogTitle] = useState<string>('');
+  const [resultDialogText, setResultDialogText] = useState<string>('');
+  const [resultDialogNote, setResultDialogNote] = useState<string>('');
 
   // Brute force protection state
   const [tabValue, setTabValue] = useState<number>(0);
@@ -398,7 +394,12 @@ const BruteForceConfig: React.FC = () => {
         return;
       }
 
-      await response.json(); // Response processed but not needed
+      const json = await response.json();
+      const { text, note } = formatResponseForDisplay(json);
+      setResultDialogTitle('Cache Flush Result');
+      setResultDialogText(text);
+      setResultDialogNote(note);
+      setResultDialogOpen(true);
 
       setNotification({
         open: true,
@@ -478,7 +479,12 @@ const BruteForceConfig: React.FC = () => {
         return;
       }
 
-      await response.json(); // Response processed but not needed
+      const json = await response.json();
+      const { text, note } = formatResponseForDisplay(json);
+      setResultDialogTitle('Brute Force Flush Result');
+      setResultDialogText(text);
+      setResultDialogNote(note);
+      setResultDialogOpen(true);
 
       setNotification({
         open: true,
@@ -552,6 +558,25 @@ const BruteForceConfig: React.FC = () => {
       </Typography>
     </Box>
   );
+
+  // Helper to pretty-print server responses and truncate large arrays
+  const formatResponseForDisplay = (obj: any): { text: string; note: string } => {
+    const MAX_ITEMS = 200; // keep large lists readable
+    let truncated = false;
+    const text = JSON.stringify(
+      obj,
+      (_key, value) => {
+        if (Array.isArray(value) && value.length > MAX_ITEMS) {
+          truncated = true;
+          return value.slice(0, MAX_ITEMS);
+        }
+        return value;
+      },
+      2
+    );
+    const note = truncated ? `Output truncated to first ${MAX_ITEMS} items for readability.` : '';
+    return { text, note };
+  };
 
   // Function to open a user dialog
   const handleOpenUserDialog = (username: string) => {
@@ -1064,6 +1089,35 @@ const BruteForceConfig: React.FC = () => {
             startIcon={isProcessing ? <CircularProgress size={20} /> : null}
           >
             {isProcessing ? 'Processing...' : 'Free IP Address'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Result Dialog */}
+      <Dialog
+        open={resultDialogOpen}
+        onClose={() => setResultDialogOpen(false)}
+        aria-labelledby="result-dialog-title"
+        maxWidth="md"
+        fullWidth
+      >
+        <DialogTitle id="result-dialog-title">{resultDialogTitle || 'Operation Result'}</DialogTitle>
+        <DialogContent dividers>
+          {resultDialogNote && (
+            <Alert severity="info" sx={{ mb: 2 }}>
+              {resultDialogNote}
+            </Alert>
+          )}
+          <Box
+            component="pre"
+            sx={{ whiteSpace: 'pre-wrap', fontFamily: 'monospace', fontSize: 13, bgcolor: 'background.default', p: 1, borderRadius: 1, maxHeight: 400, overflow: 'auto' }}
+          >
+            {resultDialogText}
+          </Box>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setResultDialogOpen(false)} color="primary" autoFocus>
+            Close
           </Button>
         </DialogActions>
       </Dialog>
