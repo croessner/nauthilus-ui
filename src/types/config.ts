@@ -339,7 +339,13 @@ export interface BruteForceConfig {
   min_tolerate_percent?: number;
   max_tolerate_percent?: number;
   scale_factor?: number;
-  neural_network?: NeuralNetworkConfig;
+  pw_history_for_known_accounts?: boolean; // mapstructure: "pw_history_for_known_accounts"
+  ip_scoping?: IPScoping; // mapstructure: "ip_scoping"
+}
+
+export interface IPScoping {
+  rwp_ipv6_cidr?: number; // mapstructure: "rwp_ipv6_cidr" validate: "omitempty,min=1,max=128" (0 disables)
+  tolerations_ipv6_cidr?: number; // mapstructure: "tolerations_ipv6_cidr" validate: "omitempty,min=1,max=128" (0 disables)
 }
 
 export interface BruteForceRuleConfig {
@@ -361,17 +367,6 @@ export interface TolerateConfig {
   min_tolerate_percent?: number;
   max_tolerate_percent?: number;
   scale_factor?: number;
-}
-
-export interface NeuralNetworkConfig {
-  dry_run?: boolean;
-  max_training_records?: number;
-  hidden_neurons?: number;
-  activation_function?: string;
-  static_weight?: number;
-  ml_weight?: number;
-  threshold?: number;
-  learning_rate?: number;
 }
 
 // RBL Configuration

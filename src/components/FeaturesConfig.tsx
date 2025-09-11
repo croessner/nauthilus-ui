@@ -178,6 +178,11 @@ const FeaturesConfigSchema = Yup.object().shape({
           min_tolerate_percent: Yup.number().min(0).max(100),
           max_tolerate_percent: Yup.number().min(0).max(100),
           scale_factor: Yup.number().min(0.1).max(10),
+          pw_history_for_known_accounts: Yup.boolean(),
+          ip_scoping: Yup.object().shape({
+            rwp_ipv6_cidr: Yup.number().min(0).max(128),
+            tolerations_ipv6_cidr: Yup.number().min(0).max(128)
+          })
         })
       : schema;
   }),
@@ -257,6 +262,11 @@ const FeaturesConfig: React.FC = () => {
       min_tolerate_percent: config?.brute_force?.min_tolerate_percent || 10,
       max_tolerate_percent: config?.brute_force?.max_tolerate_percent || 50,
       scale_factor: config?.brute_force?.scale_factor || 1.0,
+      pw_history_for_known_accounts: config?.brute_force?.pw_history_for_known_accounts || false,
+      ip_scoping: {
+        rwp_ipv6_cidr: config?.brute_force?.ip_scoping?.rwp_ipv6_cidr ?? 128,
+        tolerations_ipv6_cidr: config?.brute_force?.ip_scoping?.tolerations_ipv6_cidr ?? 128,
+      },
     },
     newSoftWhitelistUsername: '',
     newBruteForceWhitelistUsername: '',
@@ -1398,6 +1408,67 @@ const FeaturesConfig: React.FC = () => {
                       </FieldArray>
                     </CollapsibleFormSection>
                   </Grid>
+
+                  <Grid item xs={12}>
+                    <CollapsibleFormSection title="Password History for Known Accounts">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={values.brute_force?.pw_history_for_known_accounts || false}
+                            onChange={(e) => {
+                              setFieldValue('brute_force.pw_history_for_known_accounts', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
+                            }}
+                            name="brute_force.pw_history_for_known_accounts"
+                          />
+                        }
+                        label="Store password history for known accounts"
+                      />
+                      <Typography variant="body2" color="textSecondary">
+                        Records password history for existing accounts only. Failed attempts against unknown usernames won't create history entries, preventing Redis key explosion when attackers probe non-existent accounts. This applies only after the source has already been identified as a brute-forcer.
+                      </Typography>
+                    </CollapsibleFormSection>
+                  </Grid>
+
+                  <Grid item xs={12}>
+                    <CollapsibleFormSection title="IP Scoping">
+                      <Grid container spacing={2}>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.ip_scoping.rwp_ipv6_cidr"
+                            label="Repeating Wrong Password IPv6 CIDR"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 128 } }}
+                            helperText="IPv6 CIDR for repeating-wrong-password detection buckets. 0 disables (default /128)."
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid item xs={12} md={6}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.ip_scoping.tolerations_ipv6_cidr"
+                            label="Tolerations IPv6 CIDR"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0, max: 128 } }}
+                            helperText="IPv6 CIDR for tolerations buckets. 0 disables (default /128)."
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </CollapsibleFormSection>
+                  </Grid>
+
                   <Grid item xs={12}>
                     <CollapsibleFormSection title="Tolerations">
                       <Grid container spacing={2}>
