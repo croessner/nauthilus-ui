@@ -404,7 +404,12 @@ export const updateUserProfile = async (
 
 
 // Authenticate a user and generate tokens
-export const authenticate = async (username: string, password: string, rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | { mfaRequired: boolean, mfaType: string, username: string, totpEnabled?: boolean, webAuthnEnabled?: boolean } | null> => {
+export const authenticate = async (username: string, password: string, rememberMe: boolean = false, recaptchaToken?: string): Promise<
+  | { token: string; refreshToken: string }
+  | { mfaRequired: boolean; mfaType: string; username: string; totpEnabled?: boolean; webAuthnEnabled?: boolean }
+  | { captchaRequired: true; recaptchaSiteKey?: string }
+  | null
+> => {
   if (!username || !password) {
     return null;
   }
@@ -424,7 +429,8 @@ export const authenticate = async (username: string, password: string, rememberM
       const response = await axios.post('/api/auth/login', {
         username,
         password,
-        rememberMe
+        rememberMe,
+        ...(recaptchaToken ? { recaptchaToken } : {}),
       });
 
       // Check if MFA is required
@@ -450,7 +456,13 @@ export const authenticate = async (username: string, password: string, rememberM
         console.error('Invalid response format from server:', response.data);
         return null;
       }
-    } catch (error) {
+    } catch (error: any) {
+      // Detect adaptive CAPTCHA requirement signaled by backend
+      const status = error?.response?.status;
+      const data = error?.response?.data;
+      if (status === 403 && data && data.captchaRequired) {
+        return { captchaRequired: true, recaptchaSiteKey: data.recaptchaSiteKey };
+      }
       console.error('Authentication failed:', error);
       return null;
     }

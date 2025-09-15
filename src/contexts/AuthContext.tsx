@@ -11,6 +11,9 @@ interface AuthState {
   mfaType?: string;
   totpEnabled?: boolean;
   webAuthnEnabled?: boolean;
+  // Adaptive CAPTCHA support
+  captchaRequired?: boolean;
+  recaptchaSiteKey?: string;
 }
 
 // Define the context type
@@ -31,6 +34,46 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element => {
+  // Dynamically load the reCAPTCHA script when needed
+  const loadRecaptchaScript = (siteKey: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      if (!siteKey) return reject(new Error('Missing reCAPTCHA site key'));
+      // If grecaptcha already present, resolve
+      if ((window as any).grecaptcha && (window as any).grecaptcha.execute) {
+        resolve();
+        return;
+      }
+      // Check if script already added
+      const existing = document.querySelector(`script[data-recaptcha="${siteKey}"]`);
+      if (existing) {
+        existing.addEventListener('load', () => resolve());
+        existing.addEventListener('error', () => reject(new Error('Failed to load reCAPTCHA')));
+        return;
+      }
+      const script = document.createElement('script');
+      script.src = `https://www.google.com/recaptcha/api.js?render=${encodeURIComponent(siteKey)}`;
+      script.async = true;
+      script.defer = true;
+      script.setAttribute('data-recaptcha', siteKey);
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load reCAPTCHA'));
+      document.head.appendChild(script);
+    });
+  };
+
+  const getRecaptchaToken = async (siteKey: string): Promise<string | null> => {
+    try {
+      await loadRecaptchaScript(siteKey);
+      const grecaptcha: any = (window as any).grecaptcha;
+      if (!grecaptcha || !grecaptcha.execute) return null;
+      await new Promise<void>((res) => grecaptcha.ready(() => res()));
+      const token: string = await grecaptcha.execute(siteKey, { action: 'login' });
+      return token || null;
+    } catch (e) {
+      console.error('Failed to obtain reCAPTCHA token:', e);
+      return null;
+    }
+  };
   const [auth, setAuth] = useState<AuthState>({
     isAuthenticated: false,
     username: null,
@@ -83,6 +126,53 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
       const result = await userManager.authenticate(username, password, rememberMe);
 
       if (result) {
+        // Check if CAPTCHA is required (adaptive)
+        if ('captchaRequired' in result && result.captchaRequired) {
+          const siteKey = (result as any).recaptchaSiteKey || (import.meta as any).env?.VITE_RECAPTCHA_SITE_KEY;
+          // Try to auto-resolve using reCAPTCHA v3 if possible
+          let token: string | null = null;
+          if (siteKey) {
+            token = await getRecaptchaToken(siteKey);
+          }
+          if (token) {
+            const retry = await userManager.authenticate(username, password, rememberMe, token);
+            if (retry) {
+              if ('mfaRequired' in retry && retry.mfaRequired) {
+                setAuth(prev => ({
+                  ...prev,
+                  loading: false,
+                  error: null,
+                  mfaRequired: retry.mfaRequired,
+                  mfaType: retry.mfaType,
+                  username: retry.username,
+                  totpEnabled: (retry as any).totpEnabled,
+                  webAuthnEnabled: (retry as any).webAuthnEnabled,
+                  // clear captcha flags on success path to MFA
+                  captchaRequired: undefined,
+                  recaptchaSiteKey: undefined,
+                }));
+                return;
+              } else if ('token' in retry) {
+                setAuth({
+                  isAuthenticated: true,
+                  username,
+                  loading: false,
+                  error: null,
+                });
+                return;
+              }
+            }
+          }
+          // If auto-retry failed or no site key, surface requirement to UI
+          setAuth(prev => ({
+            ...prev,
+            loading: false,
+            error: token ? 'Captcha verification failed' : 'Additional verification required',
+            captchaRequired: true,
+            recaptchaSiteKey: siteKey,
+          }));
+          return;
+        }
         // Check if MFA is required
         if ('mfaRequired' in result && result.mfaRequired) {
           // Handle MFA required response

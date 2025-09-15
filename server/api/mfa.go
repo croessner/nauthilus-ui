@@ -110,14 +110,16 @@ func NewMFAHandler(mongoDB *db.MongoDB) (*MFAHandler, error) {
 func (h *MFAHandler) RegisterRoutes(router *gin.Engine) {
 	// TOTP routes
 	router.POST("/api/auth/totp/setup", h.SetupTOTP)
-	router.POST("/api/auth/totp/verify", h.VerifyTOTP)
+	// Apply rate limiting to verification
+	router.POST("/api/auth/totp/verify", MFARateLimitMiddleware(), AdaptiveCaptchaMiddleware(mfaIPLimiter), h.VerifyTOTP)
 	router.POST("/api/auth/totp/disable", h.DisableTOTP)
 
 	// WebAuthn routes
 	router.GET("/api/auth/webauthn/begin-registration", h.BeginWebAuthnRegistration)
 	router.POST("/api/auth/webauthn/finish-registration", h.FinishWebAuthnRegistration)
-	router.GET("/api/auth/webauthn/begin-login", h.BeginWebAuthnLogin)
-	router.POST("/api/auth/webauthn/finish-login", h.FinishWebAuthnLogin)
+	// Apply rate limiting to WebAuthn login begin/finish
+	router.GET("/api/auth/webauthn/begin-login", MFARateLimitMiddleware(), h.BeginWebAuthnLogin)
+	router.POST("/api/auth/webauthn/finish-login", MFARateLimitMiddleware(), AdaptiveCaptchaMiddleware(mfaIPLimiter), h.FinishWebAuthnLogin)
 	router.DELETE("/api/auth/webauthn/credential/:id", h.RemoveWebAuthnCredential)
 }
 
@@ -934,7 +936,8 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 				"error", err,
 				"devInfo", devInfo,
 			)
-			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: fmt.Sprintf("Failed to validate login: %v", err)})
+			// Return a generic error to the client to avoid leaking details
+			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Failed to validate login"})
 
 			return
 		}

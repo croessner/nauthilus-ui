@@ -446,3 +446,62 @@ If the application starts but no collections are created in MongoDB:
 ## License
 
 This project is proprietary software.
+
+# Nauthilus UI
+
+[... existing content omitted for brevity ...]
+
+## Optional Google reCAPTCHA (adaptive)
+
+The backend can optionally require Google reCAPTCHA for sensitive endpoints (login, TOTP verify, WebAuthn finish-login). When enabled, the server enforces reCAPTCHA adaptively: it is only required after several consecutive authentication failures from the same client IP. This helps slow down online brute-force attempts with minimal friction for legitimate users.
+
+Environment variables:
+- RECAPTCHA_SECRET: The reCAPTCHA secret (server-side). If empty, reCAPTCHA is disabled.
+- RECAPTCHA_SITE_KEY: The reCAPTCHA site key (frontend). Required when enabling.
+- RECAPTCHA_MIN_SCORE: Optional, float (e.g., 0.5). If provided and the response contains a score (reCAPTCHA v3), the score must meet or exceed this value.
+- RECAPTCHA_THRESHOLD: Optional, integer. Number of consecutive failures per IP before reCAPTCHA is required (default: 3).
+
+Behavior:
+- Disabled by default. If RECAPTCHA_SECRET and RECAPTCHA_SITE_KEY are both set, adaptive reCAPTCHA is active.
+- After the threshold of consecutive failures, the server responds with HTTP 403 and JSON payload including:
+  { "error": "Captcha required", "captchaRequired": true, "recaptchaSiteKey": "<site_key>" }
+- Clients should render a reCAPTCHA challenge and include the token in subsequent requests as JSON field recaptchaToken.
+- The server verifies tokens against https://www.google.com/recaptcha/api/siteverify and proceeds if successful.
+
+Note: Rate limiting and adaptive backoff are also enabled in-memory per IP. For clustered deployments, consider a shared store (e.g., Redis) and CDN/WAF protections.
+
+
+## In-memory rate limiting and adaptive backoff
+
+To protect authentication endpoints against online brute-force attempts, the backend uses an in-memory, per-IP token bucket plus adaptive backoff:
+
+- Login: 10 requests per minute per IP; exponential backoff after each 401/403 (base 1s, capped at 30s).
+- MFA (TOTP verify, WebAuthn begin/finish): 15 requests per minute per IP; exponential backoff (base 500ms, capped at 15s).
+- While backoff is active, the server responds with HTTP 429 Too Many Requests and includes a Retry-After header (seconds) indicating when you may try again.
+- Entries are aged out after ~20 minutes of inactivity to avoid unbounded memory growth.
+- This limiter is process-local. In multi-instance deployments, use a shared store (e.g., Redis) or add limits at your proxy/WAF/CDN.
+
+These defaults live in server/api/middleware.go.
+
+## Frontend behavior with adaptive reCAPTCHA
+
+- When adaptive reCAPTCHA is enabled on the server (see below) and a client IP crosses the failure threshold, the backend will return HTTP 403 with:
+  { "error": "Captcha required", "captchaRequired": true, "recaptchaSiteKey": "<site_key>" }
+- The login frontend automatically detects this condition and, if a site key is available, loads Google reCAPTCHA v3, obtains a token, and transparently retries the login including recaptchaToken in the JSON body.
+- If auto-resolution fails (e.g., script blocked) or no site key is provided, the auth state exposes captchaRequired and recaptchaSiteKey so the UI can render a challenge.
+- Optional frontend fallback key: VITE_RECAPTCHA_SITE_KEY can be set to pre-provide a site key if the backend does not include one.
+
+## .env example for adaptive reCAPTCHA
+
+Set these environment variables on the backend to enable adaptive reCAPTCHA:
+
+RECAPTCHA_SECRET=your-server-secret
+RECAPTCHA_SITE_KEY=your-site-key
+# Optional — require a minimum score for v3 (0..1)
+RECAPTCHA_MIN_SCORE=0.5
+# Optional — failures before CAPTCHA is required
+RECAPTCHA_THRESHOLD=3
+
+Notes:
+- If RECAPTCHA_SECRET or RECAPTCHA_SITE_KEY is unset, CAPTCHA is disabled and the endpoints behave normally (rate limiting/backoff still applies).
+- Tokens are verified against Google's siteverify API server-side.

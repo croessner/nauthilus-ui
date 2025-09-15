@@ -16,6 +16,9 @@ import (
 	"nauthilus-ui/server/models"
 )
 
+// dummyBcryptHash is a static bcrypt hash used for timing hardening when user is not found.
+var dummyBcryptHash = []byte("$2a$10$7EqJtq98hPqEX7fNZaFWoOHiKxz6a1J2uQ8bV.QGA3E7Z2eax5cGa")
+
 // AuthHandler handles authentication requests
 type AuthHandler struct {
 	MongoDB *db.MongoDB
@@ -63,7 +66,8 @@ func (h *AuthHandler) generateToken(user *models.User, expiryTime int) (string, 
 
 // RegisterRoutes registers the authentication routes
 func (h *AuthHandler) RegisterRoutes(router *gin.Engine) {
-	router.POST("/api/auth/login", h.Login)
+	// Apply rate limiting to login endpoint
+	router.POST("/api/auth/login", LoginRateLimitMiddleware(), AdaptiveCaptchaMiddleware(loginIPLimiter), h.Login)
 	router.POST("/api/auth/refresh", h.Refresh)
 	router.POST("/api/auth/logout", h.Logout)
 	router.GET("/api/auth/me", h.Me)
@@ -122,6 +126,8 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	if err != nil {
 		slog.Warn("User not found during login", "username", loginRequest.Username, "error", err)
+		// Timing hardening: perform a dummy bcrypt compare to equalize response time
+		_ = bcrypt.CompareHashAndPassword(dummyBcryptHash, []byte(loginRequest.Password))
 		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid username or password"})
 		return
 	}
