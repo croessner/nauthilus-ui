@@ -11,6 +11,9 @@ axios.interceptors.request.use(
     if (
       config.url && (
         config.url.includes('/api/auth/login') ||
+        config.url.includes('/api/auth/refresh') ||
+        config.url.includes('/api/auth/logout') ||
+        config.url.includes('/api/auth/me') ||
         config.url.includes('/api/auth/webauthn/') ||
         config.url.includes('/api/auth/totp/')
       )

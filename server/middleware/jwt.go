@@ -63,36 +63,30 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		headers := ctx.Request.Header
 		slog.Info("JWT Middleware: Request headers", "headers", headers)
 
-		// Get token from Authorization header
+		// Try to get token from Authorization header first
 		authHeader := ctx.GetHeader("Authorization")
 		slog.Info("JWT Middleware: Authorization header", "header", authHeader)
 
-		if authHeader == "" {
-			slog.Warn("JWT Middleware: Missing Authorization header")
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			ctx.Abort()
-
-			return
+		var tokenString string
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				tokenString = parts[1]
+			} else {
+				slog.Warn("JWT Middleware: Invalid Authorization header format", "header", authHeader)
+			}
 		}
 
-		// Strictly enforce JWT authentication for all API endpoints
-
-		// Check if the header has the Bearer prefix
-		parts := strings.Split(authHeader, " ")
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			slog.Warn("JWT Middleware: Invalid Authorization header format", "header", authHeader)
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header format must be Bearer {token}"})
-			ctx.Abort()
-
-			return
+		// Fallback to HttpOnly cookie if no valid Authorization header
+		if tokenString == "" {
+			if c, err := ctx.Request.Cookie("nauthilus_token"); err == nil {
+				tokenString = c.Value
+			}
 		}
 
-		tokenString := parts[1]
-
-		// Check for null token (common issue with frontend tests)
-		if tokenString == "null" || tokenString == "" {
-			slog.Warn("JWT Middleware: Token is null or empty")
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid or missing token"})
+		if tokenString == "" || tokenString == "null" {
+			slog.Warn("JWT Middleware: Missing token in header and cookie")
+			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 			ctx.Abort()
 
 			return

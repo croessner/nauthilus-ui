@@ -277,7 +277,11 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 			originalDirector(req)
 			req.URL.Path = config.EndpointPath
 
-			// Add authentication headers if required
+			// Never forward incoming client Authorization header to the Nauthilus server
+			// We only allow Proxy-generated Authorization built from query params
+			req.Header.Del("Authorization")
+
+			// Add authentication headers if required (from query params or headers x-auth-*)
 			if config.RequiresAuth {
 				authType, authValue := getAuthParams(ctx)
 				utils.AddAuthorizationHeader(req, authType, authValue)
@@ -307,6 +311,10 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 	// Copy headers from the original request
 	copyHeaders(req.Header, ctx.Request.Header)
+
+	// Never forward incoming client Authorization header to the Nauthilus server
+	// Only allow Proxy-generated Authorization built from query params
+	req.Header.Del("Authorization")
 
 	// Add authentication headers if required
 	if config.RequiresAuth {

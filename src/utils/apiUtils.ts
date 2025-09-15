@@ -236,7 +236,9 @@ export const authenticatedFetch = async (
   // Merge options with headers
   const fetchOptions: RequestInit = {
     ...options,
-    headers
+    headers,
+    // Ensure cookies (HttpOnly JWT) are sent to the proxy (different origin/port)
+    credentials: 'include'
   };
 
   // Perform the fetch

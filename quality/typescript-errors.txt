@@ -1,0 +1,2 @@
+src/components/DistributedBruteForceTools.tsx(262,9): error TS2345: Argument of type '{ distributed_brute_force_admin: { enabled: boolean; endpoint_path: string; }; distributed_brute_force_test: { enabled: boolean; endpoint_path: string; }; distributed_brute_force_ui: any; }' is not assignable to parameter of type 'LuaHooksConfig'.
+  Object literal may only specify known properties, but 'distributed_brute_force_ui' does not exist in type 'LuaHooksConfig'. Did you mean to write 'distributed_brute_force_admin'?

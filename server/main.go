@@ -83,17 +83,7 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 			return
 		}
 
-		// For all other API endpoints, require JWT authentication
-		authHeader := ctx.GetHeader("Authorization")
-		if authHeader == "" {
-			slog.Warn("Missing Authorization header for protected endpoint", "path", path)
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			ctx.Abort()
-
-			return
-		}
-
-		// Continue with the standard JWT middleware
+		// Delegate auth to the standard JWT middleware (supports header or cookie)
 		middleware.JWTAuthMiddleware(mongoDB)(ctx)
 	}
 
@@ -273,17 +263,36 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
 
-	// Strict JWT middleware for proxy routes
+	// Strict JWT middleware for proxy routes (with CORS headers applied early)
 	strictProxyJWTMiddleware := func(ctx *gin.Context) {
-		path := ctx.Request.URL.Path
+		// Always set CORS headers so that even 401/403 responses are visible to browsers
+		origin := ctx.Request.Header.Get("Origin")
+		if origin == "" {
+			// Default to localhost:3000 for development
+			origin = "http://localhost:3000"
+		}
+
+		ctx.Header("Access-Control-Allow-Origin", origin)
+		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
+		allowReq := ctx.GetHeader("Access-Control-Request-Headers")
+		baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
+		if allowReq != "" {
+			ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
+		} else {
+			ctx.Header("Access-Control-Allow-Headers", baseAllow)
+		}
+		ctx.Header("Access-Control-Allow-Credentials", "true")
+		ctx.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location")
+		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
+
 		method := ctx.Request.Method
-
-		// Allow CORS preflight
 		if method == http.MethodOptions {
-			ctx.Next()
-
+			// Preflight handled here
+			ctx.AbortWithStatus(204)
 			return
 		}
+
+		path := ctx.Request.URL.Path
 
 		// Skip authentication for specific public proxy endpoints
 		if strings.HasPrefix(path, "/proxy/ping") || strings.HasPrefix(path, "/proxy/jwt-token") {
@@ -292,17 +301,7 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 			return
 		}
 
-		// Enforce presence of Authorization header for all other /proxy endpoints
-		authHeader := ctx.GetHeader("Authorization")
-		if authHeader == "" {
-			slog.Warn("Missing Authorization header for protected proxy endpoint", "path", path)
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authorization header is required"})
-			ctx.Abort()
-
-			return
-		}
-
-		// Delegate JWT validation to the standard middleware
+		// Delegate JWT validation to the standard middleware (supports cookies or Authorization header)
 		middleware.JWTAuthMiddleware(mongoDB)(ctx)
 	}
 

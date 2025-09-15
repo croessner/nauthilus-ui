@@ -4,6 +4,7 @@ import (
 	"context"
 	"log/slog"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -63,6 +64,9 @@ func (h *AuthHandler) generateToken(user *models.User, expiryTime int) (string, 
 // RegisterRoutes registers the authentication routes
 func (h *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	router.POST("/api/auth/login", h.Login)
+	router.POST("/api/auth/refresh", h.Refresh)
+	router.POST("/api/auth/logout", h.Logout)
+	router.GET("/api/auth/me", h.Me)
 }
 
 // LoginRequest represents a login request
@@ -250,8 +254,149 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		ExpiresAt:    expiresAt,
 	}
 
+	// Set secure cookies for access and refresh tokens
+	SetAuthCookies(ctx, token, expiresAt, refreshToken, refreshExpiresAt)
+
 	slog.Info("Sending login response", "username", user.Username, "token_present", token != "", "refresh_token_present", refreshToken != "")
 
 	// Send response
 	ctx.JSON(http.StatusOK, response)
+}
+
+// Refresh handles the POST /api/auth/refresh endpoint
+func (h *AuthHandler) Refresh(ctx *gin.Context) {
+	// Read refresh token from secure cookie
+	cookie, err := ctx.Request.Cookie(refreshCookieName)
+	if err != nil || cookie.Value == "" {
+		slog.Warn("Refresh: missing refresh cookie")
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Refresh token required"})
+		return
+	}
+
+	// Get JWT config
+	jwtConfig, err := h.MongoDB.GetJWTConfig()
+	if err != nil {
+		slog.Error("Refresh: failed to load JWT config", "error", err)
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal server error"})
+		return
+	}
+
+	// Parse refresh token
+	token, err := jwt.Parse(cookie.Value, func(token *jwt.Token) (interface{}, error) {
+		return []byte(jwtConfig.Secret), nil
+	})
+	if err != nil || !token.Valid {
+		slog.Warn("Refresh: invalid refresh token", "error", err)
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid refresh token"})
+		return
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid refresh token claims"})
+		return
+	}
+
+	// Check expiration
+	if exp, ok := claims["exp"].(float64); ok {
+		if time.Now().Unix() >= int64(exp) {
+			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Refresh token expired"})
+			return
+		}
+	}
+
+	username, _ := claims["sub"].(string)
+	if username == "" {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid refresh token subject"})
+		return
+	}
+
+	// Load user (optional, to include in response)
+	user, err := h.MongoDB.GetUserByUsername(username)
+	if err != nil || user == nil {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "User not found"})
+		return
+	}
+
+	// Generate new tokens (rotate refresh)
+	accessToken, accessExp, err := h.generateToken(user, jwtConfig.TokenExpiry)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate access token"})
+		return
+	}
+	newRefresh, refreshExp, err := h.generateToken(user, jwtConfig.RefreshTokenExpiry)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate refresh token"})
+		return
+	}
+
+	// Set cookies
+	SetAuthCookies(ctx, accessToken, accessExp, newRefresh, refreshExp)
+
+	// Sanitize user for response
+	user.PasswordHash = ""
+
+	ctx.JSON(http.StatusOK, models.LoginResponse{
+		User:         *user,
+		Token:        accessToken,
+		RefreshToken: newRefresh,
+		ExpiresAt:    accessExp,
+	})
+}
+
+// Logout handles the POST /api/auth/logout endpoint
+func (h *AuthHandler) Logout(ctx *gin.Context) {
+	ClearAuthCookies(ctx)
+	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "Logged out"})
+}
+
+// Me handles GET /api/auth/me, returns current user based on JWT (header or cookie)
+func (h *AuthHandler) Me(ctx *gin.Context) {
+	var tokenString string
+
+	// Prefer Authorization header
+	authHeader := ctx.GetHeader("Authorization")
+	if authHeader != "" {
+		parts := strings.Split(authHeader, " ")
+		if len(parts) == 2 && parts[0] == "Bearer" {
+			tokenString = parts[1]
+		}
+	}
+	// Fallback to cookie
+	if tokenString == "" {
+		if c, err := ctx.Request.Cookie(accessCookieName); err == nil {
+			tokenString = c.Value
+		}
+	}
+	if tokenString == "" {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Not authenticated"})
+		return
+	}
+
+	jwtConfig, err := h.MongoDB.GetJWTConfig()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Internal server error"})
+		return
+	}
+
+	// Parse access token
+	t, err := jwt.Parse(tokenString, func(token *jwt.Token) (interface{}, error) { return []byte(jwtConfig.Secret), nil })
+	if err != nil || !t.Valid {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
+		return
+	}
+	claims, _ := t.Claims.(jwt.MapClaims)
+	username, _ := claims["sub"].(string)
+	if username == "" {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Invalid token"})
+		return
+	}
+
+	user, err := h.MongoDB.GetUserByUsername(username)
+	if err != nil || user == nil {
+		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		return
+	}
+	user.PasswordHash = ""
+	ctx.JSON(http.StatusOK, models.UserResponse{User: *user})
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp/totp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -28,12 +29,12 @@ import (
 
 // MFAHandler handles multi-factor authentication requests
 type MFAHandler struct {
-	MongoDB  db.UserDatabase
+	MongoDB  *db.MongoDB
 	WebAuthn *webauthn.WebAuthn
 }
 
 // NewMFAHandler creates a new MFAHandler
-func NewMFAHandler(mongoDB db.UserDatabase) (*MFAHandler, error) {
+func NewMFAHandler(mongoDB *db.MongoDB) (*MFAHandler, error) {
 	// Get WebAuthn configuration from environment variables
 	rpID := os.Getenv("WEBAUTHN_RP_ID")
 	rpDisplayName := os.Getenv("WEBAUTHN_RP_DISPLAY_NAME")
@@ -305,8 +306,9 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 
 // VerifyTOTPRequest represents a request to verify TOTP
 type VerifyTOTPRequest struct {
-	Username string `json:"username" binding:"required"`
-	Token    string `json:"token" binding:"required"`
+	Username   string `json:"username" binding:"required"`
+	Token      string `json:"token" binding:"required"`
+	RememberMe bool   `json:"rememberMe"`
 }
 
 // VerifyTOTP handles the POST /api/auth/totp/verify endpoint
@@ -360,6 +362,51 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 			return
 		}
 	}
+
+	// On successful verification, issue access and refresh tokens and set cookies
+	jwtConfig, err := h.MongoDB.GetJWTConfig()
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to load JWT config"})
+		return
+	}
+
+	// Determine access token expiry (respect rememberMe if configured)
+	accessExpiry := jwtConfig.TokenExpiry
+	if req.RememberMe && jwtConfig.RememberMeExpiry > 0 {
+		accessExpiry = jwtConfig.RememberMeExpiry
+	}
+
+	// Build claims from current user snapshot
+	expiresAt := time.Now().Add(time.Duration(accessExpiry) * time.Second).Unix()
+	claims := jwt.MapClaims{
+		"sub":   user.Username,
+		"roles": user.Roles,
+		"exp":   expiresAt,
+		"iat":   time.Now().Unix(),
+	}
+	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	accessStr, err := accessToken.SignedString([]byte(jwtConfig.Secret))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate access token"})
+		return
+	}
+
+	refreshExp := time.Now().Add(time.Duration(jwtConfig.RefreshTokenExpiry) * time.Second).Unix()
+	rClaims := jwt.MapClaims{
+		"sub":   user.Username,
+		"roles": user.Roles,
+		"exp":   refreshExp,
+		"iat":   time.Now().Unix(),
+	}
+	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, rClaims)
+	refreshStr, err := refreshToken.SignedString([]byte(jwtConfig.Secret))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate refresh token"})
+		return
+	}
+
+	// Set cookies using helper
+	SetAuthCookies(ctx, accessStr, expiresAt, refreshStr, refreshExp)
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP verified successfully"})
 }
@@ -909,6 +956,37 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 	if err != nil {
 		// Log error but don't fail the login
 		fmt.Printf("Failed to update credential last used: %v\n", err)
+	}
+
+	// Issue access and refresh tokens and set cookies
+	jwtConfig, err := h.MongoDB.GetJWTConfig()
+	if err == nil { // best-effort; on error, skip issuing tokens here
+		fullUser, uErr := h.MongoDB.GetUserByUsername(usernameStr)
+		if uErr == nil && fullUser != nil {
+			accessExp := time.Now().Add(time.Duration(jwtConfig.TokenExpiry) * time.Second).Unix()
+			claims := jwt.MapClaims{
+				"sub":   fullUser.Username,
+				"roles": fullUser.Roles,
+				"exp":   accessExp,
+				"iat":   time.Now().Unix(),
+			}
+			at := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+			accessStr, sigErr := at.SignedString([]byte(jwtConfig.Secret))
+			if sigErr == nil {
+				refreshExp := time.Now().Add(time.Duration(jwtConfig.RefreshTokenExpiry) * time.Second).Unix()
+				rClaims := jwt.MapClaims{
+					"sub":   fullUser.Username,
+					"roles": fullUser.Roles,
+					"exp":   refreshExp,
+					"iat":   time.Now().Unix(),
+				}
+				rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rClaims)
+				refreshStr, rSigErr := rt.SignedString([]byte(jwtConfig.Secret))
+				if rSigErr == nil {
+					SetAuthCookies(ctx, accessStr, accessExp, refreshStr, refreshExp)
+				}
+			}
+		}
 	}
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn login successful"})
