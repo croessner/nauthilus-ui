@@ -1845,7 +1845,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 placeholder="Filter (AND/OR/NOT; parentheses supported)"
                 value={searchQuery}
                 onChange={(e)=> setSearchQuery(e.target.value)}
-                helperText='Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, <, >, <=, >= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\\./", features=="/rbl/", "/[a-z]+/").'
                 InputProps={{
                   endAdornment: (
                     <InputAdornment position="end">
@@ -1860,7 +1859,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     </InputAdornment>
                   )
                 }}
-                sx={{ minWidth: 260 }}
+                sx={{ minWidth: 260, flexGrow: 1 }}
               />
               <Menu anchorEl={bmMenuAnchorSearch} open={Boolean(bmMenuAnchorSearch)} onClose={()=> setBmMenuAnchorSearch(null)}>
                 <MenuItem onClick={()=>{
@@ -1895,11 +1894,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <Typography variant="caption" color="text.secondary">
                 Matches: {searchFilteredRows.length} / {filteredRows.length}
               </Typography>
-              <Box sx={{ flexGrow: 1 }} />
-              <Button variant="outlined" onClick={() => setExportOpen(true)} sx={{ py: 1 }}>
-                Export
-              </Button>
             </Stack>
+            <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
+              Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\./", features=="/rbl/", "/[a-z]+/").
+            </Typography>
             <Box sx={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
@@ -2031,9 +2029,15 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </TextField>
               <Pagination color="primary" page={page} onChange={(_,p)=>setPage(p)} count={Math.max(1, Math.ceil(sortedRows.length / pageSize))} showFirstButton showLastButton />
             </Box>
+            <Divider sx={{ mt:2 }} />
+            <Box sx={{ display:'flex', justifyContent:'flex-end', alignItems:'center', py:1 }}>
+              <Button variant="outlined" onClick={() => setExportOpen(true)} sx={{ py: 1 }}>
+                Export
+              </Button>
+            </Box>
+            <Divider sx={{ mb:2 }} />
             {rawPreview && (
               <>
-                <Divider sx={{ my:2 }} />
                 <Stack direction="row" alignItems="center" gap={1} sx={{ flexWrap: 'wrap' }}>
                   <Button size="small" onClick={()=>setShowRaw(v=>!v)} sx={{ textTransform:'none' }}>
                     {showRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
