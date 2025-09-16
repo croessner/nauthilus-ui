@@ -155,6 +155,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [bmDialogName, setBmDialogName] = useState<string>('');
   const [bmDialogError, setBmDialogError] = useState<string>('');
 
+
   // Keep text input in sync when the applied limit changes
   useEffect(() => { setRawLimitInput(String(rawJsonMaxBytes)); }, [rawJsonMaxBytes]);
 
@@ -1048,6 +1049,95 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, []);
 
+  // Export dialog state
+  const [exportOpen, setExportOpen] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'json'>('csv');
+  const [exportFields, setExportFields] = useState<string[]>([]);
+  const [exportScope, setExportScope] = useState<'page' | 'filtered' | 'all'>('filtered');
+  const [csvDelimiter, setCsvDelimiter] = useState<string>(',');
+  const [csvWithHeader, setCsvWithHeader] = useState<boolean>(true);
+
+  // Helper: determine available fields for export (mirrors table display)
+  const availableExportFields = useMemo(() => {
+    return selectedFields && selectedFields.length > 0
+      ? selectedFields
+      : (rows[0] ? Object.keys(rows[0]) : []);
+  }, [selectedFields, rows]);
+
+  useEffect(() => {
+    // Default to currently visible columns
+    setExportFields(availableExportFields);
+  }, [availableExportFields]);
+
+  // CSV Escaping gemäß RFC4180
+  const csvEscape = (value: any, delimiter: string) => {
+    if (value === null || value === undefined) return '';
+    const s = typeof value === 'string' ? value : JSON.stringify(value);
+    const mustQuote = s.includes('"') || s.includes('\n') || s.includes('\r') || s.includes(delimiter);
+    const escaped = s.replace(/"/g, '""');
+    return mustQuote ? `"${escaped}"` : escaped;
+  };
+
+  const rowsToCsv = (data: Row[], fields: string[], delimiter: string, header: boolean): string => {
+    const lines: string[] = [];
+    if (header) lines.push(fields.map(f => csvEscape(f, delimiter)).join(delimiter));
+    for (const row of data) {
+      const vals = fields.map(f => {
+        const rawVal = (f === 'ts') ? formatTsForZone(row?.[f], tsTimeZone) : row?.[f];
+        return csvEscape(rawVal, delimiter);
+      });
+      lines.push(vals.join(delimiter));
+    }
+    return lines.join('\n');
+  };
+
+  const rowsToJson = (data: Row[], fields: string[]): string => {
+    const trimmed = data.map(r => {
+      const o: any = {};
+      for (const f of fields) o[f] = (f === 'ts') ? formatTsForZone(r?.[f], tsTimeZone) : r?.[f];
+      return o;
+    });
+    return JSON.stringify(trimmed, null, 2);
+  };
+
+  const downloadBlob = (content: Blob | string | Uint8Array, mime: string, filename: string) => {
+    const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const nowForName = () => new Date().toISOString().replace(/[:]/g, '-');
+
+  // Determine data set based on selected scope
+  const resolveExportData = () => {
+    if (exportScope === 'page') return pagedRows;
+    if (exportScope === 'filtered') return searchFilteredRows; // respects search-as-you-type
+    return sortedRows; // all loaded rows (sorted)
+  };
+
+  const performExport = () => {
+    const data = resolveExportData();
+    const fields = exportFields && exportFields.length ? exportFields : availableExportFields;
+    const ts = nowForName();
+    if (exportFormat === 'csv') {
+      const csv = rowsToCsv(data, fields, csvDelimiter, csvWithHeader);
+      // Prepend BOM to make Excel recognize UTF-8
+      const BOM = new Uint8Array([0xEF, 0xBB, 0xBF]);
+      const out = new Blob([BOM, csv], { type: 'text/csv;charset=utf-8' });
+      downloadBlob(out, 'text/csv;charset=utf-8', `clickhouse-results-${ts}.csv`);
+    } else {
+      const json = rowsToJson(data, fields);
+      downloadBlob(json, 'application/json;charset=utf-8', `clickhouse-results-${ts}.json`);
+    }
+    setExportOpen(false);
+  };
+
   // Reset to first page when filter or sort changes
   useEffect(() => {
     setPage(1);
@@ -1805,6 +1895,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <Typography variant="caption" color="text.secondary">
                 Matches: {searchFilteredRows.length} / {filteredRows.length}
               </Typography>
+              <Box sx={{ flexGrow: 1 }} />
+              <Button variant="outlined" onClick={() => setExportOpen(true)} sx={{ py: 1 }}>
+                Export
+              </Button>
             </Stack>
             <Box sx={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
@@ -1987,6 +2081,70 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           </>
         )}
       </Paper>
+      {/* Export Dialog */}
+      <Dialog open={exportOpen} onClose={() => setExportOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle>Export results</DialogTitle>
+        <DialogContent>
+          <Stack spacing={2} sx={{ pt: 1 }}>
+            <Stack direction="row" spacing={2}>
+              <TextField select label="Format" value={exportFormat} onChange={e => setExportFormat(e.target.value as any)} sx={{ minWidth: 160 }}>
+                <MenuItem value="csv">CSV</MenuItem>
+                <MenuItem value="json">JSON</MenuItem>
+              </TextField>
+              <TextField select label="Scope" value={exportScope} onChange={e => setExportScope(e.target.value as any)} sx={{ minWidth: 200 }}>
+                <MenuItem value="page">Current page</MenuItem>
+                <MenuItem value="filtered">All filtered</MenuItem>
+                <MenuItem value="all">All loaded</MenuItem>
+              </TextField>
+            </Stack>
+
+            {exportFormat === 'csv' && (
+              <Stack direction="row" spacing={2}>
+                <TextField select label="Delimiter" value={csvDelimiter} onChange={e => setCsvDelimiter(e.target.value)} sx={{ minWidth: 140 }}>
+                  <MenuItem value=",">Comma (,)</MenuItem>
+                  <MenuItem value=";">Semicolon (;)</MenuItem>
+                  <MenuItem value="\t">Tab</MenuItem>
+                </TextField>
+                <FormControlLabel control={<Checkbox checked={csvWithHeader} onChange={e => setCsvWithHeader(e.target.checked)} />} label="Include header" />
+              </Stack>
+            )}
+
+            <Divider />
+            <Typography variant="subtitle2">Fields</Typography>
+            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
+              <Button size="small" onClick={() => setExportFields(availableExportFields)}>Select all</Button>
+              <Button size="small" onClick={() => setExportFields([])}>Clear</Button>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+                {exportFields.length} / {availableExportFields.length} selected
+              </Typography>
+            </Stack>
+            <Grid container spacing={1}>
+              {availableExportFields.map(name => (
+                <Grid item xs={12} sm={6} md={4} key={name}>
+                  <FormControlLabel
+                    control={
+                      <Checkbox
+                        size="small"
+                        checked={exportFields.includes(name)}
+                        onChange={(e) => {
+                          if (e.target.checked) setExportFields(prev => Array.from(new Set([...(prev||[]), name])));
+                          else setExportFields(prev => (prev||[]).filter(n => n !== name));
+                        }}
+                      />
+                    }
+                    label={name}
+                  />
+                </Grid>
+              ))}
+            </Grid>
+          </Stack>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setExportOpen(false)}>Cancel</Button>
+          <Button onClick={performExport} variant="contained">Export</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Bookmark Create/Rename/Delete Dialog */}
       <Dialog open={bmDialogOpen} onClose={handleBmDialogClose}>
         <DialogTitle>
