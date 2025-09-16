@@ -90,7 +90,7 @@ const getEnvVar = (name: string, defaultValue: string): string => {
       const viteName = `VITE_${name}`;
       if (viteName in viteEnv && viteEnv[viteName]) return viteEnv[viteName] as string;
     }
-  } catch (_) {
+  } catch {
     // ignore
   }
 
@@ -123,6 +123,18 @@ let cachedJwtConfig: { tokenExpiry: number, refreshTokenExpiry: number, remember
 // Helper function to fetch data from API endpoints
 const fetchConfigData = async (): Promise<void> => {
   try {
+    // Ensure we are authenticated before hitting protected endpoints
+    try {
+      const me = await axios.get('/api/auth/me');
+      if (!me.data || !me.data.user) {
+        // Not authenticated; skip fetching protected data
+        return;
+      }
+    } catch (e: any) {
+      // If 401 or any error occurs, skip fetching protected endpoints
+      return;
+    }
+
     // Attempt to load protected resources; relies on HttpOnly cookies sent with credentials
     const usersResponse = await axios.get('/api/users');
     if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
@@ -220,7 +232,7 @@ export const addUser = async (
     try {
       const response = await axios.get(`/api/users/${username}`);
       userExists = response.data && !!response.data.user;
-    } catch (_) {
+    } catch {
       // User doesn't exist if we get a 404
       userExists = false;
     }
@@ -414,14 +426,6 @@ export const authenticate = async (username: string, password: string, rememberM
     return null;
   }
 
-  try {
-    if (!cachedConfig) {
-      await loadConfig();
-    }
-  } catch (error) {
-    console.error('Failed to load config during authentication:', error);
-    return null;
-  }
 
   try {
     // Authenticate with backend using the dedicated authentication endpoint
@@ -604,15 +608,5 @@ export const initialize = async (): Promise<void> => {
   }
 };
 
-// Call initialize when the module is loaded
-// Using a more robust error handling approach
-try {
-  initialize().catch(error => {
-    console.error('Error during initialization:', error);
-    // Log additional information that might help with debugging
-    const env = (typeof import.meta !== 'undefined' && (import.meta as any).env && (import.meta as any).env.MODE) || (typeof process !== 'undefined' && (process as any).env && (process as any).env.NODE_ENV) || 'unknown';
-    console.error('Current environment:', env);
-  });
-} catch (error) {
-  console.error('Critical error during initialization setup:', error);
-}
+// Note: Do NOT auto-run initialize() on module load to avoid pre-auth 401s.
+// The app will call initialize() explicitly after successful authentication.

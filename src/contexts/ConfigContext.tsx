@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { withErrorHandling as apiWithErrorHandling, prepareAuthParams, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 
 // Interface for configuration profiles

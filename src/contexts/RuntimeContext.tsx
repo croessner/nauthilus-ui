@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useCallback, ReactNode } from 'react';
-import axios from 'axios';
+import axios from '../utils/axiosConfig';
 import { ConnectionConfig, LuaHooksConfig } from '../types/config';
 import { withErrorHandling as apiWithErrorHandling } from '../utils/apiUtils';
 

@@ -83,8 +83,32 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
 
   // Check if the user is already authenticated on the mount
   useEffect(() => {
+    // Skip initial auth check on public auth routes to avoid 401 spam on Login/MFA pages
+    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
+    const isPublicAuthPath = pathname === '/login' || pathname === '/mfa' || pathname === '/oidc/callback' || pathname === '/oidc/callback/';
+
+    // Prevent duplicate checks in React StrictMode (DEV)
+    const hasRun = typeof window !== 'undefined' ? (window as any).__authInitRan : false;
+    if (hasRun) {
+      return;
+    }
+    if (typeof window !== 'undefined') {
+      (window as any).__authInitRan = true;
+    }
+
     const checkAuth = async () => {
       try {
+        if (isPublicAuthPath) {
+          // On login/MFA/OIDC pages, do not ping /api/auth/me pre-auth
+          setAuth({
+            isAuthenticated: false,
+            username: null,
+            loading: false,
+            error: null,
+          });
+          return;
+        }
+
         const currentUser = await userManager.getCurrentUser();
         if (currentUser) {
           setAuth({
@@ -93,6 +117,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             loading: false,
             error: null,
           });
+          // Post-auth: initialize protected config/user caches
+          try { await userManager.initialize(); } catch { /* ignore init errors */ }
         } else {
           setAuth({
             isAuthenticated: false,
@@ -159,6 +185,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
                   loading: false,
                   error: null,
                 });
+                // Initialize protected data after authentication
+                try { await userManager.initialize(); } catch { /* ignore */ }
                 return;
               }
             }
@@ -199,6 +227,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             loading: false,
             error: null,
           });
+          // Initialize protected data after authentication
+          try { await userManager.initialize(); } catch { /* ignore */ }
         }
       } else {
         console.error('Invalid username or password');
@@ -280,6 +310,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
           mfaRequired: false,
           mfaType: undefined,
         });
+        // Initialize protected data after authentication (post-MFA)
+        try { await userManager.initialize(); } catch { /* ignore */ }
         console.log('AuthContext: Authentication successful, updated auth state');
         return result; // Return the result to the caller
       } else {

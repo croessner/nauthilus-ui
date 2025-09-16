@@ -96,6 +96,7 @@ import MFASettings from './components/MFASettings';
 import LegalPage from './components/LegalPage';
 import { authenticatedFetch, resetSettingsState, loadSettings as loadSettingsUtil } from './utils/apiUtils';
 import CookieBanner from './components/CookieBanner';
+import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 260;
@@ -124,6 +125,10 @@ const MainContent = (): React.JSX.Element => {
   const [uploadProfileDialogOpen, setUploadProfileDialogOpen] = useState(false);
   const [uploadProfileName, setUploadProfileName] = useState('');
   // Profile state variables removed as we now use a dedicated page
+
+  // Global session-expired dialog state
+  const [sessionDialogOpen, setSessionDialogOpen] = useState(false);
+  const [sessionDialogMessage, setSessionDialogMessage] = useState<string>('Your session has expired. Please sign in again.');
 
   // State to track AppBar height
   const [appBarHeight, setAppBarHeight] = useState(64); // Default height
@@ -204,6 +209,24 @@ const MainContent = (): React.JSX.Element => {
   const uploadWithProfileRef = useRef<HTMLInputElement>(null);
   const appBarRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+
+  // Listen for global session-expired notifications
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ce = e as CustomEvent<SessionExpiredDetail>;
+      setSessionDialogMessage(ce.detail?.message || 'Your session has expired. Please sign in again.');
+      setSessionDialogOpen(true);
+    };
+    window.addEventListener(NotifyEvents.SESSION_EXPIRED as unknown as string, handler as EventListener);
+    return () => {
+      window.removeEventListener(NotifyEvents.SESSION_EXPIRED as unknown as string, handler as EventListener);
+    };
+  }, []);
+
+  const handleSessionDialogClose = () => {
+    setSessionDialogOpen(false);
+    navigate('/login');
+  };
   const { 
     loading, 
     error, 
@@ -1203,6 +1226,17 @@ const MainContent = (): React.JSX.Element => {
     {/* Cookie Consent Banner */}
     <CookieBanner />
 
+      {/* Session Expired Dialog */}
+      <Dialog open={sessionDialogOpen} onClose={handleSessionDialogClose}>
+        <DialogTitle>Session expired</DialogTitle>
+        <DialogContent>
+          {sessionDialogMessage}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={handleSessionDialogClose} color="primary">Sign in</Button>
+        </DialogActions>
+      </Dialog>
+
       {/* Reset Confirmation Dialog */}
       <Dialog
         open={resetDialogOpen}
@@ -1389,20 +1423,31 @@ const AppContent = (): React.JSX.Element => {
   );
 };
 
-// Wrap the app content with the ThemeProvider, ConfigProvider, RuntimeProvider, UserProvider, and AuthProvider
+// Wrap the app content with providers; defer heavy data providers until after authentication
+const AppInner = (): React.JSX.Element => {
+  const { auth } = useAuth();
+  // ConfigProvider and RuntimeProvider perform authenticated API calls; mount them only when authenticated.
+  return auth.isAuthenticated && !auth.mfaRequired ? (
+    <ConfigProvider>
+      <RuntimeProvider>
+        <AppContent />
+      </RuntimeProvider>
+    </ConfigProvider>
+  ) : (
+    <AppContent />
+  );
+};
+
 const App = (): React.JSX.Element => {
+  // Note: We need UserProvider and AuthProvider available for the login/MFA flows.
   return (
     <ThemeProvider>
       <CssBaseline />
-      <ConfigProvider>
-        <RuntimeProvider>
-          <UserProvider>
-            <AuthProvider>
-              <AppContent />
-            </AuthProvider>
-          </UserProvider>
-        </RuntimeProvider>
-      </ConfigProvider>
+      <UserProvider>
+        <AuthProvider>
+          <AppInner />
+        </AuthProvider>
+      </UserProvider>
     </ThemeProvider>
   );
 };
