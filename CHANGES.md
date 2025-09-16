@@ -704,6 +704,17 @@ Notes:
 - No changes to package.json were necessary.
 - If you still need ad-hoc endpoint/CORS checks, consider adding short, documented curl commands in README.md instead of keeping scripts in the repo.
 
+## 2025-09-16: Optional startup sync of Remember‑Me expiry from env
+
+- Added an opt-in mechanism to synchronize JWT rememberMeExpiry from environment on service start.
+- New env flag: `JWT_SYNC_FROM_ENV_ON_BOOT` (default: false). When set to `true`:
+  - On boot, if a JWT config document already exists in MongoDB and its `rememberMeExpiry` differs from the current env value (`REACT_APP_REMEMBER_ME_EXPIRY`), the service updates only this field in the DB.
+  - The update is idempotent and uses a conditional filter (compare-and-set) to be safe in multi-instance deployments. Clear logs are emitted with old → new values.
+- No change to token behavior: issued tokens keep their exp; only newly issued tokens use the new duration.
+- Files:
+  - server/config/config.go — added `SyncRememberMeFromEnvOnBoot` and env parsing for `JWT_SYNC_FROM_ENV_ON_BOOT`.
+  - server/db/mongodb.go — implemented the startup sync inside `initializeJWTConfig` when a config exists.
+
 ## 2025-09-04: ClickHouse — Bookmarks for raw SQL and Search-as-you-type (per user)
 
 - Cleanup: Removed unused helpers in ClickhouseRuntime.tsx (getOffsetsForInputs, addBookmark, renameBookmark, pad, getOffsetForTz) after verifying no usages remained. This does not affect functionality.

@@ -34,6 +34,8 @@ type Config struct {
 	RefreshTokenExpiry int
 	// RememberMeExpiry is the expiration time for "remember me" tokens in seconds.
 	RememberMeExpiry int
+	// If true, on boot the service will compare RememberMeExpiry from env with DB and update DB if different.
+	SyncRememberMeFromEnvOnBoot bool
 
 	// Cookie banner configuration
 	// CookieBannerReshowDays controls how the cookie banner is re-shown:
@@ -79,10 +81,11 @@ func LoadConfig() *Config {
 		MongoURI: getEnv("MONGODB_URI", "mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin"),
 
 		// JWT configuration
-		JWTSecret:          getEnv("REACT_APP_JWT_SECRET", "nauthilus-ui-default-secret-key-change-in-production"),
-		TokenExpiry:        getEnvAsInt("REACT_APP_TOKEN_EXPIRY", 3600),
-		RefreshTokenExpiry: getEnvAsInt("REACT_APP_REFRESH_TOKEN_EXPIRY", 86400),
-		RememberMeExpiry:   getEnvAsInt("REACT_APP_REMEMBER_ME_EXPIRY", 86400),
+		JWTSecret:                   getEnv("REACT_APP_JWT_SECRET", "nauthilus-ui-default-secret-key-change-in-production"),
+		TokenExpiry:                 getEnvAsInt("REACT_APP_TOKEN_EXPIRY", 3600),
+		RefreshTokenExpiry:          getEnvAsInt("REACT_APP_REFRESH_TOKEN_EXPIRY", 86400),
+		RememberMeExpiry:            getEnvAsInt("REACT_APP_REMEMBER_ME_EXPIRY", 86400),
+		SyncRememberMeFromEnvOnBoot: getEnv("JWT_SYNC_FROM_ENV_ON_BOOT", "false") == "true",
 
 		// Cookie banner configuration
 		CookieBannerReshowDays: getEnvAsInt("REACT_APP_COOKIE_BANNER_RESHOW_DAYS", -1),

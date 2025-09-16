@@ -170,6 +170,43 @@ func (m *MongoDB) initializeJWTConfig(ctx context.Context) error {
 		}
 
 		slog.Info("Default JWT configuration created successfully")
+	} else {
+		// Optional startup sync: update RememberMeExpiry from env if flag enabled and value differs.
+		if m.Config.SyncRememberMeFromEnvOnBoot {
+			var current models.JWTConfig
+			findErr := m.JWTConfigColl.FindOne(ctx, bson.M{}).Decode(&current)
+			if findErr != nil {
+				return findErr
+			}
+
+			if current.RememberMeExpiry != m.Config.RememberMeExpiry && m.Config.RememberMeExpiry > 0 {
+				filter := bson.M{"rememberMeExpiry": current.RememberMeExpiry}
+				update := bson.M{"$set": bson.M{"rememberMeExpiry": m.Config.RememberMeExpiry}}
+
+				res, updErr := m.JWTConfigColl.UpdateOne(ctx, filter, update)
+				if updErr != nil {
+					return updErr
+				}
+
+				if res.MatchedCount > 0 {
+					slog.Info("Synchronized JWT rememberMeExpiry from env on boot", "old", current.RememberMeExpiry, "new", m.Config.RememberMeExpiry)
+				} else {
+					// Likely another instance updated first; log at debug/info and continue
+					slog.Info("rememberMeExpiry sync skipped; configuration changed concurrently")
+				}
+			} else {
+				slog.Debug("rememberMeExpiry already matches env or env value not positive; no sync performed")
+			}
+		} else {
+			// Flag not enabled; optionally log if mismatch for operator visibility
+			var current models.JWTConfig
+
+			if err := m.JWTConfigColl.FindOne(ctx, bson.M{}).Decode(&current); err == nil {
+				if current.RememberMeExpiry != m.Config.RememberMeExpiry {
+					slog.Info("JWT rememberMeExpiry differs from env; set JWT_SYNC_FROM_ENV_ON_BOOT=true to sync on boot", "db", current.RememberMeExpiry, "env", m.Config.RememberMeExpiry)
+				}
+			}
+		}
 	}
 
 	return nil
