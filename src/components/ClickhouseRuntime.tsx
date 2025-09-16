@@ -2115,10 +2115,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
             <Divider />
             <Typography variant="subtitle2">Fields</Typography>
-            <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap', mb: 1 }}>
-              <Button size="small" onClick={() => setExportFields(availableExportFields)}>Select all</Button>
-              <Button size="small" onClick={() => setExportFields([])}>Clear</Button>
-              <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>
+            <Stack spacing={0.5} sx={{ mb: 1 }}>
+              <Stack direction="row" spacing={1} sx={{ flexWrap: 'wrap' }}>
+                <Button size="small" onClick={() => setExportFields(availableExportFields)}>Select all</Button>
+                <Button size="small" onClick={() => setExportFields([])}>Clear</Button>
+              </Stack>
+              <Typography variant="caption" color="text.secondary" sx={{ ml: 0.5 }}>
                 {exportFields.length} / {availableExportFields.length} selected
               </Typography>
             </Stack>
