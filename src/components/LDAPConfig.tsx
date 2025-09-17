@@ -156,7 +156,7 @@ const LDAPConfig = (): React.JSX.Element => {
 
   return (
     <Box>
-      <Typography variant="h4" gutterBottom sx={{ mb: 3 }}>
+      <Typography variant="h4" gutterBottom>
         LDAP Configuration
       </Typography>
 
@@ -172,7 +172,7 @@ const LDAPConfig = (): React.JSX.Element => {
       >
         {({ values, errors, touched, handleChange, setFieldValue }) => (
           <Form>
-            <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+            <Paper sx={{ mb: 3 }}>
               <Tabs 
                 value={tabValue} 
                 onChange={handleTabChange} 
@@ -184,7 +184,7 @@ const LDAPConfig = (): React.JSX.Element => {
                 <Tab label="Optional LDAP Pools" id="ldap-tab-1" aria-controls="ldap-tabpanel-1" />
                 <Tab label="Search Protocols" id="ldap-tab-2" aria-controls="ldap-tabpanel-2" />
               </Tabs>
-            </Box>
+            </Paper>
 
             {/* Main Configuration Tab */}
             <TabPanel value={tabValue} index={0}>
