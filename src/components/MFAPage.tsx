@@ -10,10 +10,22 @@ import {
   Tabs,
   Tab,
 } from '@mui/material';
+import { keyframes } from '@mui/system';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { useUser } from '../contexts/UserContext';
 import * as mfaUtils from '../utils/mfaUtils';
+
+// Animations for dark mode logo
+const floatAnim = keyframes`
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-6px); }
+  100% { transform: translateY(0px); }
+`;
+const glowAnim = keyframes`
+  0% { filter: drop-shadow(0 0 4px rgba(0, 200, 255, 0.35)) drop-shadow(0 0 10px rgba(0, 200, 255, 0.15)); }
+  100% { filter: drop-shadow(0 0 8px rgba(0, 200, 255, 0.6)) drop-shadow(0 0 18px rgba(0, 200, 255, 0.35)); }
+`;
 
 const MFAPage = (): React.JSX.Element => {
   const { auth, completeMfaLogin } = useAuth();
@@ -299,7 +311,7 @@ const MFAPage = (): React.JSX.Element => {
         justifyContent: 'center',
         alignItems: 'center',
         minHeight: '100vh',
-        bgcolor: 'background.default',
+        backgroundColor: '#516291',
       }}
     >
       <Box
@@ -308,7 +320,13 @@ const MFAPage = (): React.JSX.Element => {
         alt="Nauthilus Logo"
         sx={{
           width: 200,
-          mb: 4
+          mb: 4,
+          filter: 'drop-shadow(0 10px 20px rgba(127, 127, 127, 0.5)) drop-shadow(0 0 35px rgba(255, 255, 255, 0.7))',
+          transition: 'filter 0.3s ease-in-out, transform 0.3s ease-in-out',
+          '&:hover': {
+            filter: 'drop-shadow(0 15px 25px rgba(127, 127, 127, 0.8)) drop-shadow(0 0 50px rgba(255, 255, 255, 1))',
+            transform: 'scale(1.1)',
+          },
         }}
       />
       <Paper

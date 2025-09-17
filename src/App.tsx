@@ -32,6 +32,7 @@ import {
   TextField,
   SelectChangeEvent
 } from '@mui/material';
+import { keyframes } from '@mui/system';
 import MenuIcon from '@mui/icons-material/Menu';
 import SettingsIcon from '@mui/icons-material/Settings';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -101,6 +102,17 @@ import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
 // Define drawer widths for different modes
 const fullDrawerWidth = 260;
 const iconOnlyDrawerWidth = 72;
+
+// Animations for dark mode logo glow/float
+const floatAnim = keyframes`
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-3px); }
+  100% { transform: translateY(0px); }
+`;
+const glowAnim = keyframes`
+  0% { filter: drop-shadow(0 0 2px rgba(0, 200, 255, 0.35)) drop-shadow(0 0 6px rgba(0, 200, 255, 0.15)); }
+  100% { filter: drop-shadow(0 0 5px rgba(0, 200, 255, 0.6)) drop-shadow(0 0 12px rgba(0, 200, 255, 0.35)); }
+`;
 
 interface NavigationMenuItem {
   text: string;
@@ -570,18 +582,19 @@ const MainContent = (): React.JSX.Element => {
   const drawer = (
     <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
       <Toolbar sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-        <Avatar 
-          src="/img/logo.png" 
+        <Box
+          component="img"
+          src="/img/logo.png"
           alt="Nauthilus Logo"
-          variant="square"
-          sx={{ 
-            width: 42, 
+          sx={{
             height: 30,
-            bgcolor: mode === 'dark' ? 'background.paper' : 'white',
-            objectFit: 'cover',
-            objectPosition: '0 0',
-            overflow: 'hidden'
-          }} 
+            width: 'auto',
+            display: 'block',
+            ...(mode === 'dark' ? {
+              animation: `${floatAnim} 6s ease-in-out infinite, ${glowAnim} 3s ease-in-out infinite alternate`,
+              willChange: 'transform, filter',
+            } : {})
+          }}
         />
         <Typography variant="h6" noWrap component="div">
           Nauthilus
@@ -609,7 +622,7 @@ const MainContent = (): React.JSX.Element => {
         subheader={
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
             {!iconOnly && (
-              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'rgba(255,255,255,0.85)' }}>
                 Configuration
               </Typography>
             )}
@@ -656,7 +669,7 @@ const MainContent = (): React.JSX.Element => {
         subheader={
           <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 2, py: 1 }}>
             {!iconOnly && (
-              <Typography variant="subtitle2" color="text.secondary" sx={{ fontWeight: 'bold' }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 'bold', color: 'rgba(255,255,255,0.85)' }}>
                 Runtime
               </Typography>
             )}
@@ -880,6 +893,12 @@ const MainContent = (): React.JSX.Element => {
           top: 0,
           width: { sm: `calc(100% - ${drawerWidth}px)` },
           ml: { sm: `${drawerWidth}px` },
+          backgroundColor: 'primary.main',
+          color: '#fff',
+          '& .MuiButton-root': { color: '#fff' },
+          '& .MuiIconButton-root': { color: '#fff' },
+          '& .MuiTypography-root': { color: '#fff' },
+          '& .MuiSvgIcon-root': { color: '#fff' }
         }}
       >
         <Toolbar sx={{ flexWrap: 'wrap', py: { xs: 1 } }}>
@@ -907,7 +926,13 @@ const MainContent = (): React.JSX.Element => {
               sx={{ 
                 minWidth: { xs: 150, sm: 200 }, 
                 mr: { xs: 1, sm: 2 },
-                flexGrow: { xs: 1, sm: 0 }
+                flexGrow: { xs: 1, sm: 0 },
+                '& .MuiInputLabel-root': { color: '#fff' },
+                '& .MuiInputBase-input': { color: '#fff' },
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.35)' },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: 'rgba(255,255,255,0.6)' },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: '#fff' },
+                '& .MuiSvgIcon-root': { color: '#fff' }
               }}
             >
               <InputLabel id="profile-select-label">Profile</InputLabel>
@@ -1158,7 +1183,22 @@ const MainContent = (): React.JSX.Element => {
             }}
             sx={{
               display: { xs: 'block', sm: 'none' },
-              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+              '& .MuiDrawer-paper': {
+                boxSizing: 'border-box',
+                width: drawerWidth,
+                backgroundColor: 'primary.main',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                color: '#fff',
+                borderRight: '1px solid rgba(255,255,255,0.2)',
+                '& .MuiDivider-root': { borderColor: 'rgba(255,255,255,0.2)' },
+                '& .MuiListItemButton-root:hover': { backgroundColor: 'rgba(255,255,255,0.08)' },
+                '& .MuiListItemIcon-root': { color: '#fff' },
+                '& .MuiListItemText-root .MuiTypography-root': { color: '#fff' },
+                '& .MuiTypography-root': { color: '#fff' },
+                '& .MuiIconButton-root': { color: '#fff' },
+                '& .MuiSvgIcon-root': { color: '#fff' }
+              },
             }}
           >
             {drawer}
@@ -1167,7 +1207,22 @@ const MainContent = (): React.JSX.Element => {
             variant="permanent"
             sx={{
               display: { xs: 'none', sm: 'block' },
-              '& .MuiDrawer-paper': { boxSizing: 'border-box', width: drawerWidth },
+              '& .MuiDrawer-paper': {
+                boxSizing: 'border-box',
+                width: drawerWidth,
+                backgroundColor: 'primary.main',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+                color: '#fff',
+                borderRight: '1px solid rgba(255,255,255,0.2)',
+                '& .MuiDivider-root': { borderColor: 'rgba(255,255,255,0.2)' },
+                '& .MuiListItemButton-root:hover': { backgroundColor: 'rgba(255,255,255,0.08)' },
+                '& .MuiListItemIcon-root': { color: '#fff' },
+                '& .MuiListItemText-root .MuiTypography-root': { color: '#fff' },
+                '& .MuiTypography-root': { color: '#fff' },
+                '& .MuiIconButton-root': { color: '#fff' },
+                '& .MuiSvgIcon-root': { color: '#fff' }
+              },
             }}
             open
           >

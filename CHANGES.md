@@ -1,5 +1,37 @@
 # Changes
 
+## 2025-09-17: Light mode — align UI with nauthilus-website palette
+
+- Light theme now follows the nauthilus-website color scheme:
+  - AppBar/Drawer use the menu blue (#516291) with white contrast text.
+  - Background.default is a light bluish gray (#e0e5ef), matching the website body background.
+  - Background.paper is white (#ffffff) for clean card-like boxes over the light background.
+  - Default MUI Buttons harmonize with the menu blue:
+    - contained/containedPrimary: background #516291, text #ffffff, hover #5d6fa3.
+    - outlined: border/text #516291, hover background rgba(81,98,145,0.08).
+    - text: text #516291, hover background rgba(81,98,145,0.06).
+- Implementation:
+  - src/contexts/ThemeContext.tsx: Added light-mode palette (primary/background) and component overrides for MuiPaper and MuiButton.
+  - src/App.tsx: Replaced hardcoded AppBar/Drawer background colors with theme.palette.primary.main to respect the theme.
+- Dark mode remains unchanged from previous update.
+
+## 2025-09-17: Dark mode — deep blue Paper background across the app
+
+- In dark mode, all Material-UI Paper components now use a deep blue background to harmonize with the menu/AppBar.
+- Implementation:
+  - src/contexts/ThemeContext.tsx: Added dark-mode palette.background.paper = #1b2a4a and a global components.MuiPaper.styleOverrides.root to set backgroundColor and text color for better contrast.
+- This affects all pages that use Paper "boxes" (configuration forms, wizards, runtime views, etc.).
+
+## 2025-09-17: Dark mode — harmonized default Button colors with menu/paper blue
+
+- Default MUI Buttons (no explicit color) now use a harmonious blue matching the AppBar/menu in dark mode.
+- Implementation:
+  - src/contexts/ThemeContext.tsx: Updated components.MuiButton.styleOverrides for dark mode:
+    - contained/containedPrimary: background #516291, text #ffffff, hover #5d6fa3.
+    - outlined: border #516291, text #e0e7ff, hover border #5d6fa3 with subtle blue background.
+    - text: soft light-blue text #e0e7ff with subtle blue hover background.
+- This ensures buttons look consistent with the new deep-blue Paper and the menu.
+
 ## 2025-08-15: System page — show instance name and selectable refresh interval
 
 - SystemPage now displays the instance name next to the version.
@@ -730,3 +762,75 @@ Notes:
 - Files:
   - src/components/ClickhouseRuntime.tsx — implemented bookmark state, persistence via RuntimeContext.saveRuntimeSettings, Bookmark dialogs, and UI controls.
 
+## 2025-09-17: Einheitlicher Login/MFA Hintergrund und Logo‑Effekt
+
+- Login- und MFA-Seiten erhalten nun unabhängig vom Light/Dark‑Mode einen identischen, vollflächigen bläulichen Hintergrund (Gradient in Nauthilus‑Blau).
+- Das Nauthilus‑Logo auf beiden Seiten hat jetzt stets den gleichen Schwebe-/Glow‑Effekt wie auf der Startseite.
+- Minimalinvasiv umgesetzt: ausschließlich Styles in den betroffenen Komponenten angepasst.
+- Dateien:
+  - src/components/LoginPage.tsx — Hintergrund auf festen Blau‑Gradient umgestellt; Logo‑Animation immer aktiv.
+  - src/components/MFAPage.tsx — identische Änderungen für MFA.
+
+
+
+## 2025-09-17: Login/MFA-Logo-Effekt identisch zur nauthilus-website
+
+- Logo-Effekt exakt aus nauthilus-website übernommen (siehe src/css/custom.css, Klasse .logo-effect):
+  - Basis: kombinierter Drop-Shadow (dunkel) + heller Glow.
+  - Hover: stärkerer Glow und transform: scale(1.1).
+- Auf LoginPage.tsx und MFAPage.tsx konsistent angewendet.
+
+## 2025-09-17: Login/MFA Hintergrundfarbe exakt wie nauthilus-website
+
+- Hintergrundfarbe der Login- und MFA-Seiten von dunklem Gradient auf das helle Blau der Website umgestellt.
+- Exakter Farbcode aus nauthilus-website/src/css/custom.css (.hero--primary …): #516291
+- Unabhängig vom Light/Dark-Mode, vollflächig (minHeight: 100vh) angewendet.
+- Dateien: src/components/LoginPage.tsx, src/components/MFAPage.tsx
+
+## 2025-09-17: Linkes Menü — Website-Blau und Glas-Effekt
+
+- Hintergrund des linken Navigations-Menüs (Drawer) auf das Website-Blau umgestellt — unabhängig vom Light/Dark-Mode.
+- Glas-/Frosted-Glass-Effekt hinzugefügt (Transparenz + Hintergrund-Unschärfe), dezente helle Rahmenlinie und bessere Hover-Farbe.
+- Text- und Icon-Farbe im Drawer auf Weiß gesetzt, Divider heller angepasst.
+- Dateien: src/App.tsx — Styling der Drawer-Paper für temporären und permanenten Drawer.
+
+## 2025-09-17: Oberes Menü (AppBar) — Website-Blau für beide Themes
+
+- Das horizontale Menü oben (AppBar) erhält nun den gleichen, an das linke Menü angepassten Blauton (#516291), unabhängig vom Light/Dark-Mode.
+- Lesbarkeit verbessert: Label/Text/Icons der Profil-Auswahl in der AppBar auf Weiß angepasst; Outline-Farben aufgehellt.
+- Dateien: src/App.tsx — AppBar Hintergrund/Textfarbe gesetzt und FormControl/Select in der AppBar farblich angepasst.
+
+## 2025-09-17: Linkes Menü im Light‑Mode identisch zum Dark‑Mode
+
+- Subheader-Typografie („Configuration“, „Runtime“) nutzt nun explizit eine helle Schriftfarbe (rgba(255,255,255,0.85)) statt theme text.secondary.
+- Dadurch wirkt das linke Menü im Light‑Mode wie im Dark‑Mode (auf dem bläulichen, halbtransparenten Glas-Hintergrund).
+- Dateien: src/App.tsx — Farbe der Subheader-Typografie angepasst.
+
+## 2025-09-17: Dark‑Mode — Schriftfarbe in der oberen Menüzeile angleichen
+
+- Im Dark‑Mode entspricht die Schrift-/Iconfarbe in der AppBar jetzt exakt der im Light‑Mode (weiß).
+- Umsetzung: In src/App.tsx explizite Farb-Overrides für Buttons, IconButtons, Typografie und Icons innerhalb der AppBar hinzugefügt.
+
+## 2025-09-17: Light/Dark-Mode — Oberes und linkes Menü absolut identisch
+
+- Sichergestellt, dass sich oberes (AppBar) und linkes Menü (Drawer) beim Umschalten zwischen Light- und Dark-Mode optisch nicht unterscheiden.
+- Speziell im Light-Mode war die Listentext-Farbe im linken Menü noch dunkel. Diese wurde nun explizit auf Weiß gesetzt, wie im Dark-Mode.
+- Umsetzung: In src/App.tsx innerhalb der Drawer-Paper-Styles zusätzlich die Typografie der ListItemText-Komponenten überschrieben:
+  - `& .MuiListItemText-root .MuiTypography-root: { color: '#fff' }`
+- Bereits vorhandene Vereinheitlichungen (Hintergrund #516291, Icons/Text in der AppBar weiß, Drawer-Glaseffekt) bleiben unverändert.
+- Keine Logikänderungen — reine Styles.
+
+## 2025-09-17: Linkes Menü im Light‑Mode wirklich IDENTISCH zum Dark‑Mode
+
+- Ursache: Der Drawer hatte eine transparente Hintergrundfarbe (rgba …, 0.75). Auf hellem Seitenhintergrund wirkte das Menü im Light‑Mode dadurch deutlich heller als im Dark‑Mode.
+- Fix:
+  - Drawer‑Hintergrund in beiden Varianten (temporary & permanent) auf voll deckendes `#516291` umgestellt (keine Transparenz mehr) → damit in Light/Dark absolut gleich.
+  - Zusätzlich innerhalb der Drawer‑Paper explizit Weiß für alle relevanten Elemente erzwungen: `.MuiTypography-root`, `.MuiSvgIcon-root`, `.MuiIconButton-root` (neben bereits gesetzten ListItemText/Icon Overrides).
+  - Bestehende Hover-/Divider-/Border‑Styles beibehalten.
+- Dateien: src/App.tsx — Styles der Drawer‑Paper angepasst.
+
+
+## 2025-09-17: Dark-Mode — AppBar/Drawer identisch wie Light-Mode
+
+- Ursache: In Dark-Mode war theme.palette.primary.main = #5c6bc0, während im Light-Mode #516291 verwendet wurde. Da AppBar und Drawer `primary.main` nutzen, ergaben sich optische Unterschiede.
+- Fix: `src/contexts/ThemeContext.tsx` — primary.main im Dark-Mode auf `#516291` gesetzt, sodass oberes und linkes Menü in beiden Modes ABSOLUT identisch sind. Anzeigebereich (background.default/paper) bleibt unverändert.

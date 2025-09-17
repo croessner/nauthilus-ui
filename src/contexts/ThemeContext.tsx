@@ -30,48 +30,109 @@ export const ThemeProvider = ({ children }: ThemeProviderProps): React.JSX.Eleme
     palette: {
       mode,
       ...(mode === 'dark' && {
-        // Customize button colors for dark mode
+        // Customize colors for dark mode
         primary: {
-          main: '#5c6bc0', // A less bright blue
+          main: '#516291', // unify menu/AppBar color with light mode to keep menus identical across themes
+        },
+        background: {
+          default: '#0f172a', // keep a deep slate-ish background for the page
+          paper: '#1b2a4a', // deep blue for Paper backgrounds, harmonious with the menu
+        },
+      }),
+      ...(mode === 'light' && {
+        // Customize colors for light mode aligned with nauthilus-website
+        primary: {
+          main: '#516291', // menu/AppBar blue
+          contrastText: '#ffffff',
+        },
+        background: {
+          default: '#e0e5ef', // website body background
+          paper: '#ffffff', // white cards on light bg
         },
       }),
     },
     components: {
-      // Customize default button styling for dark mode
+      // Global Paper override to ensure all Paper boxes use cohesive backgrounds per mode
+      MuiPaper: {
+        styleOverrides: {
+          root: {
+            ...(mode === 'dark' && {
+              backgroundColor: '#1b2a4a', // deep blue paper background
+              color: 'rgba(255,255,255,0.9)',
+            }),
+            ...(mode === 'light' && {
+              backgroundColor: '#ffffff', // white paper on light background
+              color: 'rgba(0,0,0,0.87)',
+            }),
+          },
+        },
+      },
+      // Customize default button styling for both modes
       MuiButton: {
         styleOverrides: {
-          // Target only the default variant buttons
+          // Target default-looking buttons to harmonize with the menu/paper blue
           text: {
             ...(mode === 'dark' && {
-              color: '#b0b0b0', // Dimmer text color for text buttons
+              color: '#e0e7ff', // soft light blue text
+              '&:hover': {
+                backgroundColor: 'rgba(81, 98, 145, 0.08)', // subtle blue hover
+              },
+            }),
+            ...(mode === 'light' && {
+              color: '#516291', // menu blue text
+              '&:hover': {
+                backgroundColor: 'rgba(81, 98, 145, 0.06)', // very subtle blue hover on light
+              },
             }),
           },
           outlined: {
             ...(mode === 'dark' && {
-              borderColor: '#5c6bc0', // Match with primary color
-              color: '#b0b0b0', // Dimmer text color
+              borderColor: '#516291', // menu blue
+              color: '#e0e7ff', // readable on dark backgrounds
               '&:hover': {
-                borderColor: '#7986cb', // Slightly lighter border on hover
-                backgroundColor: 'rgba(92, 107, 192, 0.08)', // Very subtle background on hover
+                borderColor: '#5d6fa3', // slightly lighter on hover
+                backgroundColor: 'rgba(81, 98, 145, 0.12)', // subtle blue hover fill
+              },
+            }),
+            ...(mode === 'light' && {
+              borderColor: '#516291',
+              color: '#516291',
+              '&:hover': {
+                borderColor: '#5d6fa3',
+                backgroundColor: 'rgba(81, 98, 145, 0.08)',
               },
             }),
           },
           contained: {
             ...(mode === 'dark' && {
-              backgroundColor: '#8c9eff', // Much lighter blue background for buttons in dark mode
-              color: '#000000', // Dark text color for better contrast with a light background
+              backgroundColor: '#516291', // match AppBar/menu
+              color: '#ffffff', // high contrast text
               '&:hover': {
-                backgroundColor: '#9fa8da', // Slightly lighter on hover
+                backgroundColor: '#5d6fa3', // slightly lighter on hover
+              },
+            }),
+            ...(mode === 'light' && {
+              backgroundColor: '#516291', // match website menu
+              color: '#ffffff',
+              '&:hover': {
+                backgroundColor: '#5d6fa3',
               },
             }),
           },
-          // Ensure the default variant (no color prop specified) gets the new styling
+          // Ensure the default variant (no color prop specified) gets the new styling as well
           containedPrimary: {
             ...(mode === 'dark' && {
-              backgroundColor: '#8c9eff', // Same lighter background
-              color: '#000000', // Dark text color for better contrast
+              backgroundColor: '#516291',
+              color: '#ffffff',
               '&:hover': {
-                backgroundColor: '#9fa8da', // Same hover effect
+                backgroundColor: '#5d6fa3',
+              },
+            }),
+            ...(mode === 'light' && {
+              backgroundColor: '#516291',
+              color: '#ffffff',
+              '&:hover': {
+                backgroundColor: '#5d6fa3',
               },
             }),
           },
