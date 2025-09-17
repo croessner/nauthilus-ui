@@ -119,6 +119,16 @@ func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 			return
 		}
 
+		// Audit JWT configuration creation
+		WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+			Action: "jwt.update",
+			Details: map[string]interface{}{
+				"tokenExpiry":        newJWTConfig.TokenExpiry,
+				"refreshTokenExpiry": newJWTConfig.RefreshTokenExpiry,
+				"rememberMeExpiry":   newJWTConfig.RememberMeExpiry,
+			},
+		})
+
 		ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: newJWTConfig})
 
 		return
@@ -160,6 +170,18 @@ func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 
 		return
 	}
+
+	// Audit JWT configuration update (do not log secrets)
+	var changed []string
+
+	for k := range update {
+		changed = append(changed, k)
+	}
+
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Action:  "jwt.update",
+		Details: map[string]interface{}{"changed": changed},
+	})
 
 	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: updatedJWTConfig})
 }

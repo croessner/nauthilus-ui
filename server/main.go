@@ -71,6 +71,59 @@ func setupMongoDB(rootCtx context.Context, cfg *config.Config) *db.MongoDB {
 	return mongoDB
 }
 
+// startAuditCleanupScheduler starts a background task that periodically deletes
+// audit log entries older than the configured retention period.
+func startAuditCleanupScheduler(cfg *config.Config, mongoDB *db.MongoDB) {
+	if cfg.AuditRetentionDays <= 0 {
+		slog.Info("Audit cleanup scheduler disabled (AUDIT_RETENTION_DAYS <= 0)", "AUDIT_RETENTION_DAYS", cfg.AuditRetentionDays)
+
+		return
+	}
+
+	interval := time.Duration(cfg.AuditCleanupIntervalHours) * time.Hour
+	if interval <= 0 {
+		interval = 6 * time.Hour
+	}
+
+	slog.Info("Starting audit cleanup scheduler", "retentionDays", cfg.AuditRetentionDays, "interval", interval.String())
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		run := func() {
+			if !mongoDB.IsConnectedToMongoDB() {
+				slog.Debug("Skipping audit cleanup; database not connected")
+				return
+			}
+
+			cutoff := time.Now().Add(-time.Duration(cfg.AuditRetentionDays) * 24 * time.Hour)
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			deleted, err := mongoDB.DeleteOldAuditLogs(ctx, cutoff)
+			if err != nil {
+				slog.Error("Audit cleanup failed", "error", err)
+
+				return
+			}
+
+			if deleted > 0 {
+				slog.Info("Audit cleanup completed", "deleted", deleted, "olderThan", cutoff.Format(time.RFC3339))
+			} else {
+				slog.Debug("Audit cleanup completed; no entries to delete", "olderThan", cutoff.Format(time.RFC3339))
+			}
+		}
+
+		// Run once shortly after startup
+		time.AfterFunc(5*time.Second, run)
+
+		for range ticker.C {
+			run()
+		}
+	}()
+}
+
 // registerAPIHandlers registers all API handlers with the router
 func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Create a custom middleware that strictly enforces JWT authentication
@@ -87,9 +140,9 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 		middleware.JWTAuthMiddleware(mongoDB)(ctx)
 	}
 
-	// Apply the strict JWT middleware to all API routes
+	// Apply the strict JWT middleware globally (it inspects path to skip public endpoints)
+	r.Use(strictJWTMiddleware)
 	apiGroup := r.Group("/api")
-	apiGroup.Use(strictJWTMiddleware)
 
 	// Register auth endpoints (middleware will skip these)
 	authHandler := api.NewAuthHandler(mongoDB)
@@ -139,6 +192,10 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Register Legal handler (protected by middleware via apiGroup)
 	legalHandler := api.NewLegalHandler(mongoDB)
 	legalHandler.RegisterGroupRoutes(apiGroup)
+
+	// Register Audit handler (admin-only, protected by middleware via apiGroup)
+	auditHandler := api.NewAuditHandler(mongoDB)
+	auditHandler.RegisterGroupRoutes(apiGroup)
 }
 
 // registerMiddleware registers all middleware with the router
@@ -295,7 +352,7 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 		path := ctx.Request.URL.Path
 
 		// Skip authentication for specific public proxy endpoints
-		if strings.HasPrefix(path, "/proxy/ping") || strings.HasPrefix(path, "/proxy/jwt-token") {
+		if strings.HasPrefix(path, "/proxy/jwt-token") {
 			ctx.Next()
 
 			return
@@ -309,7 +366,7 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r.Use(strictProxyJWTMiddleware)
 
 	// Register proxy handlers
-	proxyHandler := proxy.NewProxyHandler()
+	proxyHandler := proxy.NewProxyHandler(mongoDB)
 	proxyHandler.RegisterRoutes(r)
 
 	// Register middleware
@@ -333,6 +390,9 @@ func main() {
 
 	// Setup MongoDB
 	mongoDB := setupMongoDB(rootCtx, cfg)
+
+	// Start audit cleanup scheduler (if enabled)
+	startAuditCleanupScheduler(cfg, mongoDB)
 
 	// Setup frontend router with API routes and middleware
 	frontendRouter := setupFrontendRouter(cfg, mongoDB)

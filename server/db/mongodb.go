@@ -44,6 +44,7 @@ type MongoDB struct {
 	JWTConfigColl *mongo.Collection
 	RuntimeColl   *mongo.Collection
 	LegalColl     *mongo.Collection
+	AuditColl     *mongo.Collection
 	Config        *config.Config
 	RetryCount    int
 	IsConnected   bool
@@ -91,6 +92,7 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	m.JWTConfigColl = m.DB.Collection("jwtconfig")
 	m.RuntimeColl = m.DB.Collection("runtime")
 	m.LegalColl = m.DB.Collection("legal")
+	m.AuditColl = m.DB.Collection("auditlog")
 	m.IsConnected = true
 	m.RetryCount = 0
 
@@ -138,6 +140,11 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 	// Initialize legal pages
 	if err := m.initializeLegalPages(ctx); err != nil {
 		return err
+	}
+
+	// Initialize audit collection indexes (non-fatal)
+	if err := m.initializeAuditCollection(ctx); err != nil {
+		slog.Warn("Audit collection initialization failed", "error", err)
 	}
 
 	slog.Info("Database initialization completed")
@@ -394,6 +401,45 @@ func (m *MongoDB) GetUserCollection() *mongo.Collection {
 	return m.UserColl
 }
 
+// GetAuditCollection returns the audit log collection
+func (m *MongoDB) GetAuditCollection() *mongo.Collection {
+	return m.AuditColl
+}
+
 func (m *MongoDB) SetCancelFunc(cancelFunc context.CancelFunc) {
 	m.CancelFunc = cancelFunc
+}
+
+// initializeAuditCollection creates indexes helpful for queries
+func (m *MongoDB) initializeAuditCollection(ctx context.Context) error {
+	if m.AuditColl == nil {
+		return nil
+	}
+
+	// Index on timestamp desc and actor/action for filters
+	_, err := m.AuditColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "ts", Value: -1}}},
+		{Keys: bson.D{{Key: "actor", Value: 1}}},
+		{Keys: bson.D{{Key: "action", Value: 1}}},
+	})
+
+	return err
+}
+
+// DeleteOldAuditLogs deletes audit log documents older than the provided cutoff time.
+// Note: "ts" is stored as an RFC3339 string. Because all entries are written with the same
+// server time format, lexicographic comparison with the same format works for range queries.
+func (m *MongoDB) DeleteOldAuditLogs(ctx context.Context, olderThan time.Time) (int64, error) {
+	if m.AuditColl == nil {
+		return 0, nil
+	}
+
+	cutoff := olderThan.Format(time.RFC3339)
+
+	res, err := m.AuditColl.DeleteMany(ctx, bson.M{"ts": bson.M{"$lt": cutoff}})
+	if err != nil {
+		return 0, err
+	}
+
+	return res.DeletedCount, nil
 }

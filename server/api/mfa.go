@@ -300,6 +300,13 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	}
 
 	// Return TOTP secret and QR code URL
+	// Audit TOTP setup initiation (secret not logged)
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Actor:  req.Username,
+		Action: "mfa.totp.setup",
+		Target: req.Username,
+	})
+
 	ctx.JSON(http.StatusOK, SetupTOTPResponse{
 		Secret: key.Secret(),
 		QRCode: key.URL(),
@@ -351,6 +358,7 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 	}
 
 	// If this is the first verification, enable TOTP for the user
+	enabledNow := false
 	if !user.TOTPEnabled {
 		_, err = h.MongoDB.GetUserCollection().UpdateOne(
 			ctx.Request.Context(),
@@ -363,7 +371,17 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 
 			return
 		}
+
+		enabledNow = true
 	}
+
+	// Audit TOTP verification (and enable on first time)
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Actor:   req.Username,
+		Action:  "mfa.totp.verify",
+		Target:  req.Username,
+		Details: map[string]interface{}{"enabledNow": enabledNow, "rememberMe": req.RememberMe},
+	})
 
 	// On successful verification, issue access and refresh tokens and set cookies
 	jwtConfig, err := h.MongoDB.GetJWTConfig()
@@ -453,6 +471,13 @@ func (h *MFAHandler) DisableTOTP(ctx *gin.Context) {
 
 		return
 	}
+
+	// Audit TOTP disable
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Actor:  req.Username,
+		Action: "mfa.totp.disable",
+		Target: req.Username,
+	})
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP disabled successfully"})
 }
@@ -695,6 +720,19 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 
 		return
 	}
+
+	// Audit WebAuthn credential registration
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Actor:  usernameStr,
+		Action: "mfa.webauthn.add",
+		Target: usernameStr,
+		Details: map[string]interface{}{
+			"name":           modelCredential.Name,
+			"aaguidPresent":  modelCredential.AAGUID != "",
+			"backupEligible": modelCredential.BackupEligible,
+			"backupState":    modelCredential.BackupState,
+		},
+	})
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn credential registered successfully"})
 }
@@ -992,6 +1030,15 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		}
 	}
 
+	// Audit successful WebAuthn login (actor is the usernameStr)
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Timestamp: time.Now().Format(time.RFC3339),
+		Actor:     usernameStr,
+		Action:    "login",
+		Method:    "webauthn",
+		IP:        getClientIP(ctx.Request),
+	})
+
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn login successful"})
 }
 
@@ -1051,6 +1098,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 	}
 
 	// If no credentials left, disable WebAuthn
+	disabled := false
 	if len(user.WebAuthnDevices) == 0 {
 		_, err = h.MongoDB.GetUserCollection().UpdateOne(
 			ctx.Request.Context(),
@@ -1061,8 +1109,18 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 		if err != nil {
 			// Log error but don't fail the operation
 			fmt.Printf("Failed to disable WebAuthn: %v\n", err)
+		} else {
+			disabled = true
 		}
 	}
+
+	// Audit WebAuthn credential removal
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Actor:   username,
+		Action:  "mfa.webauthn.remove",
+		Target:  username,
+		Details: map[string]interface{}{"credentialId": credentialID, "disabled": disabled},
+	})
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn credential removed successfully"})
 }

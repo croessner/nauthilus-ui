@@ -86,6 +86,7 @@ import FrontendConfig from './components/FrontendConfig';
 import ConnectionConfig from './components/ConnectionConfig';
 import ConfigPreview from './components/ConfigPreview';
 import LicensesPage from './components/LicensesPage';
+import AuditLog from './components/AuditLog';
 import ConfigWizard from './components/ConfigWizard';
 import UserManagement from './components/UserManagement';
 import UserProfile from './components/UserProfile';
@@ -335,6 +336,7 @@ const MainContent = (): React.JSX.Element => {
   // Define application menu items
   const applicationMenuItems: NavigationMenuItem[] = [
     { text: 'User Management', icon: <PeopleIcon />, path: '/users' },
+    { text: 'Audit Log', icon: <FeaturedPlayListIcon />, path: '/audit-log' },
   ];
 
   // Legal titles (dynamic)
@@ -1269,6 +1271,7 @@ const MainContent = (): React.JSX.Element => {
               <Route path="/licenses" element={<LicensesPage />} />
               <Route path="/config-wizard" element={<ConfigWizard autoOpen={true} />} />
               <Route path="/users" element={<UserManagement />} />
+              <Route path="/audit-log" element={<AuditLog />} />
               <Route path="/profile" element={<UserProfile />} />
               <Route path="/mfa-settings" element={<MFASettings />} />
               <Route path="/legal/:key" element={<LegalPage />} />

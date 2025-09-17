@@ -247,6 +247,13 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 		return
 	}
 
+	// Audit user creation
+	WriteAudit(ctx, nilToMongo(h.MongoDB), models.AuditLogEntry{
+		Action:  "user.create",
+		Target:  user.Username,
+		Details: map[string]interface{}{"roles": user.Roles, "enabled": user.Enabled},
+	})
+
 	// Return user without passwordHash
 	user.PasswordHash = ""
 	ctx.JSON(http.StatusCreated, models.UserResponse{User: user})
@@ -390,10 +397,34 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 		return
 	}
 
+	// Audit user update (list updated fields, excluding passwordHash)
+	updatedFields := []string{}
+	for k := range update {
+		if k == "passwordHash" {
+			continue
+		}
+		updatedFields = append(updatedFields, k)
+	}
+
+	WriteAudit(ctx, nilToMongo(h.MongoDB), models.AuditLogEntry{
+		Action:  "user.update",
+		Target:  username,
+		Details: map[string]interface{}{"fields": updatedFields},
+	})
+
 	ctx.JSON(http.StatusOK, models.UserResponse{User: updatedUser})
 }
 
 // hasRole checks if a role exists in the slice
+// helper: try to cast UserDatabase to *db.MongoDB (else return nil)
+func nilToMongo(d db.UserDatabase) *db.MongoDB {
+	if m, ok := d.(*db.MongoDB); ok {
+		return m
+	}
+
+	return nil
+}
+
 func hasRole(roles []string, role string) bool {
 	for _, r := range roles {
 		if r == role {
@@ -428,6 +459,12 @@ func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 
 		return
 	}
+
+	// Audit user deletion
+	WriteAudit(ctx, nilToMongo(h.MongoDB), models.AuditLogEntry{
+		Action: "user.delete",
+		Target: username,
+	})
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "User deleted successfully"})
 }

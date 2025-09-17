@@ -17,12 +17,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"nauthilus-ui/server/api"
+	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
 	"nauthilus-ui/server/utils"
 )
 
 // ProxyHandler handles proxy requests to external services
-type ProxyHandler struct{}
+type ProxyHandler struct {
+	Mongo *db.MongoDB
+}
 
 // ProxyConfig holds configuration for a proxy request
 type ProxyConfig struct {
@@ -33,11 +37,12 @@ type ProxyConfig struct {
 	ContentType     string
 	LogEndpoint     string
 	UseReverseProxy bool
+	SkipAudit       bool
 }
 
 // NewProxyHandler creates a new ProxyHandler
-func NewProxyHandler() *ProxyHandler {
-	return &ProxyHandler{}
+func NewProxyHandler(mongo *db.MongoDB) *ProxyHandler {
+	return &ProxyHandler{Mongo: mongo}
 }
 
 // getTargetURL extracts and validates the target URL from the request
@@ -182,6 +187,22 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 		config.TargetURL, statusCode, errMsg, ok = getTargetURL(ctx)
 		if !ok {
+			// Audit failed proxy attempt (missing/invalid target URL)
+			action := getOperation(ctx)
+
+			h.writeAudit(ctx, config, models.AuditLogEntry{
+				Action: action,
+				Target: "proxy",
+				Details: map[string]any{
+					"status":        statusCode,
+					"http_method":   ctx.Request.Method,
+					"endpoint":      config.LogEndpoint,
+					"endpoint_path": config.EndpointPath,
+					"error":         errMsg,
+					"query":         ctx.Request.URL.RawQuery,
+				},
+			})
+
 			ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 			return
@@ -200,6 +221,22 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Parse the target URL
 	target, err := url.Parse(config.TargetURL)
 	if err != nil {
+		// Audit invalid target URL format
+		action := getOperation(ctx)
+
+		h.writeAudit(ctx, config, models.AuditLogEntry{
+			Action: action,
+			Target: config.TargetURL,
+			Details: map[string]any{
+				"status":        http.StatusBadRequest,
+				"http_method":   ctx.Request.Method,
+				"endpoint":      config.LogEndpoint,
+				"endpoint_path": config.EndpointPath,
+				"error":         "Invalid target URL",
+				"query":         ctx.Request.URL.RawQuery,
+			},
+		})
+
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid target URL"})
 
 		return
@@ -290,6 +327,23 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 		// Handle errors
 		proxy.ErrorHandler = func(rw http.ResponseWriter, req *http.Request, err error) {
+			// Audit reverse proxy error
+			action := getOperation(ctx)
+			targetHost := target.Scheme + "://" + target.Host
+
+			h.writeAudit(ctx, config, models.AuditLogEntry{
+				Action: action,
+				Target: targetHost + config.EndpointPath,
+				Details: map[string]any{
+					"status":        http.StatusBadGateway,
+					"http_method":   ctx.Request.Method,
+					"endpoint":      config.LogEndpoint,
+					"endpoint_path": config.EndpointPath,
+					"error":         err.Error(),
+					"query":         ctx.Request.URL.RawQuery,
+				},
+			})
+
 			ctx.JSON(http.StatusBadGateway, models.ErrorResponse{
 				Error: "Failed to connect to backend server: " + err.Error(),
 			})
@@ -298,12 +352,48 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		// Serve the request
 		proxy.ServeHTTP(ctx.Writer, ctx.Request)
 
+		// Audit reverse proxy success (status from writer)
+		{
+			status := ctx.Writer.Status()
+			action := getOperation(ctx)
+			targetHost := target.Scheme + "://" + target.Host
+
+			h.writeAudit(ctx, config, models.AuditLogEntry{
+				Action: action,
+				Target: targetHost + config.EndpointPath,
+				Details: map[string]any{
+					"status":        status,
+					"http_method":   ctx.Request.Method,
+					"endpoint":      config.LogEndpoint,
+					"endpoint_path": config.EndpointPath,
+					"query":         ctx.Request.URL.RawQuery,
+				},
+			})
+		}
+
 		return
 	}
 
 	// Create the proxy request
 	req, err := http.NewRequest(ctx.Request.Method, target.String(), ctx.Request.Body)
 	if err != nil {
+		// Audit failure creating request
+		action := getOperation(ctx)
+		targetHost := target.Scheme + "://" + target.Host
+
+		h.writeAudit(ctx, config, models.AuditLogEntry{
+			Action: action,
+			Target: targetHost + config.EndpointPath,
+			Details: map[string]any{
+				"status":        http.StatusInternalServerError,
+				"http_method":   ctx.Request.Method,
+				"endpoint":      config.LogEndpoint,
+				"endpoint_path": config.EndpointPath,
+				"error":         "Failed to create proxy request",
+				"query":         ctx.Request.URL.RawQuery,
+			},
+		})
+
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create proxy request"})
 
 		return
@@ -331,6 +421,23 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
+		// Audit backend connection failure
+		action := getOperation(ctx)
+		targetHost := target.Scheme + "://" + target.Host
+
+		h.writeAudit(ctx, config, models.AuditLogEntry{
+			Action: action,
+			Target: targetHost + config.EndpointPath,
+			Details: map[string]any{
+				"status":        http.StatusInternalServerError,
+				"http_method":   ctx.Request.Method,
+				"endpoint":      config.LogEndpoint,
+				"endpoint_path": config.EndpointPath,
+				"error":         "Failed to connect to backend server: " + err.Error(),
+				"query":         ctx.Request.URL.RawQuery,
+			},
+		})
+
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to connect to backend server: " + err.Error()})
 
 		return
@@ -371,6 +478,24 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Copy the response body only for non-HEAD requests
 	if ctx.Request.Method != http.MethodHead {
 		_, _ = io.Copy(ctx.Writer, resp.Body)
+	}
+
+	// Audit direct proxy response
+	{
+		action := getOperation(ctx)
+		targetHost := target.Scheme + "://" + target.Host
+
+		h.writeAudit(ctx, config, models.AuditLogEntry{
+			Action: action,
+			Target: targetHost + config.EndpointPath,
+			Details: map[string]any{
+				"status":        resp.StatusCode,
+				"http_method":   ctx.Request.Method,
+				"endpoint":      config.LogEndpoint,
+				"endpoint_path": config.EndpointPath,
+				"query":         ctx.Request.URL.RawQuery,
+			},
+		})
 	}
 }
 
@@ -452,6 +577,7 @@ func (h *ProxyHandler) PingProxy(ctx *gin.Context) {
 		EndpointPath: "/ping",
 		LogEndpoint:  "/proxy/ping",
 		RequiresAuth: false,
+		SkipAudit:    true,
 	}
 
 	h.handleProxyRequest(ctx, config)
@@ -916,6 +1042,22 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 		result["redis_role"] = redisRole
 	}
 
+	// Audit system metrics proxy success
+	action := getOperation(ctx)
+	targetHost := u.Scheme + "://" + u.Host
+
+	api.WriteAudit(ctx, h.Mongo, models.AuditLogEntry{
+		Action: action,
+		Target: targetHost + "/metrics",
+		Details: map[string]any{
+			"status":        http.StatusOK,
+			"http_method":   ctx.Request.Method,
+			"endpoint":      "/proxy/system/metrics",
+			"endpoint_path": "/metrics",
+			"query":         ctx.Request.URL.RawQuery,
+		},
+	})
+
 	ctx.JSON(http.StatusOK, result)
 }
 
@@ -1139,5 +1281,30 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 		res["slow_attack_suspicions_total"] = slowAttackSuspicionsTotal
 	}
 
+	// Audit security metrics proxy success
+	action := getOperation(ctx)
+	targetHost := u.Scheme + "://" + u.Host
+
+	api.WriteAudit(ctx, h.Mongo, models.AuditLogEntry{
+		Action: action,
+		Target: targetHost + "/metrics",
+		Details: map[string]any{
+			"status":        http.StatusOK,
+			"http_method":   ctx.Request.Method,
+			"endpoint":      "/proxy/security/metrics",
+			"endpoint_path": "/metrics",
+			"query":         ctx.Request.URL.RawQuery,
+		},
+	})
+
 	ctx.JSON(http.StatusOK, res)
+}
+
+// writeAudit is a small helper that respects per-endpoint audit suppression
+func (h *ProxyHandler) writeAudit(ctx *gin.Context, config ProxyConfig, entry models.AuditLogEntry) {
+	if config.SkipAudit {
+		return
+	}
+
+	api.WriteAudit(ctx, h.Mongo, entry)
 }

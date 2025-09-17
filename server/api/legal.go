@@ -195,5 +195,15 @@ func (h *LegalHandler) Update(ctx *gin.Context) {
 		out = models.LegalPage{Key: key, Title: input.Title, ContentMD: input.ContentMD}
 	}
 
+	// Audit legal page update
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Action: "legal.update",
+		Target: key,
+		Details: map[string]interface{}{
+			"titleLength":   len(out.Title),
+			"contentLength": len(out.ContentMD),
+		},
+	})
+
 	ctx.JSON(http.StatusOK, out)
 }

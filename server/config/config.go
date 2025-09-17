@@ -53,6 +53,12 @@ type Config struct {
 	// WebAuthnRPDisplayName is the Relying Party display name for WebAuthn.
 	WebAuthnRPDisplayName string
 
+	// Audit log retention
+	// AuditRetentionDays controls how many days of audit logs to keep. <=0 disables cleanup.
+	AuditRetentionDays int
+	// AuditCleanupIntervalHours controls how often the cleanup runs.
+	AuditCleanupIntervalHours int
+
 	// OIDC configuration (optional)
 	OIDCEnabled       bool
 	OIDCIssuer        string
@@ -96,6 +102,10 @@ func LoadConfig() *Config {
 		// WebAuthn configuration
 		WebAuthnRPID:          getEnv("WEBAUTHN_RP_ID", ""),
 		WebAuthnRPDisplayName: getEnv("WEBAUTHN_RP_DISPLAY_NAME", "Nauthilus UI"),
+
+		// Audit log retention
+		AuditRetentionDays:        getEnvAsInt("AUDIT_RETENTION_DAYS", 0),
+		AuditCleanupIntervalHours: getEnvAsInt("AUDIT_CLEAN_INTERVAL_HOURS", 6),
 
 		// OIDC configuration (optional)
 		OIDCEnabled:       getEnv("REACT_APP_OIDC_ENABLED", "false") == "true",

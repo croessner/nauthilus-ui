@@ -265,6 +265,16 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 
 	slog.Info("Sending login response", "username", user.Username, "token_present", token != "", "refresh_token_present", refreshToken != "")
 
+	// Write audit log for successful password login
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Timestamp: time.Now().Format(time.RFC3339),
+		Actor:     user.Username,
+		Action:    "login",
+		Method:    "password",
+		IP:        getClientIP(ctx.Request),
+		Details:   map[string]interface{}{"rememberMe": loginRequest.RememberMe},
+	})
+
 	// Send response
 	ctx.JSON(http.StatusOK, response)
 }
@@ -352,7 +362,47 @@ func (h *AuthHandler) Refresh(ctx *gin.Context) {
 
 // Logout handles the POST /api/auth/logout endpoint
 func (h *AuthHandler) Logout(ctx *gin.Context) {
+	// Try to extract actor from access token cookie or Authorization header
+	actor := ""
+	if c, err := ctx.Request.Cookie(accessCookieName); err == nil && c.Value != "" {
+		if jwtConfig, err2 := h.MongoDB.GetJWTConfig(); err2 == nil {
+			if t, err3 := jwt.Parse(c.Value, func(token *jwt.Token) (interface{}, error) { return []byte(jwtConfig.Secret), nil }); err3 == nil && t.Valid {
+				if claims, ok := t.Claims.(jwt.MapClaims); ok {
+					if sub, ok := claims["sub"].(string); ok {
+						actor = sub
+					}
+				}
+			}
+		}
+	}
+
+	if actor == "" {
+		authHeader := ctx.GetHeader("Authorization")
+		if authHeader != "" {
+			parts := strings.Split(authHeader, " ")
+			if len(parts) == 2 && parts[0] == "Bearer" {
+				if jwtConfig, err2 := h.MongoDB.GetJWTConfig(); err2 == nil {
+					if t, err3 := jwt.Parse(parts[1], func(token *jwt.Token) (interface{}, error) { return []byte(jwtConfig.Secret), nil }); err3 == nil && t.Valid {
+						if claims, ok := t.Claims.(jwt.MapClaims); ok {
+							if sub, ok := claims["sub"].(string); ok {
+								actor = sub
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// Clear cookies after extracting actor
 	ClearAuthCookies(ctx)
+	// Audit logout (ensure actor is set when possible)
+	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
+		Actor:  actor,
+		Action: "logout",
+		IP:     getClientIP(ctx.Request),
+	})
+
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "Logged out"})
 }
 

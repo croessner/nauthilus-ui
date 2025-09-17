@@ -9,6 +9,26 @@ type LegalPage struct {
 	UpdatedBy string `bson:"updatedBy" json:"updatedBy"`
 }
 
+// AuditLogEntry represents an immutable audit log record
+// It captures who did what, when, from which IP, and optional context.
+type AuditLogEntry struct {
+	ID         string                 `bson:"_id,omitempty" json:"id"`
+	Timestamp  string                 `bson:"ts" json:"ts"`
+	Actor      string                 `bson:"actor" json:"actor"`
+	ActorRoles []string               `bson:"actorRoles,omitempty" json:"actorRoles,omitempty"`
+	IP         string                 `bson:"ip,omitempty" json:"ip,omitempty"`
+	Action     string                 `bson:"action" json:"action"`                       // e.g., login, user.create, user.update, config.update
+	Target     string                 `bson:"target,omitempty" json:"target,omitempty"`   // e.g., username or resource
+	Method     string                 `bson:"method,omitempty" json:"method,omitempty"`   // e.g., password, webauthn, totp
+	Details    map[string]interface{} `bson:"details,omitempty" json:"details,omitempty"` // sanitized non-sensitive info
+}
+
+// AuditLogResponse for listing logs with pagination
+type AuditLogResponse struct {
+	Items []AuditLogEntry `json:"items"`
+	Total int64           `json:"total"`
+}
+
 // LegalResponse represents a list/map of legal pages
 // We’ll return as a simple array for flexibility
 // Keys should be one of: "imprint", "privacy"
