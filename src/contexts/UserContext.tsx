@@ -32,7 +32,7 @@ interface UserContextType {
   removeUser: (username: string) => Promise<void>;
   getUsers: () => Promise<User[]>;
   updatePassword: (username: string, password: string) => Promise<void>;
-  updateUserProfile: (username: string, profileData: Partial<Omit<User, 'username' | 'roles'>>) => Promise<void>;
+  updateUserProfile: (username: string, profileData: Partial<Omit<User, 'username'>>) => Promise<void>;
   clearError: () => void;
 }
 
@@ -244,7 +244,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
   };
 
   // Update user profile function
-  const updateUserProfile = async (username: string, profileData: Partial<Omit<User, 'username' | 'roles'>>): Promise<void> => {
+  const updateUserProfile = async (username: string, profileData: Partial<Omit<User, 'username'>>): Promise<void> => {
     setLoading(true);
     setError(null);
 

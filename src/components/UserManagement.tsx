@@ -212,6 +212,8 @@ const UserManagement = (): React.JSX.Element => {
       setDisplayName(user.displayName || '');
       setEmail(user.email || '');
       setAvatar(user.avatar || '');
+      // Prefill roles for profile editing; may be shown only for admins editing other users
+      setRoles(Array.isArray(user.roles) ? user.roles : ['user']);
       setOpenProfileDialog(true);
     }
   };
@@ -253,11 +255,33 @@ const UserManagement = (): React.JSX.Element => {
     setLocalError(null);
 
     try {
-      await updateUserProfile(selectedUser, {
+      const targetUser = users.find(u => u.username === selectedUser);
+      const canEditRoles = isAdmin && currentUser?.username !== selectedUser;
+
+      // Prevent removing the last admin
+      if (canEditRoles && targetUser) {
+        const currentHasAdmin = targetUser.roles.includes('admin');
+        const newHasAdmin = roles.includes('admin');
+        if (currentHasAdmin && !newHasAdmin) {
+          const adminCount = users.filter(u => u.roles.includes('admin')).length;
+          if (adminCount <= 1) {
+            setLocalError('Cannot remove the last admin role');
+            return;
+          }
+        }
+      }
+
+      const payload: any = {
         displayName: displayName || undefined,
         email: email || undefined,
         avatar: avatar || undefined
-      });
+      };
+
+      if (canEditRoles) {
+        payload.roles = roles;
+      }
+
+      await updateUserProfile(selectedUser, payload);
       setOpenProfileDialog(false);
       setSuccessMessage('Profile updated successfully');
       await loadUsers();
@@ -619,6 +643,23 @@ const UserManagement = (): React.JSX.Element => {
                 onChange={(e) => setEmail(e.target.value)}
                 sx={{ mb: 2 }}
               />
+
+              {isAdmin && currentUser?.username !== selectedUser && (
+                <FormControl fullWidth sx={{ mb: 2 }}>
+                  <InputLabel id="profile-roles-label">Roles</InputLabel>
+                  <Select
+                    labelId="profile-roles-label"
+                    id="profile-roles"
+                    multiple
+                    value={roles}
+                    onChange={handleRoleChange}
+                    label="Roles"
+                  >
+                    <MenuItem value="admin">Admin</MenuItem>
+                    <MenuItem value="user">User</MenuItem>
+                  </Select>
+                </FormControl>
+              )}
 
               <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', mb: 3 }}>
                 <Box sx={{ position: 'relative' }}>

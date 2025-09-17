@@ -358,7 +358,7 @@ export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
 // Update user profile
 export const updateUserProfile = async (
   username: string, 
-  profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>>
+  profileData: Partial<Omit<User, 'username' | 'passwordHash'>>
 ): Promise<void> => {
   // Validate input parameters
   if (!username) {
