@@ -132,7 +132,7 @@ export function zScore(values: number[]) {
 
 export function detectPeaks(series: [string, number][], threshold = 3) {
   const zs = zScore(series.map(([,v]) => v));
-  return series.filter((p, i) => zs[i] >= threshold);
+  return series.filter((_, i) => zs[i] >= threshold);
 }
 
 export function computeInsights(rowsRaw: any[]) {
@@ -242,7 +242,7 @@ export function computeInsights(rowsRaw: any[]) {
 
   // Top IPs per feature (success/failure breakdown per IP within feature)
   const topIPsByFeature: Record<string, { ip: string; success: number; failure: number; total: number }[]> = {};
-  for (const [feat, _] of featuresMap.entries()) {
+  for (const [feat] of featuresMap.entries()) {
     const m = new Map<string, { ip: string; success: number; failure: number; total: number }>();
     for (const r of rowsWithAnyFeature) {
       if (!r.features || !r.features.includes(feat)) continue;
