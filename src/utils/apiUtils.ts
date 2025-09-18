@@ -246,6 +246,22 @@ export const authenticatedFetch = async (
 };
 
 /**
+ * Sends HTML to the backend to generate a server-side PDF and returns the Blob.
+ */
+export const generatePDFServerSide = async (html: string, filename?: string): Promise<Blob> => {
+  const res = await authenticatedFetch('/api/report/pdf', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ html, filename })
+  });
+  if (!res.ok) {
+    const msg = await extractErrorMessage(res).catch(async () => `${res.status} ${res.statusText}`);
+    throw new Error(msg);
+  }
+  return await res.blob();
+};
+
+/**
  * Loads runtime settings and checks connection status
  * @param getCurrentUserId - Function to get the current user ID
  * @param loadRuntimeSettings - Function to load runtime settings

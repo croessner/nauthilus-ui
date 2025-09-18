@@ -31,6 +31,7 @@ import {
     Tooltip
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import AnalysisPanel from './AnalysisPanel';
 import PublicIcon from '@mui/icons-material/Public';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -1057,6 +1058,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [csvDelimiter, setCsvDelimiter] = useState<string>(',');
   const [csvWithHeader, setCsvWithHeader] = useState<boolean>(true);
 
+  // Analysis dialog state
+  const [analysisOpen, setAnalysisOpen] = useState(false);
+
   // Helper: determine available fields for export (mirrors table display)
   const availableExportFields = useMemo(() => {
     return selectedFields && selectedFields.length > 0
@@ -1112,7 +1116,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     URL.revokeObjectURL(url);
   };
 
-  const nowForName = () => new Date().toISOString().replace(/[:]/g, '-');
+  const nowForName = () => new Date().toISOString().replace(/:/g, '-');
 
   // Determine data set based on selected scope
   const resolveExportData = () => {
@@ -2030,9 +2034,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               <Pagination color="primary" page={page} onChange={(_,p)=>setPage(p)} count={Math.max(1, Math.ceil(sortedRows.length / pageSize))} showFirstButton showLastButton />
             </Box>
             <Divider sx={{ mt:2 }} />
-            <Box sx={{ display:'flex', justifyContent:'flex-end', alignItems:'center', py:1 }}>
+            <Box sx={{ display:'flex', justifyContent:'flex-end', alignItems:'center', py:1, gap:1 }}>
               <Button variant="outlined" onClick={() => setExportOpen(true)} sx={{ py: 1 }}>
                 Export
+              </Button>
+              <Button variant="contained" onClick={() => setAnalysisOpen(true)} sx={{ py: 1 }}>
+                Analysis
               </Button>
             </Box>
             <Divider sx={{ mb:2 }} />
@@ -2148,6 +2155,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         <DialogActions>
           <Button onClick={() => setExportOpen(false)}>Cancel</Button>
           <Button onClick={performExport} variant="contained">Export</Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Analysis Dialog */}
+      <Dialog open={analysisOpen} onClose={() => setAnalysisOpen(false)} fullWidth maxWidth="lg">
+        <DialogTitle>Deep Analysis</DialogTitle>
+        <DialogContent>
+          <AnalysisPanel rows={sortedRows} />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setAnalysisOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 

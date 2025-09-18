@@ -196,6 +196,10 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Register Audit handler (admin-only, protected by middleware via apiGroup)
 	auditHandler := api.NewAuditHandler(mongoDB)
 	auditHandler.RegisterGroupRoutes(apiGroup)
+
+	// Register Report handler (protected by middleware)
+	reportHandler := api.NewReportHandler(mongoDB)
+	reportHandler.RegisterRoutes(r)
 }
 
 // registerMiddleware registers all middleware with the router

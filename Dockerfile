@@ -60,8 +60,17 @@ FROM alpine:latest
 
 WORKDIR /app
 
-# Install ca-certificates for HTTPS
-RUN apk --no-cache add ca-certificates
+# Install ca-certificates for HTTPS and Chromium for server-side PDF rendering
+RUN apk --no-cache add \
+    ca-certificates \
+    chromium \
+    nss \
+    freetype \
+    ttf-freefont \
+    tzdata
+
+# Environment variable for chromedp to find chromium (optional)
+ENV CHROME_PATH=/usr/bin/chromium-browser
 
 # Copy the build output from the React build stage
 COPY --from=react-build /app/build ./build

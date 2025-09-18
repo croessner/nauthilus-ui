@@ -35,9 +35,14 @@ export const ThemeProvider = ({ children }: ThemeProviderProps): React.JSX.Eleme
           main: '#516291', // unify menu/AppBar color with light mode to keep menus identical across themes
         },
         background: {
-          default: '#0f172a', // keep a deep slate-ish background for the page
-          paper: '#1b2a4a', // deep blue for Paper backgrounds, harmonious with the menu
+          default: '#0f172a', // deep slate-ish background
+          paper: '#1b2a4a', // deep blue for Paper backgrounds
         },
+        text: {
+          primary: 'rgba(255,255,255,0.92)', // higher contrast for readability
+          secondary: 'rgba(255,255,255,0.80)', // increase contrast vs default 0.6-0.7
+        },
+        divider: 'rgba(255,255,255,0.20)', // slightly stronger dividers
       }),
       ...(mode === 'light' && {
         // Customize colors for light mode aligned with nauthilus-website
@@ -49,6 +54,11 @@ export const ThemeProvider = ({ children }: ThemeProviderProps): React.JSX.Eleme
           default: '#e0e5ef', // website body background
           paper: '#ffffff', // white cards on light bg
         },
+        text: {
+          primary: '#0f172a', // near-black for high contrast on light
+          secondary: '#334155', // dark slate for secondary text
+        },
+        divider: 'rgba(15,23,42,0.18)',
       }),
     },
     components: {
@@ -58,12 +68,20 @@ export const ThemeProvider = ({ children }: ThemeProviderProps): React.JSX.Eleme
           root: {
             ...(mode === 'dark' && {
               backgroundColor: '#1b2a4a', // deep blue paper background
-              color: 'rgba(255,255,255,0.9)',
+              color: 'rgba(255,255,255,0.92)',
             }),
             ...(mode === 'light' && {
               backgroundColor: '#ffffff', // white paper on light background
-              color: 'rgba(0,0,0,0.87)',
+              color: '#0f172a',
             }),
+          },
+        },
+      },
+      // Improve default typography contrast slightly
+      MuiTypography: {
+        styleOverrides: {
+          root: {
+            color: mode === 'dark' ? 'rgba(255,255,255,0.92)' : '#0f172a',
           },
         },
       },
