@@ -28,7 +28,8 @@ import {
     Switch,
     TextField,
     Typography,
-    Tooltip
+    Tooltip,
+    LinearProgress
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import AnalysisPanel from './AnalysisPanel';
@@ -99,18 +100,21 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [account, setAccount] = useState<string>('');
   const [ip, setIp] = useState<string>('');
   const [limit, setLimit] = useState<number>(100);
+  const [pageSize, setPageSize] = useState<number>(100);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  const queryAbortRef = useRef<AbortController | null>(null);
+  const lastReqIdRef = useRef(0);
 
-  // Data and pagination (client-side)
+  // Data and pagination
   const [rows, setRows] = useState<Row[]>([]);
   const [page, setPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(25);
   const [authFilter, setAuthFilter] = useState<'all'|'failed'|'success'>('all');
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
   // Search-as-you-type for results table
   const [searchQuery, setSearchQuery] = useState<string>('');
+  const [searchDraft, setSearchDraft] = useState<string>('');
   // Column widths (px), persisted in runtime settings under clickhouse_query.columnWidths
   const [columnWidths, setColumnWidths] = useState<Record<string, number>>({});
 
@@ -231,7 +235,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     try {
       const userId = await getCurrentUserId();
       const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-      const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+      const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
       if (action === 'raw_sql') {
         // Do not persist column widths for ad-hoc raw SQL results
         setNotif({ open:true, severity:'info', message:'Column width change not persisted for raw SQL results' });
@@ -245,7 +249,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } catch(e:any) {
       setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
     }
-  }, [runtimeHooks, action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, saveRuntimeSettings]);
+  }, [runtimeHooks, action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, saveRuntimeSettings]);
 
   const onResizeStart = useCallback((col: string, clientX: number) => {
     const startW = getColWidth(col);
@@ -281,7 +285,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     try {
       const userId = await getCurrentUserId();
       const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-      const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+      const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
       const cols = action === 'raw_sql' ? ((prevCQ?.columns) || []) : selectedFields;
       await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
         ...(runtimeHooks || {}),
@@ -292,7 +296,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     } catch(e:any) {
       setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
     }
-  }, [runtimeHooks, action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, columnWidths, saveRuntimeSettings]);
+  }, [runtimeHooks, action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, columnWidths, saveRuntimeSettings]);
 
 
   const loadBookmark = useCallback((kind: keyof BookmarkState, id: string) => {
@@ -300,7 +304,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     const bm = list.find(b => b.id === id);
     if (!bm) return;
     if (kind === 'raw_sql') setRawSql(bm.value);
-    else setSearchQuery(bm.value);
+    else { setSearchQuery(bm.value); setSearchDraft(bm.value); }
     setNotif({ open:true, severity:'success', message:'Bookmark loaded' });
   }, [bookmarks]);
 
@@ -342,7 +346,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const handleBmDialogConfirm = useCallback(async () => {
     setBmDialogError('');
     if (bmDialogMode === 'create') {
-      const value = bmDialogKind === 'raw_sql' ? rawSql : searchQuery;
+      const value = bmDialogKind === 'raw_sql' ? rawSql : searchDraft;
       const list = bookmarks[bmDialogKind] || [];
       if (!value.trim()) { setBmDialogError('Content is empty.'); return; }
       if (!bmDialogName.trim()) { setBmDialogError('Please enter a name.'); return; }
@@ -443,15 +447,15 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       if (typeof ui.ip === 'string') setIp(ui.ip);
       const lim = Number((ui as any).limit);
       if (Number.isFinite(lim)) setLimit(lim);
-      if (ui.authFilter === 'all' || ui.authFilter === 'failed' || ui.authFilter === 'success') setAuthFilter(ui.authFilter);
       const ps = Number((ui as any).pageSize);
-      if (Number.isFinite(ps)) setPageSize(ps);
+      if (Number.isFinite(ps) && ps > 0) setPageSize(ps);
+      if (ui.authFilter === 'all' || ui.authFilter === 'failed' || ui.authFilter === 'success') setAuthFilter(ui.authFilter);
       if (typeof ui.tsStart === 'string') setTsStart(ui.tsStart);
       if (typeof ui.tsEnd === 'string') setTsEnd(ui.tsEnd);
       if (typeof ui.tsTimeZone === 'string') setTsTimeZone(ui.tsTimeZone);
       if (typeof ui.rawSql === 'string') setRawSql(ui.rawSql);
       if (typeof ui.mapOpen === 'boolean') setMapOpen(Boolean(ui.mapOpen));
-      if (typeof (ui as any).searchQuery === 'string') setSearchQuery((ui as any).searchQuery);
+      if (typeof (ui as any).searchQuery === 'string') { setSearchQuery((ui as any).searchQuery); setSearchDraft((ui as any).searchQuery); }
       const r = Number((ui as any).refreshMs);
       if (Number.isFinite(r)) {
         try { setRefreshMs(r); } catch {}
@@ -470,7 +474,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   const handlePickSuggestion = (ep: string) => { setEndpointPath(ep); setAnchorEl(null); };
 
-  const buildHookUrl = (connectionConfig: any) => {
+  const buildHookUrl = useCallback((connectionConfig: any, overrideOffset?: number, overrideLimit?: number, includeSearchFilter: boolean = true) => {
     const proxyUrl = new URL('/proxy/hooks/any', getProxyOrigin());
     proxyUrl.searchParams.append('url', (connectionConfig?.backend_url || '').toString());
     // The proxy expects 'endpoint_path'
@@ -486,12 +490,23 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       sql = sql.replace(/;+$/, '');
       if (sql) proxyUrl.searchParams.set('sql', sql);
     }
-    proxyUrl.searchParams.set('limit', String(limit));
+    // Limit + Offset (server side)
+    const effectiveLimit = (overrideLimit != null && Number.isFinite(overrideLimit) && overrideLimit > 0) ? Number(overrideLimit) : pageSize;
+    proxyUrl.searchParams.set('limit', String(effectiveLimit));
+    // Compute server-side offset based on current page (1-based) or override
+    const serverOffset = overrideOffset != null ? Math.max(0, overrideOffset) : Math.max(0, (page - 1) * pageSize);
+    proxyUrl.searchParams.set('offset', String(serverOffset));
     // Server-side status filter
     if (authFilter === 'failed' || authFilter === 'success') {
       proxyUrl.searchParams.set('status', authFilter);
     } else {
       proxyUrl.searchParams.set('status', 'all');
+    }
+    // Server-side search filter (debounced by UI); backend enforces safety caps
+    if (includeSearchFilter && searchQuery && searchQuery.trim()) {
+      // Soft client-side cap to avoid excessive URL size; server will enforce harder limits
+      const sq = searchQuery.trim();
+      proxyUrl.searchParams.set('filter', sq.length > 600 ? sq.slice(0, 600) : sq);
     }
     // Optional ts range
     const parseLocalInput = (v: string) => {
@@ -551,7 +566,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       proxyUrl.searchParams.append('authValue', authValue);
     }
     return proxyUrl.toString();
-  };
+  }, [endpointPath, action, username, account, ip, rawSql, pageSize, page, authFilter, tsStart, tsEnd, tsTimeZone, searchQuery]);
 
   const parseHookResult = (input: any): Row[] => {
     try {
@@ -574,15 +589,18 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   };
 
 
-  const runQuery = useCallback(async (force: boolean = false) => {
+  const runQuery = useCallback(async (force: boolean = false, opts?: { keepPage?: boolean }) => {
     // Guard: raw_sql should only execute on explicit Run click
     if (action === 'raw_sql' && !force) {
       return; // do not auto-run or refresh-trigger raw SQL
     }
     setLoading(true);
     setError('');
-    setRows([]);
-    setPage(1);
+    // Keep previous rows during loading to avoid flicker and preserve map data
+    if (!opts?.keepPage) setPage(1);
+    // Prepare request-scoped variables accessible from finally
+    let controller: AbortController | null = null;
+    let reqId = 0;
     try {
       if (!hookEnabled) {
         setError('Hook is disabled. Enable it in Hook Configuration.');
@@ -623,13 +641,25 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         return;
       }
       const url = buildHookUrl(conn);
-      const resp = await authenticatedFetch(url, { method: 'POST' });
-      if (!resp.ok) {
-        const msg = await extractErrorMessage(resp);
+      // Abort any in-flight request and start a new one for this run
+      try { queryAbortRef.current?.abort(); } catch {}
+      controller = new AbortController();
+      queryAbortRef.current = controller;
+      reqId = ++lastReqIdRef.current;
+      const UI_TIMEOUT_MS = 120_000; // 120s
+      const timer = setTimeout(() => controller.abort(), UI_TIMEOUT_MS);
+      let resp: Response | null = null;
+      try {
+        resp = await authenticatedFetch(url, { method: 'POST', signal: controller.signal });
+      } finally {
+        clearTimeout(timer);
+      }
+      if (!resp || !resp.ok) {
+        const msg = await extractErrorMessage(resp as Response);
         setError(msg);
         return;
       }
-      const resJson = await resp.json();
+      const resJson = await (resp as Response).json();
       if (resJson?.status !== 'success' || !resJson?.clickhouse) {
         setError(resJson?.message || 'Hook returned no data');
         return;
@@ -653,6 +683,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         setError('Hook returned no data');
         return;
       }
+      // Ignore if a newer request has started
+      if (reqId !== lastReqIdRef.current) return;
       // Store full preview and apply current limit for display
       setRawPreviewFull(preview);
       setRawPreview(applyPreviewLimit(preview, rawJsonMaxBytes));
@@ -692,15 +724,31 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
       } catch {}
     } catch (e:any) {
-      setError(e?.message || String(e));
+      if (e?.name === 'AbortError') {
+        // ignore aborts
+      } else {
+        setError(e?.message || String(e));
+      }
     } finally {
-      setLoading(false);
+      // Only clear loading if this is the latest request
+      if (!controller) {
+        // No request was started (validation/early return) — clear loading
+        setLoading(false);
+      } else if (queryAbortRef.current === null || controller === queryAbortRef.current) {
+        if (lastReqIdRef.current === reqId) {
+          setLoading(false);
+          if (queryAbortRef.current === controller) {
+            queryAbortRef.current = null;
+          }
+        }
+      }
     }
-  }, [getConnection, endpointPath, action, username, account, ip, limit, hookEnabled, rawSql, tsStart, tsEnd, authFilter]);
+  }, [getConnection, endpointPath, action, username, account, ip, pageSize, hookEnabled, rawSql, tsStart, tsEnd, authFilter, buildHookUrl, searchQuery]);
 
   // Auto-refresh interval like Security page (default 30s)
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
-  const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(runQuery, REFRESH_SESSION_KEY, 0);
+  const refreshRunner = useCallback(() => { return runQuery(true, { keepPage: true }); }, [runQuery]);
+  const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(refreshRunner, REFRESH_SESSION_KEY, 0);
 
   // Rows after server-side filters; keep reference for search/sort
   const filteredRows = useMemo(() => rows, [rows]);
@@ -722,6 +770,54 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return null;
     };
 
+    // Limits/guards (mirror backend)
+    const FILTER_MAX_LEN = 600;
+    const FILTER_MAX_TOKENS = 200;
+    const REGEX_MAX_LEN = 256;
+    const MAX_NESTING = 16;
+
+    // Column type knowledge (mirror backend)
+    const TEXT_COLS = [
+      'session','service','features','client_ip','client_net','client_id',
+      'hostname','proto','user_agent','local_ip',
+      'display_name','account','account_field','unique_user_id','username','password_hash',
+      'pwnd_info','brute_force_bucket','oidc_cid',
+      'geoip_guid','geoip_country','geoip_iso_codes','geoip_status',
+      'dyn_threat','dyn_response','xssl_protocol','xssl_cipher','ssl_fingerprint','prot_reason'
+    ];
+    const BOOL_COL: Record<string, true> = { debug:true, repeating:true, user_found:true, authenticated:true, no_auth:true, prot_active:true, failed_login_recognized:true };
+    const NUM_COL: Record<string, true> = { client_port:true, local_port:true, brute_force_counter:true, failed_login_count:true, failed_login_rank:true, gp_attempts:true, gp_unique_ips:true, gp_unique_users:true, gp_ips_per_user:true, prot_backoff:true, prot_delay_ms:true };
+    const isAllowedKey = (k?: string) => !!(k && (BOOL_COL[k] || NUM_COL[k] || TEXT_COLS.includes(k)));
+
+    const ISO2 = new Set([
+      'AD','AE','AF','AG','AI','AL','AM','AO','AQ','AR','AS','AT','AU','AW','AX','AZ',
+      'BA','BB','BD','BE','BF','BG','BH','BI','BJ','BL','BM','BN','BO','BQ','BR','BS','BT','BV','BW','BY','BZ',
+      'CA','CC','CD','CF','CG','CH','CI','CK','CL','CM','CN','CO','CR','CU','CV','CW','CX','CY','CZ',
+      'DE','DJ','DK','DM','DO','DZ',
+      'EC','EE','EG','EH','ER','ES','ET',
+      'FI','FJ','FK','FM','FO','FR',
+      'GA','GB','GD','GE','GF','GG','GH','GI','GL','GM','GN','GP','GQ','GR','GS','GT','GU','GW','GY',
+      'HK','HM','HN','HR','HT','HU',
+      'ID','IE','IL','IM','IN','IO','IQ','IR','IS','IT',
+      'JE','JM','JO','JP',
+      'KE','KG','KH','KI','KM','KN','KP','KR','KW','KY','KZ',
+      'LA','LB','LC','LI','LK','LR','LS','LT','LU','LV','LY',
+      'MA','MC','MD','ME','MF','MG','MH','MK','ML','MM','MN','MO','MP','MQ','MR','MS','MT','MU','MV','MW','MX','MY','MZ',
+      'NA','NC','NE','NF','NG','NI','NL','NO','NP','NR','NU','NZ',
+      'OM',
+      'PA','PE','PF','PG','PH','PK','PL','PM','PN','PR','PS','PT','PW','PY',
+      'QA',
+      'RE','RO','RS','RU','RW',
+      'SA','SB','SC','SD','SE','SG','SH','SI','SJ','SK','SL','SM','SN','SO','SR','SS','ST','SV','SX','SY','SZ',
+      'TC','TD','TF','TG','TH','TJ','TK','TL','TM','TN','TO','TR','TT','TV','TW','TZ',
+      'UA','UG','UM','US','UY','UZ',
+      'VA','VC','VE','VG','VI','VN','VU',
+      'WF','WS',
+      'YE','YT',
+      'ZA','ZM','ZW',
+      'EU'
+    ]);
+
     const isCmpStart = (c: string) => c === '=' || c === '!' || c === '<' || c === '>';
 
     // Parse JS-like regex literal: /pattern/flags (supports escaped / as \/)
@@ -736,63 +832,65 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       }
       if (end <= 1) return null; // need at least one char for pattern
       const pattern = s.slice(1, end);
-      let flags = s.slice(end + 1);
+      if (pattern.length > REGEX_MAX_LEN) return null;
+      let flags = s.slice(end + 1).replace(/[^i]/g, '');
       try { return new RegExp(pattern, flags); } catch { return null; }
     };
 
     const tokenize = (input: string): Tok[] => {
       const out: Tok[] = [];
+      let tokenCount = 0;
+      let depth = 0;
       let i = 0;
-      const n = input.length;
+      const n = Math.min(input.length, FILTER_MAX_LEN);
+      const pushTok = (t: Tok) => { tokenCount++; if (tokenCount > FILTER_MAX_TOKENS) throw new Error('too many tokens'); out.push(t); };
       while (i < n) {
         const ch = input[i];
         if (/\s/.test(ch)) { i++; continue; }
-        if (ch === '(') { out.push({ t: 'LPAREN' }); i++; continue; }
-        if (ch === ')') { out.push({ t: 'RPAREN' }); i++; continue; }
+        if (ch === '(') { depth++; if (depth > MAX_NESTING) throw new Error('too deep'); pushTok({ t: 'LPAREN' }); i++; continue; }
+        if (ch === ')') { depth = Math.max(0, depth-1); pushTok({ t: 'RPAREN' }); i++; continue; }
         if (ch === '"' || ch === '\'') {
           const q = ch; i++;
           let buf = '';
           while (i < n && input[i] !== q) { buf += input[i++]; }
           if (i < n && input[i] === q) i++; // skip closing quote
-          // Keep even empty string tokens (e.g., "")
-          out.push({ t: 'WORD', v: buf });
+          pushTok({ t: 'WORD', v: buf });
           continue;
         }
         // Comparison operators by symbol: ==, !=, <=, >=, <, >, =
         if (isCmpStart(ch)) {
           const two = input.slice(i, i+2);
-          if (two === '==' || two === '!=' || two === '<=' || two === '>=') { out.push({ t: 'CMP', v: two }); i += 2; continue; }
-          if (ch === '<' || ch === '>' || ch === '=') { out.push({ t: 'CMP', v: ch }); i += 1; continue; }
+          if (two === '==' || two === '!=' || two === '<=' || two === '>=') { pushTok({ t: 'CMP', v: two }); i += 2; continue; }
+          if (ch === '<' || ch === '>' || ch === '=') { pushTok({ t: 'CMP', v: ch }); i += 1; continue; }
         }
         // Logical operators by symbol
         if (ch === '&' || ch === '|' || ch === '!') {
-          // try two-char first
           const two = input.slice(i, i+2);
           const op2 = normalizeOp(two);
-          if (op2) { out.push({ t: op2 }); i += 2; continue; }
+          if (op2) { pushTok({ t: op2 }); i += 2; continue; }
           const op1 = normalizeOp(ch);
-          if (op1) { out.push({ t: op1 }); i += 1; continue; }
+          if (op1) { pushTok({ t: op1 }); i += 1; continue; }
         }
         // Word or keyword
         let j = i;
         while (j < n && !/\s|\(|\)|&|\||!|"|'|=|<|>/.test(input[j])) j++;
         const word = input.slice(i, j);
         const op = normalizeOp(word);
-        if (op) out.push({ t: op });
-        else if (word.length) out.push({ t: 'WORD', v: word });
+        if (op) pushTok({ t: op });
+        else if (word.length) pushTok({ t: 'WORD', v: word });
         i = j;
       }
       return out;
     };
 
-    // Transform pattern: WORD(field) NOT WORD(value)  => WORD(field) WORD(value) CMP('!=')
+    // Transform shortcut: WORD(field) NOT WORD(valueOrRegex) => WORD(field) WORD(valueOrRegex) CMP('!=') if field is allowed
     const rewriteNotComparisons = (toks: Tok[]): Tok[] => {
       const out: Tok[] = [];
       for (let i = 0; i < toks.length; i++) {
         const a = toks[i];
         const b = toks[i+1];
         const c = toks[i+2];
-        if (a && b && c && a.t === 'WORD' && b.t === 'NOT' && c.t === 'WORD') {
+        if (a && b && c && a.t === 'WORD' && typeof a.v === 'string' && isAllowedKey(a.v) && b.t === 'NOT' && c.t === 'WORD') {
           out.push({ t: 'WORD', v: a.v });
           out.push({ t: 'WORD', v: c.v });
           out.push({ t: 'CMP', v: '!=' });
@@ -830,7 +928,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return out;
     };
 
-    let toks = tokenize(raw);
+    let toks: Tok[] = [];
+    try { toks = tokenize(raw); } catch { toks = []; }
     toks = rewriteNotComparisons(toks);
     let rpn: Tok[] = [];
     try { rpn = toRpn(toks); } catch { rpn = []; }
@@ -862,57 +961,78 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return Number.isFinite(t) ? t : null;
     };
 
-    const compare = (l: any, r: any, op: string): boolean => {
-      // Regex compare: only for equality/inequality, test against raw string
-      if (r instanceof RegExp) {
-        const lsRaw = l == null ? '' : String(l);
-        if (op === '==' || op === '=') return r.test(lsRaw);
-        if (op === '!=') return !r.test(lsRaw);
-        // Other operators not supported for regex
-        return false;
+    const compareField = (row: any, key: string, op: string, rhs: any): boolean => {
+      if (!isAllowedKey(key)) return true; // neutral like server
+      const val = row?.[key];
+      if (BOOL_COL[key]) {
+        const toBool = (x: any): boolean | null => {
+          if (typeof x === 'boolean') return x;
+          if (x === 1 || x === '1' || (typeof x === 'string' && x.toLowerCase() === 'true')) return true;
+          if (x === 0 || x === '0' || (typeof x === 'string' && x.toLowerCase() === 'false')) return false;
+          return null;
+        };
+        const lv = toBool(val); const rv = toBool(rhs);
+        if (lv == null || rv == null) return true;
+        if (op === '==') return lv === rv;
+        if (op === '!=') return lv !== rv;
+        return true;
       }
-      // Try numeric/date compare if both side parse
-      const ln = toFiniteNumber(l);
-      const rn = toFiniteNumber(r);
-      if (ln !== null && rn !== null) {
-        if (op === '==' || op === '=') return ln === rn;
+      if (NUM_COL[key]) {
+        const ln = Number(val); const rn = Number(rhs);
+        if (!Number.isFinite(ln) || !Number.isFinite(rn)) return true;
+        if (op === '==') return ln === rn;
         if (op === '!=') return ln !== rn;
         if (op === '<') return ln < rn;
         if (op === '>') return ln > rn;
         if (op === '<=') return ln <= rn;
         if (op === '>=') return ln >= rn;
+        return true;
       }
-      const ls = (l == null ? '' : String(l)).toLowerCase();
-      const rs = (r == null ? '' : String(r)).toLowerCase();
-      if (op === '==' || op === '=') return ls === rs;
+      // text
+      if (rhs instanceof RegExp) {
+        const s = val == null ? '' : String(val);
+        if (op === '==') return rhs.test(s);
+        if (op === '!=') return !rhs.test(s);
+        return true;
+      }
+      const ls = val == null ? '' : String(val);
+      const rs = rhs == null ? '' : String(rhs);
+      if (op === '==') return ls === rs; // case-sensitive like server
       if (op === '!=') return ls !== rs;
-      if (op === '<') return ls < rs;
-      if (op === '>') return ls > rs;
-      if (op === '<=') return ls <= rs;
-      if (op === '>=') return ls >= rs;
-      return false;
+      return true;
+    };
+
+    const termMatches = (row: any, term: any, keys: string[]): boolean => {
+      const keysText = keys;
+      if (term instanceof RegExp) {
+        return keysText.some(k => term.test(String(row?.[k] ?? '')));
+      }
+      const rawTerm = String(term || '');
+      if (rawTerm.length === 2 && ISO2.has(rawTerm.toUpperCase())) {
+        const up = rawTerm.toUpperCase();
+        const country = String(row?.geoip_country ?? '').toUpperCase();
+        const codes = String(row?.geoip_iso_codes ?? '').toUpperCase();
+        return country === up || codes.includes(up);
+      }
+      const q = rawTerm.toLowerCase();
+      return keysText.some(k => String(row?.[k] ?? '').toLowerCase().includes(q));
     };
 
     return filteredRows.filter((row) => {
-      const keys = hasSelection ? selectedFields : Object.keys(row || {});
-      // Build both raw and lowercased strings for matching
-      const textRaw = keys.map(k => {
-        const v = (row as any)?.[k];
-        return v === null || v === undefined ? '' : String(v);
-      }).join(' ');
-      const text = textRaw.toLowerCase();
+      const keysText = (hasSelection ? (selectedFields as string[]) : TEXT_COLS).filter(k => TEXT_COLS.includes(k));
 
       if (!rpn.length) {
-        const q = raw.toLowerCase();
-        return text.includes(q);
+        const q = raw.trim();
+        if (!q) return true;
+        const maybeRe = parseRegexLiteral(q);
+        const term = maybeRe || q;
+        return termMatches(row, term, keysText);
       }
 
       const st: any[] = [];
       const asBool = (val: any): boolean => {
         if (typeof val === 'boolean') return val;
-        if (val instanceof RegExp) return val.test(textRaw);
-        const term = String(val ?? '').toLowerCase();
-        return term ? text.includes(term) : true;
+        return termMatches(row, val, keysText);
       };
       for (const tk of rpn) {
         if (tk.t === 'WORD') {
@@ -929,9 +1049,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           const rightRaw = st.pop();
           const leftRaw = st.pop();
           const field = String(leftRaw || '');
-          const rowVal = (row as any)?.[field];
           const value = (rightRaw instanceof RegExp) ? rightRaw : parseLiteral(String(rightRaw ?? ''));
-          st.push(compare(rowVal, value, tk.v || '=='));
+          st.push(compareField(row, field, tk.v || '==', value));
         }
       }
 
@@ -995,8 +1114,23 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Aggregate countries for top 100; split success/failed by authenticated flag
   const countryAgg = useMemo(() => {
     const map = new Map<string, { success: number; failed: number }>();
+    const pickCountry = (r: Row): string => {
+      // Prefer explicit country label; otherwise fall back to ISO codes list
+      const raw = (r.geoip_country || r.geoip_iso_codes || '').toString();
+      let c = raw.trim();
+      if (!c) return 'XX';
+      // Split multi-values and pick the first plausible token
+      const toks = c.split(/[\s,;|\/]+/).filter(Boolean);
+      if (toks.length > 1) {
+        const two = toks.find(t => /^[A-Za-z]{2}$/.test(t));
+        c = two || toks[0];
+      }
+      // Normalize simple 2-letter iso
+      if (/^[A-Za-z]{2}$/.test(c)) c = c.toUpperCase();
+      return c || 'XX';
+    };
     for (const r of filteredRows) {
-      const c = (r.geoip_country || '').toString() || 'XX';
+      const c = pickCountry(r);
       const succ = Boolean(r.authenticated === true);
       const cur = map.get(c) || { success: 0, failed: 0 };
       if (succ) cur.success += 1; else cur.failed += 1;
@@ -1008,9 +1142,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   }, [filteredRows]);
 
   const pagedRows = useMemo(() => {
-    const start = (page-1)*pageSize;
-    return sortedRows.slice(start, start+pageSize);
-  }, [sortedRows, page, pageSize]);
+    return sortedRows;
+  }, [sortedRows]);
+
+
+  // When navigating pages, always request the new page from server
+  useEffect(() => {
+    void runQuery(true, { keepPage: true });
+  }, [page, runQuery]);
 
   const formatTsForZone = useCallback((val: any, tz: string): string => {
     if (val == null) return '';
@@ -1057,9 +1196,129 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [exportScope, setExportScope] = useState<'page' | 'filtered' | 'all'>('filtered');
   const [csvDelimiter, setCsvDelimiter] = useState<string>(',');
   const [csvWithHeader, setCsvWithHeader] = useState<boolean>(true);
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [exportProgress, setExportProgress] = useState<{ pages: number; rows: number }>({ pages: 0, rows: 0 });
 
   // Analysis dialog state
   const [analysisOpen, setAnalysisOpen] = useState(false);
+  const [analysisRows, setAnalysisRows] = useState<Row[]>([]);
+  const [analysisLoading, setAnalysisLoading] = useState<boolean>(false);
+  const [analysisProgress, setAnalysisProgress] = useState<{ pages: number; rows: number }>({ pages: 0, rows: 0 });
+  const analysisAbortRef = useRef<AbortController | null>(null);
+
+  // Fixed chunk sizes for background paging (independent from UI limit)
+  const ANALYSIS_CHUNK_DEFAULT = 10000;
+  const EXPORT_CHUNK_DEFAULT = 10000;
+
+  // Safety caps for background operations
+  const MAX_ANALYSIS_ROWS = 500000;
+  const MAX_EXPORT_ROWS = 500000;
+
+  // Reset analysis cache when query parameters change
+  useEffect(() => {
+    setAnalysisRows([]);
+    setAnalysisProgress({ pages: 0, rows: 0 });
+    if (analysisLoading && analysisAbortRef.current) {
+      try { analysisAbortRef.current.abort(); } catch {}
+    }
+  }, [action, username, account, ip, authFilter, tsStart, tsEnd, rawSql, limit]);
+
+  // Background loader to fetch all pages for analysis
+  const loadAllForAnalysis = useCallback(async () => {
+    if (analysisLoading) return;
+    try {
+      setAnalysisLoading(true);
+      setAnalysisRows([]);
+      setAnalysisProgress({ pages: 0, rows: 0 });
+
+      const conn = getConnection();
+      if (!conn?.backend_url) {
+        setError('No backend URL configured (Runtime → Connection).');
+        setAnalysisLoading(false);
+        return;
+      }
+
+      const controller = new AbortController();
+      analysisAbortRef.current = controller;
+
+      const chunkSize = ANALYSIS_CHUNK_DEFAULT; // fixed chunk size for analysis
+      const targetTotal = Math.min((Number(limit) > 0 ? Number(limit) : MAX_ANALYSIS_ROWS), MAX_ANALYSIS_ROWS);
+
+      let offsetLocal = 0;
+      let totalRows = 0;
+      let pageCount = 0;
+
+      for (;;) {
+        const remaining = targetTotal - totalRows;
+        if (remaining <= 0) break;
+        const perReqLimit = Math.min(chunkSize, remaining);
+
+        const url = buildHookUrl(conn, offsetLocal, perReqLimit);
+        const resp = await authenticatedFetch(url, { method: 'POST', signal: controller.signal });
+        if (!resp.ok) {
+          const msg = await extractErrorMessage(resp);
+          setError(msg);
+          break;
+        }
+        const resJson = await resp.json();
+        if (resJson?.status !== 'success' || !resJson?.clickhouse) {
+          setError(resJson?.message || 'Hook returned no data');
+          break;
+        }
+        const ch = resJson.clickhouse;
+        let pageRows: Row[] = [];
+        if (ch.query_result && typeof ch.query_result === 'object') {
+          pageRows = parseHookResult(ch.query_result);
+        } else if (typeof ch.raw === 'string') {
+          pageRows = parseHookResult(ch.raw);
+        }
+        if (!Array.isArray(pageRows)) pageRows = [];
+
+        // Respect targetTotal by slicing the last page if necessary
+        let toAppend = pageRows;
+        if (toAppend.length > remaining) toAppend = toAppend.slice(0, remaining);
+
+        if (toAppend.length) {
+          setAnalysisRows(prev => prev.concat(toAppend));
+        }
+        totalRows += toAppend.length;
+        pageCount += 1;
+        setAnalysisProgress({ pages: pageCount, rows: totalRows });
+
+        // Stop if last page or target reached
+        if (pageRows.length < perReqLimit || totalRows >= targetTotal) {
+          break;
+        }
+
+        offsetLocal += perReqLimit;
+      }
+    } catch (e: any) {
+      if (e?.name === 'AbortError') {
+        // cancelled by user
+      } else {
+        console.error('Analysis loading failed', e);
+        setError('Analysis loading failed: ' + (e?.message || String(e)));
+      }
+    } finally {
+      setAnalysisLoading(false);
+      analysisAbortRef.current = null;
+    }
+  }, [limit, action, username, account, ip, authFilter, tsStart, tsEnd, rawSql]);
+
+  const cancelAnalysisLoad = useCallback(() => {
+    if (analysisAbortRef.current) {
+      try { analysisAbortRef.current.abort(); } catch {}
+    }
+  }, []);
+
+  // Auto-start analysis loading when dialog opens, and cancel when it closes
+  useEffect(() => {
+    if (analysisOpen) {
+      void loadAllForAnalysis();
+      return () => { cancelAnalysisLoad(); };
+    }
+    return;
+  }, [analysisOpen, loadAllForAnalysis, cancelAnalysisLoad]);
 
   // Helper: determine available fields for export (mirrors table display)
   const availableExportFields = useMemo(() => {
@@ -1125,21 +1384,131 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return sortedRows; // all loaded rows (sorted)
   };
 
-  const performExport = () => {
-    const data = resolveExportData();
-    const fields = exportFields && exportFields.length ? exportFields : availableExportFields;
-    const ts = nowForName();
-    if (exportFormat === 'csv') {
-      const csv = rowsToCsv(data, fields, csvDelimiter, csvWithHeader);
-      // Prepend BOM to make Excel recognize UTF-8
-      const BOM = new Uint8Array([0xEF, 0xBB, 0xBF]);
-      const out = new Blob([BOM, csv], { type: 'text/csv;charset=utf-8' });
-      downloadBlob(out, 'text/csv;charset=utf-8', `clickhouse-results-${ts}.csv`);
-    } else {
-      const json = rowsToJson(data, fields);
-      downloadBlob(json, 'application/json;charset=utf-8', `clickhouse-results-${ts}.json`);
+  const fetchAllFilteredDatasetRows = async (): Promise<Row[]> => {
+    const conn = getConnection();
+    if (!conn?.backend_url) throw new Error('No backend URL configured (Runtime → Connection).');
+
+    const chunkSize = EXPORT_CHUNK_DEFAULT; // fixed chunk size for export
+    const targetTotal = Math.min((Number(limit) > 0 ? Number(limit) : MAX_EXPORT_ROWS), MAX_EXPORT_ROWS);
+
+    let offsetLocal = 0;
+    let totalRows = 0;
+    let pageCount = 0;
+    const all: Row[] = [];
+
+    for (;;) {
+      const remaining = targetTotal - totalRows;
+      if (remaining <= 0) break;
+      const perReqLimit = Math.min(chunkSize, remaining);
+
+      const url = buildHookUrl(conn, offsetLocal, perReqLimit, true);
+      const resp = await authenticatedFetch(url, { method: 'POST' });
+      if (!resp.ok) throw new Error(await extractErrorMessage(resp));
+      const resJson = await resp.json();
+      if (resJson?.status !== 'success' || !resJson?.clickhouse) throw new Error(resJson?.message || 'Hook returned no data');
+      const ch = resJson.clickhouse;
+      let pageRows: Row[] = [];
+      if (ch.query_result && typeof ch.query_result === 'object') {
+        pageRows = parseHookResult(ch.query_result);
+      } else if (typeof ch.raw === 'string') {
+        pageRows = parseHookResult(ch.raw);
+      }
+      if (!Array.isArray(pageRows)) pageRows = [];
+
+      // Respect targetTotal by slicing the last page if necessary
+      let toAppend = pageRows;
+      if (toAppend.length > remaining) toAppend = toAppend.slice(0, remaining);
+      if (toAppend.length) all.push(...toAppend);
+
+      totalRows += toAppend.length;
+      pageCount += 1;
+      setExportProgress({ pages: pageCount, rows: totalRows });
+
+      if (pageRows.length < perReqLimit || totalRows >= targetTotal) break;
+      offsetLocal += perReqLimit;
     }
-    setExportOpen(false);
+
+    return all;
+  };
+
+  const fetchAllDatasetRowsNoFilter = async (): Promise<Row[]> => {
+    const conn = getConnection();
+    if (!conn?.backend_url) throw new Error('No backend URL configured (Runtime → Connection).');
+
+    const chunkSize = EXPORT_CHUNK_DEFAULT; // fixed chunk size for export
+    const targetTotal = Math.min((Number(limit) > 0 ? Number(limit) : MAX_EXPORT_ROWS), MAX_EXPORT_ROWS);
+
+    let offsetLocal = 0;
+    let totalRows = 0;
+    let pageCount = 0;
+    const all: Row[] = [];
+
+    for (;;) {
+      const remaining = targetTotal - totalRows;
+      if (remaining <= 0) break;
+      const perReqLimit = Math.min(chunkSize, remaining);
+
+      const url = buildHookUrl(conn, offsetLocal, perReqLimit, false);
+      const resp = await authenticatedFetch(url, { method: 'POST' });
+      if (!resp.ok) throw new Error(await extractErrorMessage(resp));
+      const resJson = await resp.json();
+      if (resJson?.status !== 'success' || !resJson?.clickhouse) throw new Error(resJson?.message || 'Hook returned no data');
+      const ch = resJson.clickhouse;
+      let pageRows: Row[] = [];
+      if (ch.query_result && typeof ch.query_result === 'object') {
+        pageRows = parseHookResult(ch.query_result);
+      } else if (typeof ch.raw === 'string') {
+        pageRows = parseHookResult(ch.raw);
+      }
+      if (!Array.isArray(pageRows)) pageRows = [];
+
+      // Respect targetTotal by slicing the last page if necessary
+      let toAppend = pageRows;
+      if (toAppend.length > remaining) toAppend = toAppend.slice(0, remaining);
+      if (toAppend.length) all.push(...toAppend);
+
+      totalRows += toAppend.length;
+      pageCount += 1;
+      setExportProgress({ pages: pageCount, rows: totalRows });
+
+      if (pageRows.length < perReqLimit || totalRows >= targetTotal) break;
+      offsetLocal += perReqLimit;
+    }
+
+    return all;
+  };
+
+  const performExport = async () => {
+    try {
+      setExporting(true);
+      setExportProgress({ pages: 0, rows: 0 });
+      let data: Row[];
+      if (exportScope === 'page') {
+        data = resolveExportData();
+      } else if (exportScope === 'filtered') {
+        data = await fetchAllFilteredDatasetRows();
+      } else { // 'all'
+        data = await fetchAllDatasetRowsNoFilter();
+      }
+      const fields = exportFields && exportFields.length ? exportFields : availableExportFields;
+      const ts = nowForName();
+      if (exportFormat === 'csv') {
+        const csv = rowsToCsv(data, fields, csvDelimiter, csvWithHeader);
+        // Prepend BOM to make Excel recognize UTF-8
+        const BOM = new Uint8Array([0xEF, 0xBB, 0xBF]);
+        const out = new Blob([BOM, csv], { type: 'text/csv;charset=utf-8' });
+        downloadBlob(out, 'text/csv;charset=utf-8', `clickhouse-results-${ts}.csv`);
+      } else {
+        const json = rowsToJson(data, fields);
+        downloadBlob(json, 'application/json;charset=utf-8', `clickhouse-results-${ts}.json`);
+      }
+      setExportOpen(false);
+    } catch (e: any) {
+      console.error('Export failed', e);
+      setNotif({ open: true, severity: 'error', message: 'Export failed: ' + (e?.message || String(e)) });
+    } finally {
+      setExporting(false);
+    }
   };
 
   // Reset to first page when filter or sort changes
@@ -1147,10 +1516,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     setPage(1);
   }, [authFilter, sortBy, sortDir]);
 
-  // Reset to first page when search changes
+  // Clamp current page when server limit or page size changes
   useEffect(() => {
-    setPage(1);
-  }, [searchQuery]);
+    const totalPages = Math.max(1, Math.ceil(Math.max(1, Number(limit)) / Math.max(1, pageSize)));
+    setPage(p => Math.min(p, totalPages));
+  }, [limit, pageSize]);
+
 
   // When availableFields arrive and no selection yet, pick sensible defaults
   useEffect(() => {
@@ -1239,6 +1610,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     IL: { lon: 35, lat: 31.5, aliases: ['Israel','IL'] },
     SA: { lon: 45, lat: 24, aliases: ['Saudi Arabia','SA'] },
     AE: { lon: 54, lat: 24, aliases: ['United Arab Emirates','UAE','AE'] },
+    IR: { lon: 53, lat: 32, aliases: ['Iran','IR','Islamic Republic of Iran'] },
     IN: { lon: 78, lat: 22, aliases: ['India','IN'] },
     PK: { lon: 70, lat: 30, aliases: ['Pakistan','PK'] },
     CN: { lon: 104, lat: 35, aliases: ['China','CN','PRC'] },
@@ -1254,14 +1626,163 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     MA: { lon: -6, lat: 32, aliases: ['Morocco','MA'] },
     TN: { lon: 10, lat: 34, aliases: ['Tunisia','TN'] },
     DZ: { lon: 2.6, lat: 28, aliases: ['Algeria','DZ'] },
+    LY: { lon: 17, lat: 27, aliases: ['Libya','LY'] },
+    IQ: { lon: 43, lat: 33, aliases: ['Iraq','IQ'] },
+    SY: { lon: 38, lat: 35, aliases: ['Syria','SY','Syrian Arab Republic'] },
+    JO: { lon: 36, lat: 31, aliases: ['Jordan','JO'] },
+    LB: { lon: 35.8, lat: 33.9, aliases: ['Lebanon','LB'] },
+    OM: { lon: 57, lat: 21, aliases: ['Oman','OM'] },
+    QA: { lon: 51.2, lat: 25.3, aliases: ['Qatar','QA'] },
+    KW: { lon: 47.6, lat: 29.3, aliases: ['Kuwait','KW'] },
+    BH: { lon: 50.55, lat: 26.02, aliases: ['Bahrain','BH'] },
+    YE: { lon: 48, lat: 15.6, aliases: ['Yemen','YE'] },
+    AF: { lon: 66, lat: 34.5, aliases: ['Afghanistan','AF'] },
+    BD: { lon: 90, lat: 23.7, aliases: ['Bangladesh','BD'] },
+    LK: { lon: 80.7, lat: 7.8, aliases: ['Sri Lanka','LK'] },
+    NP: { lon: 84, lat: 28, aliases: ['Nepal','NP'] },
+    BT: { lon: 90.4, lat: 27.4, aliases: ['Bhutan','BT'] },
+    TH: { lon: 100.5, lat: 15.9, aliases: ['Thailand','TH'] },
+    VN: { lon: 108.3, lat: 14.1, aliases: ['Vietnam','VN','Viet Nam'] },
+    PH: { lon: 122, lat: 12, aliases: ['Philippines','PH'] },
+    MY: { lon: 102, lat: 4.2, aliases: ['Malaysia','MY'] },
+    SG: { lon: 103.8, lat: 1.35, aliases: ['Singapore','SG'] },
+    KH: { lon: 104.9, lat: 12.7, aliases: ['Cambodia','KH'] },
+    LA: { lon: 102.6, lat: 19.9, aliases: ['Laos','LA','Lao PDR'] },
+    MM: { lon: 96, lat: 21, aliases: ['Myanmar','MM','Burma'] },
+    KZ: { lon: 68, lat: 48, aliases: ['Kazakhstan','KZ'] },
+    UZ: { lon: 64.6, lat: 41.8, aliases: ['Uzbekistan','UZ'] },
+    TM: { lon: 59.4, lat: 39.1, aliases: ['Turkmenistan','TM'] },
+    TJ: { lon: 71, lat: 38.5, aliases: ['Tajikistan','TJ'] },
+    KG: { lon: 75, lat: 41.2, aliases: ['Kyrgyzstan','KG'] },
+    AZ: { lon: 47.5, lat: 40.4, aliases: ['Azerbaijan','AZ'] },
+    AM: { lon: 45, lat: 40.2, aliases: ['Armenia','AM'] },
+    GE: { lon: 43.4, lat: 42.1, aliases: ['Georgia','GE'] },
+    MN: { lon: 103.8, lat: 46.9, aliases: ['Mongolia','MN'] },
+    HK: { lon: 114.15, lat: 22.29, aliases: ['Hong Kong','HK','Hong Kong SAR'] },
+    MO: { lon: 113.54, lat: 22.2, aliases: ['Macao','MO','Macau'] },
+    TW: { lon: 120.97, lat: 23.97, aliases: ['Taiwan','TW','Chinese Taipei'] },
+    PS: { lon: 35.2, lat: 31.9, aliases: ['Palestine','PS','State of Palestine','Palestinian Territory'] },
+    
+    SK: { lon: 19.5, lat: 48.7, aliases: ['Slovakia','SK'] },
+    SI: { lon: 14.9, lat: 46.1, aliases: ['Slovenia','SI'] },
+    HR: { lon: 16.4, lat: 45.1, aliases: ['Croatia','HR'] },
+    RS: { lon: 20.9, lat: 44.2, aliases: ['Serbia','RS'] },
+    BG: { lon: 25.5, lat: 42.7, aliases: ['Bulgaria','BG'] },
+    BY: { lon: 28, lat: 53.7, aliases: ['Belarus','BY'] },
+    LT: { lon: 23.9, lat: 55.2, aliases: ['Lithuania','LT'] },
+    LV: { lon: 24.9, lat: 56.8, aliases: ['Latvia','LV'] },
+    EE: { lon: 25.0, lat: 58.6, aliases: ['Estonia','EE'] },
+    IS: { lon: -19, lat: 64.9, aliases: ['Iceland','IS'] },
+    LU: { lon: 6.1, lat: 49.8, aliases: ['Luxembourg','LU'] },
+    LI: { lon: 9.55, lat: 47.17, aliases: ['Liechtenstein','LI'] },
+    MT: { lon: 14.4, lat: 35.9, aliases: ['Malta','MT'] },
+    CY: { lon: 33.4, lat: 35.1, aliases: ['Cyprus','CY'] },
+    BA: { lon: 17.8, lat: 44.2, aliases: ['Bosnia and Herzegovina','BA'] },
+    MK: { lon: 21.7, lat: 41.6, aliases: ['North Macedonia','MK','Macedonia'] },
+    AL: { lon: 20, lat: 41, aliases: ['Albania','AL'] },
+    ME: { lon: 19.3, lat: 42.8, aliases: ['Montenegro','ME'] },
+    MD: { lon: 28.4, lat: 47, aliases: ['Moldova','MD','Republic of Moldova'] },
+    SM: { lon: 12.45, lat: 43.94, aliases: ['San Marino','SM'] },
+    MC: { lon: 7.42, lat: 43.74, aliases: ['Monaco','MC'] },
+    AD: { lon: 1.6, lat: 42.55, aliases: ['Andorra','AD'] },
+    
+    PE: { lon: -75, lat: -9.2, aliases: ['Peru','PE'] },
+    EC: { lon: -78, lat: -1.4, aliases: ['Ecuador','EC'] },
+    BO: { lon: -64.7, lat: -16.7, aliases: ['Bolivia','BO','Bolivia (Plurinational State of)'] },
+    PY: { lon: -58.4, lat: -23.4, aliases: ['Paraguay','PY'] },
+    UY: { lon: -56, lat: -32.8, aliases: ['Uruguay','UY'] },
+    SR: { lon: -56, lat: 4.1, aliases: ['Suriname','SR'] },
+    GY: { lon: -58.9, lat: 4.9, aliases: ['Guyana','GY'] },
+    DO: { lon: -70.2, lat: 18.9, aliases: ['Dominican Republic','DO'] },
+    HT: { lon: -72.3, lat: 18.9, aliases: ['Haiti','HT'] },
+    CU: { lon: -79.5, lat: 21.5, aliases: ['Cuba','CU'] },
+    JM: { lon: -77.3, lat: 18.1, aliases: ['Jamaica','JM'] },
+    TT: { lon: -61.2, lat: 10.5, aliases: ['Trinidad and Tobago','TT'] },
+    BS: { lon: -77.4, lat: 25.0, aliases: ['Bahamas','BS'] },
+    BB: { lon: -59.5, lat: 13.2, aliases: ['Barbados','BB'] },
+    BZ: { lon: -88.7, lat: 17.2, aliases: ['Belize','BZ'] },
+    CR: { lon: -84, lat: 9.9, aliases: ['Costa Rica','CR'] },
+    PA: { lon: -80, lat: 8.5, aliases: ['Panama','PA'] },
+    GT: { lon: -90.4, lat: 15.7, aliases: ['Guatemala','GT'] },
+    HN: { lon: -86.6, lat: 14.8, aliases: ['Honduras','HN'] },
+    SV: { lon: -88.9, lat: 13.8, aliases: ['El Salvador','SV'] },
+    NI: { lon: -85.1, lat: 12.8, aliases: ['Nicaragua','NI'] },
+    
+    ET: { lon: 40.5, lat: 9.1, aliases: ['Ethiopia','ET'] },
+    SD: { lon: 30.2, lat: 13.6, aliases: ['Sudan','SD'] },
+    SS: { lon: 31.3, lat: 6.9, aliases: ['South Sudan','SS'] },
+    UG: { lon: 32.3, lat: 1.37, aliases: ['Uganda','UG'] },
+    TZ: { lon: 34.8, lat: -6.3, aliases: ['Tanzania','TZ','United Republic of Tanzania'] },
+    RW: { lon: 29.9, lat: -1.9, aliases: ['Rwanda','RW'] },
+    BI: { lon: 29.9, lat: -3.4, aliases: ['Burundi','BI'] },
+    SO: { lon: 46.2, lat: 5.0, aliases: ['Somalia','SO'] },
+    DJ: { lon: 42.6, lat: 11.8, aliases: ['Djibouti','DJ'] },
+    ER: { lon: 39.8, lat: 15.1, aliases: ['Eritrea','ER'] },
+    GH: { lon: -1.2, lat: 7.95, aliases: ['Ghana','GH'] },
+    CI: { lon: -5.55, lat: 7.54, aliases: ['Cote dIvoire','CI','Ivory Coast'] },
+    SN: { lon: -14.5, lat: 14.5, aliases: ['Senegal','SN'] },
+    ML: { lon: -3.5, lat: 17.5, aliases: ['Mali','ML'] },
+    BF: { lon: -1.5, lat: 12.3, aliases: ['Burkina Faso','BF'] },
+    NE: { lon: 9.4, lat: 17.6, aliases: ['Niger','NE'] },
+    TD: { lon: 18.7, lat: 15.5, aliases: ['Chad','TD'] },
+    CF: { lon: 20.5, lat: 6.6, aliases: ['Central African Republic','CF'] },
+    CM: { lon: 12.7, lat: 5.7, aliases: ['Cameroon','CM'] },
+    GQ: { lon: 10.5, lat: 1.6, aliases: ['Equatorial Guinea','GQ'] },
+    GA: { lon: 11.7, lat: -0.6, aliases: ['Gabon','GA'] },
+    CG: { lon: 15.0, lat: -0.7, aliases: ['Congo','CG','Republic of the Congo'] },
+    CD: { lon: 23.7, lat: -2.8, aliases: ['DR Congo','CD','Democratic Republic of the Congo'] },
+    AO: { lon: 17.9, lat: -12.3, aliases: ['Angola','AO'] },
+    ZM: { lon: 28.3, lat: -13.1, aliases: ['Zambia','ZM'] },
+    ZW: { lon: 29.8, lat: -19, aliases: ['Zimbabwe','ZW'] },
+    NA: { lon: 17.2, lat: -22.6, aliases: ['Namibia','NA'] },
+    BW: { lon: 24.7, lat: -22, aliases: ['Botswana','BW'] },
+    LS: { lon: 28.2, lat: -29.5, aliases: ['Lesotho','LS'] },
+    SZ: { lon: 31.5, lat: -26.5, aliases: ['Eswatini','SZ','Swaziland'] },
+    MW: { lon: 34.3, lat: -13.5, aliases: ['Malawi','MW'] },
+    MZ: { lon: 35.5, lat: -18.7, aliases: ['Mozambique','MZ'] },
+    MG: { lon: 46.7, lat: -19.4, aliases: ['Madagascar','MG'] },
+    MR: { lon: -10.3, lat: 20.3, aliases: ['Mauritania','MR'] },
+    GN: { lon: -9.7, lat: 9.9, aliases: ['Guinea','GN'] },
+    SL: { lon: -11.8, lat: 8.5, aliases: ['Sierra Leone','SL'] },
+    LR: { lon: -9.4, lat: 6.4, aliases: ['Liberia','LR'] },
+    BJ: { lon: 2.3, lat: 9.3, aliases: ['Benin','BJ'] },
+    TG: { lon: 1.2, lat: 8.6, aliases: ['Togo','TG'] },
+    GM: { lon: -15.4, lat: 13.5, aliases: ['Gambia','GM','The Gambia'] },
+    GW: { lon: -15.2, lat: 12.0, aliases: ['Guinea-Bissau','GW'] },
+    CV: { lon: -23.6, lat: 15.1, aliases: ['Cabo Verde','CV','Cape Verde'] },
+    ST: { lon: 6.73, lat: 0.18, aliases: ['Sao Tome and Principe','ST'] },
+    SC: { lon: 55.45, lat: -4.68, aliases: ['Seychelles','SC'] },
+    MU: { lon: 57.55, lat: -20.3, aliases: ['Mauritius','MU'] },
+    KM: { lon: 43.3, lat: -11.7, aliases: ['Comoros','KM'] },
+    EH: { lon: -12.9, lat: 24.2, aliases: ['Western Sahara','EH'] },
+    
+    PG: { lon: 147, lat: -6.3, aliases: ['Papua New Guinea','PG'] },
+    FJ: { lon: 178, lat: -17.8, aliases: ['Fiji','FJ'] },
+    SB: { lon: 160, lat: -9.6, aliases: ['Solomon Islands','SB'] },
+    VU: { lon: 167, lat: -16.2, aliases: ['Vanuatu','VU'] },
+    WS: { lon: -172, lat: -13.8, aliases: ['Samoa','WS'] },
+    TO: { lon: -175.2, lat: -21.2, aliases: ['Tonga','TO'] },
+    KI: { lon: -157.4, lat: 1.9, aliases: ['Kiribati','KI'] },
+    FM: { lon: 158.2, lat: 6.9, aliases: ['Micronesia','FM','Federated States of Micronesia'] },
+    MH: { lon: 171.2, lat: 7.1, aliases: ['Marshall Islands','MH'] },
+    PW: { lon: 134.5, lat: 7.5, aliases: ['Palau','PW'] },
+    NR: { lon: 166.93, lat: -0.52, aliases: ['Nauru','NR'] },
+    TV: { lon: 177.98, lat: -7.11, aliases: ['Tuvalu','TV'] },
   }), []);
 
   const normalizeCountryKey = useCallback((label: string): string | null => {
     if (!label) return null;
-    const v = String(label).trim();
+    let v = String(label).trim();
+    // If it's a list like "DE, AT" or "DE;AT" or includes spaces, pick the first token
+    const tokens = v.split(/[\s,;]+/).filter(Boolean);
+    if (tokens.length > 1) v = tokens[0];
+    // Accept bare 2-letter ISO codes case-insensitively
+    if (/^[a-z]{2}$/i.test(v)) return v.toUpperCase();
+    // Direct match against our centroid list
     if ((COUNTRY_CENTROIDS as any)[v]) return v as keyof typeof COUNTRY_CENTROIDS as string;
     const up = v.toUpperCase();
     if ((COUNTRY_CENTROIDS as any)[up]) return up;
+    // Match by alias names (case-insensitive)
     for (const [iso, def] of Object.entries(COUNTRY_CENTROIDS)) {
       if (def.aliases?.some(a => a.toLowerCase() === v.toLowerCase())) return iso;
     }
@@ -1276,7 +1797,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const rec = { success: c.success, failed: c.failed, total: c.total } as const;
       if (iso) {
         const def = COUNTRY_CENTROIDS[iso];
-        mapped.push({ iso, country: c.country, lon: def.lon, lat: def.lat, ...rec });
+        if (def && typeof def.lon === 'number' && typeof def.lat === 'number') {
+          mapped.push({ iso, country: c.country, lon: def.lon, lat: def.lat, ...rec });
+        } else {
+          // Centroid not available for this ISO — keep stats for coloring via isoStats but no marker.
+          unmapped.push({ country: c.country, ...rec });
+        }
       } else {
         unmapped.push({ country: c.country, ...rec });
       }
@@ -1324,11 +1850,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Build quick lookup for stats by ISO code for coloring
   const isoStats = useMemo(() => {
     const m = new Map<string, { success: number; failed: number; total: number }>();
-    for (const it of mapData.mapped) {
-      m.set(it.iso, { success: it.success, failed: it.failed, total: it.total });
+    for (const c of countryAgg) {
+      const iso = normalizeCountryKey(c.country);
+      if (!iso) continue;
+      const cur = m.get(iso) || { success: 0, failed: 0, total: 0 };
+      cur.success += c.success;
+      cur.failed += c.failed;
+      cur.total += c.total;
+      m.set(iso, cur);
     }
     return m;
-  }, [mapData]);
+  }, [countryAgg, normalizeCountryKey]);
 
   // Color helper: interpolate between orange (failed) and blue (success) — colorblind friendly (Okabe-Ito inspired)
   const ratioToFill = useCallback((ratio: number) => {
@@ -1346,6 +1878,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   }, []);
 
 
+  const applySearch = useCallback(() => {
+    const next = searchDraft;
+    setSearchQuery(next);
+    if (page === 1) {
+      void runQuery(true, { keepPage: true });
+    } else {
+      setPage(1);
+    }
+  }, [searchDraft, page, runQuery]);
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
@@ -1359,7 +1901,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           <MenuItem value={60000}>1 m</MenuItem>
           <MenuItem value={120000}>2 m</MenuItem>
         </Select>
-        <Button variant="outlined" size="small" startIcon={<RefreshIcon/>} onClick={()=>{ void runQuery(); }}>Refresh</Button>
+        <Button variant="outlined" size="small" startIcon={<RefreshIcon/>} onClick={()=>{ void runQuery(true, { keepPage: true }); }}>Refresh</Button>
       </Stack>
 
       {/* Connection status (unified banner) */}
@@ -1403,7 +1945,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 ? (prevCQ?.columns || [])
                 : ((selectedFields && selectedFields.length) ? selectedFields : (prevCQ?.columns || []));
               const ui = {
-                action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs
+                action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, mapOpen, searchQuery, refreshMs
               } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
@@ -1439,7 +1981,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </IconButton>
             </Stack>
             <Collapse in={mapOpen} timeout="auto" unmountOnExit>
-              {mapData.mapped.length === 0 ? (
+              {loading ? (
+                <Box sx={{ display:'flex', alignItems:'center', gap:1, mt:1 }}><CircularProgress size={18}/><Typography variant="body2" color="text.secondary">Loading…</Typography></Box>
+              ) : countryAgg.length === 0 ? (
                 <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
               ) : (
                 <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
@@ -1465,7 +2009,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     </Stack>
                   </Box>
                   {/* Using react-simple-maps world-110m TopoJSON */}
-                  <ComposableMap projection="geoMercator" width={980} height={600} style={{ width: '100%', height: 'auto' }}>
+                  <ComposableMap key={`map-${page}-${rows.length}-${countryAgg.length}`} projection="geoMercator" width={980} height={600} style={{ width: '100%', height: 'auto' }}>
                     <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
                       <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
                         {({ geographies }) => (
@@ -1473,7 +2017,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             {geographies.map(geo => {
                             const props: any = (geo as any).properties || {};
                             const name = String(props.name || props.NAME || props.NAME_LONG || '').trim();
-                            const iso = name ? normalizeCountryKey(name) : null;
+                            const iso2 = String(props.ISO_A2 || props.ISO_A2_EH || props.iso_a2 || '').trim();
+                            const iso = iso2 ? normalizeCountryKey(iso2) : (name ? normalizeCountryKey(name) : null);
                             let fill = '#f0f0f0';
                             if (iso && isoStats.has(iso)) {
                               const s = isoStats.get(iso)!;
@@ -1554,7 +2099,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <Grid container spacing={2} sx={{ mt:1 }}>
               <Grid item xs={12} sm={3}>
                 <TextField select fullWidth label="Limit" value={limit} onChange={(e)=> setLimit(Number(e.target.value))}>
-                  {[50,100,200,500,1000,2000,5000,10000].map(n=> (
+                  {[50,100,200,500,1000,2000,5000,10000,50000,100000,500000].map(n=> (
                     <MenuItem key={n} value={n}>{n}</MenuItem>
                   ))}
                 </TextField>
@@ -1781,7 +2326,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               try {
                 const userId = await getCurrentUserId();
                 const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+                const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
                 if (action === 'raw_sql') {
                   setNotif({ open:true, severity:'info', message:'Column selection not persisted for raw SQL results' });
                 } else {
@@ -1820,6 +2365,70 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
       <Paper sx={{ p:2 }}>
         <Typography variant="subtitle1" gutterBottom>Results</Typography>
+        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1, flexWrap:'wrap' }}>
+          <TextField
+            size="small"
+            label="Search"
+            placeholder="Filter (AND/OR/NOT; parentheses supported)"
+            value={searchDraft}
+            onChange={(e)=> setSearchDraft(e.target.value)}
+            onKeyDown={(e)=>{ if ((e as any).key === 'Enter') { e.preventDefault(); applySearch(); } }}
+            InputProps={{
+              endAdornment: (
+                <InputAdornment position="end">
+                  {searchDraft && (
+                    <IconButton size="small" onClick={() => setSearchDraft('')} aria-label="Clear search">
+                      <ClearIcon fontSize="small" />
+                    </IconButton>
+                  )}
+                  <IconButton size="small" aria-label="Search bookmarks" onClick={(e)=> setBmMenuAnchorSearch(e.currentTarget)}>
+                    <BookmarkBorderIcon fontSize="small" />
+                  </IconButton>
+                </InputAdornment>
+              )
+            }}
+            sx={{ minWidth: 260, flexGrow: 1 }}
+          />
+          <Button size="small" variant="contained" onClick={()=>{ applySearch(); }} sx={{ whiteSpace: 'nowrap' }}>
+            Send
+          </Button>
+          <Menu anchorEl={bmMenuAnchorSearch} open={Boolean(bmMenuAnchorSearch)} onClose={()=> setBmMenuAnchorSearch(null)}>
+            <MenuItem onClick={()=>{
+              const list = bookmarks.search || [];
+              if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
+              setBmDialogMode('create'); setBmDialogKind('search'); setBmDialogTargetId(undefined);
+              const def = `Search ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSearch(null);
+            }}>
+              <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current search
+            </MenuItem>
+            <Divider />
+            {(bookmarks.search || []).length === 0 ? (
+              <MenuItem disabled>No bookmarks</MenuItem>
+            ) : (
+              (bookmarks.search || []).map(bm => (
+                <MenuItem key={bm.id} onClick={()=>{ loadBookmark('search', bm.id); setBmMenuAnchorSearch(null); }}>
+                  <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
+                    <Box sx={{ flexGrow:1, minWidth:160 }}>
+                      <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
+                    </Box>
+                    <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
+                      <DriveFileRenameOutlineIcon fontSize="small" />
+                    </IconButton>
+                    <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
+                      <DeleteOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                </MenuItem>
+              ))
+            )}
+          </Menu>
+          <Typography variant="caption" color="text.secondary">
+            Matches: {searchFilteredRows.length} / {filteredRows.length}
+          </Typography>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
+          Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\./", features=="/rbl/", "/[a-z]+/").
+        </Typography>
         {loading ? (
           <Box sx={{ display:'flex', justifyContent:'center', my:3 }}><CircularProgress/></Box>
         ) : rows.length === 0 ? (
@@ -1842,66 +2451,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           )
         ) : (
           <>
-            <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1, flexWrap:'wrap' }}>
-              <TextField
-                size="small"
-                label="Search"
-                placeholder="Filter (AND/OR/NOT; parentheses supported)"
-                value={searchQuery}
-                onChange={(e)=> setSearchQuery(e.target.value)}
-                InputProps={{
-                  endAdornment: (
-                    <InputAdornment position="end">
-                      {searchQuery && (
-                        <IconButton size="small" onClick={() => setSearchQuery('')} aria-label="Clear search">
-                          <ClearIcon fontSize="small" />
-                        </IconButton>
-                      )}
-                      <IconButton size="small" aria-label="Search bookmarks" onClick={(e)=> setBmMenuAnchorSearch(e.currentTarget)}>
-                        <BookmarkBorderIcon fontSize="small" />
-                      </IconButton>
-                    </InputAdornment>
-                  )
-                }}
-                sx={{ minWidth: 260, flexGrow: 1 }}
-              />
-              <Menu anchorEl={bmMenuAnchorSearch} open={Boolean(bmMenuAnchorSearch)} onClose={()=> setBmMenuAnchorSearch(null)}>
-                <MenuItem onClick={()=>{
-                  const list = bookmarks.search || [];
-                  if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
-                  setBmDialogMode('create'); setBmDialogKind('search'); setBmDialogTargetId(undefined);
-                  const def = `Search ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSearch(null);
-                }}>
-                  <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current search
-                </MenuItem>
-                <Divider />
-                {(bookmarks.search || []).length === 0 ? (
-                  <MenuItem disabled>No bookmarks</MenuItem>
-                ) : (
-                  (bookmarks.search || []).map(bm => (
-                    <MenuItem key={bm.id} onClick={()=>{ loadBookmark('search', bm.id); setBmMenuAnchorSearch(null); }}>
-                      <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
-                        <Box sx={{ flexGrow:1, minWidth:160 }}>
-                          <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
-                        </Box>
-                        <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
-                          <DriveFileRenameOutlineIcon fontSize="small" />
-                        </IconButton>
-                        <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
-                          <DeleteOutlineIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
-                    </MenuItem>
-                  ))
-                )}
-              </Menu>
-              <Typography variant="caption" color="text.secondary">
-                Matches: {searchFilteredRows.length} / {filteredRows.length}
-              </Typography>
-            </Stack>
-            <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
-              Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\./", features=="/rbl/", "/[a-z]+/").
-            </Typography>
             <Box sx={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
@@ -1944,7 +2493,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                              const ui = { action, username, account, ip, limit, authFilter, pageSize, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+                              const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
                               if (action === 'raw_sql') {
                                 setNotif({ open:true, severity:'info', message:'Column order change not persisted for raw SQL results' });
                               } else {
@@ -2028,10 +2577,21 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </table>
             </Box>
             <Box display="flex" alignItems="center" justifyContent="space-between" mt={2}>
-              <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); }}>
-                {[10,25,50,100].map(n=> <MenuItem key={n} value={n}>{n}</MenuItem>)}
-              </TextField>
-              <Pagination color="primary" page={page} onChange={(_,p)=>setPage(p)} count={Math.max(1, Math.ceil(sortedRows.length / pageSize))} showFirstButton showLastButton />
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); void runQuery(true); }}>
+                  {[10,25,50,100].map(n=> <MenuItem key={n} value={n}>{n}</MenuItem>)}
+                </TextField>
+              </Box>
+              <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                <Pagination
+                  color="primary"
+                  page={page}
+                  onChange={(_, p) => setPage(p)}
+                  count={Math.max(1, Math.ceil(Math.max(1, Number(limit)) / Math.max(1, pageSize)))}
+                  showFirstButton
+                  showLastButton
+                />
+              </Box>
             </Box>
             <Divider sx={{ mt:2 }} />
             <Box sx={{ display:'flex', justifyContent:'flex-end', alignItems:'center', py:1, gap:1 }}>
@@ -2104,8 +2664,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </TextField>
               <TextField select label="Scope" value={exportScope} onChange={e => setExportScope(e.target.value as any)} sx={{ minWidth: 200 }}>
                 <MenuItem value="page">Current page</MenuItem>
-                <MenuItem value="filtered">All filtered</MenuItem>
-                <MenuItem value="all">All loaded</MenuItem>
+                <MenuItem value="filtered">Filtered</MenuItem>
+                <MenuItem value="all">All</MenuItem>
               </TextField>
             </Stack>
 
@@ -2150,11 +2710,19 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </Grid>
               ))}
             </Grid>
+          {exporting && (
+            <Stack spacing={1} sx={{ mt: 1 }}>
+              <LinearProgress />
+              <Typography variant="caption" color="text.secondary">
+                Exporting… pages: {exportProgress.pages}, rows: {exportProgress.rows}
+              </Typography>
+            </Stack>
+          )}
           </Stack>
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setExportOpen(false)}>Cancel</Button>
-          <Button onClick={performExport} variant="contained">Export</Button>
+          <Button onClick={() => setExportOpen(false)} disabled={exporting}>Cancel</Button>
+          <Button onClick={performExport} variant="contained" disabled={exporting}>{exporting ? 'Exporting…' : 'Export'}</Button>
         </DialogActions>
       </Dialog>
 
@@ -2162,7 +2730,15 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       <Dialog open={analysisOpen} onClose={() => setAnalysisOpen(false)} fullWidth maxWidth="lg">
         <DialogTitle>Deep Analysis</DialogTitle>
         <DialogContent>
-          <AnalysisPanel rows={sortedRows} />
+          {analysisLoading && (
+            <Stack spacing={1} sx={{ mb: 1 }}>
+              <LinearProgress />
+              <Typography variant="caption" color="text.secondary">
+                Loading… pages: {analysisProgress.pages}, rows: {analysisProgress.rows}
+              </Typography>
+            </Stack>
+          )}
+          <AnalysisPanel rows={analysisRows} />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setAnalysisOpen(false)}>Close</Button>

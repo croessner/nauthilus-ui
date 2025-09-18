@@ -160,7 +160,7 @@ export function computeInsights(rowsRaw: any[]) {
     ent.total++;
   }
   const countriesAll = [...countryMap.values()].sort((a,b)=> b.total - a.total);
-  const topCountries = countriesAll.slice(0, 10).map(e => [e.country, e.total] as [string, number]);
+  const topCountries = countriesAll.slice(0, 20).map(e => [e.country, e.total] as [string, number]);
 
   // Users (totals and success/failure breakdown)
   const userMap = new Map<string, { username: string; success: number; failure: number; total: number }>();

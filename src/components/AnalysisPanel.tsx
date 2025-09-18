@@ -104,7 +104,7 @@ function TopBar({ data, label }: { data: [string, number][], label: string }) {
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={ds} layout="vertical" margin={{ left: 12, right: 16, top: 8, bottom: 8 }}>
         <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor }} />
-        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} />
+        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} interval={0} />
         <Tooltip content={<TooltipContent />} />
         <Bar dataKey="value" fill="#10b981" />
       </BarChart>
@@ -139,7 +139,7 @@ function TopCountriesStacked({ data }: { data: { country: string; success: numbe
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={ds} layout="vertical" margin={{ left: 12, right: 16, top: 8, bottom: 8 }}>
         <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} />
+        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} interval={0} />
         <Tooltip content={<TooltipContent />} />
         <Legend />
         <Bar dataKey="failure" name="Failure" stackId="a" fill="#ef4444" />
@@ -187,7 +187,7 @@ function TopUsersStacked({ data }: { data: { username: string; success: number; 
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={ds} layout="vertical" margin={{ left: 12, right: 16, top: 8, bottom: 8 }}>
         <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} />
+        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} interval={0} />
         <Tooltip content={<TooltipContent />} />
         <Legend />
         <Bar dataKey="failure" name="Failure" stackId="a" fill="#ef4444" />
@@ -236,7 +236,7 @@ function TopIPsStacked({ data }: { data: { ip: string; success: number; failure:
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={ds} layout="vertical" margin={{ left: 36, right: 16, top: 8, bottom: 8 }}>
         <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} tickMargin={8} />
+        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} interval={0} tickMargin={8} />
         <Tooltip content={<TooltipContent />} />
         <Legend />
         <Bar dataKey="failure" name="Failure" stackId="a" fill="#ef4444" />
@@ -284,7 +284,7 @@ function TopUserAgentsStacked({ data }: { data: { ua: string; success: number; f
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={ds} layout="vertical" margin={{ left: 12, right: 16, top: 8, bottom: 8 }}>
         <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} />
+        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} interval={0} />
         <Tooltip content={<TooltipContent />} />
         <Legend />
         <Bar dataKey="failure" name="Failure" stackId="a" fill="#ef4444" />
@@ -298,6 +298,7 @@ export default function AnalysisPanel({ rows }: { rows: any[] }) {
   const insights = useMemo(() => computeInsights(rows), [rows]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [downloading, setDownloading] = useState(false);
+  const [pdfMode, setPdfMode] = useState(false);
   const featureKeys = (insights as any).features?.featureKeys || [];
   const [selectedFeature, setSelectedFeature] = useState<string | null>(featureKeys[0] || null);
   useEffect(() => {
@@ -309,6 +310,13 @@ export default function AnalysisPanel({ rows }: { rows: any[] }) {
     if (!containerRef.current) return;
     try {
       setDownloading(true);
+      // Switch component into PDF mode to render all feature charts and hide interactive controls
+      setPdfMode(true);
+      // Wait for React to re-render with pdfMode and for charts to paint
+      await new Promise<void>(resolve => setTimeout(resolve, 0));
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      // Give Recharts a brief moment to render multiple charts
+      await new Promise<void>(resolve => setTimeout(resolve, 150));
       // Build a minimal HTML document using the panel content
       const inner = containerRef.current.innerHTML;
       const html = `<!doctype html>
@@ -353,7 +361,8 @@ export default function AnalysisPanel({ rows }: { rows: any[] }) {
 
   /* Avoid awkward page breaks */
   .report, #report { page-break-inside: auto; }
-  h1, h2, h3 { break-after: avoid-page; page-break-after: avoid; orphans: 3; widows: 3; }
+  /* Keep headings with their following content (avoid splits between heading and chart) */
+  h1, h2, h3, h4, h5, h6, .MuiTypography-subtitle1, .MuiTypography-h6 { break-after: avoid-page; page-break-after: avoid; orphans: 3; widows: 3; }
   .kpis, .MuiStack-root, .MuiBox-root, .MuiGrid-root, .MuiTypography-root,
   .recharts-responsive-container, .MuiChip-root, .MuiDivider-root, .section {
     break-inside: avoid; page-break-inside: avoid; }
@@ -387,6 +396,8 @@ export default function AnalysisPanel({ rows }: { rows: any[] }) {
       console.error('PDF export failed', e);
       alert('PDF export failed: ' + (e as Error).message);
     } finally {
+      // Restore normal mode
+      setPdfMode(false);
       setDownloading(false);
     }
   };
@@ -433,18 +444,31 @@ export default function AnalysisPanel({ rows }: { rows: any[] }) {
       </Stack>
 
       <Typography variant="subtitle1">Top IPs by feature (success vs failure) — Top {TOPN_FEATURE_IPS}</Typography>
-      <Stack direction="row" spacing={1} sx={{ flexWrap:'wrap', mb: 1 }}>
-        {featureKeys.length ? featureKeys.map((f:string)=> (
-          <Chip key={f} label={f} color={selectedFeature===f? 'primary' : 'default'} onClick={()=>setSelectedFeature(f)} clickable />
-        )) : <Chip label="No feature tags found" size="small" />}
-      </Stack>
-      {selectedFeature && (
-        <TopIPsStacked data={(((insights as any).features?.topIPsByFeature?.[selectedFeature]) || []) as any} />
+      {!pdfMode && (
+        <Stack direction="row" spacing={1} sx={{ flexWrap:'wrap', mb: 1 }} data-pdf-hide="true">
+          {featureKeys.length ? featureKeys.map((f:string)=> (
+            <Chip key={f} label={f} color={selectedFeature===f? 'primary' : 'default'} onClick={()=>setSelectedFeature(f)} clickable />
+          )) : <Chip label="No feature tags found" size="small" />}
+        </Stack>
+      )}
+      {pdfMode ? (
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {featureKeys.map((f: string) => (
+            <Box key={f} sx={{ mb: 1 }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary', mb: 0.5 }}>Feature: {f}</Typography>
+              <TopIPsStacked data={(((insights as any).features?.topIPsByFeature?.[f]) || []) as any} />
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        selectedFeature && (
+          <TopIPsStacked data={(((insights as any).features?.topIPsByFeature?.[selectedFeature]) || []) as any} />
+        )
       )}
 
       <Divider className="section" />
-      <Typography variant="subtitle1">Top countries (success vs failure)</Typography>
-      <TopCountriesStacked data={(insights.top as any).topCountriesAllBreakdown || []} />
+      <Typography variant="subtitle1">Top countries (success vs failure) — Top 20</Typography>
+      <TopCountriesStacked data={((insights.top as any).topCountriesAllBreakdown || []).slice(0, 20)} />
 
       <Divider className="section" />
       <Typography variant="subtitle1">Top users (success vs failure) — Top {TOPN_USERS}</Typography>
@@ -484,7 +508,7 @@ export default function AnalysisPanel({ rows }: { rows: any[] }) {
         </>
       )}
 
-      <Divider className="section" />
+      <Divider className="section" data-pdf-hide="true" />
       <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }} data-pdf-hide="true">
         <Button onClick={handleExportPDF} variant="contained" disabled={downloading}>
           {downloading ? 'Exporting…' : 'Export as PDF (server-side)'}
@@ -525,7 +549,7 @@ function FeaturesStacked({ data }: { data: { feature: string; success: number; f
     <ResponsiveContainer width="100%" height={height}>
       <BarChart data={ds} layout="vertical" margin={{ left: 12, right: 16, top: 8, bottom: 8 }}>
         <XAxis type="number" stroke={axisColor} tick={{ fill: axisColor }} allowDecimals={false} />
-        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} />
+        <YAxis type="category" dataKey="name" width={yAxisWidth} stroke={axisColor} tick={<Tick />} interval={0} />
         <Tooltip content={<TooltipContent />} />
         <Legend />
         <Bar dataKey="failure" name="Failure" stackId="a" fill="#ef4444" />

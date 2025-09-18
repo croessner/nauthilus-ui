@@ -31,7 +31,7 @@ try {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <BrowserRouter>
+    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
       <DevSupport ComponentPreviews={ComponentPreviews} useInitialHook={useInitial}>
         <App />
       </DevSupport>

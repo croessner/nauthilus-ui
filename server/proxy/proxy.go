@@ -417,8 +417,17 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		req.Header.Set("Content-Type", config.ContentType)
 	}
 
-	// Send the proxy request
-	client := &http.Client{}
+	// Send the proxy request with a tuned Transport (no overall timeout to allow streaming)
+	tr := &http.Transport{
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+	}
+	client := &http.Client{Transport: tr}
+
 	resp, err := client.Do(req)
 	if err != nil {
 		// Audit backend connection failure
@@ -472,12 +481,45 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		ctx.Header("Access-Control-Expose-Headers", strings.Join(baseExpose, ", "))
 	}
 
+	// Decide whether to gzip-compress the response to the browser
+	shouldCompress := false
+	if ctx.Request.Method != http.MethodHead {
+		ce := strings.ToLower(resp.Header.Get("Content-Encoding"))
+		ae := ctx.Request.Header.Get("Accept-Encoding")
+		ct := resp.Header.Get("Content-Type")
+		// Compress only when upstream did not already compress, client accepts gzip, and type is compressible
+		if ce == "" && strings.Contains(ae, "gzip") {
+			if strings.HasPrefix(strings.ToLower(ct), "application/json") || strings.HasPrefix(strings.ToLower(ct), "text/") {
+				shouldCompress = true
+			}
+		}
+	}
+
+	if shouldCompress {
+		// We will change the encoding; remove any Content-Length and set Content-Encoding
+		h := ctx.Writer.Header()
+		h.Del("Content-Length")
+		h.Set("Content-Encoding", "gzip")
+		// Make caches aware
+		if v := h.Get("Vary"); v == "" {
+			h.Set("Vary", "Accept-Encoding")
+		} else if !strings.Contains(v, "Accept-Encoding") {
+			h.Set("Vary", v+", Accept-Encoding")
+		}
+	}
+
 	// Set the status code
 	ctx.Writer.WriteHeader(resp.StatusCode)
 
 	// Copy the response body only for non-HEAD requests
 	if ctx.Request.Method != http.MethodHead {
-		_, _ = io.Copy(ctx.Writer, resp.Body)
+		if shouldCompress {
+			gz := gzip.NewWriter(ctx.Writer)
+			defer func() { _ = gz.Close() }()
+			_, _ = io.Copy(gz, resp.Body)
+		} else {
+			_, _ = io.Copy(ctx.Writer, resp.Body)
+		}
 	}
 
 	// Audit direct proxy response
