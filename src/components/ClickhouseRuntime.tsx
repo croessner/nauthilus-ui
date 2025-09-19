@@ -17,9 +17,9 @@ import {
     Grid,
     IconButton,
     InputAdornment,
+    LinearProgress,
     Menu,
     MenuItem,
-    Pagination,
     Paper,
     Select,
     Slider,
@@ -27,13 +27,13 @@ import {
     Stack,
     Switch,
     TextField,
-    Typography,
     Tooltip,
-    LinearProgress
+    Typography
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import {useTheme} from '@mui/material/styles';
 import AnalysisPanel from './AnalysisPanel';
 import PublicIcon from '@mui/icons-material/Public';
+import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import LinkIcon from '@mui/icons-material/Link';
@@ -48,9 +48,17 @@ import BookmarkAddIcon from '@mui/icons-material/BookmarkAdd';
 import DriveFileRenameOutlineIcon from '@mui/icons-material/DriveFileRenameOutline';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
+import FirstPageIcon from '@mui/icons-material/FirstPage';
 import {useConfig} from '../contexts/ConfigContext';
 import {getCurrentUserId, useRuntime} from '../contexts/RuntimeContext';
-import {authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil} from '../utils/apiUtils';
+import {
+    authenticatedFetch,
+    checkConnection as checkConnectionUtil,
+    extractErrorMessage,
+    getProxyOrigin,
+    loadSettings as loadSettingsUtil,
+    prepareAuthParams
+} from '../utils/apiUtils';
 import {getKnownHookEndpointSuggestions} from '../utils/hooks';
 import {usePersistedAutoRefresh} from '../hooks/usePersistedAutoRefresh';
 import {
@@ -103,12 +111,35 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [pageSize, setPageSize] = useState<number>(100);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
+  // Auto-dismiss error after a timeout and allow manual dismiss
+  const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    // Clear any previous timer
+    if (errorTimerRef.current) {
+      clearTimeout(errorTimerRef.current);
+      errorTimerRef.current = null;
+    }
+    if (error) {
+      // Auto-hide after 8 seconds
+      errorTimerRef.current = setTimeout(() => {
+        setError('');
+        errorTimerRef.current = null;
+      }, 8000);
+    }
+    return () => {
+      if (errorTimerRef.current) {
+        clearTimeout(errorTimerRef.current);
+        errorTimerRef.current = null;
+      }
+    };
+  }, [error]);
   const queryAbortRef = useRef<AbortController | null>(null);
   const lastReqIdRef = useRef(0);
 
   // Data and pagination
   const [rows, setRows] = useState<Row[]>([]);
   const [page, setPage] = useState<number>(1);
+  const [hasMore, setHasMore] = useState<boolean>(false);
   const [authFilter, setAuthFilter] = useState<'all'|'failed'|'success'>('all');
   const [sortBy, setSortBy] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc');
@@ -210,6 +241,73 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const sortedAvailableFields = useMemo(() => [...availableFields].sort((a,b)=> a.localeCompare(b, undefined, { sensitivity: 'base' })), [availableFields]);
   const [fieldSelectorOpen, setFieldSelectorOpen] = useState<boolean>(false);
+
+  // Search input autocomplete (ghost text) for field names
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const [caretAtEnd, setCaretAtEnd] = useState(true);
+  // Computed typography and paddings from the actual input to perfectly align ghost text
+  const [ghostStyle, setGhostStyle] = useState<Record<string, any>>({});
+  useEffect(() => {
+    const input = searchInputRef.current;
+    if (!input) return;
+    const sync = () => {
+      try {
+        const cs = window.getComputedStyle(input);
+        setGhostStyle({
+          fontFamily: cs.fontFamily,
+          fontSize: cs.fontSize,
+          fontWeight: cs.fontWeight,
+          lineHeight: cs.lineHeight,
+          letterSpacing: cs.letterSpacing,
+          paddingLeft: cs.paddingLeft,
+          paddingRight: cs.paddingRight,
+        });
+      } catch {}
+    };
+    sync();
+    window.addEventListener('resize', sync);
+    return () => { window.removeEventListener('resize', sync); };
+  }, [searchInputRef]);
+
+  const completionSuffix = useMemo(() => {
+    const value = searchDraft || '';
+    if (!caretAtEnd || !value) return '';
+    // Extract last token consisting of letters, digits, underscore or dot
+    let i = value.length - 1;
+    while (i >= 0 && /[A-Za-z0-9_.]/.test(value[i])) i--;
+    const tokenStart = i + 1;
+    const token = value.slice(tokenStart);
+    if (!token) return '';
+
+    // Suppress completion when typing a value (RHS of a comparison) within the current clause.
+    // Heuristic: look at the text after the last logical reset (AND/OR/NOT or '(') and before the current token.
+    // If that window contains any comparison operator, treat the current token as a value and do not suggest field names.
+    const before = value.slice(0, tokenStart);
+    const beforeLower = before.toLowerCase();
+    const lastAnd = beforeLower.lastIndexOf(' and ');
+    const lastOr = beforeLower.lastIndexOf(' or ');
+    const lastNot = beforeLower.lastIndexOf(' not ');
+    const lastLParen = before.lastIndexOf('(');
+    const resetIdx = Math.max(lastAnd, lastOr, lastNot, lastLParen, -1);
+    const windowStr = before.slice(resetIdx + 1);
+    const hasComparator = ['==','!=','<=','>=','<','>'].some(op => windowStr.includes(op));
+    if (hasComparator) return '';
+
+    const lower = token.toLowerCase();
+    const candidate = sortedAvailableFields.find(f => f.toLowerCase().startsWith(lower) && f !== token);
+    if (!candidate) return '';
+    return candidate.slice(token.length);
+  }, [searchDraft, caretAtEnd, sortedAvailableFields]);
+
+  const updateCaretAtEnd = useCallback(() => {
+    const el = searchInputRef.current;
+    if (!el) { setCaretAtEnd(true); return; }
+    try {
+      setCaretAtEnd(el.selectionStart === el.value.length && el.selectionEnd === el.value.length);
+    } catch {
+      setCaretAtEnd(true);
+    }
+  }, []);
 
   // Resizing state
   const resizingRef = useRef<{ col: string | null; startX: number; startW: number } | null>(null);
@@ -640,14 +738,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         setError('No backend URL configured (Runtime → Connection).');
         return;
       }
-      const url = buildHookUrl(conn);
+      const url = buildHookUrl(conn, undefined, pageSize + 1);
       // Abort any in-flight request and start a new one for this run
       try { queryAbortRef.current?.abort(); } catch {}
       controller = new AbortController();
       queryAbortRef.current = controller;
       reqId = ++lastReqIdRef.current;
       const UI_TIMEOUT_MS = 120_000; // 120s
-      const timer = setTimeout(() => controller.abort(), UI_TIMEOUT_MS);
+      const timer = setTimeout(() => controller?.abort(), UI_TIMEOUT_MS);
       let resp: Response | null = null;
       try {
         resp = await authenticatedFetch(url, { method: 'POST', signal: controller.signal });
@@ -688,7 +786,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       // Store full preview and apply current limit for display
       setRawPreviewFull(preview);
       setRawPreview(applyPreviewLimit(preview, rawJsonMaxBytes));
-      setRows(parsed);
+      if (parsed.length > pageSize) {
+        setHasMore(true);
+        setRows(parsed.slice(0, pageSize));
+      } else {
+        setHasMore(false);
+        setRows(parsed);
+      }
       // Auto-expand raw if no tabular rows parsed
       setShowRaw(parsed.length === 0 && Boolean(preview));
       // Update available fields using meta if present, otherwise from row keys
@@ -788,36 +892,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     const BOOL_COL: Record<string, true> = { debug:true, repeating:true, user_found:true, authenticated:true, no_auth:true, prot_active:true, failed_login_recognized:true };
     const NUM_COL: Record<string, true> = { client_port:true, local_port:true, brute_force_counter:true, failed_login_count:true, failed_login_rank:true, gp_attempts:true, gp_unique_ips:true, gp_unique_users:true, gp_ips_per_user:true, prot_backoff:true, prot_delay_ms:true };
     const isAllowedKey = (k?: string) => !!(k && (BOOL_COL[k] || NUM_COL[k] || TEXT_COLS.includes(k)));
-
-    const ISO2 = new Set([
-      'AD','AE','AF','AG','AI','AL','AM','AO','AQ','AR','AS','AT','AU','AW','AX','AZ',
-      'BA','BB','BD','BE','BF','BG','BH','BI','BJ','BL','BM','BN','BO','BQ','BR','BS','BT','BV','BW','BY','BZ',
-      'CA','CC','CD','CF','CG','CH','CI','CK','CL','CM','CN','CO','CR','CU','CV','CW','CX','CY','CZ',
-      'DE','DJ','DK','DM','DO','DZ',
-      'EC','EE','EG','EH','ER','ES','ET',
-      'FI','FJ','FK','FM','FO','FR',
-      'GA','GB','GD','GE','GF','GG','GH','GI','GL','GM','GN','GP','GQ','GR','GS','GT','GU','GW','GY',
-      'HK','HM','HN','HR','HT','HU',
-      'ID','IE','IL','IM','IN','IO','IQ','IR','IS','IT',
-      'JE','JM','JO','JP',
-      'KE','KG','KH','KI','KM','KN','KP','KR','KW','KY','KZ',
-      'LA','LB','LC','LI','LK','LR','LS','LT','LU','LV','LY',
-      'MA','MC','MD','ME','MF','MG','MH','MK','ML','MM','MN','MO','MP','MQ','MR','MS','MT','MU','MV','MW','MX','MY','MZ',
-      'NA','NC','NE','NF','NG','NI','NL','NO','NP','NR','NU','NZ',
-      'OM',
-      'PA','PE','PF','PG','PH','PK','PL','PM','PN','PR','PS','PT','PW','PY',
-      'QA',
-      'RE','RO','RS','RU','RW',
-      'SA','SB','SC','SD','SE','SG','SH','SI','SJ','SK','SL','SM','SN','SO','SR','SS','ST','SV','SX','SY','SZ',
-      'TC','TD','TF','TG','TH','TJ','TK','TL','TM','TN','TO','TR','TT','TV','TW','TZ',
-      'UA','UG','UM','US','UY','UZ',
-      'VA','VC','VE','VG','VI','VN','VU',
-      'WF','WS',
-      'YE','YT',
-      'ZA','ZM','ZW',
-      'EU'
-    ]);
-
     const isCmpStart = (c: string) => c === '=' || c === '!' || c === '<' || c === '>';
 
     // Parse JS-like regex literal: /pattern/flags (supports escaped / as \/)
@@ -883,21 +957,27 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return out;
     };
 
-    // Transform shortcut: WORD(field) NOT WORD(valueOrRegex) => WORD(field) WORD(valueOrRegex) CMP('!=') if field is allowed
-    const rewriteNotComparisons = (toks: Tok[]): Tok[] => {
+    // Insert implicit AND for EXPRESSION NOT EXPRESSION only.
+    // Left EXPRESSION ends either with RPAREN or the pattern WORD CMP WORD (infix), i.e., tokens [..., CMP, WORD]
+    // Right EXPRESSION starts with LPAREN or WORD CMP ... (infix), i.e., tokens [WORD, CMP, ...]
+    const rewriteImplicitAndBetweenExpressions = (toks: Tok[]): Tok[] => {
+      if (toks.length < 3) return toks;
       const out: Tok[] = [];
       for (let i = 0; i < toks.length; i++) {
-        const a = toks[i];
-        const b = toks[i+1];
-        const c = toks[i+2];
-        if (a && b && c && a.t === 'WORD' && typeof a.v === 'string' && isAllowedKey(a.v) && b.t === 'NOT' && c.t === 'WORD') {
-          out.push({ t: 'WORD', v: a.v });
-          out.push({ t: 'WORD', v: c.v });
-          out.push({ t: 'CMP', v: '!=' });
-          i += 2;
-          continue;
+        const prev2 = toks[i-2];
+        const prev1 = toks[i-1];
+        const cur   = toks[i];
+        const next1 = toks[i+1];
+        const next2 = toks[i+2];
+        const leftOK = (prev1 && ((prev1.t === 'WORD' && prev2 && prev2.t === 'CMP') || prev1.t === 'RPAREN'));
+        const rightOK = ((next1 && next1.t === 'LPAREN') || (next1 && next2 && next1.t === 'WORD' && next2.t === 'CMP'));
+        if (cur && cur.t === 'NOT' && leftOK && rightOK) {
+          // Emit AND before this NOT to read as: (left) AND NOT (right)
+          out.push({ t: 'AND' });
+          out.push(cur);
+        } else {
+          out.push(cur);
         }
-        out.push(a);
       }
       return out;
     };
@@ -928,13 +1008,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return out;
     };
 
-    let toks: Tok[] = [];
+    let toks: Tok[];
     try { toks = tokenize(raw); } catch { toks = []; }
-    toks = rewriteNotComparisons(toks);
+    toks = rewriteImplicitAndBetweenExpressions(toks);
     let rpn: Tok[] = [];
     try { rpn = toRpn(toks); } catch { rpn = []; }
-
-    const hasSelection = (selectedFields || []).length > 0;
 
     const parseLiteral = (s: string): any => {
       // Regex literal support
@@ -949,16 +1027,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const num = Number(v);
       if (!Number.isNaN(num) && v !== '') return num;
       return v;
-    };
-
-    const toFiniteNumber = (val: any): number | null => {
-      if (val == null || val === '') return null;
-      if (typeof val === 'number') return Number.isFinite(val) ? val : null;
-      if (typeof val === 'boolean') return val ? 1 : 0;
-      const n = Number(val);
-      if (Number.isFinite(n)) return n;
-      const t = Date.parse(String(val));
-      return Number.isFinite(t) ? t : null;
     };
 
     const compareField = (row: any, key: string, op: string, rhs: any): boolean => {
@@ -1002,37 +1070,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       return true;
     };
 
-    const termMatches = (row: any, term: any, keys: string[]): boolean => {
-      const keysText = keys;
-      if (term instanceof RegExp) {
-        return keysText.some(k => term.test(String(row?.[k] ?? '')));
-      }
-      const rawTerm = String(term || '');
-      if (rawTerm.length === 2 && ISO2.has(rawTerm.toUpperCase())) {
-        const up = rawTerm.toUpperCase();
-        const country = String(row?.geoip_country ?? '').toUpperCase();
-        const codes = String(row?.geoip_iso_codes ?? '').toUpperCase();
-        return country === up || codes.includes(up);
-      }
-      const q = rawTerm.toLowerCase();
-      return keysText.some(k => String(row?.[k] ?? '').toLowerCase().includes(q));
-    };
-
     return filteredRows.filter((row) => {
-      const keysText = (hasSelection ? (selectedFields as string[]) : TEXT_COLS).filter(k => TEXT_COLS.includes(k));
-
       if (!rpn.length) {
-        const q = raw.trim();
-        if (!q) return true;
-        const maybeRe = parseRegexLiteral(q);
-        const term = maybeRe || q;
-        return termMatches(row, term, keysText);
+        // Strict mode: without explicit comparisons we do not filter client-side
+        return true;
       }
 
       const st: any[] = [];
+      let invalid = false;
       const asBool = (val: any): boolean => {
         if (typeof val === 'boolean') return val;
-        return termMatches(row, val, keysText);
+        invalid = true; return false;
       };
       for (const tk of rpn) {
         if (tk.t === 'WORD') {
@@ -1055,7 +1103,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       }
 
       // Reduce remaining stack entries by AND
-      return st.reduce((acc, it) => acc && asBool(it), true);
+      const res = st.reduce((acc, it) => acc && asBool(it), true);
+      return invalid ? true : !!res;
     });
   }, [filteredRows, searchQuery, selectedFields]);
 
@@ -1122,7 +1171,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       // Split multi-values and pick the first plausible token
       const toks = c.split(/[\s,;|\/]+/).filter(Boolean);
       if (toks.length > 1) {
-        const two = toks.find(t => /^[A-Za-z]{2}$/.test(t));
+        const two = toks.find((t: string) => /^[A-Za-z]{2}$/.test(t));
         c = two || toks[0];
       }
       // Normalize simple 2-letter iso
@@ -1145,6 +1194,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     return sortedRows;
   }, [sortedRows]);
 
+
+  // Re-run query when applied search filter changes
+  useEffect(() => {
+    void runQuery(true, { keepPage: true });
+  }, [searchQuery, runQuery]);
 
   // When navigating pages, always request the new page from server
   useEffect(() => {
@@ -1314,11 +1368,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Auto-start analysis loading when dialog opens, and cancel when it closes
   useEffect(() => {
     if (analysisOpen) {
-      void loadAllForAnalysis();
+      // Do not auto-start; only ensure any in-flight job is cancelled when dialog closes
       return () => { cancelAnalysisLoad(); };
     }
     return;
-  }, [analysisOpen, loadAllForAnalysis, cancelAnalysisLoad]);
+  }, [analysisOpen, cancelAnalysisLoad]);
+
 
   // Helper: determine available fields for export (mirrors table display)
   const availableExportFields = useMemo(() => {
@@ -1514,13 +1569,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Reset to first page when filter or sort changes
   useEffect(() => {
     setPage(1);
+    setHasMore(false);
   }, [authFilter, sortBy, sortDir]);
 
-  // Clamp current page when server limit or page size changes
-  useEffect(() => {
-    const totalPages = Math.max(1, Math.ceil(Math.max(1, Number(limit)) / Math.max(1, pageSize)));
-    setPage(p => Math.min(p, totalPages));
-  }, [limit, pageSize]);
 
 
   // When availableFields arrive and no selection yet, pick sensible defaults
@@ -1797,7 +1848,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const rec = { success: c.success, failed: c.failed, total: c.total } as const;
       if (iso) {
         const def = COUNTRY_CENTROIDS[iso];
-        if (def && typeof def.lon === 'number' && typeof def.lat === 'number') {
+        if (def) {
           mapped.push({ iso, country: c.country, lon: def.lon, lat: def.lat, ...rec });
         } else {
           // Centroid not available for this ISO — keep stats for coloring via isoStats but no marker.
@@ -1879,8 +1930,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
 
   const applySearch = useCallback(() => {
-    const next = searchDraft;
-    setSearchQuery(next);
+    setSearchQuery(searchDraft);
     if (page === 1) {
       void runQuery(true, { keepPage: true });
     } else {
@@ -2076,7 +2126,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           <Paper sx={{ p:2, mb:2 }}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>Query</Typography>
             <Grid container spacing={2} sx={{ mt:1 }}>
-              <Grid item xs={12} sm={4}>
+              <Grid item xs={12} sm={6}>
                 <TextField select fullWidth label="Action" value={action} onChange={e=>setAction(e.target.value as Action)}>
                   <MenuItem value="recent">recent</MenuItem>
                   <MenuItem value="by_user">by_user</MenuItem>
@@ -2086,7 +2136,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </TextField>
               </Grid>
               {(action === 'by_user' || action === 'by_account' || action === 'by_ip') && (
-                <Grid item xs={12} sm={4}>
+                <Grid item xs={12} sm={6}>
                   <TextField
                     fullWidth
                     label={action === 'by_user' ? 'Username' : action === 'by_account' ? 'Account' : 'IP'}
@@ -2097,14 +2147,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               )}
             </Grid>
             <Grid container spacing={2} sx={{ mt:1 }}>
-              <Grid item xs={12} sm={3}>
-                <TextField select fullWidth label="Limit" value={limit} onChange={(e)=> setLimit(Number(e.target.value))}>
-                  {[50,100,200,500,1000,2000,5000,10000,50000,100000,500000].map(n=> (
-                    <MenuItem key={n} value={n}>{n}</MenuItem>
-                  ))}
-                </TextField>
-              </Grid>
-              <Grid item xs={12} sm={3}>
+              <Grid item xs={12} sm={6}>
                 <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
                   <MenuItem value="all">failed/success</MenuItem>
                   <MenuItem value="failed">failed</MenuItem>
@@ -2208,62 +2251,65 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   helperText="Optional"
                 />
               </Grid>
-              <Grid item xs={12}>
-                <TextField
-                  fullWidth
-                  multiline
-                  minRows={3}
-                  maxRows={12}
-                  label="SQL (SELECT ...)"
-                  placeholder="SELECT ... FROM ... WHERE ..."
-                  value={rawSql}
-                  onChange={(e)=>setRawSql(e.target.value)}
-                  disabled={action !== 'raw_sql'}
-                />
-              </Grid>
-              <Grid item xs={12} sm={8}>
-                <Stack direction="row" spacing={1} alignItems="center">
-                  <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
-                    Run
-                  </Button>
-                  <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
-                    Reset
-                  </Button>
-                  <IconButton size="small" aria-label="SQL bookmarks" onClick={(e)=> setBmMenuAnchorSql(e.currentTarget)}>
-                    <BookmarkBorderIcon/>
-                  </IconButton>
-                </Stack>
-                <Menu anchorEl={bmMenuAnchorSql} open={Boolean(bmMenuAnchorSql)} onClose={()=> setBmMenuAnchorSql(null)}>
-                  <MenuItem onClick={()=>{ 
-                    const list = bookmarks.raw_sql || []; 
-                    if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
-                    setBmDialogMode('create'); setBmDialogKind('raw_sql'); setBmDialogTargetId(undefined);
-                    const def = `SQL ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSql(null);
-                  }}>
-                    <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current SQL
-                  </MenuItem>
-                  <Divider />
-                  {(bookmarks.raw_sql || []).length === 0 ? (
-                    <MenuItem disabled>No bookmarks</MenuItem>
-                  ) : (
-                    (bookmarks.raw_sql || []).map(bm => (
-                      <MenuItem key={bm.id} onClick={()=>{ loadBookmark('raw_sql', bm.id); setBmMenuAnchorSql(null); }}>
-                        <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
-                          <Box sx={{ flexGrow:1, minWidth:160 }}>
-                            <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
-                          </Box>
-                          <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('raw_sql'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
-                            <DriveFileRenameOutlineIcon fontSize="small" />
-                          </IconButton>
-                          <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('raw_sql'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
-                            <DeleteOutlineIcon fontSize="small" />
-                          </IconButton>
-                        </Box>
+              {action === 'raw_sql' && (
+                <>
+                  <Grid item xs={12}>
+                    <TextField
+                      fullWidth
+                      multiline
+                      minRows={3}
+                      maxRows={12}
+                      label="SQL (SELECT ...)"
+                      placeholder="SELECT ... FROM ... WHERE ..."
+                      value={rawSql}
+                      onChange={(e)=>setRawSql(e.target.value)}
+                    />
+                  </Grid>
+                  <Grid item xs={12} sm={8}>
+                    <Stack direction="row" spacing={1} alignItems="center">
+                      <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
+                        Run
+                      </Button>
+                      <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
+                        Reset
+                      </Button>
+                      <IconButton size="small" aria-label="SQL bookmarks" onClick={(e)=> setBmMenuAnchorSql(e.currentTarget)}>
+                        <BookmarkBorderIcon/>
+                      </IconButton>
+                    </Stack>
+                    <Menu anchorEl={bmMenuAnchorSql} open={Boolean(bmMenuAnchorSql)} onClose={()=> setBmMenuAnchorSql(null)}>
+                      <MenuItem onClick={()=>{ 
+                        const list = bookmarks.raw_sql || []; 
+                        if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
+                        setBmDialogMode('create'); setBmDialogKind('raw_sql'); setBmDialogTargetId(undefined);
+                        const def = `SQL ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSql(null);
+                      }}>
+                        <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current SQL
                       </MenuItem>
-                    ))
-                  )}
-                </Menu>
-              </Grid>
+                      <Divider />
+                      {(bookmarks.raw_sql || []).length === 0 ? (
+                        <MenuItem disabled>No bookmarks</MenuItem>
+                      ) : (
+                        (bookmarks.raw_sql || []).map(bm => (
+                          <MenuItem key={bm.id} onClick={()=>{ loadBookmark('raw_sql', bm.id); setBmMenuAnchorSql(null); }}>
+                            <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
+                              <Box sx={{ flexGrow:1, minWidth:160 }}>
+                                <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
+                              </Box>
+                              <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('raw_sql'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
+                                <DriveFileRenameOutlineIcon fontSize="small" />
+                              </IconButton>
+                              <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('raw_sql'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
+                                <DeleteOutlineIcon fontSize="small" />
+                              </IconButton>
+                            </Box>
+                          </MenuItem>
+                        ))
+                      )}
+                    </Menu>
+                  </Grid>
+                </>
+              )}
             </Grid>
             <Typography variant="caption" color="text.secondary" sx={{ mt:1, display:'block' }}>
               Hinweis: Sommer-/Winterzeit (DST) wird automatisch anhand der gewählten Zeitzone berücksichtigt. Eine separate Checkbox ist nicht nötig.
@@ -2271,7 +2317,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           </Paper>
 
           {/* Query error under the Query box */}
-          {error && <Alert severity="error" sx={{ mb:2 }}>{error}</Alert>}
+          <Collapse in={Boolean(error)}>
+            <Alert severity="error" sx={{ mb:2 }} onClose={()=> setError('')}>
+              {error}
+            </Alert>
+          </Collapse>
 
           {/* Top Countries under Query */}
           <Paper sx={{ p:2, mb:2 }}>
@@ -2366,29 +2416,67 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       <Paper sx={{ p:2 }}>
         <Typography variant="subtitle1" gutterBottom>Results</Typography>
         <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1, flexWrap:'wrap' }}>
-          <TextField
-            size="small"
-            label="Search"
-            placeholder="Filter (AND/OR/NOT; parentheses supported)"
-            value={searchDraft}
-            onChange={(e)=> setSearchDraft(e.target.value)}
-            onKeyDown={(e)=>{ if ((e as any).key === 'Enter') { e.preventDefault(); applySearch(); } }}
-            InputProps={{
-              endAdornment: (
-                <InputAdornment position="end">
-                  {searchDraft && (
-                    <IconButton size="small" onClick={() => setSearchDraft('')} aria-label="Clear search">
-                      <ClearIcon fontSize="small" />
+          <Box sx={{ position: 'relative', minWidth: 260, flexGrow: 1 }}>
+            {!!completionSuffix && (
+              <Box
+                aria-hidden
+                sx={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  pointerEvents: 'none',
+                  display: 'flex',
+                  alignItems: 'center',
+                  // Mirror the actual input's computed styles for exact alignment
+                  color: 'text.disabled',
+                  whiteSpace: 'pre',
+                  ...ghostStyle,
+                }}
+              >
+                <span style={{ visibility: 'hidden' }}>{searchDraft}</span>
+                <span>{completionSuffix}</span>
+              </Box>
+            )}
+
+            <TextField
+              fullWidth
+              size="small"
+              label="Search"
+              placeholder="Filter (strict: use field comparisons e.g. username==&quot;alice&quot;; combine with AND/OR/NOT and parentheses)"
+              value={searchDraft}
+              inputRef={searchInputRef}
+              onClick={updateCaretAtEnd}
+              onKeyUp={updateCaretAtEnd}
+              onBlur={updateCaretAtEnd}
+              onChange={(e) => { setSearchDraft(e.target.value); setTimeout(updateCaretAtEnd, 0); }}
+              onKeyDown={(e) => {
+                if ((e as any).key === 'Enter') { e.preventDefault(); applySearch(); return; }
+                const hasCompletion = !!completionSuffix;
+                if ((e.key === 'ArrowRight' || e.key === 'Tab') && hasCompletion && caretAtEnd) {
+                  e.preventDefault();
+                  setSearchDraft(prev => prev + completionSuffix);
+                  requestAnimationFrame(updateCaretAtEnd);
+                }
+              }}
+              InputProps={{
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {searchDraft && (
+                      <IconButton size="small" onClick={() => { setSearchDraft(''); setSearchQuery(''); if (page !== 1) { setPage(1); } }} aria-label="Clear search">
+                        <ClearIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                    <IconButton size="small" aria-label="Search bookmarks" onClick={(e) => setBmMenuAnchorSearch(e.currentTarget)}>
+                      <BookmarkBorderIcon fontSize="small" />
                     </IconButton>
-                  )}
-                  <IconButton size="small" aria-label="Search bookmarks" onClick={(e)=> setBmMenuAnchorSearch(e.currentTarget)}>
-                    <BookmarkBorderIcon fontSize="small" />
-                  </IconButton>
-                </InputAdornment>
-              )
-            }}
-            sx={{ minWidth: 260, flexGrow: 1 }}
-          />
+                  </InputAdornment>
+                )
+              }}
+              sx={{ minWidth: 260, flexGrow: 1 }}
+            />
+          </Box>
           <Button size="small" variant="contained" onClick={()=>{ applySearch(); }} sx={{ whiteSpace: 'nowrap' }}>
             Send
           </Button>
@@ -2427,7 +2515,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           </Typography>
         </Stack>
         <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
-          Tips: Use AND/OR/NOT; group with ( ); phrases in "..."; also supports &&, ||, !; field comparisons: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count != ""). Regex: /pattern/flags in values or words (e.g., client_ip=="/^123\./", features=="/rbl/", "/[a-z]+/").
+          Tips: Strict mode: only field comparisons are allowed. Use AND/OR/NOT and parentheses to combine. Supported: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count &gt;= 5). Regex is allowed only as a comparison value for text fields, e.g., user_agent=="/android/i" or proto!="/^(imap|smtp)$/i".
         </Typography>
         {loading ? (
           <Box sx={{ display:'flex', justifyContent:'center', my:3 }}><CircularProgress/></Box>
@@ -2578,19 +2666,40 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             </Box>
             <Box display="flex" alignItems="center" justifyContent="space-between" mt={2}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); void runQuery(true); }}>
+                <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); setHasMore(false); void runQuery(true); }}>
                   {[10,25,50,100].map(n=> <MenuItem key={n} value={n}>{n}</MenuItem>)}
                 </TextField>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Pagination
-                  color="primary"
-                  page={page}
-                  onChange={(_, p) => setPage(p)}
-                  count={Math.max(1, Math.ceil(Math.max(1, Number(limit)) / Math.max(1, pageSize)))}
-                  showFirstButton
-                  showLastButton
-                />
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <IconButton
+                    aria-label="First page"
+                    onClick={() => setPage(1)}
+                    disabled={loading || page <= 1}
+                    size="small"
+                  >
+                    <FirstPageIcon />
+                  </IconButton>
+                  <IconButton
+                    aria-label="Previous page"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={loading || page <= 1}
+                    size="small"
+                  >
+                    <ChevronLeftIcon />
+                  </IconButton>
+                  <Typography variant="body2" sx={{ minWidth: 48, textAlign: 'center' }}>
+                    Page {page}
+                  </Typography>
+                  <IconButton
+                    aria-label="Next page"
+                    onClick={() => setPage(p => p + 1)}
+                    disabled={loading || !hasMore}
+                    size="small"
+                  >
+                    <ChevronRightIcon />
+                  </IconButton>
+                </Box>
               </Box>
             </Box>
             <Divider sx={{ mt:2 }} />
@@ -2669,6 +2778,19 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </TextField>
             </Stack>
 
+            <Stack direction="row" spacing={2}>
+              <TextField
+                size="small"
+                type="number"
+                label="Max rows"
+                value={Number.isFinite(limit) ? limit : 0}
+                onChange={(e)=> setLimit(Math.max(0, Number(e.target.value) || 0))}
+                inputProps={{ min: 0, step: 1000 }}
+                helperText="0 = no hard limit (server caps still apply)"
+                sx={{ minWidth: 200 }}
+              />
+            </Stack>
+
             {exportFormat === 'csv' && (
               <Stack direction="row" spacing={2}>
                 <TextField select label="Delimiter" value={csvDelimiter} onChange={e => setCsvDelimiter(e.target.value)} sx={{ minWidth: 140 }}>
@@ -2730,17 +2852,35 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       <Dialog open={analysisOpen} onClose={() => setAnalysisOpen(false)} fullWidth maxWidth="lg">
         <DialogTitle>Deep Analysis</DialogTitle>
         <DialogContent>
-          {analysisLoading && (
+          <Stack direction="row" spacing={2} sx={{ mb: 1 }}>
+            <TextField
+              size="small"
+              type="number"
+              label="Max rows"
+              value={Number.isFinite(limit) ? limit : 0}
+              onChange={(e)=> setLimit(Math.max(0, Number(e.target.value) || 0))}
+              inputProps={{ min: 0, step: 1000 }}
+              helperText="0 = no hard limit (server caps still apply)"
+              sx={{ minWidth: 220 }}
+            />
+          </Stack>
+          {analysisLoading ? (
             <Stack spacing={1} sx={{ mb: 1 }}>
               <LinearProgress />
               <Typography variant="caption" color="text.secondary">
                 Loading… pages: {analysisProgress.pages}, rows: {analysisProgress.rows}
               </Typography>
             </Stack>
+          ) : (
+            <Typography variant="caption" color="text.secondary" sx={{ mb: 1, display: 'block' }}>
+              Ready. Set parameters above and press "Start analysis" to fetch data.
+            </Typography>
           )}
           <AnalysisPanel rows={analysisRows} />
         </DialogContent>
         <DialogActions>
+          <Button onClick={cancelAnalysisLoad} disabled={!analysisLoading}>Cancel</Button>
+          <Button onClick={() => { void loadAllForAnalysis(); }} variant="contained" disabled={analysisLoading}>Start analysis</Button>
           <Button onClick={() => setAnalysisOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
