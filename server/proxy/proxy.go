@@ -4,12 +4,14 @@ import (
 	"bufio"
 	"compress/gzip"
 	"encoding/json"
+	"fmt"
 	"io"
 	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -611,6 +613,10 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 	router.GET("/proxy/system/metrics", h.SystemMetricsProxy)
 	// Security metrics route
 	router.GET("/proxy/security/metrics", h.SecurityMetricsProxy)
+
+	// IPAPI capability and lookup routes
+	router.GET("/proxy/ipapi/status", h.IpapiStatus)
+	router.GET("/proxy/ipapi/lookup", h.IpapiLookupProxy)
 }
 
 // PingProxy handles the /proxy/ping endpoint
@@ -1336,6 +1342,390 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 			"endpoint":      "/proxy/security/metrics",
 			"endpoint_path": "/metrics",
 			"query":         ctx.Request.URL.RawQuery,
+		},
+	})
+
+	ctx.JSON(http.StatusOK, res)
+}
+
+// isPublicRoutableIP checks for public/routable IPv4/IPv6 (no private, loopback, link-local, doc/test)
+func isPublicRoutableIP(ipStr string) bool {
+	ip := net.ParseIP(strings.TrimSpace(ipStr))
+	if ip == nil {
+		return false
+	}
+
+	if ip.IsLoopback() || ip.IsUnspecified() || ip.IsLinkLocalMulticast() || ip.IsLinkLocalUnicast() {
+		return false
+	}
+
+	// IPv4 checks
+	if ip4 := ip.To4(); ip4 != nil {
+		// 10.0.0.0/8
+		if ip4[0] == 10 {
+			return false
+		}
+
+		// 172.16.0.0/12
+		if ip4[0] == 172 && (ip4[1]&0xF0) == 16 {
+			return false
+		}
+
+		// 192.168.0.0/16
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return false
+		}
+
+		// 100.64.0.0/10 (CGNAT)
+		if ip4[0] == 100 && (ip4[1]&0xC0) == 64 {
+			return false
+		}
+
+		// 198.18.0.0/15 benchmarking
+		if ip4[0] == 198 && (ip4[1] == 18 || ip4[1] == 19) {
+			return false
+		}
+
+		// 192.0.2.0/24, 198.51.100.0/24, 203.0.113.0/24 documentation
+		if (ip4[0] == 192 && ip4[1] == 0 && ip4[2] == 2) || (ip4[0] == 198 && ip4[1] == 51 && ip4[2] == 100) || (ip4[0] == 203 && ip4[1] == 0 && ip4[2] == 113) {
+			return false
+		}
+	} else {
+		// IPv6: private fc00::/7, link-local fe80::/10
+		ls := strings.ToLower(ip.String())
+		if strings.HasPrefix(ls, "fc") || strings.HasPrefix(ls, "fd") {
+			return false
+		}
+
+		if strings.HasPrefix(ls, "fe80:") {
+			return false
+		}
+	}
+
+	return true
+}
+
+// IpapiStatus returns { enabled: boolean } depending on the presence of IPAPI_API_KEY
+func (h *ProxyHandler) IpapiStatus(ctx *gin.Context) {
+	enabled := os.Getenv("IPAPI_API_KEY") != ""
+	ctx.JSON(http.StatusOK, gin.H{"enabled": enabled})
+}
+
+// IpapiLookupProxy proxies to ipapi.com and returns pretty JSON for UI
+func (h *ProxyHandler) IpapiLookupProxy(ctx *gin.Context) {
+	ip := strings.TrimSpace(ctx.Query("ip"))
+	if ip == "" {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Missing query param 'ip'"})
+
+		return
+	}
+
+	if strings.Contains(ip, "/") {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "CIDR not supported, provide a single IP"})
+
+		return
+	}
+
+	if !isPublicRoutableIP(ip) {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "IP is not public routable"})
+
+		return
+	}
+
+	apiKey := os.Getenv("IPAPI_API_KEY")
+	if apiKey == "" {
+		ctx.JSON(http.StatusNotImplemented, models.ErrorResponse{Error: "IP lookup is disabled (no API key configured)"})
+
+		return
+	}
+
+	u := &url.URL{Scheme: "https", Host: "api.ipapi.com", Path: "/api/" + ip}
+	q := u.Query()
+	q.Set("access_key", apiKey)
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequest(http.MethodGet, u.String(), nil)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to create request"})
+
+		return
+	}
+
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Accept-Encoding", "identity")
+
+	client := &http.Client{Timeout: 8 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Lookup failed: " + err.Error()})
+
+		return
+	}
+
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		// Try to extract helpful error info from ipapi response body
+		body, _ := io.ReadAll(resp.Body)
+		msg := "ipapi returned status " + strconv.Itoa(resp.StatusCode)
+		if len(body) > 0 {
+			// Attempt to parse ipapi error JSON
+			var em map[string]any
+			if err := json.Unmarshal(body, &em); err == nil {
+				if success, ok := em["success"].(bool); ok && !success {
+					if e, ok := em["error"].(map[string]any); ok {
+						if info, ok := e["info"].(string); ok && info != "" {
+							msg = info
+						} else if t, ok := e["type"].(string); ok && t != "" {
+							msg = t
+						}
+					}
+				}
+				// Some variants may use a top-level "message"
+				if m, ok := em["message"].(string); ok && m != "" {
+					msg = m
+				}
+			} else {
+				// Fallback: use plain text body trimmed
+				bs := strings.TrimSpace(string(body))
+				if bs != "" {
+					msg = msg + ": " + bs
+				}
+			}
+		}
+		// For ipapi 400-level errors, propagate 400 to the client so UI can show meaningful info
+		status := http.StatusBadGateway
+		if resp.StatusCode >= 400 && resp.StatusCode < 500 {
+			status = http.StatusBadRequest
+		}
+		ctx.JSON(status, models.ErrorResponse{Error: msg})
+
+		return
+	}
+
+	var raw map[string]any
+	if err := json.NewDecoder(resp.Body).Decode(&raw); err != nil {
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "Invalid response from ipapi"})
+
+		return
+	}
+
+	if success, ok := raw["success"].(bool); ok && !success {
+		if e, ok := raw["error"].(map[string]any); ok {
+			msg := "ipapi error"
+			if m, ok := e["info"].(string); ok {
+				msg = m
+			}
+
+			ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: msg})
+
+			return
+		}
+
+		ctx.JSON(http.StatusBadGateway, models.ErrorResponse{Error: "ipapi returned an error"})
+
+		return
+	}
+
+	type Loc struct {
+		Continent      string   `json:"continent"`
+		ContinentCode  string   `json:"continent_code"`
+		Country        string   `json:"country"`
+		CountryCode    string   `json:"country_code"`
+		Region         string   `json:"region"`
+		RegionCode     string   `json:"region_code"`
+		City           string   `json:"city"`
+		Zip            string   `json:"zip"`
+		Lat            float64  `json:"lat"`
+		Lon            float64  `json:"lon"`
+		Capital        string   `json:"capital"`
+		Languages      []string `json:"languages"`
+		IsEU           bool     `json:"is_eu"`
+		GeoNameID      float64  `json:"geoname_id"`
+		CountryFlagURL string   `json:"country_flag"`
+		FlagEmoji      string   `json:"flag_emoji"`
+		Calling        string   `json:"calling_code"`
+		TimeZone       string   `json:"time_zone"`
+		ISP            string   `json:"isp"`
+		Org            string   `json:"org"`
+		Asn            string   `json:"asn"`
+		Proxy          bool     `json:"proxy"`
+		Hosting        bool     `json:"hosting"`
+	}
+
+	type TimeZone struct {
+		ID          string  `json:"id"`
+		Abbr        string  `json:"code"`
+		CurrentTime string  `json:"current_time"`
+		GmtOffset   float64 `json:"gmt_offset"`
+		IsDST       bool    `json:"is_dst"`
+	}
+
+	type Connection struct {
+		IP   string `json:"ip"`
+		Type string `json:"type"`
+		ISP  string `json:"isp"`
+		Org  string `json:"org"`
+		Asn  string `json:"asn"`
+	}
+
+	type Carrier struct {
+		Name string `json:"name"`
+		MCC  string `json:"mcc"`
+		MNC  string `json:"mnc"`
+	}
+
+	getS := func(m map[string]any, k string) string {
+		if v, ok := m[k].(string); ok {
+			return v
+		}
+
+		return ""
+	}
+
+	getF := func(m map[string]any, k string) float64 {
+		if v, ok := m[k].(float64); ok {
+			return v
+		}
+
+		return 0
+	}
+
+	getB := func(m map[string]any, k string) bool {
+		if v, ok := m[k].(bool); ok {
+			return v
+		}
+
+		return false
+	}
+
+	loc := Loc{
+		Continent:     getS(raw, "continent_name"),
+		ContinentCode: getS(raw, "continent_code"),
+		Country:       getS(raw, "country_name"),
+		CountryCode:   getS(raw, "country_code"),
+		Region:        getS(raw, "region_name"),
+		RegionCode:    getS(raw, "region_code"),
+		City:          getS(raw, "city"),
+		Zip:           getS(raw, "zip"),
+		Lat:           getF(raw, "latitude"),
+		Lon:           getF(raw, "longitude"),
+	}
+
+	if m, ok := raw["location"].(map[string]any); ok {
+		loc.Capital = getS(m, "capital")
+		// languages can be array of objects or string; collect readable names/codes
+		if arr, ok := m["languages"].([]any); ok {
+			langs := make([]string, 0, len(arr))
+			for _, it := range arr {
+				if mm, ok := it.(map[string]any); ok {
+					name := getS(mm, "name")
+					if name == "" {
+						name = getS(mm, "native")
+					}
+
+					if name == "" {
+						name = getS(mm, "code")
+					}
+
+					if name != "" {
+						langs = append(langs, name)
+					}
+				}
+			}
+
+			loc.Languages = langs
+		}
+
+		loc.IsEU = getB(m, "is_eu")
+		// geoname_id might be number or string; try both
+		if v, ok := m["geoname_id"].(float64); ok {
+			loc.GeoNameID = v
+		} else if s, ok := m["geoname_id"].(string); ok && s != "" {
+			if fv, err := strconv.ParseFloat(s, 64); err == nil {
+				loc.GeoNameID = fv
+			}
+		}
+
+		loc.CountryFlagURL = getS(m, "country_flag")
+		loc.FlagEmoji = getS(m, "country_flag_emoji")
+		loc.Calling = getS(m, "calling_code")
+		loc.Proxy = getB(m, "is_proxy")
+		loc.Hosting = getB(m, "is_hosting")
+	}
+
+	var tzObj *TimeZone
+	if tz, ok := raw["time_zone"].(map[string]any); ok {
+		loc.TimeZone = getS(tz, "id")
+		tzObj = &TimeZone{
+			ID:          getS(tz, "id"),
+			Abbr:        getS(tz, "code"),
+			CurrentTime: getS(tz, "current_time"),
+			GmtOffset:   getF(tz, "gmt_offset"),
+			IsDST:       getB(tz, "is_dst"),
+		}
+	}
+
+	var connObj *Connection
+	if c, ok := raw["connection"].(map[string]any); ok {
+		loc.ISP = getS(c, "isp")
+		loc.Org = getS(c, "org")
+		asn := ""
+
+		if v, ok := c["asn"].(float64); ok {
+			asn = "AS" + fmt.Sprintf("%.0f", v)
+		} else {
+			asn = getS(c, "asn")
+		}
+
+		loc.Asn = asn
+
+		// Use the explicit connection_type provided by ipapi (no fallback/derivation)
+		connType := getS(c, "connection_type")
+
+		connObj = &Connection{
+			IP:   getS(c, "ip"),
+			Type: connType,
+			ISP:  getS(c, "isp"),
+			Org:  getS(c, "org"),
+			Asn:  asn,
+		}
+	}
+
+	var carrierObj *Carrier
+	if car, ok := raw["carrier"].(map[string]any); ok {
+		carrierObj = &Carrier{Name: getS(car, "name"), MCC: getS(car, "mcc"), MNC: getS(car, "mnc")}
+	}
+
+	res := gin.H{
+		"ip":              getS(raw, "ip"),
+		"type":            getS(raw, "type"),
+		"hostname":        getS(raw, "hostname"),
+		"location":        loc,
+		"ip_routing_type": getS(raw, "ip_routing_type"),
+	}
+
+	if tzObj != nil {
+		res["time_zone"] = tzObj
+	}
+
+	if connObj != nil {
+		res["connection"] = connObj
+		// Also expose connection_type at top-level for convenience (aligns with Lua usage ip_info.connection_type)
+		res["connection_type"] = connObj.Type
+	}
+
+	if carrierObj != nil {
+		res["carrier"] = carrierObj
+	}
+
+	api.WriteAudit(ctx, h.Mongo, models.AuditLogEntry{
+		Action: "ipapi.lookup",
+		Target: "ipapi.com",
+		Details: map[string]any{
+			"status":    http.StatusOK,
+			"endpoint":  "/proxy/ipapi/lookup",
+			"client_ip": ip,
 		},
 	})
 

@@ -68,7 +68,9 @@ import {
     RAW_JSON_MIN_BYTES,
     setRawJsonMaxBytesOverride
 } from '../utils/limits';
-import {ComposableMap, Geographies, Geography, Marker, ZoomableGroup} from '../lib/reactSimpleMaps';
+import { fetchIpapiStatus } from '../utils/ipapiStatus';
+import { ClientIpCell } from './ClientIpCell';
+import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
 
 type Row = Record<string, any>;
 
@@ -109,6 +111,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [ip, setIp] = useState<string>('');
   const [limit, setLimit] = useState<number>(100);
   const [pageSize, setPageSize] = useState<number>(100);
+  // IPAPI feature flag from server
+  const [ipapiEnabled, setIpapiEnabled] = useState<boolean>(false);
+  useEffect(() => { fetchIpapiStatus().then(setIpapiEnabled).catch(() => setIpapiEnabled(false)); }, []);
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string>('');
   // Auto-dismiss error after a timeout and allow manual dismiss
@@ -2634,7 +2639,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
                           const w = getColWidth(h);
                           return (
-                            <td key={h} style={{ padding:'6px 8px', borderBottom:`1px solid ${theme.palette.divider}`, width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={String(text)}>{text}</td>
+                            <td key={h} style={{ padding:'6px 8px', borderBottom:`1px solid ${theme.palette.divider}`, width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={h === 'client_ip' ? undefined : String(text)}>
+                              {h === 'client_ip' ? (
+                                <ClientIpCell ip={String(raw ?? '')} ipapiEnabled={ipapiEnabled} />
+                              ) : (
+                                text
+                              )}
+                            </td>
                           );
                         })}
                       </tr>
