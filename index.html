@@ -8,6 +8,8 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#000000" />
     <title>Nauthilus Configuration</title>
+    <!-- Preload world map topology to avoid first-render flash on Map -->
+    <link rel="preload" as="fetch" href="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json" crossorigin>
     <script src="/env-config.js"></script>
   </head>
   <body>

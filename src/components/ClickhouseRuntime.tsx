@@ -115,6 +115,17 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [ipapiEnabled, setIpapiEnabled] = useState<boolean>(false);
   useEffect(() => { fetchIpapiStatus().then(setIpapiEnabled).catch(() => setIpapiEnabled(false)); }, []);
   const [loading, setLoading] = useState<boolean>(false);
+  // Debounced busy state: only show loading indicators if loading persists >150ms
+  const [busy, setBusy] = useState<boolean>(false);
+  useEffect(() => {
+    let t: any;
+    if (loading) {
+      t = setTimeout(() => setBusy(true), 150);
+    } else {
+      setBusy(false);
+    }
+    return () => { if (t) clearTimeout(t); };
+  }, [loading]);
   const [error, setError] = useState<string>('');
   // Auto-dismiss error after a timeout and allow manual dismiss
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -2073,41 +2084,43 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 <ExpandMoreIcon sx={{ transform: mapOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
               </IconButton>
             </Stack>
-            <Collapse in={mapOpen} timeout="auto" unmountOnExit>
-              {loading ? (
-                <Box sx={{ display:'flex', alignItems:'center', gap:1, mt:1 }}><CircularProgress size={18}/><Typography variant="body2" color="text.secondary">Loading…</Typography></Box>
-              ) : countryAgg.length === 0 ? (
-                <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>No data to display.</Typography>
-              ) : (
-                <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
-                  {/* Zoom slider displayed above the map (not overlay) for better visibility on small screens */}
-                  <Box sx={{ display:'flex', justifyContent:'flex-end', mb:1 }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>-</Typography>
-                      <Slider
-                        size="small"
-                        value={mapSlider}
-                        onChange={(_, v)=> {
-                          const s = Array.isArray(v) ? v[0] : (v as number);
-                          setMapSlider(s);
-                          setMapZoom(sliderToZoom(s));
-                        }}
-                        min={0}
-                        max={100}
-                        step={1}
-                        sx={{ width: 160 }}
-                        aria-label="Map zoom"
-                      />
-                      <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>+</Typography>
-                    </Stack>
+            <Collapse in={mapOpen} timeout="auto" unmountOnExit={false}>
+              <Box sx={{ width:'100%', overflowX:'auto', mt:1, position:'relative' }}>
+                {/* Subtle progress shown while long-running loads; map stays mounted */}
+                {busy && (
+                  <Box sx={{ position:'absolute', top:8, right:12, zIndex:1, minWidth:180 }}>
+                    <LinearProgress />
                   </Box>
-                  {/* Using react-simple-maps world-110m TopoJSON */}
-                  <ComposableMap key={`map-${page}-${rows.length}-${countryAgg.length}`} projection="geoMercator" width={980} height={600} style={{ width: '100%', height: 'auto' }}>
-                    <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
-                      <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
-                        {({ geographies }) => (
-                          <>
-                            {geographies.map(geo => {
+                )}
+
+                {/* Zoom slider displayed above the map (not overlay) for better visibility on small screens */}
+                <Box sx={{ display:'flex', justifyContent:'flex-end', mb:1 }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>-</Typography>
+                    <Slider
+                      size="small"
+                      value={mapSlider}
+                      onChange={(_, v)=> {
+                        const s = Array.isArray(v) ? v[0] : (v as number);
+                        setMapSlider(s);
+                        setMapZoom(sliderToZoom(s));
+                      }}
+                      min={0}
+                      max={100}
+                      step={1}
+                      sx={{ width: 160 }}
+                      aria-label="Map zoom"
+                    />
+                    <Typography variant="caption" sx={{ minWidth: 28, textAlign:'center' }}>+</Typography>
+                  </Stack>
+                </Box>
+                {/* Using react-simple-maps world-110m TopoJSON; map is always mounted */}
+                <ComposableMap projection="geoMercator" width={980} height={600} style={{ width: '100%', height: 'auto' }}>
+                  <ZoomableGroup center={mapCenter} zoom={mapZoom} minZoom={MAP_MIN_ZOOM} maxZoom={MAP_MAX_ZOOM} onMoveEnd={({ coordinates, zoom })=>{ setMapCenter(coordinates as any); const z = zoom as number; setMapZoom(z); setMapSlider(zoomToSlider(z)); }}>
+                    <Geographies geography="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json">
+                      {({ geographies }) => (
+                        <>
+                          {geographies.map(geo => {
                             const props: any = (geo as any).properties || {};
                             const name = String(props.name || props.NAME || props.NAME_LONG || '').trim();
                             const iso2 = String(props.ISO_A2 || props.ISO_A2_EH || props.iso_a2 || '').trim();
@@ -2122,6 +2135,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                               <Geography key={geo.rsmKey} geography={geo} fill={fill} stroke="#ccc" />
                             );
                           })}
+
+                          {/* Markers render only when we have mapped data; the base map stays */}
                           {mapData.mapped.map((pt, idx) => {
                             const R = mapData.radius(pt.total);
                             const total = Math.max(1, pt.total);
@@ -2139,26 +2154,34 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                         </>
                       )}
                     </Geographies>
-                    </ZoomableGroup>
-                  </ComposableMap>
-                  <Stack direction="row" spacing={2} alignItems="center" sx={{ mt:1, flexWrap:'wrap' }}>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Box sx={{ width:12, height:12, bgcolor:'#0072B2', borderRadius:0.5 }} />
-                      <Typography variant="caption">success (blue)</Typography>
-                    </Stack>
-                    <Stack direction="row" spacing={1} alignItems="center">
-                      <Box sx={{ width:12, height:12, bgcolor:'#D55E00', borderRadius:0.5 }} />
-                      <Typography variant="caption">failed (orange)</Typography>
-                    </Stack>
-                    {mapData.unmapped.length > 0 && (
-                      <Typography variant="caption" color="text.secondary">Unmapped: {mapData.unmapped.length}</Typography>
-                    )}
-                    <Typography variant="caption" color="text.secondary" sx={{ ml:2 }}>
-                      Country and circle color encode success ratio (orange = more failed, blue = more success)
-                    </Typography>
+                  </ZoomableGroup>
+                </ComposableMap>
+
+                {/* Optional hint text; does not unmount the map */}
+                {countryAgg.length === 0 && !loading && (
+                  <Typography variant="body2" color="text.secondary" sx={{ mt:1 }}>
+                    No data to display.
+                  </Typography>
+                )}
+
+                {/* Legend stays visible */}
+                <Stack direction="row" spacing={2} alignItems="center" sx={{ mt:1, flexWrap:'wrap' }}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box sx={{ width:12, height:12, bgcolor:'#0072B2', borderRadius:0.5 }} />
+                    <Typography variant="caption">success (blue)</Typography>
                   </Stack>
-                </Box>
-              )}
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Box sx={{ width:12, height:12, bgcolor:'#D55E00', borderRadius:0.5 }} />
+                    <Typography variant="caption">failed (orange)</Typography>
+                  </Stack>
+                  {mapData.unmapped.length > 0 && (
+                    <Typography variant="caption" color="text.secondary">Unmapped: {mapData.unmapped.length}</Typography>
+                  )}
+                  <Typography variant="caption" color="text.secondary" sx={{ ml:2 }}>
+                    Country and circle color encode success ratio (orange = more failed, blue = more success)
+                  </Typography>
+                </Stack>
+              </Box>
             </Collapse>
           </Paper>
         </Grid>
@@ -2572,9 +2595,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
           Tips: Strict mode: only field comparisons are allowed. Use AND/OR/NOT and parentheses to combine. Supported: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count &gt;= 5). Regex is allowed only as a comparison value for text fields, e.g., user_agent=="/android/i" or proto!="/^(imap|smtp)$/i".
         </Typography>
-        {loading ? (
-          <Box sx={{ display:'flex', justifyContent:'center', my:3 }}><CircularProgress/></Box>
-        ) : rows.length === 0 ? (
+        {busy && (
+          <Box sx={{ mb: 1 }}>
+            <LinearProgress />
+          </Box>
+        )}
+
+        {rows.length === 0 ? (
           rawPreview ? (
             <>
               <TextField
@@ -2593,7 +2620,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <Typography variant="body2" color="text.secondary">No rows.</Typography>
           )
         ) : (
-          <>
+          <Box sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 120ms ease' }}>
             <Box sx={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
@@ -2819,7 +2846,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 )}
               </>
             )}
-          </>
+          </Box>
         )}
       </Paper>
       {/* Export Dialog */}
