@@ -199,11 +199,43 @@ export const resetSettingsState = () => {
 };
 
 /**
- * Performs an authenticated fetch request with JWT token
- * @param url - The URL to fetch
- * @param options - Fetch options
- * @returns The fetch response
+ * Performs an authenticated fetch request with JWT token and robust 401 handling
+ * - Adds Authorization header from cookie token when present
+ * - Sends credentials to proxy
+ * - On 401, performs a single-flight refresh and retries the request once
  */
+
+// Single-flight refresh state for fetch-based requests
+let isRefreshingFetch = false;
+let waitersFetch: Array<(ok: boolean) => void> = [];
+
+async function refreshSessionFetch(): Promise<boolean> {
+  try {
+    const resp = await fetch(`${getProxyOrigin()}/api/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include'
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  }
+}
+
+function waitForRefresh(): Promise<boolean> {
+  return new Promise((resolve) => waitersFetch.push(resolve));
+}
+
+function isAuthEndpoint(url: string): boolean {
+  return (
+    url.includes('/api/auth/login') ||
+    url.includes('/api/auth/refresh') ||
+    url.includes('/api/auth/logout') ||
+    url.includes('/api/auth/me') ||
+    url.includes('/api/auth/webauthn/') ||
+    url.includes('/api/auth/totp/')
+  );
+}
+
 export const authenticatedFetch = async (
   url: string,
   options: RequestInit = {}
@@ -217,13 +249,8 @@ export const authenticatedFetch = async (
   // Decide whether to set a default Content-Type
   const method = (options.method || 'GET').toUpperCase();
   const hasBody = options.body !== undefined && options.body !== null;
-  const isFormData = typeof FormData !== 'undefined' && hasBody && options.body instanceof FormData;
+  const isFormData = typeof FormData !== 'undefined' && hasBody && (options.body as any) instanceof FormData;
 
-  // Only set Content-Type automatically when:
-  // - there is a request body
-  // - it's not FormData (browser will set proper boundary)
-  // - caller did not already provide Content-Type
-  // Do NOT set for GET/HEAD requests or when no body is present.
   if (hasBody && !isFormData && !headers.has('Content-Type') && method !== 'GET' && method !== 'HEAD') {
     headers.set('Content-Type', 'application/json');
   }
@@ -237,12 +264,66 @@ export const authenticatedFetch = async (
   const fetchOptions: RequestInit = {
     ...options,
     headers,
-    // Ensure cookies (HttpOnly JWT) are sent to the proxy (different origin/port)
     credentials: 'include'
   };
 
-  // Perform the fetch
-  return fetch(url, fetchOptions);
+  async function doFetchOnce(): Promise<Response> {
+    return fetch(url, fetchOptions);
+  }
+
+  let response = await doFetchOnce();
+  if (response.status !== 401) {
+    return response;
+  }
+
+  // Don't attempt refresh for auth endpoints themselves
+  if (isAuthEndpoint(url)) {
+    return response;
+  }
+
+  if (!isRefreshingFetch) {
+    isRefreshingFetch = true;
+    try {
+      const ok = await refreshSessionFetch();
+      // Wake up waiters
+      waitersFetch.forEach((fn) => fn(ok));
+      waitersFetch = [];
+
+      if (ok) {
+        // Retry once
+        response = await doFetchOnce();
+        if (response.status === 401) {
+          try {
+            const { notifySessionExpired } = await import('./notify');
+            notifySessionExpired('Your session has expired. Please sign in again.');
+          } catch {
+            // eslint-disable-next-line no-alert
+            window.alert('Your session has expired. Please sign in again.');
+          }
+        }
+        return response;
+      }
+
+      // Refresh failed
+      try {
+        const { notifySessionExpired } = await import('./notify');
+        notifySessionExpired('Your session has expired. Please sign in again.');
+      } catch {
+        // eslint-disable-next-line no-alert
+        window.alert('Your session has expired. Please sign in again.');
+      }
+      return response;
+    } finally {
+      isRefreshingFetch = false;
+    }
+  }
+
+  // Another refresh is in progress – wait and retry once if it succeeded
+  const ok = await waitForRefresh();
+  if (ok) {
+    return doFetchOnce();
+  }
+  return response;
 };
 
 /**
