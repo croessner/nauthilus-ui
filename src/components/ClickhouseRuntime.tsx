@@ -693,9 +693,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
 
   const runQuery = useCallback(async (force: boolean = false, opts?: { keepPage?: boolean }) => {
-    // Guard: raw_sql should only execute on explicit Run click
-    if (action === 'raw_sql' && !force) {
-      return; // do not auto-run or refresh-trigger raw SQL
+    // Guard: all actions except 'recent' should only execute on explicit Run click
+    if (action !== 'recent' && !force) {
+      return; // do not auto-run for passive actions
     }
     setLoading(true);
     setError('');
@@ -854,9 +854,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [getConnection, endpointPath, action, username, account, ip, pageSize, hookEnabled, rawSql, tsStart, tsEnd, authFilter, buildHookUrl, searchQuery]);
 
+  // Stable reference to runQuery to avoid effects re-firing on its identity changes
+  const runQueryRef = useRef(runQuery);
+  useEffect(() => { runQueryRef.current = runQuery; }, [runQuery]);
+
   // Auto-refresh interval like Security page (default 30s)
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
-  const refreshRunner = useCallback(() => { return runQuery(true, { keepPage: true }); }, [runQuery]);
+  const refreshRunner = useCallback(() => {
+    if (action !== 'recent') return Promise.resolve(); // do not auto-run passive actions
+    return runQuery(true, { keepPage: true });
+  }, [runQuery, action]);
   const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(refreshRunner, REFRESH_SESSION_KEY, 0);
 
   // Rows after server-side filters; keep reference for search/sort
@@ -1202,13 +1209,40 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   // Re-run query when applied search filter changes
   useEffect(() => {
-    void runQuery(true, { keepPage: true });
-  }, [searchQuery, runQuery]);
+    if (action === 'recent') {
+      void runQueryRef.current?.(true, { keepPage: true });
+    }
+  }, [searchQuery, action]);
 
-  // When navigating pages, always request the new page from server
+  // Track previous page and action to distinguish which one changed
+  const prevActionRef = useRef<Action>(action);
+  const prevPageRef = useRef<number>(page);
+
+  // When navigating pages or changing action, request data from server with rules:
+  // - For passive actions (all except 'recent'): only run on page changes (action change is passive)
+  // - For 'recent': run on either page or action change
   useEffect(() => {
-    void runQuery(true, { keepPage: true });
-  }, [page, runQuery]);
+    const prevAction = prevActionRef.current;
+    const prevPage = prevPageRef.current;
+
+    const pageChanged = page !== prevPage;
+    const actionChanged = action !== prevAction;
+
+    // Update refs for next render
+    prevActionRef.current = action;
+    prevPageRef.current = page;
+
+    if (action !== 'recent') {
+      if (pageChanged) {
+        void runQueryRef.current?.(true, { keepPage: true });
+      }
+      return;
+    }
+
+    if (pageChanged || actionChanged) {
+      void runQueryRef.current?.(true, { keepPage: true });
+    }
+  }, [page, action]);
 
   const formatTsForZone = useCallback((val: any, tz: string): string => {
     if (val == null) return '';
@@ -1936,12 +1970,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   const applySearch = useCallback(() => {
     setSearchQuery(searchDraft);
-    if (page === 1) {
-      void runQuery(true, { keepPage: true });
+    if (action === 'recent') {
+      if (page === 1) {
+        void runQuery(true, { keepPage: true });
+      } else {
+        setPage(1);
+      }
     } else {
-      setPage(1);
+      if (page !== 1) setPage(1);
     }
-  }, [searchDraft, page, runQuery]);
+  }, [searchDraft, page, runQuery, action]);
 
   return (
     <Box>
@@ -1949,14 +1987,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         <Typography variant="h5" sx={{ fontWeight: 700 }}>ClickHouse</Typography>
         <Box sx={{ flexGrow: 1 }} />
         {/* Top-right refresh and interval (like Security) */}
-        <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval">
+        <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval" disabled={action!=='recent'}>
           <MenuItem value={0}>OFF</MenuItem>
           <MenuItem value={10000}>10 s</MenuItem>
           <MenuItem value={30000}>30 s</MenuItem>
           <MenuItem value={60000}>1 m</MenuItem>
           <MenuItem value={120000}>2 m</MenuItem>
         </Select>
-        <Button variant="outlined" size="small" startIcon={<RefreshIcon/>} onClick={()=>{ void runQuery(true, { keepPage: true }); }}>Refresh</Button>
+        <Button variant="outlined" size="small" startIcon={<RefreshIcon/>} onClick={()=>{ void runQuery(true, { keepPage: true }); }} disabled={action!=='recent'}>Refresh</Button>
       </Stack>
 
       {/* Connection status (unified banner) */}
@@ -2314,6 +2352,18 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     </Menu>
                   </Grid>
                 </>
+              )}
+              {action !== 'recent' && action !== 'raw_sql' && (
+                <Grid item xs={12} sm={8}>
+                  <Stack direction="row" spacing={1} alignItems="center">
+                    <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
+                      Run
+                    </Button>
+                    <Button variant="outlined" startIcon={<RefreshIcon/>} onClick={()=>{ setRows([]); setRawPreview(''); setRawPreviewFull(''); setError(''); }} disabled={loading}>
+                      Reset
+                    </Button>
+                  </Stack>
+                </Grid>
               )}
             </Grid>
             <Typography variant="caption" color="text.secondary" sx={{ mt:1, display:'block' }}>
