@@ -16,7 +16,7 @@ COPY . .
 RUN npm run build
 
 # Build stage for Go server
-FROM golang:1.22-alpine AS go-build
+FROM golang:1.25-alpine AS go-build
 
 # Add build arguments for multi-architecture support
 ARG TARGETPLATFORM
@@ -56,9 +56,13 @@ RUN GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") && \
     upx --best server
 
 # Production stage
-FROM alpine:latest
+FROM alpine:3.22
 
 WORKDIR /app
+
+# Ensure community repository is enabled (chromium is in community)
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" > /etc/apk/repositories \
+ && echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories
 
 # Install ca-certificates for HTTPS and Chromium for server-side PDF rendering
 RUN apk --no-cache add \
@@ -69,8 +73,10 @@ RUN apk --no-cache add \
     ttf-freefont \
     tzdata
 
-# Environment variable for chromedp to find chromium (optional)
-ENV CHROME_PATH=/usr/bin/chromium-browser
+# Provide common envs and a convenient symlink for tools that expect "chromium"
+ENV CHROME_PATH=/usr/bin/chromium-browser \
+    CHROME_BIN=/usr/bin/chromium-browser
+RUN ln -sf /usr/bin/chromium-browser /usr/bin/chromium
 
 # Copy the build output from the React build stage
 COPY --from=react-build /app/build ./build

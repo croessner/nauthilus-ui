@@ -15,23 +15,7 @@ target "nauthilus-ui" {
     "linux/arm64",
     "linux/arm/v7",
     "linux/arm/v6",
-    "linux/386"
   ]
   // Uncomment and modify the following line to set a tag for your image
   // tags = ["your-registry/nauthilus-ui:latest"]
-}
-
-// Target for the server component (if needed separately)
-target "nauthilus-server" {
-  context = "."
-  dockerfile = "server/Dockerfile"
-  platforms = [
-    "linux/amd64",
-    "linux/arm64",
-    "linux/arm/v7",
-    "linux/arm/v6",
-    "linux/386"
-  ]
-  // Uncomment and modify the following line to set a tag for your image
-  // tags = ["your-registry/nauthilus-server:latest"]
 }
