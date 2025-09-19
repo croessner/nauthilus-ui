@@ -2,9 +2,12 @@ package api
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"net/url"
+	"os"
+	"os/exec"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
@@ -69,8 +72,47 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 		})
 	}
 
+	// Resolve Chrome/Chromium executable path
+	findBrowser := func() (string, error) {
+		if p := os.Getenv("CHROME_PATH"); p != "" {
+			if _, err := os.Stat(p); err == nil {
+				return p, nil
+			}
+		}
+
+		candidates := []string{"google-chrome", "google-chrome-stable", "chromium-browser", "chromium"}
+		for _, name := range candidates {
+			if p, err := exec.LookPath(name); err == nil {
+				return p, nil
+			}
+		}
+
+		return "", errors.New("no Chrome/Chromium executable found; set CHROME_PATH or install chromium/google-chrome")
+	}
+
+	exePath, err := findBrowser()
+	if err != nil {
+		slog.Error("browser not found for PDF export", "error", err)
+		ctx.JSON(500, gin.H{"error": "browser not found for PDF export", "details": err.Error()})
+		return
+	}
+
+	// Create an ExecAllocator with explicit flags suitable for containers
+	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
+		chromedp.ExecPath(exePath),
+		chromedp.Flag("headless", true),
+		chromedp.Flag("disable-gpu", true),
+		chromedp.Flag("no-sandbox", true),
+		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("hide-scrollbars", true),
+		chromedp.Flag("mute-audio", true),
+	)
+
+	allocCtx, cancelAlloc := chromedp.NewExecAllocator(ctx.Request.Context(), allocOpts...)
+	defer cancelAlloc()
+
 	// Prepare chromedp context
-	cctx, cancel := chromedp.NewContext(ctx.Request.Context())
+	cctx, cancel := chromedp.NewContext(allocCtx)
 	defer cancel()
 
 	// Increase timeout for heavy reports
