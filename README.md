@@ -1032,3 +1032,22 @@ Example .env:
 AUDIT_RETENTION_DAYS=90
 AUDIT_CLEAN_INTERVAL_HOURS=6
 ```
+
+
+## Audit policy and suppression (server-side)
+
+To avoid noisy audit entries from routine, idempotent requests (e.g., auto-refresh GETs), the backend applies a conservative, server-side audit policy:
+
+- By default, GET and HEAD requests are NOT audited.
+- Mutating methods (POST/PUT/PATCH/DELETE) are audited.
+- Optional deduplication suppresses repeated identical events within a small time window per actor.
+- You can force auditing of specific paths via a regex.
+
+Environment variables:
+- AUDIT_GET_AUDIT: If set to true, GET/HEAD requests will also be audited. Default: false
+- AUDIT_DEDUP_WINDOW_SEC: Deduplication window in seconds for repeated events per actor/method/path/action/target. Default: 30
+- AUDIT_FORCE_REGEX: Optional regular expression to force audit for matching request paths (e.g., ^/api/session$|^/admin/)
+
+Notes:
+- Suppression is server-side; clients cannot disable auditing.
+- The policy is in-memory and process-local. For clustered deployments, prefer sticky sessions or an external audit pipeline if strict dedup across instances is required.

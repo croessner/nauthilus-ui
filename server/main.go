@@ -15,6 +15,7 @@ import (
 	"github.com/joho/godotenv"
 
 	"nauthilus-ui/server/api"
+	"nauthilus-ui/server/audit"
 	"nauthilus-ui/server/config"
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/middleware"
@@ -388,6 +389,9 @@ func main() {
 
 	// Load configuration
 	cfg := config.LoadConfig()
+
+	// Initialize audit policy
+	audit.Init(cfg)
 
 	// Create root context
 	rootCtx := context.Background()

@@ -15,6 +15,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo/options"
 
+	"nauthilus-ui/server/audit"
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
 )
@@ -357,6 +358,17 @@ func WriteAudit(ctx *gin.Context, mongo *db.MongoDB, entry models.AuditLogEntry)
 	// IP
 	if entry.IP == "" {
 		entry.IP = getClientIP(ctx.Request)
+	}
+
+	// Method
+	if entry.Method == "" && ctx != nil && ctx.Request != nil {
+		entry.Method = ctx.Request.Method
+	}
+
+	// Policy decision: suppress non-relevant events
+	if !audit.ShouldAudit(ctx, &entry) {
+		// Optionally, we could count suppressed events via metrics; keep it simple for now.
+		return
 	}
 
 	// Insert-only

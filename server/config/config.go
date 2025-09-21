@@ -59,6 +59,14 @@ type Config struct {
 	// AuditCleanupIntervalHours controls how often the cleanup runs.
 	AuditCleanupIntervalHours int
 
+	// Audit policy configuration
+	// AuditGetAudit controls whether GET/HEAD requests are audited. Default false.
+	AuditGetAudit bool
+	// AuditDedupWindowSec controls deduplication window (seconds) for repeated events. 0 disables dedup.
+	AuditDedupWindowSec int
+	// AuditForceRegex allows forcing audit for requests whose path matches this regex (optional).
+	AuditForceRegex string
+
 	// OIDC configuration (optional)
 	OIDCEnabled       bool
 	OIDCIssuer        string
@@ -106,6 +114,11 @@ func LoadConfig() *Config {
 		// Audit log retention
 		AuditRetentionDays:        getEnvAsInt("AUDIT_RETENTION_DAYS", 0),
 		AuditCleanupIntervalHours: getEnvAsInt("AUDIT_CLEAN_INTERVAL_HOURS", 6),
+
+		// Audit policy configuration
+		AuditGetAudit:       getEnv("AUDIT_GET_AUDIT", "false") == "true",
+		AuditDedupWindowSec: getEnvAsInt("AUDIT_DEDUP_WINDOW_SEC", 30),
+		AuditForceRegex:     getEnv("AUDIT_FORCE_REGEX", ""),
 
 		// OIDC configuration (optional)
 		OIDCEnabled:       getEnv("REACT_APP_OIDC_ENABLED", "false") == "true",
