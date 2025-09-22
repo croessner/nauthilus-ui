@@ -1,4 +1,5 @@
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useTheme } from '@mui/material/styles'
 import type { IpapiPretty } from '../utils/ipapi'
 
@@ -16,6 +17,18 @@ export function IpNote({ data, onClose, anchorRect, error }: {
     top: Math.max(8, anchorRect.bottom + 6)
   })
 
+  // Compute and clamp the floating note position relative to the anchor and viewport
+  const updatePosition = () => {
+    const el = ref.current
+    if (!el) return
+    const w = el.offsetWidth
+    const h = el.offsetHeight
+    const margin = 8
+    const left = Math.min(window.innerWidth - w - margin, Math.max(margin, anchorRect.left))
+    const top = Math.min(window.innerHeight - h - margin, Math.max(margin, anchorRect.bottom + 6))
+    setPos({ left, top })
+  }
+
   useEffect(() => {
     function onDoc(e: MouseEvent) {
       if (!ref.current) return
@@ -25,17 +38,22 @@ export function IpNote({ data, onClose, anchorRect, error }: {
     return () => document.removeEventListener('mousedown', onDoc)
   }, [onClose])
 
+  // Reposition on scroll/resize to keep the note near the anchor
+  useEffect(() => {
+    function onWin() {
+      updatePosition()
+    }
+    window.addEventListener('scroll', onWin, true)
+    window.addEventListener('resize', onWin)
+    return () => {
+      window.removeEventListener('scroll', onWin, true)
+      window.removeEventListener('resize', onWin)
+    }
+  }, [anchorRect])
 
   // After mount/update, measure size and clamp into viewport for optimal positioning
   useLayoutEffect(() => {
-    const el = ref.current
-    if (!el) return
-    const w = el.offsetWidth
-    const h = el.offsetHeight
-    const margin = 8
-    const left = Math.min(window.innerWidth - w - margin, Math.max(margin, anchorRect.left))
-    const top = Math.min(window.innerHeight - h - margin, Math.max(margin, anchorRect.bottom + 6))
-    setPos({ left, top })
+    updatePosition()
   }, [anchorRect, data])
 
   const L = data.location || {}
@@ -73,9 +91,9 @@ export function IpNote({ data, onClose, anchorRect, error }: {
     }
   }
 
-  return (
+  const content = (
     <div ref={ref} style={{
-      position: 'fixed', left: pos.left, top: pos.top, zIndex: 1000,
+      position: 'fixed', left: pos.left, top: pos.top, zIndex: 2000,
       background: bg, color: fg, border: `1px solid ${border}`, borderRadius: 8,
       boxShadow: shadow, padding: 10, fontFamily: 'system-ui, sans-serif', fontSize: 12.5,
       width: 'auto', minWidth: 260, maxWidth: 'min(80vw, 420px)',
@@ -156,4 +174,6 @@ export function IpNote({ data, onClose, anchorRect, error }: {
       )}
     </div>
   )
+
+  return typeof document !== 'undefined' ? createPortal(content, document.body) : content
 }

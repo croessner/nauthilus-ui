@@ -7,7 +7,6 @@ import {
   Geographies as BaseGeographies,
   Geography as BaseGeography,
   Marker as BaseMarker,
-  // eslint-disable-next-line @typescript-eslint/ban-ts-comment
   // @ts-ignore - depending on installed types, ZoomableGroup may be untyped
   ZoomableGroup as BaseZoomableGroup,
 } from 'react-simple-maps';

@@ -68,9 +68,9 @@ import {
     RAW_JSON_MIN_BYTES,
     setRawJsonMaxBytesOverride
 } from '../utils/limits';
-import { fetchIpapiStatus } from '../utils/ipapiStatus';
-import { ClientIpCell } from './ClientIpCell';
-import { ComposableMap, Geographies, Geography, Marker, ZoomableGroup } from 'react-simple-maps';
+import {fetchIpapiStatus} from '../utils/ipapiStatus';
+import {ClientIpCell} from './ClientIpCell';
+import {ComposableMap, Geographies, Geography, Marker, ZoomableGroup} from '../lib/reactSimpleMaps';
 
 type Row = Record<string, any>;
 
@@ -126,6 +126,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
     return () => { if (t) clearTimeout(t); };
   }, [loading]);
+  
+  // Visual pulse only when new data actually arrives during auto-refresh
+  const [changePulse, setChangePulse] = useState<boolean>(false);
+  const pulseTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [error, setError] = useState<string>('');
   // Auto-dismiss error after a timeout and allow manual dismiss
   const errorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -183,11 +187,50 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     if (rawPreviewFull) setRawPreview(applyPreviewLimit(rawPreviewFull, clamped));
   }, [rawLimitInput, rawPreviewFull]);
   const [rawSql, setRawSql] = useState<string>('');
-  // Expanded rows by index
-  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
-  const toggleExpanded = useCallback((idx:number)=>{
-    setExpanded(prev=>({ ...prev, [idx]: !prev[idx] }));
+  // Row identity and expansion state (key-based, robust to reordering)
+  const rowKey = useCallback((r: Row) => {
+    // Prefer explicit IDs if available
+    const cand = (r as any)?.id || (r as any)?.event_id || (r as any)?.uuid;
+    if (cand) return String(cand);
+    try {
+      return JSON.stringify(r);
+    } catch {
+      const ts = String((r as any)?.ts ?? '');
+      const ipk = String((r as any)?.client_ip ?? '');
+      const user = String((r as any)?.username ?? (r as any)?.unique_user_id ?? '');
+      const svc = String((r as any)?.service ?? '');
+      return `${ts}|${ipk}|${user}|${svc}`;
+    }
   }, []);
+
+  // Track expanded rows by stable key
+  const [expandedKeys, setExpandedKeys] = useState<Set<string>>(new Set());
+  const isExpanded = useCallback((k: string) => expandedKeys.has(k), [expandedKeys]);
+  // Keep a snapshot of row data when expanded to avoid flicker during refresh
+  const expandedSnapshotsRef = useRef<Map<string, Row>>(new Map());
+  const toggleExpanded = useCallback((k:string, row?: Row)=>{
+    setExpandedKeys(prev => {
+      const next = new Set(prev);
+      if (next.has(k)) {
+        next.delete(k);
+        try { expandedSnapshotsRef.current.delete(k); } catch {}
+      } else {
+        next.add(k);
+        if (row) {
+          try { expandedSnapshotsRef.current.set(k, row); } catch {}
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // Track seen rows (for dimming during auto-refresh)
+  const seenKeysRef = useRef<Set<string>>(new Set());
+  // Quick boolean ref for auto-refresh status to avoid TDZ with refreshMs
+  const autoRefreshingRef = useRef<boolean>(false);
+
+  // Row DOM refs for scroll stabilization
+  const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
   const isEmptyValue = useCallback((v:any)=>{
     if (v === null || v === undefined) return true;
     if (typeof v === 'string') return v.trim() === '';
@@ -754,7 +797,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         setError('No backend URL configured (Runtime → Connection).');
         return;
       }
-      const url = buildHookUrl(conn, undefined, pageSize + 1);
+      const url = buildHookUrl(conn, autoRefreshingRef.current ? 0 : undefined, pageSize + 1);
       // Abort any in-flight request and start a new one for this run
       try { queryAbortRef.current?.abort(); } catch {}
       controller = new AbortController();
@@ -802,13 +845,64 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       // Store full preview and apply current limit for display
       setRawPreviewFull(preview);
       setRawPreview(applyPreviewLimit(preview, rawJsonMaxBytes));
+      // Determine if there are actually new rows; only then mark previous rows as seen (for dimming)
+      let hasNew = false;
+      if (autoRefreshingRef.current) {
+        try {
+          const tsOf = (x: Row) => String((x as any)?.ts ?? '');
+          const prevTopTs = rows.length ? tsOf(rows[0]) : '';
+          const nextTopTs = parsed.length ? tsOf(parsed[0]) : '';
+          if (nextTopTs && prevTopTs) {
+            if (nextTopTs > prevTopTs) {
+              hasNew = true;
+            } else if (nextTopTs === prevTopTs) {
+              const prevCnt = rows.reduce((n, r) => n + (tsOf(r) === prevTopTs ? 1 : 0), 0);
+              const nextCnt = parsed.reduce((n, r) => n + (tsOf(r) === nextTopTs ? 1 : 0), 0);
+              if (nextCnt > prevCnt) hasNew = true;
+            }
+          } else if (nextTopTs && !prevTopTs) {
+            hasNew = true; // there were no previous rows
+          }
+          if (hasNew) {
+            const s = seenKeysRef.current;
+            rows.forEach(r => s.add(rowKey(r)));
+          }
+        } catch {}
+      }
+
+      // Compute next page worth of rows and prune expansion to visible rows
+      const nextRows = parsed.length > pageSize ? parsed.slice(0, pageSize) : parsed;
+      const present = new Set(nextRows.map(r => rowKey(r)));
+      let removedCount = 0;
+      setExpandedKeys(prev => {
+        const keep = new Set<string>();
+        for (const k of prev) { if (present.has(k)) keep.add(k); }
+        removedCount = prev.size - keep.size;
+        return keep;
+      });
+      if (removedCount > 0) {
+        setNotif({ open:true, severity:'info', message:'Expanded row moved out of current page' });
+      }
+
       if (parsed.length > pageSize) {
         setHasMore(true);
-        setRows(parsed.slice(0, pageSize));
+        setRows(nextRows);
       } else {
         setHasMore(false);
         setRows(parsed);
       }
+
+      // Trigger a short visual pulse only when auto-refresh is on and new data arrived
+      if (autoRefreshingRef.current) {
+        if (pulseTimerRef.current) { clearTimeout(pulseTimerRef.current); pulseTimerRef.current = null; }
+        if (hasNew) {
+          setChangePulse(true);
+          pulseTimerRef.current = setTimeout(() => { setChangePulse(false); pulseTimerRef.current = null; }, 180);
+        } else {
+          setChangePulse(false);
+        }
+      }
+
       // Auto-expand raw if no tabular rows parsed
       setShowRaw(parsed.length === 0 && Boolean(preview));
       // Update available fields using meta if present, otherwise from row keys
@@ -863,7 +957,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
       }
     }
-  }, [getConnection, endpointPath, action, username, account, ip, pageSize, hookEnabled, rawSql, tsStart, tsEnd, authFilter, buildHookUrl, searchQuery]);
+  }, [getConnection, endpointPath, action, username, account, ip, pageSize, hookEnabled, rawSql, tsStart, tsEnd, authFilter, buildHookUrl, searchQuery, rows, rowKey]);
 
   // Stable reference to runQuery to avoid effects re-firing on its identity changes
   const runQueryRef = useRef(runQuery);
@@ -873,9 +967,45 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const REFRESH_SESSION_KEY = 'clickhouseRuntime.refreshIntervalMs';
   const refreshRunner = useCallback(() => {
     if (action !== 'recent') return Promise.resolve(); // do not auto-run passive actions
-    return runQuery(true, { keepPage: true });
-  }, [runQuery, action]);
+    return runQueryRef.current(true, { keepPage: true });
+  }, [action]);
   const [refreshMs, setRefreshMs] = usePersistedAutoRefresh(refreshRunner, REFRESH_SESSION_KEY, 0);
+  // Sync boolean ref to avoid TDZ when runQuery is defined above
+  useEffect(() => { autoRefreshingRef.current = refreshMs > 0; }, [refreshMs]);
+
+  // Initialize/clear seen set when auto-refresh is toggled: do NOT pre-mark current rows.
+  useEffect(() => {
+    seenKeysRef.current.clear();
+  }, [refreshMs]);
+
+  // When enabling auto-refresh, reset to page 1 for consistency
+  useEffect(() => {
+    if (refreshMs > 0 && page !== 1) setPage(1);
+  }, [refreshMs, page]);
+
+  // Clear expansion and history on major context changes
+  useEffect(() => {
+    setExpandedKeys(new Set());
+    seenKeysRef.current.clear();
+  }, [action, username, account, ip, rawSql, tsStart, tsEnd, authFilter]);
+
+  // Scroll stabilization: keep expanded row roughly in view
+  useEffect(() => {
+    if (!expandedKeys.size) return;
+    const present = new Set(rows.map(r => rowKey(r)));
+    for (const k of expandedKeys) {
+      if (!present.has(k)) continue;
+      const el = rowRefs.current[k];
+      if (!el) continue;
+      const rect = el.getBoundingClientRect();
+      const vh = window.innerHeight || document.documentElement.clientHeight;
+      const partiallyVisible = rect.top < vh && rect.bottom > 0;
+      if (!partiallyVisible) {
+        try { el.scrollIntoView({ block: 'nearest' }); } catch {}
+      }
+      break; // only the first expanded row
+    }
+  }, [rows, expandedKeys, rowKey]);
 
   // Rows after server-side filters; keep reference for search/sort
   const filteredRows = useMemo(() => rows, [rows]);
@@ -1133,11 +1263,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   // Sort rows by selected column and direction
   const sortedRows = useMemo(() => {
-    const base = searchFilteredRows;
-    if (!sortBy) return base;
     // decorate with index to achieve stable sort
-    const decorated = base.map((r, i) => ({ r, i }));
-    const getVal = (row: Row) => row?.[sortBy as keyof Row];
+    const decorated = searchFilteredRows.map((r, i) => ({ r, i }));
+    const getVal = (row: Row, field?: string | null) => field ? (row as any)?.[field] : undefined;
     const toFiniteNumber = (v: any): number | null => {
       if (v == null || v === '') return null;
       if (typeof v === 'number') return Number.isFinite(v) ? v : null;
@@ -1149,39 +1277,48 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     };
     const isMissing = (v: any) => v === null || v === undefined || v === '';
 
-    decorated.sort((a, b) => {
-      const av = getVal(a.r);
-      const bv = getVal(b.r);
-
-      // Handle missing values deterministically
+    const compareBy = (a: any, b: any, field: string, dir: 'asc'|'desc') => {
+      const av = getVal(a, field);
+      const bv = getVal(b, field);
       const aMiss = isMissing(av);
       const bMiss = isMissing(bv);
       let cmp: number;
-      if (aMiss && bMiss) {
-        cmp = 0;
-      } else if (aMiss) {
-        cmp = 1; // missing last for asc
-      } else if (bMiss) {
-        cmp = -1;
-      } else {
-        // Both present: try numeric/date first if both parse to finite numbers
+      if (aMiss && bMiss) cmp = 0;
+      else if (aMiss) cmp = 1;
+      else if (bMiss) cmp = -1;
+      else {
         const an = toFiniteNumber(av);
         const bn = toFiniteNumber(bv);
-        if (an !== null && bn !== null) {
-          cmp = an < bn ? -1 : an > bn ? 1 : 0;
-        } else {
+        if (an !== null && bn !== null) cmp = an < bn ? -1 : an > bn ? 1 : 0;
+        else {
           const as = String(av).toLowerCase();
           const bs = String(bv).toLowerCase();
           cmp = as < bs ? -1 : as > bs ? 1 : 0;
         }
       }
+      return dir === 'asc' ? cmp : -cmp;
+    };
 
+    const liveMode = action === 'recent' && refreshMs > 0;
+
+    decorated.sort((a, b) => {
+      let cmp = 0;
+      if (liveMode) {
+        // Primary: ts desc to keep newest on top
+        cmp = compareBy(a.r, b.r, 'ts', 'desc');
+        // Secondary: user's sort choice, if any and not ts
+        if (cmp === 0 && sortBy && sortBy !== 'ts') {
+          cmp = compareBy(a.r, b.r, String(sortBy), sortDir);
+        }
+      } else if (sortBy) {
+        cmp = compareBy(a.r, b.r, String(sortBy), sortDir);
+      }
       if (cmp === 0) cmp = a.i - b.i; // stable tie-breaker
-      return sortDir === 'asc' ? cmp : -cmp;
+      return cmp;
     });
 
     return decorated.map(d => d.r);
-  }, [searchFilteredRows, sortBy, sortDir]);
+  }, [searchFilteredRows, sortBy, sortDir, action, refreshMs]);
 
   // Aggregate countries for top 100; split success/failed by authenticated flag
   const countryAgg = useMemo(() => {
@@ -1992,6 +2129,9 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [searchDraft, page, runQuery, action]);
 
+  const autoRefreshing = refreshMs > 0;
+  const hasAnyExpanded = expandedKeys.size > 0;
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
@@ -2000,6 +2140,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         {/* Top-right refresh and interval (like Security) */}
         <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval" disabled={action!=='recent'}>
           <MenuItem value={0}>OFF</MenuItem>
+          <MenuItem value={2000}>2 s</MenuItem>
+          <MenuItem value={5000}>5 s</MenuItem>
           <MenuItem value={10000}>10 s</MenuItem>
           <MenuItem value={30000}>30 s</MenuItem>
           <MenuItem value={60000}>1 m</MenuItem>
@@ -2595,7 +2737,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
           Tips: Strict mode: only field comparisons are allowed. Use AND/OR/NOT and parentheses to combine. Supported: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count &gt;= 5). Regex is allowed only as a comparison value for text fields, e.g., user_agent=="/android/i" or proto!="/^(imap|smtp)$/i".
         </Typography>
-        {busy && (
+        {busy && !hasAnyExpanded && (
           <Box sx={{ mb: 1 }}>
             <LinearProgress />
           </Box>
@@ -2620,7 +2762,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             <Typography variant="body2" color="text.secondary">No rows.</Typography>
           )
         ) : (
-          <Box sx={{ opacity: loading ? 0.6 : 1, transition: 'opacity 120ms ease' }}>
+          <Box sx={{ opacity: changePulse && !hasAnyExpanded ? 0.6 : 1, transition: 'opacity 120ms ease' }}>
             <Box sx={{ overflowX:'auto' }}>
               <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
@@ -2703,91 +2845,104 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   </tr>
                 </thead>
                 <tbody>
-                  {pagedRows.map((r, idx) => (
-                    <React.Fragment key={idx}>
-                      <tr>
-                        <td style={{ padding:'0 4px', borderBottom:`1px solid ${theme.palette.divider}`, textAlign:'center', verticalAlign:'middle' }}>
-                          <IconButton size="small" onClick={()=>toggleExpanded(idx)} aria-label="Expand row" aria-expanded={expanded[idx]} sx={{ transition:'transform 0.2s', transform: expanded[idx] ? 'rotate(90deg)' : 'rotate(0deg)' }}>
-                            <ChevronRightIcon fontSize="small" />
-                          </IconButton>
-                        </td>
-                        {selectedFields.map((h) => {
-                          const raw = (r as any)?.[h];
-                          const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
-                          const w = getColWidth(h);
-                          return (
-                            <td key={h} style={{ padding:'6px 8px', borderBottom:`1px solid ${theme.palette.divider}`, width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={h === 'client_ip' ? undefined : String(text)}>
-                              {h === 'client_ip' ? (
-                                <ClientIpCell ip={String(raw ?? '')} ipapiEnabled={ipapiEnabled} />
-                              ) : (
-                                text
-                              )}
-                            </td>
-                          );
-                        })}
-                      </tr>
-                      {expanded[idx] && (
+                  {pagedRows.map((r, idx) => {
+                    const k = rowKey(r);
+                    const expanded = isExpanded(k);
+                    const isDimmed = autoRefreshing && !expanded && seenKeysRef.current.has(k);
+                    return (
+                      <React.Fragment key={k || idx}>
+                        <tr
+                          ref={el => { rowRefs.current[k] = el; }}
+                          style={{ color: isDimmed ? theme.palette.text.disabled : undefined, transition: 'color 120ms linear' }}
+                        >
+                          <td style={{ padding:'0 4px', borderBottom:`1px solid ${theme.palette.divider}`, textAlign:'center', verticalAlign:'middle' }}>
+                            <IconButton size="small" onClick={()=>toggleExpanded(k, r)} aria-label="Expand row" aria-expanded={expanded} sx={{ transition:'transform 0.2s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
+                              <ChevronRightIcon fontSize="small" />
+                            </IconButton>
+                          </td>
+                          {selectedFields.map((h) => {
+                            const raw = (r as any)?.[h];
+                            const text = h === 'ts' ? formatTsForZone(raw, tsTimeZone) : String(raw ?? '');
+                            const w = getColWidth(h);
+                            return (
+                              <td key={h} style={{ padding:'6px 8px', borderBottom:`1px solid ${theme.palette.divider}`, width:w, minWidth:w, maxWidth:w, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }} title={h === 'client_ip' ? undefined : String(text)}>
+                                {h === 'client_ip' ? (
+                                  <ClientIpCell ip={String(raw ?? '')} ipapiEnabled={ipapiEnabled} />
+                                ) : (
+                                  text
+                                )}
+                              </td>
+                            );
+                          })}
+                        </tr>
                         <tr>
-                          <td style={{ borderBottom:`1px solid ${theme.palette.divider}` }} />
-                          <td colSpan={selectedFields.length} style={{ padding:'8px 8px', borderBottom:`1px solid ${theme.palette.divider}` }}>
-                            <Box sx={{ p:1.25, bgcolor:'rgba(25,118,210,0.06)', border:'1px solid', borderColor:'primary.light', borderRadius:1 }}>
-                              <Grid container spacing={0.5}>
-                                {selectedFields.filter(k => !isEmptyValue((r as any)?.[k])).map(k => {
-                                  const raw = (r as any)?.[k];
-                                  const text = k === 'ts' ? formatTsForZone(raw, tsTimeZone) : (typeof raw === 'object' ? JSON.stringify(raw) : String(raw));
-                                  return (
-                                    <React.Fragment key={k}>
-                                      <Grid item xs={1} sm={3} md={2}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{k}</Typography></Grid>
-                                      <Grid item xs={11} sm={9} md={10}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{text}</Typography></Grid>
-                                    </React.Fragment>
-                                  );
-                                })}
-                              </Grid>
-                            </Box>
+                          <td style={{ borderBottom: expanded ? `1px solid ${theme.palette.divider}` : 'none' }} />
+                          <td colSpan={selectedFields.length} style={{ padding:'0 8px', borderBottom: expanded ? `1px solid ${theme.palette.divider}` : 'none' }}>
+                            <Collapse in={expanded} timeout="auto" unmountOnExit>
+                              <Box sx={{ p:1.25, bgcolor:'rgba(25,118,210,0.06)', border:'1px solid', borderColor:'primary.light', borderRadius:1 }}>
+                                <Grid container spacing={0.5}>
+                                  {selectedFields.filter(kf => !isEmptyValue(((expandedSnapshotsRef.current.get(k) || r) as any)?.[kf])).map(kf => {
+                                    const src = (expandedSnapshotsRef.current.get(k) || r) as any;
+                                    const rawV = src?.[kf];
+                                    const textV = kf === 'ts' ? formatTsForZone(rawV, tsTimeZone) : (typeof rawV === 'object' ? JSON.stringify(rawV) : String(rawV));
+                                    return (
+                                      <React.Fragment key={kf}>
+                                        <Grid item xs={1} sm={3} md={2}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{kf}</Typography></Grid>
+                                        <Grid item xs={11} sm={9} md={10}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{textV}</Typography></Grid>
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </Grid>
+                              </Box>
+                            </Collapse>
                           </td>
                         </tr>
-                      )}
-                    </React.Fragment>
-                  ))}
+                      </React.Fragment>
+                    );
+                  })}
                 </tbody>
               </table>
             </Box>
             <Box display="flex" alignItems="center" justifyContent="space-between" mt={2}>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ setPageSize(Number(e.target.value)); setPage(1); setHasMore(false); void runQuery(true); }}>
+                <TextField select size="small" label="Rows per page" value={pageSize} onChange={e=>{ const newSize = Number(e.target.value); setPageSize(newSize); setPage(1); setHasMore(false); setTimeout(() => { try { void runQueryRef.current?.(true); } catch {} }, 0); }}>
                   {[10,25,50,100].map(n=> <MenuItem key={n} value={n}>{n}</MenuItem>)}
                 </TextField>
               </Box>
               <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <IconButton
-                    aria-label="First page"
-                    onClick={() => setPage(1)}
-                    disabled={loading || page <= 1}
-                    size="small"
-                  >
-                    <FirstPageIcon />
-                  </IconButton>
-                  <IconButton
-                    aria-label="Previous page"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={loading || page <= 1}
-                    size="small"
-                  >
-                    <ChevronLeftIcon />
-                  </IconButton>
-                  <Typography variant="body2" sx={{ minWidth: 48, textAlign: 'center' }}>
-                    Page {page}
-                  </Typography>
-                  <IconButton
-                    aria-label="Next page"
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={loading || !hasMore}
-                    size="small"
-                  >
-                    <ChevronRightIcon />
-                  </IconButton>
-                </Box>
+                <Tooltip title={autoRefreshing ? 'Auto-refresh is active; navigation disabled' : ''}>
+                  <span>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, opacity: autoRefreshing ? 0.6 : 1 }}>
+                      <IconButton
+                        aria-label="First page"
+                        onClick={() => setPage(1)}
+                        disabled={loading || page <= 1 || autoRefreshing}
+                        size="small"
+                      >
+                        <FirstPageIcon />
+                      </IconButton>
+                      <IconButton
+                        aria-label="Previous page"
+                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                        disabled={loading || page <= 1 || autoRefreshing}
+                        size="small"
+                      >
+                        <ChevronLeftIcon />
+                      </IconButton>
+                      <Typography variant="body2" sx={{ minWidth: 48, textAlign: 'center' }} color={autoRefreshing ? 'text.disabled' : undefined} aria-disabled={autoRefreshing}>
+                        Page {page}
+                      </Typography>
+                      <IconButton
+                        aria-label="Next page"
+                        onClick={() => setPage(p => p + 1)}
+                        disabled={loading || !hasMore || autoRefreshing}
+                        size="small"
+                      >
+                        <ChevronRightIcon />
+                      </IconButton>
+                    </Box>
+                  </span>
+                </Tooltip>
               </Box>
             </Box>
             <Divider sx={{ mt:2 }} />

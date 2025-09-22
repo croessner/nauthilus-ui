@@ -147,7 +147,7 @@ const MainContent = (): React.JSX.Element => {
   const [appBarHeight, setAppBarHeight] = useState(64); // Default height
 
   // User context needed for per-user persistence keys
-  const { user, logout } = useUser();
+  const { user, logout: userLogout } = useUser();
 
   // Menu display states with per-user persistence
   const username = useMemo(() => user?.username || 'anon', [user]);
@@ -222,6 +222,7 @@ const MainContent = (): React.JSX.Element => {
   const uploadWithProfileRef = useRef<HTMLInputElement>(null);
   const appBarRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
+  const { logout: authLogout } = useAuth();
 
   // Listen for global session-expired notifications
   useEffect(() => {
@@ -236,9 +237,15 @@ const MainContent = (): React.JSX.Element => {
     };
   }, []);
 
-  const handleSessionDialogClose = () => {
+  const handleSessionDialogClose = async () => {
     setSessionDialogOpen(false);
-    navigate('/login');
+    try {
+      await Promise.allSettled([
+        authLogout(),
+        userLogout(),
+      ]);
+    } catch {}
+    navigate('/login', { replace: true });
   };
   const { 
     loading, 
@@ -1119,7 +1126,7 @@ const MainContent = (): React.JSX.Element => {
               <Tooltip title="Logout">
                 <Button
                   color="inherit"
-                  onClick={logout}
+                  onClick={userLogout}
                   startIcon={<LogoutIcon />}
                   sx={{ 
                     mr: { xs: 0.5, sm: 1 },
@@ -1134,7 +1141,7 @@ const MainContent = (): React.JSX.Element => {
               <Tooltip title="Logout">
                 <IconButton
                   color="inherit"
-                  onClick={logout}
+                  onClick={userLogout}
                   sx={{ display: { xs: 'flex', sm: 'none' } }}
                 >
                   <LogoutIcon />
