@@ -629,6 +629,20 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     didInitUiForProfileRef.current = currentProfileName;
   }, [runtimeHooks, currentProfileName]);
 
+  // Trigger an initial data load once when entering the page after login/profile load
+  // Only auto-run for the default 'recent' action to avoid firing expensive or invalid queries
+  const didInitialRunRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (didInitialRunRef.current) return;
+    // Ensure we have a connected backend, hook settings are loaded, and querying is enabled
+    const cqAny: any = (runtimeHooks as any)?.clickhouse_query;
+    const hooksReady = cqAny && typeof cqAny === 'object';
+    if (connStatus === 'connected' && hooksReady && hookEnabled && action === 'recent') {
+      didInitialRunRef.current = true;
+      void runQueryRef.current?.(true, { keepPage: true });
+    }
+  }, [connStatus, runtimeHooks, hookEnabled, action]);
+
   const handlePickSuggestion = (ep: string) => { setEndpointPath(ep); setAnchorEl(null); };
 
   const buildHookUrl = useCallback((connectionConfig: any, overrideOffset?: number, overrideLimit?: number, includeSearchFilter: boolean = true) => {
