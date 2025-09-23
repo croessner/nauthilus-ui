@@ -200,8 +200,9 @@ export interface HTTPClientConfig {
 
 export interface CompressionConfig {
   enabled?: boolean;
-  level?: number;
-  content_types?: string[];
+  algorithms?: string[];
+  level_gzip?: number;
+  level_zstd?: number;
   min_length?: number;
 }
 

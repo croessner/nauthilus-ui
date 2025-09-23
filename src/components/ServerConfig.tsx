@@ -1,4 +1,6 @@
 import React from 'react';
+import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
+import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
 import { 
@@ -14,7 +16,12 @@ import {
   MenuItem,
   Typography,
   Switch,
-  InputAdornment
+  InputAdornment,
+  List,
+  ListItem,
+  ListItemText,
+  IconButton,
+  Stack
 } from '@mui/material';
 import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
@@ -131,8 +138,9 @@ const ServerConfigSchema = Yup.object().shape({
   // Compression validation
   compression: Yup.object().shape({
     enabled: Yup.boolean(),
-    level: Yup.number().min(1, 'Must be at least 1').max(9, 'Must be at most 9'),
-    content_types: Yup.array().of(Yup.string()),
+    algorithms: Yup.array().of(Yup.string()),
+    level_gzip: Yup.number().min(1, 'Must be at least 1').max(9, 'Must be at most 9'),
+    level_zstd: Yup.number().min(0, 'Must be at least 0').max(3, 'Must be at most 3'),
     min_length: Yup.number().min(0, 'Must be at least 0'),
   }),
 
@@ -241,8 +249,9 @@ const ServerConfig = (): React.JSX.Element | null => {
     // Initialize compression configuration
     compression: {
       enabled: config.server.compression?.enabled || false,
-      level: config.server.compression?.level || 5,
-      content_types: config.server.compression?.content_types || ['text/html', 'text/css', 'text/plain', 'text/javascript', 'application/javascript', 'application/json', 'application/xml'],
+      algorithms: config.server.compression?.algorithms || ['zstd', 'gzip'],
+      level_gzip: config.server.compression?.level_gzip || 5,
+      level_zstd: config.server.compression?.level_zstd || 0,
       min_length: config.server.compression?.min_length || 1024,
     },
 
@@ -1093,7 +1102,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1114,13 +1123,30 @@ const ServerConfig = (): React.JSX.Element | null => {
                     <Field
                       as={TextField}
                       fullWidth
-                      name="compression.level"
-                      label="Compression Level (1-9)"
+                      name="compression.level_zstd"
+                      label="ZStandard Compression Level (0-3)"
+                      variant="outlined"
+                      type="number"
+                      InputProps={{ inputProps: { min: 0, max: 3 } }}
+                      error={getIn(touched, 'compression.level_zstd') && Boolean(getIn(errors, 'compression.level_zstd'))}
+                      helperText={(getIn(touched, 'compression.level_zstd') && getIn(errors, 'compression.level_zstd')) || "0 is default, 1 is fastest, 2 is better, 3 is best compression"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Field
+                      as={TextField}
+                      fullWidth
+                      name="compression.level_gzip"
+                      label="GZip Compression Level (1-9)"
                       variant="outlined"
                       type="number"
                       InputProps={{ inputProps: { min: 1, max: 9 } }}
-                      error={getIn(touched, 'compression.level') && Boolean(getIn(errors, 'compression.level'))}
-                      helperText={(getIn(touched, 'compression.level') && getIn(errors, 'compression.level')) || "1 is fastest, 9 is best compression"}
+                      error={getIn(touched, 'compression.level_gzip') && Boolean(getIn(errors, 'compression.level_gzip'))}
+                      helperText={(getIn(touched, 'compression.level_gzip') && getIn(errors, 'compression.level_gzip')) || "1 is fastest, 9 is best compression"}
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);
                         setHasUnsavedChanges(true);
@@ -1144,32 +1170,79 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12}>
-                    <Typography variant="subtitle2" sx={{ mb: 1 }}>Content Types to Compress</Typography>
-                    <FormControl fullWidth error={getIn(touched, 'compression.content_types') && Boolean(getIn(errors, 'compression.content_types'))}>
-                      <Select
+                  <Grid item xs={12} />
+                  <Grid item xs={12} md={6}>
+                    <FormControl fullWidth error={getIn(touched, 'compression.algorithms') && Boolean(getIn(errors, 'compression.algorithms'))}>
+                      <InputLabel id="compression-algorithms-label">Compression Algorithms</InputLabel>
+                      <Field
+                        as={Select}
+                        labelId="compression-algorithms-label"
+                        name="compression.algorithms"
+                        label="Compression Algorithms"
                         multiple
-                        value={values.compression?.content_types || []}
-                        onChange={(e) => {
-                          setFieldValue('compression.content_types', e.target.value)
-                              .then(() => setHasUnsavedChanges(true));
+                        renderValue={(selected: any) => (Array.isArray(selected) ? selected.join(', ') : '')}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
                         }}
-                        renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                       >
-                        <MenuItem value="text/html">text/html</MenuItem>
-                        <MenuItem value="text/css">text/css</MenuItem>
-                        <MenuItem value="text/plain">text/plain</MenuItem>
-                        <MenuItem value="text/javascript">text/javascript</MenuItem>
-                        <MenuItem value="application/javascript">application/javascript</MenuItem>
-                        <MenuItem value="application/json">application/json</MenuItem>
-                        <MenuItem value="application/xml">application/xml</MenuItem>
-                        <MenuItem value="image/svg+xml">image/svg+xml</MenuItem>
-                      </Select>
+                        <MenuItem value="gzip">gzip</MenuItem>
+                        <MenuItem value="zstd">zstd</MenuItem>
+                      </Field>
                       <FormHelperText>
-                        {(getIn(touched, 'compression.content_types') && getIn(errors, 'compression.content_types')) || "Select content types to compress"}
+                        {(getIn(touched, 'compression.algorithms') && getIn(errors, 'compression.algorithms')) || "Select one or more compression algorithms"}
                       </FormHelperText>
                     </FormControl>
                   </Grid>
+                  {Array.isArray(values.compression?.algorithms) && values.compression.algorithms.length > 1 && (
+                    <Grid item xs={12} md={6}>
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>Preferred Order</Typography>
+                      <List dense>
+                        {values.compression.algorithms.map((alg, idx) => (
+                          <ListItem
+                            key={alg}
+                            secondaryAction={
+                              <Stack direction="row" spacing={1}>
+                                <IconButton
+                                  size="small"
+                                  aria-label={`move ${alg} up`}
+                                  disabled={idx === 0}
+                                  onClick={() => {
+                                    const arr = [...(values.compression?.algorithms || [])];
+                                    const tmp = arr[idx - 1];
+                                    arr[idx - 1] = arr[idx];
+                                    arr[idx] = tmp;
+                                    setFieldValue('compression.algorithms', arr)
+                                      .then(() => setHasUnsavedChanges(true));
+                                  }}
+                                >
+                                  <ArrowUpwardIcon fontSize="inherit" />
+                                </IconButton>
+                                <IconButton
+                                  size="small"
+                                  aria-label={`move ${alg} down`}
+                                  disabled={idx === (values.compression?.algorithms?.length || 0) - 1}
+                                  onClick={() => {
+                                    const arr = [...(values.compression?.algorithms || [])];
+                                    const tmp = arr[idx + 1];
+                                    arr[idx + 1] = arr[idx];
+                                    arr[idx] = tmp;
+                                    setFieldValue('compression.algorithms', arr)
+                                      .then(() => setHasUnsavedChanges(true));
+                                  }}
+                                >
+                                  <ArrowDownwardIcon fontSize="inherit" />
+                                </IconButton>
+                              </Stack>
+                            }
+                          >
+                            <ListItemText primary={alg} />
+                          </ListItem>
+                        ))}
+                      </List>
+                      <FormHelperText>Adjust the order to set which algorithm should be tried first.</FormHelperText>
+                    </Grid>
+                  )}
                 </>
               )}
             </Grid>
@@ -1181,7 +1254,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid item xs={12}>
                 <FormControlLabel
                   control={
                     <Switch
