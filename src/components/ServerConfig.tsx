@@ -139,8 +139,9 @@ const ServerConfigSchema = Yup.object().shape({
   compression: Yup.object().shape({
     enabled: Yup.boolean(),
     algorithms: Yup.array().of(Yup.string()),
-    level_gzip: Yup.number().min(1, 'Must be at least 1').max(9, 'Must be at most 9'),
+    level_brotli: Yup.number().min(0, 'Must be at least 0').max(3, 'Must be at most 3'),
     level_zstd: Yup.number().min(0, 'Must be at least 0').max(3, 'Must be at most 3'),
+    level_gzip: Yup.number().min(1, 'Must be at least 1').max(9, 'Must be at most 9'),
     min_length: Yup.number().min(0, 'Must be at least 0'),
   }),
 
@@ -249,9 +250,10 @@ const ServerConfig = (): React.JSX.Element | null => {
     // Initialize compression configuration
     compression: {
       enabled: config.server.compression?.enabled || false,
-      algorithms: config.server.compression?.algorithms || ['zstd', 'gzip'],
-      level_gzip: config.server.compression?.level_gzip || 5,
+      algorithms: config.server.compression?.algorithms || ['br', 'zstd', 'gzip'],
+      level_brotli: config.server.compression?.level_brotli || 0,
       level_zstd: config.server.compression?.level_zstd || 0,
+      level_gzip: config.server.compression?.level_gzip || 5,
       min_length: config.server.compression?.min_length || 1024,
     },
 
@@ -1123,6 +1125,23 @@ const ServerConfig = (): React.JSX.Element | null => {
                     <Field
                       as={TextField}
                       fullWidth
+                      name="compression.level_brotli"
+                      label="Brotli Compression Level (0-3)"
+                      variant="outlined"
+                      type="number"
+                      InputProps={{ inputProps: { min: 0, max: 3 } }}
+                      error={getIn(touched, 'compression.level_brotli') && Boolean(getIn(errors, 'compression.level_brotli'))}
+                      helperText={(getIn(touched, 'compression.level_brotli') && getIn(errors, 'compression.level_brotli')) || "0 is default, 1 is fastest, 2 is better, 3 is best compression"}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </Grid>
+                  <Grid item xs={12} md={6}>
+                    <Field
+                      as={TextField}
+                      fullWidth
                       name="compression.level_zstd"
                       label="ZStandard Compression Level (0-3)"
                       variant="outlined"
@@ -1186,8 +1205,9 @@ const ServerConfig = (): React.JSX.Element | null => {
                           setHasUnsavedChanges(true);
                         }}
                       >
-                        <MenuItem value="gzip">gzip</MenuItem>
+                        <MenuItem value="brotli">zstd</MenuItem>
                         <MenuItem value="zstd">zstd</MenuItem>
+                        <MenuItem value="gzip">gzip</MenuItem>
                       </Field>
                       <FormHelperText>
                         {(getIn(touched, 'compression.algorithms') && getIn(errors, 'compression.algorithms')) || "Select one or more compression algorithms"}

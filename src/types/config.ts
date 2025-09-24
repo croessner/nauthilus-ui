@@ -203,6 +203,7 @@ export interface CompressionConfig {
   algorithms?: string[];
   level_gzip?: number;
   level_zstd?: number;
+  level_brotli?: number;
   min_length?: number;
 }
 
