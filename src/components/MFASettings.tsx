@@ -1,33 +1,33 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Box, 
-  Typography, 
-  Paper, 
-  Button, 
-  TextField, 
-  Dialog, 
-  DialogTitle, 
-  DialogContent, 
-  DialogActions,
-  List,
-  ListItem,
-  ListItemText,
-  IconButton,
-  Divider,
-  Alert,
-  CircularProgress,
-  Tabs,
-  Tab,
-  Grid,
-  Card,
-  CardContent,
-  CardActions,
-  Switch,
-  FormControlLabel
+import React, {useEffect, useState} from 'react';
+import {
+    Alert,
+    Box,
+    Button,
+    Card,
+    CardActions,
+    CardContent,
+    CircularProgress,
+    Dialog,
+    DialogActions,
+    DialogContent,
+    DialogTitle,
+    Divider,
+    FormControlLabel,
+    Grid,
+    IconButton,
+    List,
+    ListItem,
+    ListItemText,
+    Paper,
+    Switch,
+    Tab,
+    Tabs,
+    TextField,
+    Typography
 } from '@mui/material';
-import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
-import { QRCodeCanvas as QRCode } from 'qrcode.react';
-import { useUser } from '../contexts/UserContext';
+import {Add as AddIcon, Delete as DeleteIcon} from '@mui/icons-material';
+import {QRCodeCanvas as QRCode} from 'qrcode.react';
+import {useUser} from '../contexts/UserContext';
 import * as mfaUtils from '../utils/mfaUtils';
 import * as userManager from '../utils/userManager';
 
@@ -176,7 +176,7 @@ const MFASettings: React.FC = () => {
       const { publicKey, sessionData } = await mfaUtils.beginWebAuthnRegistration(user.username);
 
       if (!publicKey) {
-        throw new Error('Failed to get WebAuthn registration options from server');
+        await Promise.reject('Failed to get WebAuthn registration options from server');
       }
 
       // Create credential - using Promise with timeout to handle cases where the browser dialog is dismissed
@@ -194,12 +194,10 @@ const MFASettings: React.FC = () => {
         
         // Set a timeout of 5 minutes (300000ms) - this is a reasonable upper limit for user interaction
         const timeoutPromise = new Promise<never>((_, reject) => {
-          const timeoutId = setTimeout(() => {
-            reject(new Error('WebAuthn registration timed out. Please try again.'));
+            // Store the timeout ID so we can clear it if the credential is created successfully
+          (window as any).__webAuthnTimeoutId = setTimeout(() => {
+              reject(new Error('WebAuthn registration timed out. Please try again.'));
           }, 300000);
-          
-          // Store the timeout ID so we can clear it if the credential is created successfully
-          (window as any).__webAuthnTimeoutId = timeoutId;
         });
         
         // Race the credential creation against the timeout
@@ -212,7 +210,7 @@ const MFASettings: React.FC = () => {
         }
         
         if (!credential) {
-          throw new Error('Browser did not return a credential');
+          await Promise.reject('Browser did not return a credential');
         }
 
         // Finish registration
@@ -368,7 +366,7 @@ const MFASettings: React.FC = () => {
             <Card>
               <CardContent>
                 <Grid container alignItems="center">
-                  <Grid item xs={8}>
+                  <Grid xs={8}>
                     <Typography variant="h6">
                       Authenticator App
                     </Typography>
@@ -376,7 +374,7 @@ const MFASettings: React.FC = () => {
                       {user.totpEnabled ? 'Enabled' : 'Disabled'}
                     </Typography>
                   </Grid>
-                  <Grid item xs={4} container justifyContent="flex-end">
+                  <Grid xs={4} container justifyContent="flex-end">
                     <FormControlLabel
                       control={
                         <Switch
