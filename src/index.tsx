@@ -2,8 +2,6 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import App from './App';
-import { DevSupport } from '@react-buddy/ide-toolbox';
-import { ComponentPreviews, useInitial } from './dev';
 import { initSessionHandlers, removeSessionHandlers } from './utils/session';
 
 const rootEl = document.getElementById('root');
@@ -31,10 +29,8 @@ try {
 
 ReactDOM.createRoot(rootEl).render(
   <React.StrictMode>
-    <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-      <DevSupport ComponentPreviews={ComponentPreviews} useInitialHook={useInitial}>
-        <App />
-      </DevSupport>
+    <BrowserRouter>
+      <App />
     </BrowserRouter>
   </React.StrictMode>
 );

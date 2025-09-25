@@ -12,7 +12,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   IconButton,
   Divider,
   Alert,
@@ -27,7 +26,7 @@ import {
   FormControlLabel
 } from '@mui/material';
 import { Delete as DeleteIcon, Add as AddIcon } from '@mui/icons-material';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas as QRCode } from 'qrcode.react';
 import { useUser } from '../contexts/UserContext';
 import * as mfaUtils from '../utils/mfaUtils';
 import * as userManager from '../utils/userManager';
@@ -482,12 +481,8 @@ const MFASettings: React.FC = () => {
                   <List>
                     {webAuthnDevices.map((device, index) => (
                       <React.Fragment key={device.id}>
-                        <ListItem>
-                          <ListItemText
-                            primary={device.name}
-                            secondary={`Last used: ${new Date(device.lastUsed).toLocaleString()}`}
-                          />
-                          <ListItemSecondaryAction>
+                        <ListItem
+                          secondaryAction={
                             <IconButton
                               edge="end"
                               aria-label="delete"
@@ -496,7 +491,12 @@ const MFASettings: React.FC = () => {
                             >
                               <DeleteIcon />
                             </IconButton>
-                          </ListItemSecondaryAction>
+                          }
+                        >
+                          <ListItemText
+                            primary={device.name}
+                            secondary={`Last used: ${new Date(device.lastUsed).toLocaleString()}`}
+                          />
                         </ListItem>
                         {index < webAuthnDevices.length - 1 && <Divider />}
                       </React.Fragment>

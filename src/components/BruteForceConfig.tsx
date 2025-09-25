@@ -12,7 +12,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -707,7 +706,20 @@ const BruteForceConfig: React.FC = () => {
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((item, index) => (
                         <React.Fragment key={index}>
-                          <ListItem>
+                          <ListItem
+                            secondaryAction={
+                              <Button
+                                sx={{ mt: { xs: 1, sm: 0 } }}
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
+                                startIcon={<DeleteIcon />}
+                                size="small"
+                              >
+                                Free
+                              </Button>
+                            }
+                          >
                             <ListItemText
                               primary={item.ip_address}
                               secondary={
@@ -724,17 +736,6 @@ const BruteForceConfig: React.FC = () => {
                                 </>
                               }
                             />
-                            <ListItemSecondaryAction sx={{ position: { xs: 'static', sm: 'absolute' }, mt: { xs: 1, sm: 0 } }}>
-                              <Button
-                                variant="outlined"
-                                color="secondary"
-                                onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
-                                startIcon={<DeleteIcon />}
-                                size="small"
-                              >
-                                Free
-                              </Button>
-                            </ListItemSecondaryAction>
                           </ListItem>
                           <Divider />
                         </React.Fragment>
@@ -769,7 +770,20 @@ const BruteForceConfig: React.FC = () => {
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((account, index) => (
                         <React.Fragment key={index}>
-                          <ListItem>
+                          <ListItem
+                            secondaryAction={
+                              <Button
+                                sx={{ mt: { xs: 1, sm: 0 } }}
+                                variant="outlined"
+                                color="secondary"
+                                onClick={() => handleOpenUserDialog(account.username)}
+                                startIcon={<DeleteIcon />}
+                                size="small"
+                              >
+                                Free
+                              </Button>
+                            }
+                          >
                             <ListItemText
                               primary={account.username}
                               secondary={
@@ -780,17 +794,6 @@ const BruteForceConfig: React.FC = () => {
                                 </>
                               }
                             />
-                            <ListItemSecondaryAction sx={{ position: { xs: 'static', sm: 'absolute' }, mt: { xs: 1, sm: 0 } }}>
-                              <Button
-                                variant="outlined"
-                                color="secondary"
-                                onClick={() => handleOpenUserDialog(account.username)}
-                                startIcon={<DeleteIcon />}
-                                size="small"
-                              >
-                                Free
-                              </Button>
-                            </ListItemSecondaryAction>
                           </ListItem>
                           <Divider />
                         </React.Fragment>

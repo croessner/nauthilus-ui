@@ -1051,3 +1051,10 @@ Environment variables:
 Notes:
 - Suppression is server-side; clients cannot disable auditing.
 - The policy is in-memory and process-local. For clustered deployments, prefer sticky sessions or an external audit pipeline if strict dedup across instances is required.
+
+
+
+## Docs
+
+- Daily-Check (DE): docs/Daily-Check.de.md
+- Dependency Updates (EN): docs/Dependency-Updates.md

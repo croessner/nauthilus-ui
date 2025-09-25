@@ -10,7 +10,16 @@
     <title>Nauthilus Configuration</title>
     <!-- Preload world map topology to avoid first-render flash on Map -->
     <link rel="preload" as="fetch" href="https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json" crossorigin>
-    <script src="/env-config.js"></script>
+    <script id="env-config-loader" data-src="/env-config.js"></script>
+    <script>
+      (function(){
+        var el = document.getElementById('env-config-loader');
+        var src = el && el.getAttribute('data-src');
+        if (src) {
+          el.setAttribute('src', src);
+        }
+      })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>
