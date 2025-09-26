@@ -58,7 +58,7 @@ function TabPanel(props: TabPanelProps) {
 }
 
 const MFASettings: React.FC = () => {
-  const { user } = useUser();
+  const { user, updateUserProfile } = useUser();
   const [tabValue, setTabValue] = useState(0);
 
   // TOTP states
@@ -124,9 +124,7 @@ const MFASettings: React.FC = () => {
         setTotpSetupOpen(false);
         setTotpSuccess('TOTP has been successfully set up!');
         // Update user context to reflect TOTP is enabled
-        if (user) {
-          user.totpEnabled = true;
-        }
+        await updateUserProfile(user.username, { totpEnabled: true });
       } else {
         setTotpError('Invalid verification code. Please try again.');
       }
@@ -150,9 +148,7 @@ const MFASettings: React.FC = () => {
       if (success) {
         setTotpSuccess('TOTP has been successfully disabled.');
         // Update user context to reflect TOTP is disabled
-        if (user) {
-          user.totpEnabled = false;
-        }
+        await updateUserProfile(user.username, { totpEnabled: false });
       } else {
         setTotpError('Failed to disable TOTP. Please try again.');
       }
@@ -181,6 +177,7 @@ const MFASettings: React.FC = () => {
 
       // Create credential - using Promise with timeout to handle cases where the browser dialog is dismissed
       let credential: PublicKeyCredential | null = null;
+      let timeoutId: number | null = null;
       
       try {
         // Create a promise that will be rejected if the credential creation takes too long
@@ -195,7 +192,7 @@ const MFASettings: React.FC = () => {
         // Set a timeout of 5 minutes (300000ms) - this is a reasonable upper limit for user interaction
         const timeoutPromise = new Promise<never>((_, reject) => {
             // Store the timeout ID so we can clear it if the credential is created successfully
-          (window as any).__webAuthnTimeoutId = setTimeout(() => {
+          timeoutId = window.setTimeout(() => {
               reject(new Error('WebAuthn registration timed out. Please try again.'));
           }, 300000);
         });
@@ -204,9 +201,9 @@ const MFASettings: React.FC = () => {
         credential = await Promise.race([credentialPromise, timeoutPromise]) as PublicKeyCredential;
         
         // Clear the timeout if we got here
-        if ((window as any).__webAuthnTimeoutId) {
-          clearTimeout((window as any).__webAuthnTimeoutId);
-          (window as any).__webAuthnTimeoutId = null;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
         }
         
         if (!credential) {
@@ -220,24 +217,15 @@ const MFASettings: React.FC = () => {
           setWebAuthnSetupOpen(false);
           setWebAuthnSuccess('Security key has been successfully registered!');
 
-          // Update user context to reflect WebAuthn is enabled
-          if (user) {
-            user.webAuthnEnabled = true;
-
-            // Refresh the list of devices
-            // In a real app, you would fetch the updated user data here
-            // For now, we'll just add a placeholder
-            const newDevice: userManager.WebAuthnCredential = {
-              id: Math.random().toString(36).substring(7),
-              publicKey: '', // This would normally come from the server
-              name: deviceName,
-              createdAt: new Date().toISOString(),
-              lastUsed: new Date().toISOString(),
-              aaguid: '', // This would normally come from the server
-              authenticator: 'WebAuthn Device'
-            };
-
-            setWebAuthnDevices(prev => [...prev, newDevice]);
+          // Update user context to reflect WebAuthn is enabled and refresh devices from server
+          await updateUserProfile(user.username, { webAuthnEnabled: true });
+          try {
+            const refreshed = await userManager.getCurrentUser();
+            if (refreshed && Array.isArray(refreshed.webAuthnDevices)) {
+              setWebAuthnDevices(refreshed.webAuthnDevices);
+            }
+          } catch (e) {
+            console.warn('Could not refresh WebAuthn devices', e);
           }
         } else {
           setWebAuthnError('Failed to register security key. Please try again.');
@@ -246,9 +234,9 @@ const MFASettings: React.FC = () => {
         console.error('Error creating credential:', credentialError);
         
         // Clear the timeout if it exists
-        if ((window as any).__webAuthnTimeoutId) {
-          clearTimeout((window as any).__webAuthnTimeoutId);
-          (window as any).__webAuthnTimeoutId = null;
+        if (timeoutId) {
+          clearTimeout(timeoutId);
+          timeoutId = null;
         }
         
         if (credentialError instanceof Error) {
@@ -294,14 +282,14 @@ const MFASettings: React.FC = () => {
       const success = await mfaUtils.removeWebAuthnCredential(user.username, credentialId);
 
       if (success) {
-        // Remove the device from the list
-        setWebAuthnDevices(prev => prev.filter(device => device.id !== credentialId));
+        // Remove the device from the list and update profile if needed
+        const nextDevices = webAuthnDevices.filter(device => device.id !== credentialId);
+        setWebAuthnDevices(nextDevices);
 
         setWebAuthnSuccess('Security key has been successfully removed.');
 
-        // If no devices left, update user context to reflect WebAuthn is disabled
-        if (webAuthnDevices.length <= 1 && user) {
-          user.webAuthnEnabled = false;
+        if (nextDevices.length === 0) {
+          await updateUserProfile(user.username, { webAuthnEnabled: false });
         }
       } else {
         setWebAuthnError('Failed to remove security key. Please try again.');
@@ -366,7 +354,7 @@ const MFASettings: React.FC = () => {
             <Card>
               <CardContent>
                 <Grid container alignItems="center">
-                  <Grid xs={8}>
+                  <Grid item xs={8}>
                     <Typography variant="h6">
                       Authenticator App
                     </Typography>
@@ -374,7 +362,7 @@ const MFASettings: React.FC = () => {
                       {user.totpEnabled ? 'Enabled' : 'Disabled'}
                     </Typography>
                   </Grid>
-                  <Grid xs={4} container justifyContent="flex-end">
+                  <Grid item xs={4} container justifyContent="flex-end">
                     <FormControlLabel
                       control={
                         <Switch

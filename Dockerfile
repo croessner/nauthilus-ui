@@ -7,7 +7,8 @@ WORKDIR /app
 COPY package*.json ./
 
 # Install dependencies (use install to align updated semver across Emotion packages)
-RUN npm install
+# Use legacy peer deps to avoid strict ERESOLVE failures in CI/build images
+RUN npm install --legacy-peer-deps
 
 # Copy the rest of the code
 COPY . .
@@ -61,8 +62,8 @@ FROM alpine:3.22
 WORKDIR /app
 
 # Ensure community repository is enabled (chromium is in community)
-RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/main" > /etc/apk/repositories \
- && echo "https://dl-cdn.alpinelinux.org/alpine/v3.20/community" >> /etc/apk/repositories
+RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /etc/apk/repositories \
+ && echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/community" >> /etc/apk/repositories
 
 # Install ca-certificates for HTTPS and Chromium for server-side PDF rendering
 RUN apk --no-cache add \
