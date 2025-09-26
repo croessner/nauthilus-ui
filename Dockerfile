@@ -1,5 +1,7 @@
 # Build stage for React app
-FROM node:24-alpine AS react-build
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+FROM --platform=$BUILDPLATFORM node:24-alpine AS react-build
 
 WORKDIR /app
 
@@ -17,7 +19,7 @@ COPY . .
 RUN npm run build
 
 # Build stage for Go server
-FROM golang:1.25-alpine AS go-build
+FROM --platform=$BUILDPLATFORM golang:1.25-alpine AS go-build
 
 # Add build arguments for multi-architecture support
 ARG TARGETPLATFORM
@@ -46,14 +48,15 @@ RUN GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") && \
     GIT_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "unknown") && \
     VERSION="$GIT_TAG-$GIT_COMMIT" && \
     case "$TARGETPLATFORM" in \
-      "linux/amd64") GOARCH=amd64 ;; \
-      "linux/arm64") GOARCH=arm64 ;; \
-      "linux/arm/v7") GOARCH=arm GOARM=7 ;; \
-      "linux/arm/v6") GOARCH=arm GOARM=6 ;; \
-      "linux/386") GOARCH=386 ;; \
+      "linux/amd64") GOOS=linux GOARCH=amd64 ;; \
+      "linux/arm64") GOOS=linux GOARCH=arm64 ;; \
+      "linux/arm/v7") GOOS=linux GOARCH=arm GOARM=7 ;; \
+      "linux/arm/v6") GOOS=linux GOARCH=arm GOARM=6 ;; \
+      "darwin/amd64") GOOS=darwin GOARCH=amd64 ;; \
+      "darwin/arm64") GOOS=darwin GOARCH=arm64 ;; \
       *) GOARCH=amd64 ;; \
     esac && \
-    CGO_ENABLED=0 GOOS=linux GOARCH=$GOARCH go build -mod=vendor -ldflags="-s -w -X main.version=$VERSION" -o server . && \
+    CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -mod=vendor -ldflags="-s -w -X main.version=$VERSION" -o server . && \
     upx --best server
 
 # Production stage

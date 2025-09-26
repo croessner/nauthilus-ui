@@ -14,8 +14,7 @@ target "nauthilus-ui" {
     "linux/amd64",
     "linux/arm64",
     "linux/arm/v7",
-    "linux/arm/v6",
   ]
   // Uncomment and modify the following line to set a tag for your image
-  // tags = ["your-registry/nauthilus-ui:latest"]
+  tags = ["docker.roessner-net.de/misc/nauthilus-ui:latest"]
 }
