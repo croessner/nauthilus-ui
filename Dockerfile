@@ -51,9 +51,6 @@ RUN GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") && \
       "linux/amd64") GOOS=linux GOARCH=amd64 ;; \
       "linux/arm64") GOOS=linux GOARCH=arm64 ;; \
       "linux/arm/v7") GOOS=linux GOARCH=arm GOARM=7 ;; \
-      "linux/arm/v6") GOOS=linux GOARCH=arm GOARM=6 ;; \
-      "darwin/amd64") GOOS=darwin GOARCH=amd64 ;; \
-      "darwin/arm64") GOOS=darwin GOARCH=arm64 ;; \
       *) GOARCH=amd64 ;; \
     esac && \
     CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -mod=vendor -ldflags="-s -w -X main.version=$VERSION" -o server . && \
