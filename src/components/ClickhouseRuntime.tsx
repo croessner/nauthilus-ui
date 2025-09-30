@@ -2,6 +2,7 @@ import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
 import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, FormControlLabel, IconButton, InputAdornment, LinearProgress, Menu, MenuItem, Paper, Select, Slider, Snackbar, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
 import {useTheme} from '@mui/material/styles';
 import AnalysisPanel from './AnalysisPanel';
+import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PublicIcon from '@mui/icons-material/Public';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -270,7 +271,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
   const sortedAvailableFields = useMemo(() => [...availableFields].sort((a,b)=> a.localeCompare(b, undefined, { sensitivity: 'base' })), [availableFields]);
-  const [fieldSelectorOpen, setFieldSelectorOpen] = useState<boolean>(false);
 
   // Search input autocomplete (ghost text) for field names
   const searchInputRef = useRef<HTMLInputElement | null>(null);
@@ -2558,65 +2558,56 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         </Grid>
       </Grid>
 
-      <Paper sx={{ p:2, mb:2 }}>
-        <Stack direction="row" alignItems="center" justifyContent="space-between">
-          <Typography variant="subtitle1" gutterBottom>Field Selection</Typography>
-          <IconButton size="small" onClick={()=>setFieldSelectorOpen(v=>!v)} aria-label={fieldSelectorOpen ? 'Collapse' : 'Expand'}>
-            <ExpandMoreIcon sx={{ transform: fieldSelectorOpen ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
-          </IconButton>
-        </Stack>
-        <Collapse in={fieldSelectorOpen} unmountOnExit>
-          <Typography variant="body2" color="text.secondary" sx={{ mb:1 }}>Choose the columns to display in the results table.</Typography>
-          <Stack direction="row" spacing={1} sx={{ mb:1, flexWrap:'wrap', alignItems:'center' }}>
-            <Button size="small" onClick={()=>setSelectedFields(sortedAvailableFields)}>Select all</Button>
-            <Button size="small" onClick={()=>setSelectedFields([])}>Clear</Button>
-            <Button size="small" onClick={()=>{
-              // Set to defaults: exactly DEFAULT_COLUMNS intersected with currently available fields
-              const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
-              const next = intersect(DEFAULT_COLUMNS, availableFields);
-              setSelectedFields(next);
-            }}>Set to defaults</Button>
-            <Box sx={{ flexGrow:1 }} />
-            <Button size="small" startIcon={<SaveIcon/>} variant="contained" onClick={async()=>{
-              try {
-                const userId = await getCurrentUserId();
-                const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
-                const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
-                if (action === 'raw_sql') {
-                  setNotif({ open:true, severity:'info', message:'Column selection not persisted for raw SQL results' });
-                } else {
-                  await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
-                    ...(runtimeHooks || {}),
-                    clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
-                  } as any);
-                  setNotif({ open:true, severity:'success', message:'Column selection saved' });
-                }
-              } catch(e:any) {
-                setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
+      <CollapsibleFormSection title="Field Selection" description="Choose the columns to display in the results table.">
+        <Stack direction="row" spacing={1} sx={{ mb:1, flexWrap:'wrap', alignItems:'center' }}>
+          <Button size="small" onClick={()=>setSelectedFields(sortedAvailableFields)}>Select all</Button>
+          <Button size="small" onClick={()=>setSelectedFields([])}>Clear</Button>
+          <Button size="small" onClick={()=>{
+            // Set to defaults: exactly DEFAULT_COLUMNS intersected with currently available fields
+            const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
+            const next = intersect(DEFAULT_COLUMNS, availableFields);
+            setSelectedFields(next);
+          }}>Set to defaults</Button>
+          <Box sx={{ flexGrow:1 }} />
+          <Button size="small" startIcon={<SaveIcon/>} variant="contained" onClick={async()=>{
+            try {
+              const userId = await getCurrentUserId();
+              const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+              const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
+              if (action === 'raw_sql') {
+                setNotif({ open:true, severity:'info', message:'Column selection not persisted for raw SQL results' });
+              } else {
+                await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
+                  ...(runtimeHooks || {}),
+                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
+                } as any);
+                setNotif({ open:true, severity:'success', message:'Column selection saved' });
               }
-            }}>Save settings</Button>
-          </Stack>
-          <Grid container spacing={1}>
-            {sortedAvailableFields.map((name)=> (
-              <Grid key={name} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-                <FormControlLabel
-                  control={
-                    <Checkbox
-                      size="small"
-                      checked={selectedFields.includes(name)}
-                      onChange={(e)=>{
-                        if (e.target.checked) setSelectedFields(prev => Array.from(new Set([...(prev||[]), name])));
-                        else setSelectedFields(prev => (prev||[]).filter(n => n !== name));
-                      }}
-                    />
-                  }
-                  label={name}
-                />
-              </Grid>
-            ))}
-          </Grid>
-        </Collapse>
-      </Paper>
+            } catch(e:any) {
+              setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
+            }
+          }}>Save settings</Button>
+        </Stack>
+        <Grid container spacing={1}>
+          {sortedAvailableFields.map((name)=> (
+            <Grid key={name} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
+              <FormControlLabel
+                control={
+                  <Checkbox
+                    size="small"
+                    checked={selectedFields.includes(name)}
+                    onChange={(e)=>{
+                      if (e.target.checked) setSelectedFields(prev => Array.from(new Set([...(prev||[]), name])));
+                      else setSelectedFields(prev => (prev||[]).filter(n => n !== name));
+                    }}
+                  />
+                }
+                label={name}
+              />
+            </Grid>
+          ))}
+        </Grid>
+      </CollapsibleFormSection>
 
       <Paper sx={{ p:2 }}>
         <Typography variant="subtitle1" gutterBottom>Results</Typography>
