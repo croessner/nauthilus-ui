@@ -80,8 +80,6 @@ export interface LogConfig {
 
 export type BackendConfig = string;
 
-
-
 export interface DNSConfig {
   resolver?: string;
   timeout?: string;
@@ -342,6 +340,8 @@ export interface BruteForceConfig {
   max_tolerate_percent?: number;
   scale_factor?: number;
   pw_history_for_known_accounts?: boolean; // mapstructure: "pw_history_for_known_accounts"
+  cold_start_grace_enabled?: boolean;
+  cold_start_grace_ttl?: string;
   ip_scoping?: IPScoping; // mapstructure: "ip_scoping"
 }
 

@@ -161,6 +161,8 @@ const FeaturesConfigSchema = Yup.object().shape({
           max_tolerate_percent: Yup.number().min(0).max(100),
           scale_factor: Yup.number().min(0.1).max(10),
           pw_history_for_known_accounts: Yup.boolean(),
+          cold_start_grace_enabled: Yup.boolean(),
+          cold_start_grace_ttl: Yup.string(),
           ip_scoping: Yup.object().shape({
             rwp_ipv6_cidr: Yup.number().min(0).max(128),
             tolerations_ipv6_cidr: Yup.number().min(0).max(128)
@@ -245,6 +247,8 @@ const FeaturesConfig: React.FC = () => {
       max_tolerate_percent: config?.brute_force?.max_tolerate_percent || 50,
       scale_factor: config?.brute_force?.scale_factor || 1.0,
       pw_history_for_known_accounts: config?.brute_force?.pw_history_for_known_accounts || false,
+      cold_start_grace_enabled: config?.brute_force?.cold_start_grace_enabled || false,
+      cold_start_grace_ttl: config?.brute_force?.cold_start_grace_ttl || '1m',
       ip_scoping: {
         rwp_ipv6_cidr: config?.brute_force?.ip_scoping?.rwp_ipv6_cidr ?? 128,
         tolerations_ipv6_cidr: config?.brute_force?.ip_scoping?.tolerations_ipv6_cidr ?? 128,
@@ -1408,6 +1412,42 @@ const FeaturesConfig: React.FC = () => {
                       />
                       <Typography variant="body2" color="textSecondary">
                         Records password history for existing accounts only. Failed attempts against unknown usernames won't create history entries, preventing Redis key explosion when attackers probe non-existent accounts. This applies only after the source has already been identified as a brute-forcer.
+                      </Typography>
+                    </CollapsibleFormSection>
+                  </Grid>
+
+                  <Grid size={12}>
+                    <CollapsibleFormSection title="Cold Start Grace">
+                      <FormControlLabel
+                        control={
+                          <Switch
+                            checked={values.brute_force?.cold_start_grace_enabled || false}
+                            onChange={(e) => {
+                              setFieldValue('brute_force.cold_start_grace_enabled', e.target.checked)
+                                .then(() => setHasUnsavedChanges(true));
+                            }}
+                            name="brute_force.cold_start_grace_enabled"
+                          />
+                        }
+                        label="Enable cold start grace period"
+                      />
+                      <Box sx={{ mt: 2 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name="brute_force.cold_start_grace_ttl"
+                          label="Grace TTL"
+                          variant="outlined"
+                          disabled={!values.brute_force?.cold_start_grace_enabled}
+                          helperText="Duration for the grace period (e.g., 30s, 1m, 5m)."
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            handleChange(e);
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Box>
+                      <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
+                        When enabled, applies a temporary grace period after startup before enforcing brute-force penalties.
                       </Typography>
                     </CollapsibleFormSection>
                   </Grid>
