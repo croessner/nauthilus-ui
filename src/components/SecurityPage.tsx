@@ -1,6 +1,6 @@
 import React from 'react';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { Box, Card, CardContent, Grid, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, Table, TableBody, TableCell, TableHead, TableRow, Alert, CircularProgress, Tooltip, IconButton } from '@mui/material';
+import { Box, Card, CardContent, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, Table, TableBody, TableCell, TableHead, TableRow, Alert, CircularProgress, Tooltip, IconButton } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import SecurityIcon from '@mui/icons-material/Security';
 import InfoTooltip from './common/InfoTooltip';
@@ -10,6 +10,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
 import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
+import Grid from '@mui/material/Grid';
 
 interface PerUserMetric {
   username: string;
@@ -232,7 +233,7 @@ const SecurityPage = (): React.JSX.Element => {
       })()}
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion defaultExpanded>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}> 
               <Stack direction="row" spacing={1} alignItems="center">
@@ -242,7 +243,7 @@ const SecurityPage = (): React.JSX.Element => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Accounts in Protection Mode</Typography>
@@ -253,7 +254,7 @@ const SecurityPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Global IPs per User (by window)</Typography>
@@ -270,7 +271,7 @@ const SecurityPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Sprayed Password Tokens</Typography>
@@ -287,7 +288,7 @@ const SecurityPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Step-Up Challenges Issued</Typography>
@@ -296,7 +297,7 @@ const SecurityPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Proof-of-Work Challenges Issued</Typography>
@@ -305,7 +306,7 @@ const SecurityPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Slow-Attack Suspicions</Typography>
@@ -319,7 +320,7 @@ const SecurityPage = (): React.JSX.Element => {
           </Accordion>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion defaultExpanded>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}> 
               <Stack direction="row" spacing={1} alignItems="center">
@@ -329,7 +330,7 @@ const SecurityPage = (): React.JSX.Element => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Unique IPs per User</Typography>
@@ -361,7 +362,7 @@ const SecurityPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Account Fail Budget Used</Typography>

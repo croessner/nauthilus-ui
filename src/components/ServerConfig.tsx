@@ -3,31 +3,13 @@ import ArrowUpwardIcon from '@mui/icons-material/ArrowUpward';
 import ArrowDownwardIcon from '@mui/icons-material/ArrowDownward';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
-import { 
-  TextField, 
-  FormControlLabel, 
-  Grid, 
-  Button, 
-  Box,
-  FormHelperText,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Typography,
-  Switch,
-  InputAdornment,
-  List,
-  ListItem,
-  ListItemText,
-  IconButton,
-  Stack
-} from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, FormHelperText, FormControl, InputLabel, Select, MenuItem, Typography, Switch, InputAdornment, List, ListItem, ListItemText, IconButton, Stack } from '@mui/material';
 import { ServerConfig as ServerConfigType } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
 import InfoTooltip from './common/InfoTooltip';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const ServerConfigSchema = Yup.object().shape({
@@ -345,7 +327,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             description="Configure the basic server settings for Nauthilus."
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -367,7 +349,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -385,7 +367,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -404,7 +386,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -423,7 +405,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -438,7 +420,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable HTTP/3<InfoTooltip title="Enables HTTP/3 (QUIC) support. Requires compatible clients and network." /></Box>}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -462,7 +444,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -479,7 +461,7 @@ const ServerConfig = (): React.JSX.Element | null => {
               </Grid>
               {values.tls?.enabled && (
                 <>
-                  <Grid item xs={12} md={12}>
+                  <Grid size={{ xs: 12, md: 12 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -497,7 +479,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={12}>
+                  <Grid size={{ xs: 12, md: 12 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -515,7 +497,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={12}>
+                  <Grid size={{ xs: 12, md: 12 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -533,7 +515,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -548,7 +530,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Skip TLS Verification<InfoTooltip title="Do not verify peer TLS certificates. Unsafe; testing only." /></Box>}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControl fullWidth variant="outlined">
                       <InputLabel id="min-tls-version-label">Minimum TLS Version</InputLabel>
                       <Field
@@ -572,7 +554,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       )}
                     </FormControl>
                   </Grid>
-                  <Grid item xs={12} md={12}>
+                  <Grid size={{ xs: 12, md: 12 }}>
                     <FormControl fullWidth variant="outlined">
                       <InputLabel id="cipher-suites-label">Cipher Suites</InputLabel>
                       <Field
@@ -626,7 +608,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -641,7 +623,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable Auth Header Endpoint (/api/v1/auth/header)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -656,7 +638,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable Auth JSON Endpoint (/api/v1/auth/json)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -671,7 +653,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable Auth Basic Endpoint (/api/v1/auth/basic)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -686,7 +668,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable Auth Nginx Endpoint (/api/v1/auth/nginx)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -701,7 +683,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable Auth SASL Endpoint (/api/v1/auth/saslauthd)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -716,7 +698,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable JWT Endpoints (/api/v1/jwt/*)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -731,7 +713,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Disable Custom Hooks Endpoints (/api/v1/custom/*)"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                     control={
                       <Switch
@@ -756,7 +738,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             {/* Authentication Headers */}
             <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Authentication Headers</Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -767,7 +749,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.username') && getIn(errors, 'default_http_request_header.username')) || "Default: X-Auth-Username"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -778,7 +760,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.password') && getIn(errors, 'default_http_request_header.password')) || "Default: X-Auth-Password"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -789,7 +771,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.password_encoded') && getIn(errors, 'default_http_request_header.password_encoded')) || "Default: X-Auth-Password-Encoded"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -800,7 +782,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.protocol') && getIn(errors, 'default_http_request_header.protocol')) || "Default: X-Auth-Protocol"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -811,7 +793,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.login_attempt') && getIn(errors, 'default_http_request_header.login_attempt')) || "Default: X-Auth-Login-Attempt"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -827,7 +809,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             {/* Client Information Headers */}
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>Client Information Headers</Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -838,7 +820,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.client_ip') && getIn(errors, 'default_http_request_header.client_ip')) || "Default: X-Auth-Client-IP"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -849,7 +831,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.client_port') && getIn(errors, 'default_http_request_header.client_port')) || "Default: X-Auth-Client-Port"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -860,7 +842,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.client_host') && getIn(errors, 'default_http_request_header.client_host')) || "Default: X-Auth-Client-Host"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -871,7 +853,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.client_id') && getIn(errors, 'default_http_request_header.client_id')) || "Default: X-Auth-Client-ID"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -882,7 +864,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.local_ip') && getIn(errors, 'default_http_request_header.local_ip')) || "Default: X-Auth-Local-IP"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -898,7 +880,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             {/* SSL/TLS Headers */}
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>SSL/TLS Headers</Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -909,7 +891,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl') && getIn(errors, 'default_http_request_header.ssl')) || "Default: X-Auth-SSL"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -920,7 +902,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_session_id') && getIn(errors, 'default_http_request_header.ssl_session_id')) || "Default: X-Auth-SSL-Session-ID"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -931,7 +913,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_verify') && getIn(errors, 'default_http_request_header.ssl_verify')) || "Default: X-Auth-SSL-Verify"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -942,7 +924,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_cipher') && getIn(errors, 'default_http_request_header.ssl_cipher')) || "Default: X-Auth-SSL-Cipher"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -953,7 +935,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_protocol') && getIn(errors, 'default_http_request_header.ssl_protocol')) || "Default: X-Auth-SSL-Protocol"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -964,7 +946,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_serial') && getIn(errors, 'default_http_request_header.ssl_serial')) || "Default: X-Auth-SSL-Serial"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -980,7 +962,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             {/* SSL/TLS Certificate Headers */}
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>SSL/TLS Certificate Headers</Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -991,7 +973,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_subject') && getIn(errors, 'default_http_request_header.ssl_subject')) || "Default: X-Auth-SSL-Subject"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1002,7 +984,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_client_cn') && getIn(errors, 'default_http_request_header.ssl_client_cn')) || "Default: X-Auth-SSL-Client-CN"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1013,7 +995,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_issuer') && getIn(errors, 'default_http_request_header.ssl_issuer')) || "Default: X-Auth-SSL-Issuer"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1024,7 +1006,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_client_not_before') && getIn(errors, 'default_http_request_header.ssl_client_not_before')) || "Default: X-Auth-SSL-Client-Not-Before"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1035,7 +1017,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_client_not_after') && getIn(errors, 'default_http_request_header.ssl_client_not_after')) || "Default: X-Auth-SSL-Client-Not-After"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1046,7 +1028,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_subject_dn') && getIn(errors, 'default_http_request_header.ssl_subject_dn')) || "Default: X-Auth-SSL-Subject-DN"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1057,7 +1039,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_issuer_dn') && getIn(errors, 'default_http_request_header.ssl_issuer_dn')) || "Default: X-Auth-SSL-Issuer-DN"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1068,7 +1050,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'default_http_request_header.ssl_client_subject_dn') && getIn(errors, 'default_http_request_header.ssl_client_subject_dn')) || "Default: X-Auth-SSL-Client-Subject-DN"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1084,7 +1066,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             {/* Other Headers */}
             <Typography variant="subtitle1" sx={{ mt: 3, mb: 1 }}>Other Headers</Typography>
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1104,7 +1086,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1121,7 +1103,7 @@ const ServerConfig = (): React.JSX.Element | null => {
               </Grid>
               {values.compression?.enabled && (
                 <>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1138,7 +1120,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1155,7 +1137,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1172,7 +1154,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1189,8 +1171,8 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} />
-                  <Grid item xs={12} md={6}>
+                  <Grid size={12} />
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControl fullWidth error={getIn(touched, 'compression.algorithms') && Boolean(getIn(errors, 'compression.algorithms'))}>
                       <InputLabel id="compression-algorithms-label">Compression Algorithms</InputLabel>
                       <Field
@@ -1215,7 +1197,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                     </FormControl>
                   </Grid>
                   {Array.isArray(values.compression?.algorithms) && values.compression.algorithms.length > 1 && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Typography variant="subtitle2" sx={{ mb: 1 }}>Preferred Order</Typography>
                       <List dense>
                         {values.compression.algorithms.map((alg, idx) => (
@@ -1274,7 +1256,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1291,7 +1273,7 @@ const ServerConfig = (): React.JSX.Element | null => {
               </Grid>
               {values.keep_alive?.enabled && (
                 <>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1306,7 +1288,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1323,7 +1305,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -1351,7 +1333,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1364,7 +1346,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'http_client.max_connections_per_host') && getIn(errors, 'http_client.max_connections_per_host')) || "Maximum number of connections per host"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1377,7 +1359,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'http_client.max_idle_connections') && getIn(errors, 'http_client.max_idle_connections')) || "Maximum number of idle connections"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1390,7 +1372,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'http_client.max_idle_connections_per_host') && getIn(errors, 'http_client.max_idle_connections_per_host')) || "Maximum number of idle connections per host"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1401,7 +1383,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'http_client.idle_connection_timeout') && getIn(errors, 'http_client.idle_connection_timeout')) || "Duration format (e.g., 90s, 2m)"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1412,7 +1394,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'http_client.proxy') && getIn(errors, 'http_client.proxy')) || "Proxy URL (e.g., http://proxy.example.com:8080)"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1436,7 +1418,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1451,7 +1433,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Enable JSON Logging"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1466,7 +1448,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   label="Enable Colored Logging"
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>Log Level</InputLabel>
                   <Select
@@ -1484,7 +1466,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   </Select>
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>Debug Modules</Typography>
                 <FormControl fullWidth>
                   <Select
@@ -1537,7 +1519,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>Protocols to Protect</Typography>
                 <FormControl fullWidth>
                   <Select
@@ -1576,7 +1558,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   </FormHelperText>
                 </FormControl>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>Custom Protocol</Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <TextField
@@ -1621,7 +1603,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1632,7 +1614,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'dns.resolver') && getIn(errors, 'dns.resolver')) || "DNS resolver address (e.g., 1.1.1.1:53)"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -1643,7 +1625,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   helperText={(getIn(touched, 'dns.timeout') && getIn(errors, 'dns.timeout')) || "Duration format (e.g., 5s, 1m)"}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1667,7 +1649,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -1683,7 +1665,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                 />
               </Grid>
               {values.master_user?.enabled && (
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Field
                     as={TextField}
                     fullWidth

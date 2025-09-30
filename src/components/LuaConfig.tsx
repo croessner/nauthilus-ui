@@ -1,29 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
-import {
-  TextField,
-  Grid,
-  Button,
-  Box,
-  Typography,
-  Paper,
-  IconButton,
-  List,
-  ListItem,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Tabs,
-  Tab,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  InputAdornment
-} from '@mui/material';
+import { TextField, Button, Box, Typography, Paper, IconButton, List, ListItem, FormControl, InputLabel, Select, MenuItem, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LuaFeatureConfig, LuaFilterConfig, LuaActionConfig, LuaCustomHookConfig, LuaSearchProtocolConfig, LuaConfig as LuaConfigType, NauthilusConfig } from '../types/config';
@@ -31,6 +9,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import ValidationErrors from './common/ValidationErrors';
 import ProtocolsConfig from './ProtocolsConfig';
 import InfoTooltip from './common/InfoTooltip';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const LuaConfigSchema = Yup.object().shape({
@@ -225,7 +204,7 @@ const LuaConfig = (): React.JSX.Element => {
                   {values.features.map((feature: LuaFeatureConfig, index: number) => (
                     <ListItem key={index} divider={index < values.features.length - 1}>
                       <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={5}>
+                        <Grid size={5}>
                           <TextField
                             fullWidth
                             label="Feature Name"
@@ -245,7 +224,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={5}>
+                        <Grid size={5}>
                           <TextField
                             fullWidth
                             label="Script Path"
@@ -265,7 +244,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -312,7 +291,7 @@ const LuaConfig = (): React.JSX.Element => {
                   {values.filters.map((filter: LuaFilterConfig, index: number) => (
                     <ListItem key={index} divider={index < values.filters.length - 1}>
                       <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={5}>
+                        <Grid size={5}>
                           <TextField
                             fullWidth
                             label="Filter Name"
@@ -332,7 +311,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={5}>
+                        <Grid size={5}>
                           <TextField
                             fullWidth
                             label="Script Path"
@@ -352,7 +331,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -399,7 +378,7 @@ const LuaConfig = (): React.JSX.Element => {
                   {values.actions.map((action: LuaActionConfig, index: number) => (
                     <ListItem key={index} divider={index < values.actions.length - 1}>
                       <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={3}>
+                        <Grid size={3}>
                           <FormControl fullWidth>
                             <InputLabel id={`actions-type-label-${index}`}>Action Type</InputLabel>
                             <Select
@@ -422,7 +401,7 @@ const LuaConfig = (): React.JSX.Element => {
                             </Select>
                           </FormControl>
                         </Grid>
-                        <Grid item xs={3}>
+                        <Grid size={3}>
                           <TextField
                             fullWidth
                             label="Action Name"
@@ -442,7 +421,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid size={4}>
                           <TextField
                             fullWidth
                             label="Script Path"
@@ -462,7 +441,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -509,7 +488,7 @@ const LuaConfig = (): React.JSX.Element => {
                   {values.custom_hooks.map((hook: LuaCustomHookConfig, index: number) => (
                     <ListItem key={index} divider={index < values.custom_hooks.length - 1}>
                       <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <TextField
                             fullWidth
                             label="HTTP Location"
@@ -529,7 +508,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <FormControl fullWidth>
                             <InputLabel id={`custom-hooks-method-label-${index}`}>HTTP Method</InputLabel>
                             <Select
@@ -552,7 +531,7 @@ const LuaConfig = (): React.JSX.Element => {
                             </Select>
                           </FormControl>
                         </Grid>
-                        <Grid item xs={4}>
+                        <Grid size={4}>
                           <TextField
                             fullWidth
                             label="Script Path"
@@ -572,7 +551,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <TextField
                             fullWidth
                             label="Roles (comma-separated)"
@@ -588,7 +567,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -635,7 +614,7 @@ const LuaConfig = (): React.JSX.Element => {
                   {values.search.map((searchProtocol: LuaSearchProtocolConfig, index: number) => (
                     <ListItem key={index} divider={index < values.search.length - 1}>
                       <Grid container spacing={2} alignItems="center">
-                        <Grid item xs={4}>
+                        <Grid size={4}>
                           <ProtocolsConfig
                             index={index}
                             protocol={searchProtocol.protocol}
@@ -645,7 +624,7 @@ const LuaConfig = (): React.JSX.Element => {
                             setHasUnsavedChanges={setHasUnsavedChanges}
                           />
                         </Grid>
-                        <Grid item xs={3}>
+                        <Grid size={3}>
                           <TextField
                             fullWidth
                             label="Cache Name"
@@ -665,7 +644,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={3}>
+                        <Grid size={3}>
                           <TextField
                             fullWidth
                             label="Backend Name (optional)"
@@ -685,7 +664,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid item xs={2}>
+                        <Grid size={2}>
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -729,7 +708,7 @@ const LuaConfig = (): React.JSX.Element => {
 
               <Paper sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={2}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle1" gutterBottom>
                       Optional Lua Backends
                     </Typography>
@@ -737,7 +716,7 @@ const LuaConfig = (): React.JSX.Element => {
                     {Object.entries(values.optional_lua_backends).map(([backendName, backendConfig]: [string, any]) => (
                       <Box key={backendName} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                         <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={10}>
+                          <Grid size={10}>
                             <TextField
                               fullWidth
                               label="Backend Name"
@@ -745,7 +724,7 @@ const LuaConfig = (): React.JSX.Element => {
                               disabled
                             />
                           </Grid>
-                          <Grid item xs={2}>
+                          <Grid size={2}>
                             <IconButton
                               color="error"
                               onClick={() => {
@@ -761,7 +740,7 @@ const LuaConfig = (): React.JSX.Element => {
                         </Grid>
 
                         <Grid container spacing={3} sx={{ mt: 1 }}>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Number of Workers"
@@ -774,7 +753,7 @@ const LuaConfig = (): React.JSX.Element => {
                               ) }}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Package Path"
@@ -786,7 +765,7 @@ const LuaConfig = (): React.JSX.Element => {
                               ) }}
                             />
                           </Grid>
-                          <Grid item xs={12}>
+                          <Grid size={12}>
                             <TextField
                               fullWidth
                               label="Backend Script Path"
@@ -798,7 +777,7 @@ const LuaConfig = (): React.JSX.Element => {
                               ) }}
                             />
                           </Grid>
-                          <Grid item xs={12}>
+                          <Grid size={12}>
                             <TextField
                               fullWidth
                               label="Init Script Path"
@@ -810,7 +789,7 @@ const LuaConfig = (): React.JSX.Element => {
                               ) }}
                             />
                           </Grid>
-                          <Grid item xs={12}>
+                          <Grid size={12}>
                             <Typography variant="subtitle2" gutterBottom>
                               Init Script Paths
                             </Typography>
@@ -818,7 +797,7 @@ const LuaConfig = (): React.JSX.Element => {
                               {(backendConfig.init_script_paths || []).map((path: string, pathIndex: number) => (
                                 <ListItem key={pathIndex} divider={pathIndex < (backendConfig.init_script_paths || []).length - 1}>
                                   <Grid container spacing={2} alignItems="center">
-                                    <Grid item xs={10}>
+                                    <Grid size={10}>
                                       <TextField
                                         fullWidth
                                         label={`Script Path ${pathIndex + 1}`}
@@ -830,7 +809,7 @@ const LuaConfig = (): React.JSX.Element => {
                                         ) }}
                                       />
                                     </Grid>
-                                    <Grid item xs={2}>
+                                    <Grid size={2}>
                                       <IconButton
                                         color="error"
                                         onClick={() => {
@@ -894,7 +873,7 @@ const LuaConfig = (): React.JSX.Element => {
 
               <Paper sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Number of Workers"
@@ -915,7 +894,7 @@ const LuaConfig = (): React.JSX.Element => {
                       ) }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Package Path"
@@ -935,7 +914,7 @@ const LuaConfig = (): React.JSX.Element => {
                       ) }}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <TextField
                       fullWidth
                       label="Backend Script Path"
@@ -955,7 +934,7 @@ const LuaConfig = (): React.JSX.Element => {
                       ) }}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <TextField
                       fullWidth
                       label="Init Script Path"
@@ -975,7 +954,7 @@ const LuaConfig = (): React.JSX.Element => {
                       ) }}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle1" gutterBottom>
                       Init Script Paths
                     </Typography>
@@ -983,7 +962,7 @@ const LuaConfig = (): React.JSX.Element => {
                       {(values.config.init_script_paths || []).map((path: string, index: number) => (
                         <ListItem key={index} divider={index < (values.config.init_script_paths || []).length - 1}>
                           <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={10}>
+                            <Grid size={10}>
                               <TextField
                                 fullWidth
                                 label={`Script Path ${index + 1}`}
@@ -995,7 +974,7 @@ const LuaConfig = (): React.JSX.Element => {
                                 ) }}
                               />
                             </Grid>
-                            <Grid item xs={2}>
+                            <Grid size={2}>
                               <IconButton
                                 color="error"
                                 onClick={() => {

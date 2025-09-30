@@ -1,25 +1,7 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
-import { 
-  TextField, 
-  FormControlLabel, 
-  Grid, 
-  Button, 
-  Box,
-  Typography,
-  Switch,
-  CircularProgress,
-  Tooltip,
-  IconButton,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  InputAdornment,
-  Stack,
-} from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, Typography, Switch, CircularProgress, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment, Stack } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -29,6 +11,7 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
 import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
@@ -373,10 +356,10 @@ const ConnectionConfig: React.FC = () => {
 
 
                 {/* Backend URL */}
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Backend Configuration</Typography>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Field
                     as={TextField}
                     fullWidth
@@ -400,10 +383,10 @@ const ConnectionConfig: React.FC = () => {
                 </Grid>
 
                 {/* Basic Authentication */}
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Basic Authentication</Typography>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -425,9 +408,9 @@ const ConnectionConfig: React.FC = () => {
                 </Grid>
                 {values.basic_auth?.enabled && (
                   <>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -445,7 +428,7 @@ const ConnectionConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <Field
                             as={PasswordField}
                             fullWidth
@@ -470,10 +453,10 @@ const ConnectionConfig: React.FC = () => {
                 )}
 
                 {/* JWT Authentication */}
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>JWT Authentication</Typography>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -495,9 +478,9 @@ const ConnectionConfig: React.FC = () => {
                 </Grid>
                 {values.jwt_auth?.enabled && (
                   <>
-                    <Grid item xs={12}>
+                    <Grid size={12}>
                       <Grid container spacing={2}>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -518,7 +501,7 @@ const ConnectionConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} sm={6}>
+                        <Grid size={{ xs: 12, sm: 6 }}>
                           <Field
                             as={PasswordField}
                             fullWidth
@@ -542,7 +525,7 @@ const ConnectionConfig: React.FC = () => {
 
                     {/* Token Status and Reset-Button */}
                     {values.jwt_auth?.token && (
-                      <Grid item xs={12} sx={{ mt: 2 }}>
+                      <Grid sx={{ mt: 2 }} size={12}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                           <Box>
                             <Typography variant="subtitle2" color="primary">

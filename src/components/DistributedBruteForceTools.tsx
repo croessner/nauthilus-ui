@@ -1,27 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  Tabs,
-  Tab,
-  Grid,
-  TextField,
-  Button,
-  Switch,
-  FormControlLabel,
-  Alert,
-  InputAdornment,
-  MenuItem,
-  CircularProgress,
-  Divider,
-  Tooltip,
-  IconButton,
-  Chip,
-  Stack,
-  Snackbar,
-  Menu
-} from '@mui/material';
+import { Box, Paper, Typography, Tabs, Tab, TextField, Button, Switch, FormControlLabel, Alert, InputAdornment, MenuItem, CircularProgress, Divider, Tooltip, IconButton, Chip, Stack, Snackbar, Menu } from '@mui/material';
 import SecurityIcon from '@mui/icons-material/Security';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import SaveIcon from '@mui/icons-material/Save';
@@ -35,6 +13,7 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
+import Grid from '@mui/material/Grid';
 
 const prettyJson = (obj: any) => {
   try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
@@ -434,7 +413,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     const toBool = (v: any) => Boolean(v);
     const toNum = (v: any) => (typeof v === 'number' ? v : Number(v || 0));
     const boolTile = (label: string, value: any) => (
-      <Grid item xs={6} md={3}>
+      <Grid size={{ xs: 6, md: 3 }}>
         <Paper sx={{ p: 2 }}>
           <Typography variant="subtitle2">{label}</Typography>
           <Typography variant="h6" color={toBool(value) ? 'error.main' : 'text.primary'}>
@@ -445,7 +424,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     );
     return (
       <Grid container spacing={2}>
-        <Grid item xs={6} md={3}>
+        <Grid size={{ xs: 6, md: 3 }}>
           <Paper sx={{ p: 2 }}>
             <Typography variant="subtitle2">Threat Level</Typography>
             <Typography variant="h6">{toNum(dr?.threat_level) || 0}</Typography>
@@ -504,7 +483,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
         {/* Hook settings */}
         <Grid container spacing={2} sx={{ mb: 2 }}>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>Admin Hook</Typography>
             <FormControlLabel 
               control={<Switch checked={adminEnabled} onChange={(e) => setAdminEnabled(e.target.checked)} />} 
@@ -536,7 +515,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
               ))}
             </Menu>
           </Grid>
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>Test Hook</Typography>
             <FormControlLabel 
               control={<Switch checked={testEnabled} onChange={(e) => setTestEnabled(e.target.checked)} />} 
@@ -587,7 +566,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
               Execute admin operations for the distributed brute-force detection. Choose an operation below.
             </Typography>
             <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <TextField
                   select
                   fullWidth
@@ -604,7 +583,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
               {/* Username required field for reset_account */}
               {adminOperation === 'reset_account' && (
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <TextField
                     fullWidth
                     required
@@ -618,7 +597,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                 </Grid>
               )}
 
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Box sx={{ display: 'flex', gap: 1 }}>
                   <Button 
                     variant="contained" 
@@ -630,7 +609,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   </Button>
                 </Box>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Divider sx={{ my: 1 }} />
                 <Typography variant="subtitle2" sx={{ mb: 1 }}>Response</Typography>
                 {/* Pretty admin response rendering */}
@@ -699,55 +678,55 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                               );
                             })()}
                             <Grid container spacing={2}>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Attempts</Typography>
                                   <Typography variant="h6">{toNum(m.attempts) || 0}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Unique IPs</Typography>
                                   <Typography variant="h6">{toNum(m.unique_ips) || 0}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Unique Users</Typography>
                                   <Typography variant="h6">{toNum(m.unique_users) || 0}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">IPs per User</Typography>
                                   <Typography variant="h6">{(toNum(m.ips_per_user) || 0).toFixed(2)}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Threat Level</Typography>
                                   <Typography variant="h6">{toNum(m.threat_level) || 0}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Attacked Accounts</Typography>
                                   <Typography variant="h6">{attacked}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Rate-limited IPs</Typography>
                                   <Typography variant="h6">{rateLimitedIPs}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Blocked Regions</Typography>
                                   <Typography variant="h6">{blockedRegions}</Typography>
                                 </Paper>
                               </Grid>
-                              <Grid item xs={12} md={3}>
+                              <Grid size={{ xs: 12, md: 3 }}>
                                 <Paper sx={{ p: 2 }}>
                                   <Typography variant="subtitle2">Captcha Accounts</Typography>
                                   <Typography variant="h6">{captchaAccounts}</Typography>
@@ -862,7 +841,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
             {!useAdvancedBody && (
               <Grid container spacing={2}>
-                <Grid item xs={12} md={4}>
+                <Grid size={{ xs: 12, md: 4 }}>
                   <TextField
                     select
                     fullWidth
@@ -876,7 +855,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                     <MenuItem value="check_detection">Check detection status</MenuItem>
                   </TextField>
                 </Grid>
-                <Grid item xs={12} md={8}>
+                <Grid size={{ xs: 12, md: 8 }}>
                   <TextField
                     fullWidth
                     required
@@ -887,7 +866,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   />
                 </Grid>
                 {testFields.action !== 'check_detection' && (
-                  <Grid item xs={12} md={4}>
+                  <Grid size={{ xs: 12, md: 4 }}>
                     <TextField
                       fullWidth
                       label="Num IPs"
@@ -899,7 +878,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   </Grid>
                 )}
                 {testFields.action !== 'check_detection' && (
-                  <Grid item xs={12} md={4}>
+                  <Grid size={{ xs: 12, md: 4 }}>
                     <TextField
                       fullWidth
                       label="Country Code"

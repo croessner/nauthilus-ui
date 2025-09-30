@@ -1,24 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  Box,
-  Typography,
-  Paper,
-  TextField,
-  Button,
-  Avatar,
-  Grid,
-  Container,
-  Alert,
-  CircularProgress,
-  IconButton,
-  Divider
-} from '@mui/material';
+import { Box, Typography, Paper, TextField, Button, Avatar, Container, Alert, CircularProgress, IconButton, Divider } from '@mui/material';
 import { useUser } from '../contexts/UserContext';
 import { useNavigate } from 'react-router-dom';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
 import PhotoCameraIcon from '@mui/icons-material/PhotoCamera';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import SecurityIcon from '@mui/icons-material/Security';
+import Grid from '@mui/material/Grid';
 
 const UserProfile = (): React.JSX.Element => {
   const { user, updateUserProfile, updatePassword, loading, error, clearError } = useUser();
@@ -170,7 +158,7 @@ const UserProfile = (): React.JSX.Element => {
       ) : (
         <Grid container spacing={3}>
           {/* Profile Information Section */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper sx={{ p: 3, height: '100%' }}>
               <Typography variant="h6" component="h2" gutterBottom>
                 Profile Information
@@ -288,7 +276,7 @@ const UserProfile = (): React.JSX.Element => {
           </Grid>
 
           {/* Password Change Section */}
-          <Grid item xs={12} md={6}>
+          <Grid size={{ xs: 12, md: 6 }}>
             <Paper sx={{ p: 3, height: '100%' }}>
               <Typography variant="h6" component="h2" gutterBottom>
                 Change Password

@@ -1,21 +1,12 @@
 import React from 'react';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
-import { 
-  TextField, 
-  FormControlLabel, 
-  Grid, 
-  Button, 
-  Box,
-  FormHelperText,
-  Typography,
-  Switch,
-  InputAdornment
-} from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, FormHelperText, Typography, Switch, InputAdornment } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const AuthConfigSchema = Yup.object().shape({
@@ -132,10 +123,10 @@ const AuthConfig = (): React.JSX.Element | null => {
           >
             <Grid container spacing={3}>
               {/* Basic Authentication */}
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Basic Authentication</Typography>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -157,7 +148,7 @@ const AuthConfig = (): React.JSX.Element | null => {
               </Grid>
               {values.basic_auth?.enabled && (
                 <>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -175,7 +166,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={PasswordField}
                       fullWidth
@@ -198,10 +189,10 @@ const AuthConfig = (): React.JSX.Element | null => {
               )}
 
               {/* JWT Authentication */}
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>JWT Authentication</Typography>
               </Grid>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -223,7 +214,7 @@ const AuthConfig = (): React.JSX.Element | null => {
               </Grid>
               {values.jwt_auth?.enabled && (
                 <>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={PasswordField}
                       fullWidth
@@ -242,7 +233,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                         as={TextField}
                         fullWidth
@@ -264,7 +255,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -280,7 +271,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                     />
                   </Grid>
                   {values.jwt_auth?.refresh_token && (
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Field
                         as={TextField}
                         fullWidth
@@ -300,7 +291,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       />
                     </Grid>
                   )}
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -317,7 +308,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                   </Grid>
 
                   {/* JWT Users */}
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>JWT Users</Typography>
                     <Box sx={{ mb: 2 }}>
                       <Typography variant="body2" color="textSecondary">
@@ -328,7 +319,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       values.jwt_auth.users.map((_user, index) => (
                         <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
                           <Grid container spacing={2}>
-                            <Grid item xs={12} md={6}>
+                            <Grid size={{ xs: 12, md: 6 }}>
                               <Field
                                 as={TextField}
                                 fullWidth
@@ -349,7 +340,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                                 }}
                               />
                             </Grid>
-                            <Grid item xs={12} md={6}>
+                            <Grid size={{ xs: 12, md: 6 }}>
                               <Field
                                 as={PasswordField}
                                 fullWidth
@@ -371,7 +362,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                                 }}
                               />
                             </Grid>
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                               {/* Use a regular TextField for roles to allow typing commas */}
                               <TextField
                                 fullWidth
@@ -395,7 +386,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                                 Default roles: authenticate, user_info, list_accounts, security, admin
                               </FormHelperText>
                             </Grid>
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                               <Button
                                 variant="outlined"
                                 color="error"

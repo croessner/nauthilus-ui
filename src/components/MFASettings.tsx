@@ -1,35 +1,11 @@
 import React, {useEffect, useState} from 'react';
-import {
-    Alert,
-    Box,
-    Button,
-    Card,
-    CardActions,
-    CardContent,
-    CircularProgress,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogTitle,
-    Divider,
-    FormControlLabel,
-    Grid,
-    IconButton,
-    List,
-    ListItem,
-    ListItemText,
-    Paper,
-    Switch,
-    Tab,
-    Tabs,
-    TextField,
-    Typography
-} from '@mui/material';
+import { Alert, Box, Button, Card, CardActions, CardContent, CircularProgress, Dialog, DialogActions, DialogContent, DialogTitle, Divider, FormControlLabel, IconButton, List, ListItem, ListItemText, Paper, Switch, Tab, Tabs, TextField, Typography } from '@mui/material';
 import {Add as AddIcon, Delete as DeleteIcon} from '@mui/icons-material';
 import {QRCodeCanvas as QRCode} from 'qrcode.react';
 import {useUser} from '../contexts/UserContext';
 import * as mfaUtils from '../utils/mfaUtils';
 import * as userManager from '../utils/userManager';
+import Grid from '@mui/material/Grid';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -354,7 +330,7 @@ const MFASettings: React.FC = () => {
             <Card>
               <CardContent>
                 <Grid container alignItems="center">
-                  <Grid item xs={8}>
+                  <Grid size={8}>
                     <Typography variant="h6">
                       Authenticator App
                     </Typography>
@@ -362,7 +338,7 @@ const MFASettings: React.FC = () => {
                       {user.totpEnabled ? 'Enabled' : 'Disabled'}
                     </Typography>
                   </Grid>
-                  <Grid item xs={4} container justifyContent="flex-end">
+                  <Grid container justifyContent="flex-end" size={4}>
                     <FormControlLabel
                       control={
                         <Switch

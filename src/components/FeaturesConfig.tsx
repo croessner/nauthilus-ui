@@ -1,26 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import {
-  Grid,
-  Button,
-  Box,
-  Typography,
-  FormHelperText,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Paper,
-  Tabs,
-  Tab,
-  TextField,
-  FormControlLabel,
-  IconButton,
-  Radio,
-  RadioGroup,
-  Switch
-} from '@mui/material';
+import { Button, Box, Typography, FormHelperText, FormControl, InputLabel, Select, MenuItem, Paper, Tabs, Tab, TextField, FormControlLabel, IconButton, Radio, RadioGroup, Switch } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { 
@@ -33,6 +14,7 @@ import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PasswordField from './common/PasswordField';
 import InfoTooltip from './common/InfoTooltip';
+import Grid from '@mui/material/Grid';
 
 // Interface for tab panel props
 interface TabPanelProps {
@@ -386,7 +368,7 @@ const FeaturesConfig: React.FC = () => {
             <TabPanel value={tabValue} index={0}>
               <FormSection title="Standard Features">
                 <Grid container spacing={2}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="body1" gutterBottom>
                       Configure standard features for the server. Select multiple features from the dropdown.
                     </Typography>
@@ -446,7 +428,7 @@ const FeaturesConfig: React.FC = () => {
             <TabPanel value={tabValue} index={1}>
               <FormSection title="TLS Encryption Configuration">
                 <Grid container spacing={3}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>Cleartext Networks</Typography>
                     <Typography variant="body2" sx={{ mb: 2 }}>
                       Networks that are allowed to connect without TLS encryption. IP addresses or CIDR notation (e.g., 192.168.1.0/24).
@@ -509,7 +491,7 @@ const FeaturesConfig: React.FC = () => {
             <TabPanel value={tabValue} index={2}>
               <FormSection title="RBL Configuration">
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -526,7 +508,7 @@ const FeaturesConfig: React.FC = () => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="IP Whitelist" defaultExpanded>
                       <FieldArray name="realtime_blackhole_lists.ip_whitelist">
                         {({ push, remove }) => (
@@ -579,7 +561,7 @@ const FeaturesConfig: React.FC = () => {
                       </FieldArray>
                     </CollapsibleFormSection>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="Soft Whitelist">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         The soft whitelist allows you to specify which usernames are allowed to bypass RBL checks from specific IP addresses or networks.
@@ -591,7 +573,7 @@ const FeaturesConfig: React.FC = () => {
                               Object.entries(values.realtime_blackhole_lists?.soft_whitelist || {}).map(([username, networks], index) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -602,7 +584,7 @@ const FeaturesConfig: React.FC = () => {
                                         disabled
                                       />
                                     </Grid>
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                       <Typography variant="subtitle2">Networks</Typography>
                                       {Array.isArray(networks) && networks.map((network: string, netIndex: number) => (
                                         <Box key={netIndex} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -667,7 +649,7 @@ const FeaturesConfig: React.FC = () => {
                                         Add Network
                                       </Button>
                                     </Grid>
-                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                    <Grid display="flex" justifyContent="flex-end" size={12}>
                                       <Button
                                         variant="outlined"
                                         color="error"
@@ -728,7 +710,7 @@ const FeaturesConfig: React.FC = () => {
                       </FieldArray>
                     </CollapsibleFormSection>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="RBL Lists">
                       <FieldArray name="realtime_blackhole_lists.lists">
                       {({ push, remove }) => (
@@ -737,7 +719,7 @@ const FeaturesConfig: React.FC = () => {
                             values.realtime_blackhole_lists.lists.map((_list, index) => (
                               <Paper key={index} sx={{ p: 2, mb: 2 }}>
                                 <Grid container spacing={2}>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={TextField}
                                       fullWidth
@@ -752,7 +734,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={TextField}
                                       fullWidth
@@ -767,7 +749,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Typography variant="subtitle2" sx={{ mb: 1 }}>Return codes</Typography>
                                     <FieldArray name={`realtime_blackhole_lists.lists[${index}].return_codes`}>
                                       {({ push, remove}) => (
@@ -819,7 +801,7 @@ const FeaturesConfig: React.FC = () => {
                                       )}
                                     </FieldArray>
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={TextField}
                                       fullWidth
@@ -836,7 +818,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -851,7 +833,7 @@ const FeaturesConfig: React.FC = () => {
                                       label="Allow Failure"
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -866,7 +848,7 @@ const FeaturesConfig: React.FC = () => {
                                       label="IPv4"
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -881,7 +863,7 @@ const FeaturesConfig: React.FC = () => {
                                       label="IPv6"
                                     />
                                   </Grid>
-                                  <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                  <Grid display="flex" justifyContent="flex-end" size={12}>
                                     <IconButton 
                                       onClick={() => {
                                         remove(index);
@@ -923,7 +905,7 @@ const FeaturesConfig: React.FC = () => {
             <TabPanel value={tabValue} index={3}>
               <FormSection title="Relay Domains Configuration">
                 <Grid container spacing={3}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>Static Domains</Typography>
                     <FieldArray name="relay_domains.static">
                       {({ push, remove }) => (
@@ -983,7 +965,7 @@ const FeaturesConfig: React.FC = () => {
             <TabPanel value={tabValue} index={4}>
               <FormSection title="Backend Server Monitoring Configuration">
                 <Grid container spacing={3}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle2" sx={{ mb: 1 }}>Backend Servers</Typography>
                     <FieldArray name="backend_server_monitoring.backend_servers">
                       {({ push, remove }) => (
@@ -992,7 +974,7 @@ const FeaturesConfig: React.FC = () => {
                             values.backend_server_monitoring.backend_servers.map((_server: BackendServerConfig, index: number) => (
                               <Paper key={index} sx={{ p: 2, mb: 2 }}>
                                 <Grid container spacing={2}>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControl fullWidth>
                                       <InputLabel id={`protocol-select-label-${index}`}>Protocol</InputLabel>
                                       <Select
@@ -1015,7 +997,7 @@ const FeaturesConfig: React.FC = () => {
                                       </Select>
                                     </FormControl>
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={TextField}
                                       fullWidth
@@ -1030,7 +1012,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={TextField}
                                       fullWidth
@@ -1047,7 +1029,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -1063,7 +1045,7 @@ const FeaturesConfig: React.FC = () => {
                                     />
                                   </Grid>
                                   {values.backend_server_monitoring.backend_servers[index].protocol === 'http' && (
-                                    <Grid item xs={12} md={12}>
+                                    <Grid size={{ xs: 12, md: 12 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1079,7 +1061,7 @@ const FeaturesConfig: React.FC = () => {
                                       />
                                     </Grid>
                                   )}
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={TextField}
                                       fullWidth
@@ -1094,7 +1076,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={6}>
+                                  <Grid size={{ xs: 12, md: 6 }}>
                                     <Field
                                       as={PasswordField}
                                       fullWidth
@@ -1109,7 +1091,7 @@ const FeaturesConfig: React.FC = () => {
                                       }}
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={4}>
+                                  <Grid size={{ xs: 12, md: 4 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -1124,7 +1106,7 @@ const FeaturesConfig: React.FC = () => {
                                       label="TLS"
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={4}>
+                                  <Grid size={{ xs: 12, md: 4 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -1139,7 +1121,7 @@ const FeaturesConfig: React.FC = () => {
                                       label="Skip TLS Verify"
                                     />
                                   </Grid>
-                                  <Grid item xs={12} md={4}>
+                                  <Grid size={{ xs: 12, md: 4 }}>
                                     <FormControlLabel
                                       control={
                                         <Switch
@@ -1154,7 +1136,7 @@ const FeaturesConfig: React.FC = () => {
                                       label="HAProxy v2"
                                     />
                                   </Grid>
-                                  <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                  <Grid display="flex" justifyContent="flex-end" size={12}>
                                     <IconButton 
                                       onClick={() => {
                                         remove(index);
@@ -1206,7 +1188,7 @@ const FeaturesConfig: React.FC = () => {
             <TabPanel value={tabValue} index={5}>
               <FormSection title="Brute Force Configuration">
                 <Grid container spacing={3}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="IP Whitelist" defaultExpanded>
                       <FieldArray name="brute_force.ip_whitelist">
                       {({ push, remove }) => (
@@ -1259,7 +1241,7 @@ const FeaturesConfig: React.FC = () => {
                     </FieldArray>
                     </CollapsibleFormSection>
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="Soft Whitelist">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         The soft whitelist allows you to specify which usernames are allowed to bypass brute force checks from specific IP addresses or networks.
@@ -1271,7 +1253,7 @@ const FeaturesConfig: React.FC = () => {
                               Object.entries(values.brute_force?.soft_whitelist || {}).map(([username, networks], index) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1282,7 +1264,7 @@ const FeaturesConfig: React.FC = () => {
                                         disabled
                                       />
                                     </Grid>
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                       <Typography variant="subtitle2">Networks</Typography>
                                       {Array.isArray(networks) && networks.map((network: string, netIndex: number) => (
                                         <Box key={netIndex} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
@@ -1347,7 +1329,7 @@ const FeaturesConfig: React.FC = () => {
                                         Add Network
                                       </Button>
                                     </Grid>
-                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                    <Grid display="flex" justifyContent="flex-end" size={12}>
                                       <Button
                                         variant="outlined"
                                         color="error"
@@ -1409,7 +1391,7 @@ const FeaturesConfig: React.FC = () => {
                     </CollapsibleFormSection>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="Password History for Known Accounts">
                       <FormControlLabel
                         control={
@@ -1430,10 +1412,10 @@ const FeaturesConfig: React.FC = () => {
                     </CollapsibleFormSection>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="IP Scoping">
                       <Grid container spacing={2}>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1449,7 +1431,7 @@ const FeaturesConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1469,10 +1451,10 @@ const FeaturesConfig: React.FC = () => {
                     </CollapsibleFormSection>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="Tolerations">
                       <Grid container spacing={2}>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1489,7 +1471,7 @@ const FeaturesConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1504,7 +1486,7 @@ const FeaturesConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <FormControlLabel
                             control={
                               <Switch
@@ -1519,7 +1501,7 @@ const FeaturesConfig: React.FC = () => {
                             label="Adaptive Toleration"
                           />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1536,7 +1518,7 @@ const FeaturesConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1553,7 +1535,7 @@ const FeaturesConfig: React.FC = () => {
                             }}
                           />
                         </Grid>
-                        <Grid item xs={12} md={6}>
+                        <Grid size={{ xs: 12, md: 6 }}>
                           <Field
                             as={TextField}
                             fullWidth
@@ -1574,7 +1556,7 @@ const FeaturesConfig: React.FC = () => {
                     </CollapsibleFormSection>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="Custom Tolerations">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         Custom tolerations allow you to specify different toleration settings for specific IP addresses or networks.
@@ -1586,7 +1568,7 @@ const FeaturesConfig: React.FC = () => {
                               values.brute_force.custom_tolerations.map((_toleration: any, index: number) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1601,7 +1583,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1618,7 +1600,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1633,7 +1615,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <FormControlLabel
                                         control={
                                           <Switch
@@ -1648,7 +1630,7 @@ const FeaturesConfig: React.FC = () => {
                                         label="Adaptive Toleration"
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1665,7 +1647,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1682,7 +1664,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1699,7 +1681,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                    <Grid display="flex" justifyContent="flex-end" size={12}>
                                       <IconButton 
                                         onClick={() => {
                                           remove(index);
@@ -1742,7 +1724,7 @@ const FeaturesConfig: React.FC = () => {
                     </CollapsibleFormSection>
                   </Grid>
 
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <CollapsibleFormSection title="Buckets">
                       <Typography variant="body2" sx={{ mb: 2 }}>
                         Buckets define rules for detecting brute force attacks based on the number of failed requests within a specific time period.
@@ -1754,7 +1736,7 @@ const FeaturesConfig: React.FC = () => {
                               values.brute_force.buckets.map((_bucket: any, index: number) => (
                                 <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
                                   <Grid container spacing={2}>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1769,7 +1751,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1784,7 +1766,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1801,7 +1783,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Typography variant="subtitle2" sx={{ mb: 1 }}>IP Version</Typography>
                                       <RadioGroup
                                         row
@@ -1821,7 +1803,7 @@ const FeaturesConfig: React.FC = () => {
                                         <FormControlLabel value="ipv6" control={<Radio />} label="IPv6" />
                                       </RadioGroup>
                                     </Grid>
-                                    <Grid item xs={12} md={6}>
+                                    <Grid size={{ xs: 12, md: 6 }}>
                                       <Field
                                         as={TextField}
                                         fullWidth
@@ -1838,7 +1820,7 @@ const FeaturesConfig: React.FC = () => {
                                         }}
                                       />
                                     </Grid>
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                       <Typography variant="subtitle2" sx={{ mb: 1 }}>Filter by Protocol</Typography>
                                       <FieldArray name={`brute_force.buckets[${index}].filter_by_protocol`}>
                                         {({ push: pushProtocol, remove: removeProtocol }) => (
@@ -1889,7 +1871,7 @@ const FeaturesConfig: React.FC = () => {
                                         )}
                                       </FieldArray>
                                     </Grid>
-                                    <Grid item xs={12}>
+                                    <Grid size={12}>
                                       <Typography variant="subtitle2" sx={{ mb: 1 }}>Filter by OIDC Client ID</Typography>
                                       <FieldArray name={`brute_force.buckets[${index}].filter_by_oidc_cid`}>
                                         {({ push: pushOIDC, remove: removeOIDC }) => (
@@ -1940,7 +1922,7 @@ const FeaturesConfig: React.FC = () => {
                                         )}
                                       </FieldArray>
                                     </Grid>
-                                    <Grid item xs={12} display="flex" justifyContent="flex-end">
+                                    <Grid display="flex" justifyContent="flex-end" size={12}>
                                       <IconButton 
                                         onClick={() => {
                                           remove(index);

@@ -1,25 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Box,
-  Paper,
-  Typography,
-  Grid,
-  TextField,
-  Button,
-  MenuItem,
-  Divider,
-  Alert,
-  Tooltip,
-  IconButton,
-  Chip,
-  Stack,
-  CircularProgress,
-  Snackbar,
-  Switch,
-  FormControlLabel,
-  Menu,
-  Dialog
-} from '@mui/material';
+import { Box, Paper, Typography, TextField, Button, MenuItem, Divider, Alert, Tooltip, IconButton, Chip, Stack, CircularProgress, Snackbar, Switch, FormControlLabel, Menu, Dialog } from '@mui/material';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -38,6 +18,7 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
+import Grid from '@mui/material/Grid';
 
 const METHODS = ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] as const;
 
@@ -460,12 +441,12 @@ const HookTester = (): React.JSX.Element => {
                     </Box>
                     {showRequestPanel && (
                         <Grid container spacing={2}>
-                            <Grid item xs={12} md={2}>
+                            <Grid size={{ xs: 12, md: 2 }}>
                                 <TextField select fullWidth label="Method" value={method} onChange={(e) => setMethod(e.target.value as Method)}>
                                     {METHODS.map(m => <MenuItem key={m} value={m}>{m}</MenuItem>)}
                                 </TextField>
                             </Grid>
-                            <Grid item xs={12} md={10}>
+                            <Grid size={{ xs: 12, md: 10 }}>
                                 <TextField
                                     fullWidth
                                     label="Endpoint Path (e.g., /api/v1/custom/hooks/distributed-brute-force-test)"
@@ -491,7 +472,7 @@ const HookTester = (): React.JSX.Element => {
                             </Grid>
 
                             {/* Query Params */}
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                                     <Typography variant="subtitle1">Query Parameters</Typography>
                                     <Chip size="small" label={`${query.filter(q => q.key).length}`} />
@@ -501,13 +482,13 @@ const HookTester = (): React.JSX.Element => {
                                 <Grid container spacing={1}>
                                     {query.map((row) => (
                                         <React.Fragment key={row.id}>
-                                            <Grid item xs={5} md={3}>
+                                            <Grid size={{ xs: 5, md: 3 }}>
                                                 <TextField size="small" fullWidth label="key" value={row.key} onChange={(e) => updateRow(row.id, { key: e.target.value })} />
                                             </Grid>
-                                            <Grid item xs={7} md={7}>
+                                            <Grid size={{ xs: 7, md: 7 }}>
                                                 <TextField size="small" fullWidth label="value" value={row.value} onChange={(e) => updateRow(row.id, { value: e.target.value })} />
                                             </Grid>
-                                            <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <Grid sx={{ display: 'flex', alignItems: 'center' }} size={{ xs: 12, md: 2 }}>
                                                 <IconButton onClick={() => removeRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
                                             </Grid>
                                         </React.Fragment>
@@ -516,7 +497,7 @@ const HookTester = (): React.JSX.Element => {
                             </Grid>
 
                             {/* Custom Request Headers */}
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1, mt: 2 }}>
                                     <Typography variant="subtitle1">Request Headers</Typography>
                                     <Chip size="small" label={`${headersRows.filter(h => h.key).length}`} />
@@ -526,13 +507,13 @@ const HookTester = (): React.JSX.Element => {
                                 <Grid container spacing={1}>
                                     {headersRows.map((row) => (
                                         <React.Fragment key={row.id}>
-                                            <Grid item xs={5} md={3}>
+                                            <Grid size={{ xs: 5, md: 3 }}>
                                                 <TextField size="small" fullWidth label="Header name" value={row.key} onChange={(e) => updateHeaderRow(row.id, { key: e.target.value })} />
                                             </Grid>
-                                            <Grid item xs={7} md={7}>
+                                            <Grid size={{ xs: 7, md: 7 }}>
                                                 <TextField size="small" fullWidth label="Header value" value={row.value} onChange={(e) => updateHeaderRow(row.id, { value: e.target.value })} />
                                             </Grid>
-                                            <Grid item xs={12} md={2} sx={{ display: 'flex', alignItems: 'center' }}>
+                                            <Grid sx={{ display: 'flex', alignItems: 'center' }} size={{ xs: 12, md: 2 }}>
                                                 <IconButton onClick={() => removeHeaderRow(row.id)} aria-label="remove"><DeleteIcon fontSize="small" /></IconButton>
                                             </Grid>
                                         </React.Fragment>
@@ -543,7 +524,7 @@ const HookTester = (): React.JSX.Element => {
                             {/* Body */}
                             {hasBody && (
                                 <>
-                                    <Grid item xs={12} md={4}>
+                                    <Grid size={{ xs: 12, md: 4 }}>
                                         <TextField select fullWidth label="Content-Type" value={contentType} onChange={(e) => setContentType(e.target.value)}>
                                             <MenuItem value="application/json">application/json</MenuItem>
                                             <MenuItem value="text/plain">text/plain</MenuItem>
@@ -555,7 +536,7 @@ const HookTester = (): React.JSX.Element => {
                                             <Button size="small" onClick={pasteExample}>Insert example</Button>
                                         </Stack>
                                     </Grid>
-                                    <Grid item xs={12} md={8}>
+                                    <Grid size={{ xs: 12, md: 8 }}>
                                         <TextField
                                             fullWidth
                                             multiline
@@ -571,7 +552,7 @@ const HookTester = (): React.JSX.Element => {
                                 </>
                             )}
 
-                            <Grid item xs={12}>
+                            <Grid size={12}>
                                 <Divider sx={{ my: 1 }} />
                                 <Stack direction="row" spacing={1}>
                                     <Button variant="contained" startIcon={<PlayArrowIcon />} onClick={send} disabled={loading || !endpointPath || !connectionOk || bodyTooLargeJson}>

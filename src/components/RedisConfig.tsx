@@ -1,21 +1,7 @@
 import React, { useState } from 'react';
 import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { 
-  TextField, 
-  FormControlLabel, 
-  Grid, 
-  Button, 
-  Box,
-  Typography,
-  Radio,
-  RadioGroup,
-  FormControl,
-  FormLabel,
-  IconButton,
-  Switch,
-  InputAdornment
-} from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, Typography, Radio, RadioGroup, FormControl, FormLabel, IconButton, Switch, InputAdornment } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { ServerConfig as ServerConfigType } from '../types/config';
@@ -24,6 +10,7 @@ import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PasswordField from './common/PasswordField';
 import InfoTooltip from './common/InfoTooltip';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const RedisConfigSchema = Yup.object().shape({
@@ -375,7 +362,7 @@ const RedisConfig = (): React.JSX.Element | null => {
             description="Configure Redis settings for caching and session management."
           >
             <Grid container spacing={3}>
-              <Grid item xs={12}>
+              <Grid size={12}>
                 <FormControl component="fieldset">
                   <FormLabel component="legend">Redis Setup Type <InfoTooltip title="Choose how your Redis is deployed: standalone, replica set, Sentinel, or Cluster." /></FormLabel>
                   <RadioGroup
@@ -392,7 +379,7 @@ const RedisConfig = (): React.JSX.Element | null => {
               </Grid>
 
               {/* Common Redis Configuration */}
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -411,7 +398,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -429,7 +416,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={PasswordField}
                   fullWidth
@@ -445,7 +432,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -464,7 +451,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -483,7 +470,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -501,7 +488,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
                   fullWidth
@@ -529,7 +516,7 @@ const RedisConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid item xs={12} md={6}>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -546,7 +533,7 @@ const RedisConfig = (): React.JSX.Element | null => {
               </Grid>
               {values.redis.tls?.enabled && (
                 <>
-                  <Grid item xs={12} md={12}>
+                  <Grid size={{ xs: 12, md: 12 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -564,7 +551,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={12}>
+                  <Grid size={{ xs: 12, md: 12 }}>
                     <Field
                       as={TextField}
                       fullWidth
@@ -582,7 +569,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -610,7 +597,7 @@ const RedisConfig = (): React.JSX.Element | null => {
               defaultExpanded={true}
             >
               <Grid container spacing={3}>
-                <Grid item xs={12} md={12}>
+                <Grid size={{ xs: 12, md: 12 }}>
                   <Field
                     as={TextField}
                     fullWidth
@@ -629,9 +616,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Field
                         as={TextField}
                         fullWidth
@@ -649,7 +636,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Field
                         as={PasswordField}
                         fullWidth
@@ -679,7 +666,7 @@ const RedisConfig = (): React.JSX.Element | null => {
               defaultExpanded={true}
             >
               <Grid container spacing={3}>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Replica Addresses</Typography>
                   <FieldArray name="redis.replica.addresses">
                     {({ push, remove}) => (
@@ -747,7 +734,7 @@ const RedisConfig = (): React.JSX.Element | null => {
               defaultExpanded={true}
             >
               <Grid container spacing={3}>
-                <Grid item xs={12} md={12}>
+                <Grid size={{ xs: 12, md: 12 }}>
                   <Field
                     as={TextField}
                     fullWidth
@@ -765,7 +752,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Sentinel Addresses</Typography>
                   <FieldArray name="redis.sentinels.addresses">
                     {({ push, remove}) => (
@@ -821,9 +808,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                     )}
                   </FieldArray>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Field
                         as={TextField}
                         fullWidth
@@ -841,7 +828,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Field
                         as={PasswordField}
                         fullWidth
@@ -871,7 +858,7 @@ const RedisConfig = (): React.JSX.Element | null => {
               defaultExpanded={true}
             >
               <Grid container spacing={3}>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="subtitle2" sx={{ mb: 1 }}>Cluster Addresses</Typography>
                   <FieldArray name="redis.cluster.addresses">
                     {({ push, remove}) => (
@@ -927,9 +914,9 @@ const RedisConfig = (): React.JSX.Element | null => {
                     )}
                   </FieldArray>
                 </Grid>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Field
                         as={TextField}
                         fullWidth
@@ -947,7 +934,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         }}
                       />
                     </Grid>
-                    <Grid item xs={12} sm={6}>
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <Field
                         as={PasswordField}
                         fullWidth
@@ -965,7 +952,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     </Grid>
                   </Grid>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -980,7 +967,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Route By Latency<InfoTooltip title="Prefer nodes with the lowest latency when routing requests." /></Box>}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -995,7 +982,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Route Randomly<InfoTooltip title="Distribute requests randomly across nodes (ignores latency)." /></Box>}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -1010,7 +997,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Route Reads To Replicas<InfoTooltip title="Send read operations to replica nodes when possible." /></Box>}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Field
                     as={TextField}
                     fullWidth
@@ -1027,7 +1014,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Field
                     as={TextField}
                     fullWidth
@@ -1042,7 +1029,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Field
                     as={TextField}
                     fullWidth

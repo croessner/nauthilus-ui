@@ -1,31 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
-import {
-  TextField,
-  Grid,
-  Button,
-  Box,
-  Typography,
-  Paper,
-  IconButton,
-  List,
-  ListItem,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Tabs,
-  Tab,
-  FormControlLabel,
-  Switch,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogContentText,
-  DialogActions,
-  InputAdornment
-} from '@mui/material';
+import { TextField, Button, Box, Typography, Paper, IconButton, List, ListItem, FormControl, InputLabel, Select, MenuItem, Tabs, Tab, FormControlLabel, Switch, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -34,6 +10,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import ValidationErrors from './common/ValidationErrors';
 import PasswordField from './common/PasswordField';
 import ProtocolsConfig from './ProtocolsConfig';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const LDAPConfigSchema = Yup.object().shape({
@@ -194,7 +171,7 @@ const LDAPConfig = (): React.JSX.Element => {
 
               <Paper sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={3}>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -206,7 +183,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Pool Only<InfoTooltip title="Use only pooled connections; disables direct binds on demand." /></Box>}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -218,7 +195,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Start TLS<InfoTooltip title="Upgrade plain LDAP connection to TLS using STARTTLS." /></Box>}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -230,7 +207,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>TLS Skip Verify<InfoTooltip title="Do not verify server certificate. Unsafe; only for testing." /></Box>}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <FormControlLabel
                       control={
                         <Switch
@@ -242,7 +219,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>SASL External<InfoTooltip title="Use SASL EXTERNAL mechanism (e.g., with client TLS certificates)." /></Box>}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Number of Workers"
@@ -260,7 +237,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Lookup Pool Size"
@@ -278,7 +255,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Lookup Idle Pool Size"
@@ -296,7 +273,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Auth Pool Size"
@@ -314,7 +291,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Auth Idle Pool Size"
@@ -332,7 +309,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Bind DN"
@@ -352,7 +329,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       ) }}
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <PasswordField
                       fullWidth
                       name="config.bind_pw"
@@ -370,7 +347,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="TLS CA Certificate"
@@ -387,7 +364,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="TLS Client Certificate"
@@ -404,7 +381,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="TLS Client Key"
@@ -421,7 +398,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12} md={6}>
+                  <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth
                       label="Connect Abort Timeout"
@@ -438,7 +415,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
                       Server URIs
                     </Typography>
@@ -446,7 +423,7 @@ const LDAPConfig = (): React.JSX.Element => {
                       {(Array.isArray(values.config.server_uri) ? values.config.server_uri : [values.config.server_uri].filter(Boolean)).map((uri: string, index: number) => (
                         <ListItem key={index} divider={index < (Array.isArray(values.config.server_uri) ? values.config.server_uri : [values.config.server_uri].filter(Boolean)).length - 1}>
                           <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={10}>
+                            <Grid size={10}>
                               <TextField
                                 fullWidth
                                 label={`Server URI ${index + 1}`}
@@ -466,7 +443,7 @@ const LDAPConfig = (): React.JSX.Element => {
                                 }
                               />
                             </Grid>
-                            <Grid item xs={2}>
+                            <Grid size={2}>
                               <IconButton
                                 color="error"
                                 onClick={() => {
@@ -518,7 +495,7 @@ const LDAPConfig = (): React.JSX.Element => {
 
               <Paper sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={2}>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
                       Optional LDAP Pools
                     </Typography>
@@ -526,7 +503,7 @@ const LDAPConfig = (): React.JSX.Element => {
                     {Object.entries(values.optional_ldap_pools).map(([poolName, poolConfig]: [string, any]) => (
                       <Box key={poolName} sx={{ mb: 3, p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                         <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={10}>
+                          <Grid size={10}>
                             <TextField
                               fullWidth
                               label="Pool Name"
@@ -534,7 +511,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               disabled
                             />
                           </Grid>
-                          <Grid item xs={2}>
+                          <Grid size={2}>
                             <IconButton
                               color="error"
                               onClick={() => {
@@ -550,7 +527,7 @@ const LDAPConfig = (): React.JSX.Element => {
                         </Grid>
 
                         <Grid container spacing={3} sx={{ mt: 1 }}>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <FormControlLabel
                               control={
                                 <Switch
@@ -562,7 +539,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               label="Pool Only"
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <FormControlLabel
                               control={
                                 <Switch
@@ -574,7 +551,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               label="Start TLS"
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <FormControlLabel
                               control={
                                 <Switch
@@ -586,7 +563,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               label="TLS Skip Verify"
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <FormControlLabel
                               control={
                                 <Switch
@@ -598,7 +575,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               label="SASL External"
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Number of Workers"
@@ -608,7 +585,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Lookup Pool Size"
@@ -618,7 +595,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Lookup Idle Pool Size"
@@ -628,7 +605,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Auth Pool Size"
@@ -638,7 +615,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Auth Idle Pool Size"
@@ -648,7 +625,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Bind DN"
@@ -657,7 +634,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <PasswordField
                               fullWidth
                               name={`optional_ldap_pools.${poolName}.bind_pw`}
@@ -666,7 +643,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="TLS CA Certificate"
@@ -675,7 +652,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="TLS Client Certificate"
@@ -684,7 +661,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="TLS Client Key"
@@ -693,7 +670,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Connect Abort Timeout"
@@ -702,7 +679,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <Grid item xs={12}>
+                          <Grid size={12}>
                             <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
                               Server URIs
                             </Typography>
@@ -710,7 +687,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               {(Array.isArray(poolConfig.server_uri) ? poolConfig.server_uri : [poolConfig.server_uri].filter(Boolean)).map((uri: string, uriIndex: number) => (
                                 <ListItem key={uriIndex} divider={uriIndex < (Array.isArray(poolConfig.server_uri) ? poolConfig.server_uri : [poolConfig.server_uri].filter(Boolean)).length - 1}>
                                   <Grid container spacing={2} alignItems="center">
-                                    <Grid item xs={10}>
+                                    <Grid size={10}>
                                       <TextField
                                         fullWidth
                                         label={`Server URI ${uriIndex + 1}`}
@@ -719,7 +696,7 @@ const LDAPConfig = (): React.JSX.Element => {
                                         onChange={handleChange}
                                       />
                                     </Grid>
-                                    <Grid item xs={2}>
+                                    <Grid size={2}>
                                       <IconButton
                                         color="error"
                                         onClick={() => {
@@ -794,10 +771,10 @@ const LDAPConfig = (): React.JSX.Element => {
                     <ListItem key={index} divider={index < values.search.length - 1}>
                       <Box sx={{ width: '100%', mb: 2 }}>
                         <Grid container spacing={2} alignItems="center">
-                          <Grid item xs={10}>
+                          <Grid size={10}>
                             <Typography variant="subtitle1" sx={{ mb: 1 }}>Search Protocol {index + 1}</Typography>
                           </Grid>
-                          <Grid item xs={2}>
+                          <Grid size={2}>
                             <IconButton
                               color="error"
                               onClick={() => {
@@ -813,7 +790,7 @@ const LDAPConfig = (): React.JSX.Element => {
                         </Grid>
 
                         <Grid container spacing={2} sx={{ mt: 1 }}>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <ProtocolsConfig
                               index={index}
                               protocol={searchProtocol.protocol}
@@ -823,7 +800,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               setHasUnsavedChanges={setHasUnsavedChanges}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Cache Name"
@@ -840,7 +817,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Pool Name (optional)"
@@ -857,7 +834,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Base DN"
@@ -874,7 +851,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <FormControl fullWidth>
                               <InputLabel id={`search-scope-label-${index}`}>Scope</InputLabel>
                               <Select
@@ -893,7 +870,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               </Select>
                             </FormControl>
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Attributes (comma-separated)"
@@ -918,7 +895,7 @@ const LDAPConfig = (): React.JSX.Element => {
 
                         <Typography variant="subtitle2" sx={{ mt: 2, mb: 2 }}>Filters</Typography>
                         <Grid container spacing={2}>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="User Filter"
@@ -938,7 +915,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               rows={3}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="List Accounts Filter"
@@ -958,7 +935,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               rows={3}
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="WebAuthn Credentials Filter"
@@ -979,7 +956,7 @@ const LDAPConfig = (): React.JSX.Element => {
 
                         <Typography variant="subtitle2" sx={{ mt: 2, mb: 2 }}>Attribute Mapping</Typography>
                         <Grid container spacing={2}>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Account Field"
@@ -996,7 +973,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="TOTP Secret Field"
@@ -1013,7 +990,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="TOTP Recovery Field"
@@ -1028,7 +1005,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               helperText="This feature is not implemented yet."
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Display Name Field"
@@ -1045,7 +1022,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Credential Object"
@@ -1060,7 +1037,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               helperText="This feature is not implemented yet."
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Credential ID Field"
@@ -1075,7 +1052,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               helperText="This feature is not implemented yet."
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Public Key Field"
@@ -1090,7 +1067,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               helperText="This feature is not implemented yet."
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Unique User ID Field"
@@ -1107,7 +1084,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               }
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="AAGUID Field"
@@ -1122,7 +1099,7 @@ const LDAPConfig = (): React.JSX.Element => {
                               helperText="This feature is not implemented yet."
                             />
                           </Grid>
-                          <Grid item xs={12} md={6}>
+                          <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
                               label="Sign Count Field"

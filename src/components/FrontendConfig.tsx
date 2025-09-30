@@ -1,28 +1,7 @@
 import React, { useState } from 'react';
 import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
-import { 
-  TextField, 
-  FormControlLabel, 
-  Grid, 
-  Button, 
-  Box,
-  Typography,
-  Switch,
-  Divider,
-  IconButton,
-  Card,
-  CardContent,
-  CardActions,
-  Accordion,
-  AccordionSummary,
-  AccordionDetails,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  InputAdornment
-} from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, Typography, Switch, Divider, IconButton, Card, CardContent, CardActions, Accordion, AccordionSummary, AccordionDetails, FormControl, InputLabel, Select, MenuItem, InputAdornment } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import PasswordField from './common/PasswordField';
 import AddIcon from '@mui/icons-material/Add';
@@ -32,6 +11,7 @@ import { FrontendConfig as FrontendConfigType, Oauth2Config } from '../types/con
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import ValidationErrors from './common/ValidationErrors';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const FrontendConfigSchema = Yup.object().shape({
@@ -211,13 +191,13 @@ const FrontendConfig = (): React.JSX.Element => {
           <Form>
             <FormSection title="Frontend Configuration">
               <Grid container spacing={3}>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="body1" gutterBottom>
                     Configure the frontend settings for the web interface.
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <FormControlLabel
                     control={
                       <Field
@@ -237,7 +217,7 @@ const FrontendConfig = (): React.JSX.Element => {
 
                 {values.frontend?.enabled && (
                   <>
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Field
                         as={PasswordField}
                         fullWidth
@@ -254,7 +234,7 @@ const FrontendConfig = (): React.JSX.Element => {
                       />
                     </Grid>
 
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Field
                         as={PasswordField}
                         fullWidth
@@ -271,7 +251,7 @@ const FrontendConfig = (): React.JSX.Element => {
                       />
                     </Grid>
 
-                    <Grid item xs={12} md={6}>
+                    <Grid size={{ xs: 12, md: 6 }}>
                       <Field
                         as={PasswordField}
                         fullWidth
@@ -289,14 +269,14 @@ const FrontendConfig = (): React.JSX.Element => {
                   </>
                 )}
 
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
                     Ory Hydra Configuration
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Field
                     as={TextField}
                     fullWidth
@@ -313,7 +293,7 @@ const FrontendConfig = (): React.JSX.Element => {
                   />
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
                     OAuth2 Configuration
@@ -321,7 +301,7 @@ const FrontendConfig = (): React.JSX.Element => {
                 </Grid>
 
                 {/* OAuth2 Custom Scopes */}
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Accordion>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                       <Typography variant="subtitle1">Custom Scopes</Typography>
@@ -335,7 +315,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                 <Card key={scopeIndex} sx={{ mb: 2 }}>
                                   <CardContent>
                                     <Grid container spacing={2}>
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid size={{ xs: 12, sm: 6 }}>
                                         <Field
                                           as={TextField}
                                           fullWidth
@@ -351,7 +331,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                           }
                                         />
                                       </Grid>
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid size={{ xs: 12, sm: 6 }}>
                                         <Field
                                           as={TextField}
                                           fullWidth
@@ -379,7 +359,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                           {scope.claims && scope.claims.length > 0 ? (
                                             scope.claims.map((_claim, claimIndex) => (
                                               <Grid container spacing={2} key={claimIndex} sx={{ mb: 1 }}>
-                                                <Grid item xs={5}>
+                                                <Grid size={5}>
                                                   <Field
                                                     as={TextField}
                                                     fullWidth
@@ -395,7 +375,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                                     }
                                                   />
                                                 </Grid>
-                                                <Grid item xs={5}>
+                                                <Grid size={5}>
                                                   <FormControl 
                                                     fullWidth
                                                     error={Boolean(
@@ -425,7 +405,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                                     )}
                                                   </FormControl>
                                                 </Grid>
-                                                <Grid item xs={2}>
+                                                <Grid size={2}>
                                                   <IconButton
                                                     color="error"
                                                     onClick={() => removeClaim(claimIndex)}
@@ -486,7 +466,7 @@ const FrontendConfig = (): React.JSX.Element => {
                 </Grid>
 
                 {/* OAuth2 Clients */}
-                <Grid item xs={12} sx={{ mt: 2 }}>
+                <Grid sx={{ mt: 2 }} size={12}>
                   <Accordion>
                     <AccordionSummary expandIcon={<ExpandMoreIcon />}>
                       <Typography variant="subtitle1">OAuth2 Clients</Typography>
@@ -500,7 +480,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                 <Card key={clientIndex} sx={{ mb: 2 }}>
                                   <CardContent>
                                     <Grid container spacing={2}>
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid size={{ xs: 12, sm: 6 }}>
                                         <Field
                                           as={TextField}
                                           fullWidth
@@ -516,7 +496,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                           }
                                         />
                                       </Grid>
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid size={{ xs: 12, sm: 6 }}>
                                         <Field
                                           as={TextField}
                                           fullWidth
@@ -532,7 +512,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                           }
                                         />
                                       </Grid>
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid size={{ xs: 12, sm: 6 }}>
                                         <Field
                                           as={TextField}
                                           fullWidth
@@ -549,7 +529,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                           }
                                         />
                                       </Grid>
-                                      <Grid item xs={12} sm={6}>
+                                      <Grid size={{ xs: 12, sm: 6 }}>
                                         <FormControlLabel
                                           control={
                                             <Field
@@ -585,7 +565,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                       </AccordionSummary>
                                       <AccordionDetails>
                                         <Grid container spacing={2}>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth
@@ -601,7 +581,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               }
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <FormControlLabel
                                               control={
                                                 <Field
@@ -614,7 +594,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               label="Email Verified"
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth
@@ -622,7 +602,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               name={`oauth2.clients.${clientIndex}.claims.name`}
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth
@@ -630,7 +610,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               name={`oauth2.clients.${clientIndex}.claims.given_name`}
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth
@@ -638,7 +618,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               name={`oauth2.clients.${clientIndex}.claims.family_name`}
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth
@@ -646,7 +626,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               name={`oauth2.clients.${clientIndex}.claims.middle_name`}
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth
@@ -654,7 +634,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               name={`oauth2.clients.${clientIndex}.claims.nickname`}
                                             />
                                           </Grid>
-                                          <Grid item xs={12} sm={6}>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
                                             <Field
                                               as={TextField}
                                               fullWidth

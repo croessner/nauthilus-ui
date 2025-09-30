@@ -1,35 +1,5 @@
 import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react';
-import {
-    Alert,
-    Box,
-    Button,
-    Checkbox,
-    Chip,
-    CircularProgress,
-    Collapse,
-    Dialog,
-    DialogActions,
-    DialogContent,
-    DialogContentText,
-    DialogTitle,
-    Divider,
-    FormControlLabel,
-    Grid,
-    IconButton,
-    InputAdornment,
-    LinearProgress,
-    Menu,
-    MenuItem,
-    Paper,
-    Select,
-    Slider,
-    Snackbar,
-    Stack,
-    Switch,
-    TextField,
-    Tooltip,
-    Typography
-} from '@mui/material';
+import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog, DialogActions, DialogContent, DialogContentText, DialogTitle, Divider, FormControlLabel, IconButton, InputAdornment, LinearProgress, Menu, MenuItem, Paper, Select, Slider, Snackbar, Stack, Switch, TextField, Tooltip, Typography } from '@mui/material';
 import {useTheme} from '@mui/material/styles';
 import AnalysisPanel from './AnalysisPanel';
 import PublicIcon from '@mui/icons-material/Public';
@@ -71,6 +41,7 @@ import {
 import {fetchIpapiStatus} from '../utils/ipapiStatus';
 import {ClientIpCell} from './ClientIpCell';
 import {ComposableMap, Geographies, Geography, Marker, ZoomableGroup} from '../lib/reactSimpleMaps';
+import Grid from '@mui/material/Grid';
 
 type Row = Record<string, any>;
 
@@ -2228,7 +2199,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       {/* Responsive layout: Query and Top Countries on the left, Map on the right */}
       <Grid container spacing={2}>
         {/* Right column: Map (takes about half width on md+ screens) */}
-        <Grid item xs={12} md={6} sx={{ order: { xs: 2, md: 2 } }} >
+        <Grid sx={{ order: { xs: 2, md: 2 } }} size={{ xs: 12, md: 6 }}>
           {/* World Map (collapsible) */}
           <Paper sx={{ p:2, mb:2 }}>
             <Stack direction="row" alignItems="center" justifyContent="space-between">
@@ -2343,12 +2314,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         </Grid>
 
         {/* Left column: Query (above) and Top Countries (below) */}
-        <Grid item xs={12} md={6} sx={{ order: { xs: 1, md: 1 } }}>
+        <Grid sx={{ order: { xs: 1, md: 1 } }} size={{ xs: 12, md: 6 }}>
           {/* Query */}
           <Paper sx={{ p:2, mb:2 }}>
             <Typography variant="subtitle1" sx={{ mb: 1 }}>Query</Typography>
             <Grid container spacing={2} sx={{ mt:1 }}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField select fullWidth label="Action" value={action} onChange={e=>setAction(e.target.value as Action)}>
                   <MenuItem value="recent">recent</MenuItem>
                   <MenuItem value="by_user">by_user</MenuItem>
@@ -2358,7 +2329,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </TextField>
               </Grid>
               {(action === 'by_user' || action === 'by_account' || action === 'by_ip') && (
-                <Grid item xs={12} sm={6}>
+                <Grid size={{ xs: 12, sm: 6 }}>
                   <TextField
                     fullWidth
                     label={action === 'by_user' ? 'Username' : action === 'by_account' ? 'Account' : 'IP'}
@@ -2369,14 +2340,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               )}
             </Grid>
             <Grid container spacing={2} sx={{ mt:1 }}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField select fullWidth label="Status" value={authFilter} onChange={e=>{ setAuthFilter(e.target.value as any); }}>
                   <MenuItem value="all">failed/success</MenuItem>
                   <MenuItem value="failed">failed</MenuItem>
                   <MenuItem value="success">success</MenuItem>
                 </TextField>
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField select fullWidth label="Time zone" value={tsTimeZone} onChange={(e)=> setTsTimeZone(String(e.target.value))} helperText="DST is applied automatically for this time zone; Start/End are interpreted in this zone and converted to UTC for the query.">
                   {tzList.map((z)=> (
                     <MenuItem key={z.id} value={z.id}>{z.label}</MenuItem>
@@ -2385,7 +2356,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </Grid>
             </Grid>
             <Grid container spacing={2} sx={{ mt:1 }}>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   type="datetime-local"
@@ -2429,7 +2400,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                   helperText="Optional"
                 />
               </Grid>
-              <Grid item xs={12} sm={6}>
+              <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   fullWidth
                   type="datetime-local"
@@ -2475,7 +2446,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               </Grid>
               {action === 'raw_sql' && (
                 <>
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <TextField
                       fullWidth
                       multiline
@@ -2487,7 +2458,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                       onChange={(e)=>setRawSql(e.target.value)}
                     />
                   </Grid>
-                  <Grid item xs={12} sm={8}>
+                  <Grid size={{ xs: 12, sm: 8 }}>
                     <Stack direction="row" spacing={1} alignItems="center">
                       <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
                         Run
@@ -2533,7 +2504,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                 </>
               )}
               {action !== 'recent' && action !== 'raw_sql' && (
-                <Grid item xs={12} sm={8}>
+                <Grid size={{ xs: 12, sm: 8 }}>
                   <Stack direction="row" spacing={1} alignItems="center">
                     <Button variant="contained" startIcon={<PlayArrowIcon/>} onClick={()=>runQuery(true)} disabled={loading}>
                       Run
@@ -2568,7 +2539,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             ) : (
               <Grid container spacing={1}>
                 {countryAgg.map((c)=> (
-                  <Grid key={c.country} item xs={12} sm={6} md={6} lg={6}>
+                  <Grid key={c.country} size={{ xs: 12, sm: 6, md: 6, lg: 6 }}>
                     <Paper variant="outlined" sx={{ p:1 }}>
                       <Stack direction="row" justifyContent="space-between">
                         <Typography fontWeight={600}>{c.country}</Typography>
@@ -2627,7 +2598,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
           </Stack>
           <Grid container spacing={1}>
             {sortedAvailableFields.map((name)=> (
-              <Grid item xs={12} sm={6} md={4} lg={3} key={name}>
+              <Grid key={name} size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                 <FormControlLabel
                   control={
                     <Checkbox
@@ -2901,8 +2872,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                                     const textV = kf === 'ts' ? formatTsForZone(rawV, tsTimeZone) : (typeof rawV === 'object' ? JSON.stringify(rawV) : String(rawV));
                                     return (
                                       <React.Fragment key={kf}>
-                                        <Grid item xs={1} sm={3} md={2}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{kf}</Typography></Grid>
-                                        <Grid item xs={11} sm={9} md={10}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{textV}</Typography></Grid>
+                                        <Grid size={{ xs: 1, sm: 3, md: 2 }}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{kf}</Typography></Grid>
+                                        <Grid size={{ xs: 11, sm: 9, md: 10 }}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{textV}</Typography></Grid>
                                       </React.Fragment>
                                     );
                                   })}
@@ -3072,7 +3043,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             </Stack>
             <Grid container spacing={1}>
               {availableExportFields.map(name => (
-                <Grid item xs={12} sm={6} md={4} key={name}>
+                <Grid key={name} size={{ xs: 12, sm: 6, md: 4 }}>
                   <FormControlLabel
                     control={
                       <Checkbox

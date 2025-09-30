@@ -1,22 +1,12 @@
 import React from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import { 
-  FormControlLabel, 
-  Grid, 
-  Button, 
-  Box,
-  FormHelperText,
-  FormControl,
-  Select,
-  MenuItem,
-  Typography,
-  Switch
-} from '@mui/material';
+import { FormControlLabel, Button, Box, FormHelperText, FormControl, Select, MenuItem, Typography, Switch } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const MonitoringConfigSchema = Yup.object().shape({
@@ -94,7 +84,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
               defaultExpanded={true}
             >
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -109,7 +99,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                     label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable pprof (Go Profiling)<InfoTooltip title="Enables Go pprof for runtime profiling (CPU, heap, etc.). Use only in test/debug environments." /></Box>}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -124,7 +114,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                     label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Block Profile<InfoTooltip title="Captures blocking events (block profiling). Adds overhead; enable only temporarily." /></Box>}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -148,7 +138,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
               defaultExpanded={true}
             >
               <Grid container spacing={3}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
@@ -164,7 +154,7 @@ const MonitoringConfig = (): React.JSX.Element | null => {
                   />
                 </Grid>
                 {values.prometheus_timer?.enabled && (
-                  <Grid item xs={12}>
+                  <Grid size={12}>
                     <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
                                         <Typography variant="subtitle2">Timer Labels</Typography>
                                         <InfoTooltip title="Choose additional labels to break down metrics (e.g., per action/backend). Too many labels increase cardinality." />

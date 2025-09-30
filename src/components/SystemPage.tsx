@@ -1,6 +1,6 @@
 import React from 'react';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { Box, Card, CardContent, Grid, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Tooltip, IconButton } from '@mui/material';
+import { Box, Card, CardContent, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Tooltip, IconButton } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import RefreshIcon from '@mui/icons-material/Refresh';
@@ -9,6 +9,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
 import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
+import Grid from '@mui/material/Grid';
 
 interface MetricsResponse {
   timestamp_ms: number;
@@ -361,7 +362,7 @@ const SystemPage = (): React.JSX.Element => {
       </Box>
 
       <Grid container spacing={2}>
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion
             expanded={cpuExpanded}
             onChange={() => setCpuExpanded(prev => !prev)}
@@ -384,7 +385,7 @@ const SystemPage = (): React.JSX.Element => {
             </AccordionDetails>
           </Accordion>
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion
             expanded={memoryExpanded}
             onChange={() => setMemoryExpanded(prev => !prev)}
@@ -397,7 +398,7 @@ const SystemPage = (): React.JSX.Element => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <GaugeBar
                     label="Go Heap (allocated)"
                     value={(data?.go_memstats_alloc_bytes || 0) / (1024*1024)}
@@ -406,7 +407,7 @@ const SystemPage = (): React.JSX.Element => {
                     subtitle={`${alloc}`}
                   />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <GaugeBar
                     label="Process Memory (RSS)"
                     value={(data?.process_resident_memory_bytes || 0) / (1024*1024)}
@@ -419,7 +420,7 @@ const SystemPage = (): React.JSX.Element => {
             </AccordionDetails>
           </Accordion>
         </Grid>
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion
             expanded={runtimeExpanded}
             onChange={() => setRuntimeExpanded(prev => !prev)}
@@ -432,16 +433,16 @@ const SystemPage = (): React.JSX.Element => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <StatCard icon="⏱️" title="Uptime" value={uptime} />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <StatCard icon="📈" title="Goroutines" value={Number.isFinite(goroutines) ? String(goroutines) : 'N/A'} />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <StatCard icon="🧵" title="Threads" value={Number.isFinite(threads) ? String(threads) : 'N/A'} />
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <StatCard icon="🔌" title="Connections" value={Number.isFinite(connectionsCurrent || NaN) ? String(connectionsCurrent) : 'N/A'} />
                 </Grid>
               </Grid>
@@ -449,7 +450,7 @@ const SystemPage = (): React.JSX.Element => {
           </Accordion>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion
             expanded={redisExpanded}
             onChange={() => setRedisExpanded(prev => !prev)}
@@ -462,7 +463,7 @@ const SystemPage = (): React.JSX.Element => {
             </AccordionSummary>
             <AccordionDetails>
               <Grid container spacing={2}>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Card variant="outlined">
                     <CardContent>
                       <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" rowGap={1}>
@@ -478,7 +479,7 @@ const SystemPage = (): React.JSX.Element => {
                     </CardContent>
                   </Card>
                 </Grid>
-                <Grid item xs={12} md={6}>
+                <Grid size={{ xs: 12, md: 6 }}>
                   <Card variant="outlined">
                     <CardContent>
                       <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Redis Hit Rate</Typography>
@@ -531,7 +532,7 @@ const SystemPage = (): React.JSX.Element => {
           </Accordion>
         </Grid>
 
-        <Grid item xs={12}>
+        <Grid size={12}>
           <Accordion
             expanded={detailsExpanded}
             onChange={() => setDetailsExpanded(prev => !prev)}

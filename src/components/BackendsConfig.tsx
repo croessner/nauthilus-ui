@@ -1,23 +1,7 @@
 import React, { useState } from 'react';
 import { Formik, Form } from 'formik';
 import * as Yup from 'yup';
-import {
-  Grid,
-  Button,
-  Box,
-  Typography,
-  Paper,
-  IconButton,
-  List,
-  ListItem,
-  FormControl,
-  InputLabel,
-  Select,
-  MenuItem,
-  Divider,
-  Card,
-  CardContent,
-} from '@mui/material';
+import { Button, Box, Typography, Paper, IconButton, List, ListItem, FormControl, InputLabel, Select, MenuItem, Divider, Card, CardContent } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
@@ -27,6 +11,7 @@ import { BackendConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import ValidationErrors from './common/ValidationErrors';
+import Grid from '@mui/material/Grid';
 
 // Validation schema
 const BackendsConfigSchema = Yup.object().shape({
@@ -131,7 +116,7 @@ const BackendsConfig = (): React.JSX.Element => {
           <Form>
             <FormSection title="Backends Configuration">
               <Grid container spacing={3}>
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Typography variant="body1" gutterBottom>
                     Configure the authentication backends and their order. The backends are processed in the order they appear in the list.
                   </Typography>
@@ -140,13 +125,13 @@ const BackendsConfig = (): React.JSX.Element => {
                   </Typography>
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Paper sx={{ p: 2, mb: 2 }}>
                     <List>
                       {values.backends.map((backend, index) => (
                         <ListItem key={index} divider={index < values.backends.length - 1}>
                           <Grid container spacing={2} alignItems="center">
-                            <Grid item xs={8}>
+                            <Grid size={8}>
                               <FormControl fullWidth>
                                 <InputLabel id={`backend-type-label-${index}`}>
                                                                   Backend Type
@@ -176,7 +161,7 @@ const BackendsConfig = (): React.JSX.Element => {
                                 </Select>
                               </FormControl>
                             </Grid>
-                            <Grid item xs={4}>
+                            <Grid size={4}>
                               <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
                                 <IconButton
                                   color="primary"
@@ -246,13 +231,13 @@ const BackendsConfig = (): React.JSX.Element => {
                   </Paper>
                 </Grid>
 
-                <Grid item xs={12}>
+                <Grid size={12}>
                   <Divider sx={{ my: 2 }} />
                   <Typography variant="h6" gutterBottom>
                     Available Backend Types
                   </Typography>
                   <Grid container spacing={2}>
-                    <Grid item xs={12} md={4}>
+                    <Grid size={{ xs: 12, md: 4 }}>
                       <Card>
                         <CardContent>
                           <Typography variant="h6">Cache</Typography>
@@ -264,7 +249,7 @@ const BackendsConfig = (): React.JSX.Element => {
                     </Grid>
 
                     {isLuaConfigured && (
-                      <Grid item xs={12} md={4}>
+                      <Grid size={{ xs: 12, md: 4 }}>
                         <Card>
                           <CardContent>
                             <Typography variant="h6">Lua</Typography>
@@ -277,7 +262,7 @@ const BackendsConfig = (): React.JSX.Element => {
                     )}
 
                     {isLDAPConfigured && (
-                      <Grid item xs={12} md={4}>
+                      <Grid size={{ xs: 12, md: 4 }}>
                         <Card>
                           <CardContent>
                             <Typography variant="h6">LDAP</Typography>
@@ -290,7 +275,7 @@ const BackendsConfig = (): React.JSX.Element => {
                     )}
 
                     {Object.keys(optionalLuaBackends).map((name) => (
-                      <Grid item xs={12} md={4} key={`lua-${name}`}>
+                      <Grid key={`lua-${name}`} size={{ xs: 12, md: 4 }}>
                         <Card>
                           <CardContent>
                             <Typography variant="h6">Lua ({name})</Typography>
@@ -303,7 +288,7 @@ const BackendsConfig = (): React.JSX.Element => {
                     ))}
 
                     {Object.keys(optionalLDAPPools).map((name) => (
-                      <Grid item xs={12} md={4} key={`ldap-${name}`}>
+                      <Grid key={`ldap-${name}`} size={{ xs: 12, md: 4 }}>
                         <Card>
                           <CardContent>
                             <Typography variant="h6">LDAP ({name})</Typography>
