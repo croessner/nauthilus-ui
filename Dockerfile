@@ -76,7 +76,9 @@ RUN apk --no-cache add \
 
 # Provide common envs and a convenient symlink for tools that expect "chromium"
 ENV CHROME_PATH=/usr/bin/chromium-browser \
-    CHROME_BIN=/usr/bin/chromium-browser
+    CHROME_BIN=/usr/bin/chromium-browser \
+    TMPDIR=/tmp \
+    XDG_RUNTIME_DIR=/tmp
 RUN ln -sf /usr/bin/chromium-browser /usr/bin/chromium
 
 # Copy the build output from the React build stage

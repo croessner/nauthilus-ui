@@ -8,6 +8,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
 	"time"
 
 	"github.com/chromedp/cdproto/page"
@@ -72,22 +75,89 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 		})
 	}
 
+	// Ensure temp-related envs are sane (helps read-only containers and macOS)
+	if os.Getenv("TMPDIR") == "" {
+		_ = os.Setenv("TMPDIR", "/tmp")
+	}
+
+	if os.Getenv("XDG_RUNTIME_DIR") == "" {
+		_ = os.Setenv("XDG_RUNTIME_DIR", "/tmp")
+	}
+
 	// Resolve Chrome/Chromium executable path
 	findBrowser := func() (string, error) {
-		if p := os.Getenv("CHROME_PATH"); p != "" {
-			if _, err := os.Stat(p); err == nil {
+		if raw := strings.TrimSpace(os.Getenv("CHROME_PATH")); raw != "" {
+			p := strings.Trim(raw, "\"'")
+			if info, err := os.Stat(p); err == nil && !info.IsDir() {
 				return p, nil
+			}
+
+			// Handle macOS app bundles
+			if runtime.GOOS == "darwin" {
+				bundle := p
+				if strings.HasSuffix(bundle, ".app") {
+					// keep
+				} else if strings.Contains(strings.ToLower(bundle), ".app/contents") {
+					if i := strings.Index(strings.ToLower(bundle), ".app"); i != -1 {
+						bundle = bundle[:i+4]
+					}
+				}
+
+				macCandidates := []string{
+					filepath.Join(bundle, "Contents", "MacOS", "Google Chrome"),
+					filepath.Join(bundle, "Contents", "MacOS", "Chromium"),
+				}
+
+				for _, c := range macCandidates {
+					if _, err := os.Stat(c); err == nil {
+						return c, nil
+					}
+				}
+			}
+
+			// If CHROME_PATH points to a directory, try common executable names inside
+			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
+				tryNames := []string{"chrome", "google-chrome", "chromium", "Chromium", "Google Chrome"}
+				for _, n := range tryNames {
+					cand := filepath.Join(p, n)
+					if _, err := os.Stat(cand); err == nil {
+						return cand, nil
+					}
+				}
 			}
 		}
 
-		candidates := []string{"google-chrome", "google-chrome-stable", "chromium-browser", "chromium"}
+		candidates := []string{"google-chrome", "google-chrome-stable", "chromium-browser", "chromium", "chrome"}
 		for _, name := range candidates {
 			if p, err := exec.LookPath(name); err == nil {
 				return p, nil
 			}
 		}
 
-		return "", errors.New("no Chrome/Chromium executable found; set CHROME_PATH or install chromium/google-chrome")
+		// OS-specific absolute paths
+		if runtime.GOOS == "darwin" {
+			macPaths := []string{
+				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+				"/Applications/Chromium.app/Contents/MacOS/Chromium",
+				filepath.Join(os.Getenv("HOME"), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+				filepath.Join(os.Getenv("HOME"), "Applications/Chromium.app/Contents/MacOS/Chromium"),
+			}
+
+			for _, p := range macPaths {
+				if _, err := os.Stat(p); err == nil {
+					return p, nil
+				}
+			}
+		} else if runtime.GOOS == "linux" {
+			linuxPaths := []string{"/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome", "/snap/bin/chromium"}
+			for _, p := range linuxPaths {
+				if _, err := os.Stat(p); err == nil {
+					return p, nil
+				}
+			}
+		}
+
+		return "", errors.New("no Chrome/Chromium executable found; set CHROME_PATH or install Chromium/Google Chrome")
 	}
 
 	exePath, err := findBrowser()
@@ -97,6 +167,10 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 		return
 	}
 
+	// Create a dedicated user-data-dir under /tmp and pass safe flags
+	userDataDir := filepath.Join(os.TempDir(), "chrome-profile")
+	_ = os.MkdirAll(userDataDir, 0o777)
+
 	// Create an ExecAllocator with explicit flags suitable for containers
 	allocOpts := append(chromedp.DefaultExecAllocatorOptions[:],
 		chromedp.ExecPath(exePath),
@@ -104,6 +178,9 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 		chromedp.Flag("disable-gpu", true),
 		chromedp.Flag("no-sandbox", true),
 		chromedp.Flag("disable-dev-shm-usage", true),
+		chromedp.Flag("user-data-dir", userDataDir),
+		chromedp.Flag("disable-features", "Crashpad"),
+		chromedp.Flag("disable-crash-reporter", true),
 		chromedp.Flag("hide-scrollbars", true),
 		chromedp.Flag("mute-audio", true),
 	)
