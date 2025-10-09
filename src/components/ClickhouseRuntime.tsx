@@ -3,6 +3,7 @@ import { Alert, Box, Button, Checkbox, Chip, CircularProgress, Collapse, Dialog,
 import {useTheme} from '@mui/material/styles';
 import AnalysisPanel from './AnalysisPanel';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
+import InfoTooltip from './common/InfoTooltip';
 import PublicIcon from '@mui/icons-material/Public';
 import ChevronLeftIcon from '@mui/icons-material/ChevronLeft';
 import PlayArrowIcon from '@mui/icons-material/PlayArrow';
@@ -270,6 +271,20 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   ], []);
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  // Track if the user explicitly reordered columns during this session; do not auto-adjust after that
+  const [userReorderedCols, setUserReorderedCols] = useState<boolean>(false);
+  // Default normalization: if 'ts' is part of the selection, make it the leftmost column by default
+  const normalizeColumnsDefault = useCallback((cols: string[]): string[] => {
+    try {
+      if (!Array.isArray(cols) || cols.length === 0) return cols;
+      if (!cols.includes('ts')) return cols;
+      if (cols[0] === 'ts') return cols;
+      const rest = cols.filter(c => c !== 'ts');
+      return ['ts', ...rest];
+    } catch {
+      return cols;
+    }
+  }, []);
   const sortedAvailableFields = useMemo(() => [...availableFields].sort((a,b)=> a.localeCompare(b, undefined, { sensitivity: 'base' })), [availableFields]);
 
   // Search input autocomplete (ghost text) for field names
@@ -1752,9 +1767,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     if (selectedFields.length === 0) {
       const persisted = ((runtimeHooks as any)?.clickhouse_query?.columns || []) as string[];
       const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
-      let next = Array.isArray(persisted) && persisted.length ? intersect(persisted, availableFields) : [];
+      const fromPersisted = Array.isArray(persisted) && persisted.length ? intersect(persisted, availableFields) : [];
+      let next = fromPersisted;
       if (next.length === 0) next = intersect(DEFAULT_COLUMNS, availableFields);
       if (next.length === 0) next = availableFields.slice(0, Math.min(10, availableFields.length));
+      // Only normalize default ordering when not using an explicit persisted order and user hasn't reordered
+      if (fromPersisted.length === 0 && !userReorderedCols) {
+        next = normalizeColumnsDefault(next);
+      }
       setSelectedFields(next);
     }
   }, [availableFields]);
@@ -1767,9 +1787,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       // Determine selected fields from persisted settings or defaults
       const persisted = ((runtimeHooks as any)?.clickhouse_query?.columns || []) as string[];
       const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
-      let next = Array.isArray(persisted) && persisted.length ? intersect(persisted, KNOWN_FIELDS) : [];
+      const fromPersisted = Array.isArray(persisted) && persisted.length ? intersect(persisted, KNOWN_FIELDS) : [];
+      let next = fromPersisted;
       if (next.length === 0) next = intersect(DEFAULT_COLUMNS, KNOWN_FIELDS);
       if (next.length === 0) next = KNOWN_FIELDS.slice(0, Math.min(10, KNOWN_FIELDS.length));
+      if (fromPersisted.length === 0 && !userReorderedCols) {
+        next = normalizeColumnsDefault(next);
+      }
       setSelectedFields(next);
       // Restore normal column widths if we had overridden them for raw_sql
       if (normalWidthsRef.current) {
@@ -2117,22 +2141,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const autoRefreshing = refreshMs > 0;
   const hasAnyExpanded = expandedKeys.size > 0;
 
+  const searchTipsText = `Tips: Strict mode: only field comparisons are allowed. Use AND/OR/NOT and parentheses to combine. Supported: key==value, !=, <, >, <=, >= (e.g., authenticated==true, failed_login_count >= 5). Regex is allowed only as a comparison value for text fields, e.g., user_agent="/android/i" or proto!="/^(imap|smtp)$/i".`;
+
   return (
     <Box>
       <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 2, flexWrap: 'wrap', rowGap: 1 }}>
         <Typography variant="h5" sx={{ fontWeight: 700 }}>ClickHouse</Typography>
         <Box sx={{ flexGrow: 1 }} />
-        {/* Top-right refresh and interval (like Security) */}
-        <Select size="small" value={refreshMs} onChange={(e)=>setRefreshMs(Number(e.target.value))} sx={{ minWidth: 140, mr:1 }} displayEmpty aria-label="Refresh interval" disabled={action!=='recent'}>
-          <MenuItem value={0}>OFF</MenuItem>
-          <MenuItem value={2000}>2 s</MenuItem>
-          <MenuItem value={5000}>5 s</MenuItem>
-          <MenuItem value={10000}>10 s</MenuItem>
-          <MenuItem value={30000}>30 s</MenuItem>
-          <MenuItem value={60000}>1 m</MenuItem>
-          <MenuItem value={120000}>2 m</MenuItem>
-        </Select>
-        <Button variant="outlined" size="small" startIcon={<RefreshIcon/>} onClick={()=>{ void runQuery(true, { keepPage: true }); }} disabled={action!=='recent'}>Refresh</Button>
       </Stack>
 
       {/* Connection status (unified banner) */}
@@ -2560,12 +2575,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
       <CollapsibleFormSection title="Field Selection" description="Choose the columns to display in the results table.">
         <Stack direction="row" spacing={1} sx={{ mb:1, flexWrap:'wrap', alignItems:'center' }}>
-          <Button size="small" onClick={()=>setSelectedFields(sortedAvailableFields)}>Select all</Button>
+          <Button size="small" onClick={()=>{
+            const next = (!userReorderedCols ? normalizeColumnsDefault(sortedAvailableFields) : sortedAvailableFields);
+            setSelectedFields(next);
+          }}>Select all</Button>
           <Button size="small" onClick={()=>setSelectedFields([])}>Clear</Button>
           <Button size="small" onClick={()=>{
             // Set to defaults: exactly DEFAULT_COLUMNS intersected with currently available fields
             const intersect = (a: string[], b: string[]) => a.filter(x => b.includes(x));
-            const next = intersect(DEFAULT_COLUMNS, availableFields);
+            let next = intersect(DEFAULT_COLUMNS, availableFields);
+            if (!userReorderedCols) next = normalizeColumnsDefault(next);
             setSelectedFields(next);
           }}>Set to defaults</Button>
           <Box sx={{ flexGrow:1 }} />
@@ -2597,7 +2616,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                     size="small"
                     checked={selectedFields.includes(name)}
                     onChange={(e)=>{
-                      if (e.target.checked) setSelectedFields(prev => Array.from(new Set([...(prev||[]), name])));
+                      if (e.target.checked) {
+                        setSelectedFields(prev => {
+                          const arr = Array.from(new Set([...(prev||[]), name]));
+                          if (!userReorderedCols) return normalizeColumnsDefault(arr);
+                          return arr;
+                        });
+                      }
                       else setSelectedFields(prev => (prev||[]).filter(n => n !== name));
                     }}
                   />
@@ -2611,108 +2636,157 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
       <Paper sx={{ p:2 }}>
         <Typography variant="subtitle1" gutterBottom>Results</Typography>
-        <Stack direction="row" spacing={1} alignItems="center" sx={{ mb:1, flexWrap:'wrap' }}>
-          <Box sx={{ position: 'relative', minWidth: 260, flexGrow: 1 }}>
-            {!!completionSuffix && (
-              <Box
-                aria-hidden
-                sx={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  pointerEvents: 'none',
-                  display: 'flex',
-                  alignItems: 'center',
-                  // Mirror the actual input's computed styles for exact alignment
-                  color: 'text.disabled',
-                  whiteSpace: 'pre',
-                  ...ghostStyle,
-                }}
-              >
-                <span style={{ visibility: 'hidden' }}>{searchDraft}</span>
-                <span>{completionSuffix}</span>
-              </Box>
-            )}
+        {/* Responsive grid: stack controls on xs, 3 columns on md+ */}
+        <Box sx={{
+          display: 'grid',
+          gridTemplateColumns: { xs: '1fr', md: '1fr auto auto' },
+          columnGap: 1,
+          rowGap: 1,
+          alignItems: 'center',
+          mb: 1,
+        }}>
+          {/* Column 1, Row 1: Search + Send + Matches (flex) */}
+          <Box sx={{ display:'flex', alignItems:'center', gap:1, minWidth: { xs: 160, md: 260 }, flexWrap: { xs: 'wrap', md: 'nowrap' } }}>
+            <Box sx={{ position: 'relative', minWidth: { xs: 160, md: 260 }, flexGrow: 1 }}>
+              {!!completionSuffix && (
+                <Box
+                  aria-hidden
+                  sx={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    pointerEvents: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    // Mirror the actual input's computed styles for exact alignment
+                    color: 'text.disabled',
+                    whiteSpace: 'pre',
+                    ...ghostStyle,
+                  }}
+                >
+                  <span style={{ visibility: 'hidden' }}>{searchDraft}</span>
+                  <span>{completionSuffix}</span>
+                </Box>
+              )}
 
-            <TextField
-              fullWidth
-              size="small"
-              label="Search"
-              placeholder="Filter (strict: use field comparisons e.g. username==&quot;alice&quot;; combine with AND/OR/NOT and parentheses)"
-              value={searchDraft}
-              inputRef={searchInputRef}
-              onClick={updateCaretAtEnd}
-              onKeyUp={updateCaretAtEnd}
-              onBlur={updateCaretAtEnd}
-              onChange={(e) => { setSearchDraft(e.target.value); setTimeout(updateCaretAtEnd, 0); }}
-              onKeyDown={(e) => {
-                if ((e as any).key === 'Enter') { e.preventDefault(); applySearch(); return; }
-                const hasCompletion = !!completionSuffix;
-                if ((e.key === 'ArrowRight' || e.key === 'Tab') && hasCompletion && caretAtEnd) {
-                  e.preventDefault();
-                  setSearchDraft(prev => prev + completionSuffix);
-                  requestAnimationFrame(updateCaretAtEnd);
-                }
-              }}
-              InputProps={{
-                endAdornment: (
-                  <InputAdornment position="end">
-                    {searchDraft && (
-                      <IconButton size="small" onClick={() => { setSearchDraft(''); setSearchQuery(''); if (page !== 1) { setPage(1); } }} aria-label="Clear search">
-                        <ClearIcon fontSize="small" />
+              <TextField
+                fullWidth
+                size="small"
+                label="Search"
+                placeholder="Filter (strict: use field comparisons e.g. username==&quot;alice&quot;; combine with AND/OR/NOT and parentheses)"
+                value={searchDraft}
+                inputRef={searchInputRef}
+                onClick={updateCaretAtEnd}
+                onKeyUp={updateCaretAtEnd}
+                onBlur={updateCaretAtEnd}
+                onChange={(e) => { setSearchDraft(e.target.value); setTimeout(updateCaretAtEnd, 0); }}
+                onKeyDown={(e) => {
+                  if ((e as any).key === 'Enter') { e.preventDefault(); applySearch(); return; }
+                  const hasCompletion = !!completionSuffix;
+                  if ((e.key === 'ArrowRight' || e.key === 'Tab') && hasCompletion && caretAtEnd) {
+                    e.preventDefault();
+                    setSearchDraft(prev => prev + completionSuffix);
+                    requestAnimationFrame(updateCaretAtEnd);
+                  }
+                }}
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {searchDraft && (
+                        <IconButton size="small" onClick={() => { setSearchDraft(''); setSearchQuery(''); if (page !== 1) { setPage(1); } }} aria-label="Clear search">
+                          <ClearIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      <IconButton size="small" aria-label="Search bookmarks" onClick={(e) => setBmMenuAnchorSearch(e.currentTarget)}>
+                        <BookmarkBorderIcon fontSize="small" />
                       </IconButton>
-                    )}
-                    <IconButton size="small" aria-label="Search bookmarks" onClick={(e) => setBmMenuAnchorSearch(e.currentTarget)}>
-                      <BookmarkBorderIcon fontSize="small" />
-                    </IconButton>
-                  </InputAdornment>
-                )
-              }}
-              sx={{ minWidth: 260, flexGrow: 1 }}
-            />
-          </Box>
-          <Button size="small" variant="contained" onClick={()=>{ applySearch(); }} sx={{ whiteSpace: 'nowrap' }}>
-            Send
-          </Button>
-          <Menu anchorEl={bmMenuAnchorSearch} open={Boolean(bmMenuAnchorSearch)} onClose={()=> setBmMenuAnchorSearch(null)}>
-            <MenuItem onClick={()=>{
-              const list = bookmarks.search || [];
-              if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
-              setBmDialogMode('create'); setBmDialogKind('search'); setBmDialogTargetId(undefined);
-              const def = `Search ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSearch(null);
-            }}>
-              <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current search
-            </MenuItem>
-            <Divider />
-            {(bookmarks.search || []).length === 0 ? (
-              <MenuItem disabled>No bookmarks</MenuItem>
-            ) : (
-              (bookmarks.search || []).map(bm => (
-                <MenuItem key={bm.id} onClick={()=>{ loadBookmark('search', bm.id); setBmMenuAnchorSearch(null); }}>
-                  <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
-                    <Box sx={{ flexGrow:1, minWidth:160 }}>
-                      <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
+                      <InfoTooltip
+                        title={searchTipsText}
+                        size="small"
+                        placement="top"
+                      />
+                    </InputAdornment>
+                  )
+                }}
+                sx={{ minWidth: { xs: 160, md: 260 }, width: '100%', flexGrow: 1, '& .MuiInputBase-root': { height: 40 } }}
+              />
+            </Box>
+            <Button size="small" variant="contained" onClick={()=>{ applySearch(); }} sx={{ whiteSpace: 'nowrap', height: 40, width: { xs: '100%', md: 'auto' }, flexShrink: 0 }}>
+              Send
+            </Button>
+            <Menu anchorEl={bmMenuAnchorSearch} open={Boolean(bmMenuAnchorSearch)} onClose={()=> setBmMenuAnchorSearch(null)}>
+              <MenuItem onClick={()=>{
+                const list = bookmarks.search || [];
+                if (list.length >= MAX_BOOKMARKS) { setNotif({ open:true, severity:'warning', message:`Maximum ${MAX_BOOKMARKS} bookmarks allowed.` }); return; }
+                setBmDialogMode('create'); setBmDialogKind('search'); setBmDialogTargetId(undefined);
+                const def = `Search ${list.length+1}`; setBmDialogName(def); setBmDialogError(''); setBmDialogOpen(true); setBmMenuAnchorSearch(null);
+              }}>
+                <BookmarkAddIcon fontSize="small" style={{ marginRight: 8 }} /> Save current search
+              </MenuItem>
+              <Divider />
+              {(bookmarks.search || []).length === 0 ? (
+                <MenuItem disabled>No bookmarks</MenuItem>
+              ) : (
+                (bookmarks.search || []).map(bm => (
+                  <MenuItem key={bm.id} onClick={()=>{ loadBookmark('search', bm.id); setBmMenuAnchorSearch(null); }}>
+                    <Box sx={{ display:'flex', alignItems:'center', width:'100%', gap:1 }}>
+                      <Box sx={{ flexGrow:1, minWidth:160 }}>
+                        <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
+                      </Box>
+                      <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode='rename'; setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
+                        <DriveFileRenameOutlineIcon fontSize="small" />
+                      </IconButton>
+                      <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode='delete'; setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
                     </Box>
-                    <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
-                      <DriveFileRenameOutlineIcon fontSize="small" />
-                    </IconButton>
-                    <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
-                      <DeleteOutlineIcon fontSize="small" />
-                    </IconButton>
-                  </Box>
-                </MenuItem>
-              ))
-            )}
-          </Menu>
-          <Typography variant="caption" color="text.secondary">
-            Matches: {searchFilteredRows.length} / {filteredRows.length}
-          </Typography>
-        </Stack>
-        <Typography variant="caption" color="text.secondary" sx={{ display:'block', mt: 0.5, mb: 1 }}>
-          Tips: Strict mode: only field comparisons are allowed. Use AND/OR/NOT and parentheses to combine. Supported: key==value, !=, &lt;, &gt;, &lt;=, &gt;= (e.g., authenticated==true, failed_login_count &gt;= 5). Regex is allowed only as a comparison value for text fields, e.g., user_agent=="/android/i" or proto!="/^(imap|smtp)$/i".
-        </Typography>
+                  </MenuItem>
+                ))
+              )}
+            </Menu>
+            <Typography variant="caption" color="text.secondary" sx={{ flexBasis: { xs: '100%', md: 'auto' } }}>
+              Matches: {searchFilteredRows.length} / {filteredRows.length}
+            </Typography>
+          </Box>
+
+          {/* Column 2, Row 1: OFF/Refresh controls */}
+          <Select
+            size="small"
+            value={refreshMs}
+            onChange={(e)=>setRefreshMs(Number(e.target.value))}
+            sx={{
+              minWidth: { xs: 110, md: 140 },
+              mr: { xs: 0, md: 1 },
+              '& .MuiOutlinedInput-root': { height: 40 },
+              width: { xs: '100%', md: 'auto' },
+              justifySelf: { xs: 'stretch', md: 'start' },
+            }}
+            displayEmpty
+            aria-label="Refresh interval"
+            disabled={action!=='recent'}
+          >
+            <MenuItem value={0}>OFF</MenuItem>
+            <MenuItem value={2000}>2 s</MenuItem>
+            <MenuItem value={5000}>5 s</MenuItem>
+            <MenuItem value={10000}>10 s</MenuItem>
+            <MenuItem value={30000}>30 s</MenuItem>
+            <MenuItem value={60000}>1 m</MenuItem>
+            <MenuItem value={120000}>2 m</MenuItem>
+          </Select>
+          <Button
+            variant="outlined"
+            size="small"
+            startIcon={<RefreshIcon/>}
+            onClick={()=>{ void runQuery(true, { keepPage: true }); }}
+            sx={{ height: 40, width: { xs: '100%', md: 'auto' }, justifySelf: { xs: 'stretch', md: 'start' } }}
+            disabled={action!=='recent'}
+          >
+            Refresh
+          </Button>
+
+        </Box>
         {busy && !hasAnyExpanded && (
           <Box sx={{ mb: 1 }}>
             <LinearProgress />
@@ -2777,6 +2851,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             const [moved] = next.splice(fromIdx, 1);
                             next.splice(toIdx, 0, moved);
                             setSelectedFields(next);
+                            setUserReorderedCols(true);
                             // Persist new order automatically
                             try {
                               const userId = await getCurrentUserId();
