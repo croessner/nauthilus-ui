@@ -26,6 +26,7 @@ export interface ServerConfig {
   http_client?: HTTPClientConfig;
   compression?: CompressionConfig;
   keep_alive?: KeepAliveConfig;
+  dedup?: DeDupConfig;
 }
 
 export interface EndpointConfig {
@@ -212,6 +213,10 @@ export interface KeepAliveConfig {
   max_idle_connections_per_host?: number;
 }
 
+export interface DeDupConfig {
+  distributed_enabled?: boolean;
+}
+
 // LDAP Configuration
 export interface LDAPConfig {
   config: LDAPConfConfig;
@@ -343,6 +348,8 @@ export interface BruteForceConfig {
   cold_start_grace_enabled?: boolean;
   cold_start_grace_ttl?: string;
   ip_scoping?: IPScoping; // mapstructure: "ip_scoping"
+  rwp_allowed_unique_hashes?: number;
+  rwp_window?: string;
 }
 
 export interface IPScoping {

@@ -166,7 +166,9 @@ const FeaturesConfigSchema = Yup.object().shape({
           ip_scoping: Yup.object().shape({
             rwp_ipv6_cidr: Yup.number().min(0).max(128),
             tolerations_ipv6_cidr: Yup.number().min(0).max(128)
-          })
+          }),
+          rwp_allowed_unique_hashes: Yup.number().min(0),
+          rwp_window: Yup.string(),
         })
       : schema;
   }),
@@ -253,6 +255,8 @@ const FeaturesConfig: React.FC = () => {
         rwp_ipv6_cidr: config?.brute_force?.ip_scoping?.rwp_ipv6_cidr ?? 128,
         tolerations_ipv6_cidr: config?.brute_force?.ip_scoping?.tolerations_ipv6_cidr ?? 128,
       },
+      rwp_allowed_unique_hashes: config?.brute_force?.rwp_allowed_unique_hashes ?? 0,
+      rwp_window: config?.brute_force?.rwp_window || '5m',
     },
     newSoftWhitelistUsername: '',
     newBruteForceWhitelistUsername: '',
@@ -1481,6 +1485,43 @@ const FeaturesConfig: React.FC = () => {
                             type="number"
                             InputProps={{ inputProps: { min: 0, max: 128 } }}
                             helperText="IPv6 CIDR for tolerations buckets. 0 disables (default /128)."
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                      </Grid>
+                    </CollapsibleFormSection>
+                  </Grid>
+
+                  <Grid size={12}>
+                    <CollapsibleFormSection title="Repeating Wrong Password (RWP)">
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.rwp_allowed_unique_hashes"
+                            label="Allowed Unique Hashes"
+                            variant="outlined"
+                            type="number"
+                            InputProps={{ inputProps: { min: 0 } }}
+                            helperText="Maximum number of unique password hashes allowed within the RWP window before flagging as brute force."
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="brute_force.rwp_window"
+                            label="RWP Window"
+                            variant="outlined"
+                            helperText="Time window for evaluating repeating wrong passwords (e.g., 1m, 5m, 1h)."
                             onChange={(e: React.ChangeEvent<any>) => {
                               handleChange(e);
                               setHasUnsavedChanges(true);

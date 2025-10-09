@@ -146,6 +146,11 @@ const ServerConfigSchema = Yup.object().shape({
       skip_verify: Yup.boolean(),
     }),
   }),
+
+  // De-duplication validation
+  dedup: Yup.object().shape({
+    distributed_enabled: Yup.boolean(),
+  }),
 });
 
 const ServerConfig = (): React.JSX.Element | null => {
@@ -259,6 +264,11 @@ const ServerConfig = (): React.JSX.Element | null => {
       },
     },
 
+    // Initialize de-duplication configuration
+    dedup: {
+      distributed_enabled: config.server.dedup?.distributed_enabled || false,
+    },
+
     // Initialize log configuration
     log: {
       json: config.server.log?.json || false,
@@ -302,6 +312,7 @@ const ServerConfig = (): React.JSX.Element | null => {
         brute_force_protocols: values.brute_force_protocols,
         dns: values.dns,
         master_user: values.master_user,
+        dedup: values.dedup,
         // prometheus_timer is now in MonitoringConfig
       };
       await updateConfigSection('server', updatedValues);
@@ -1408,6 +1419,33 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }
                   label="Skip TLS Verification for HTTP Client"
                 />
+              </Grid>
+            </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
+            title="De-duplication"
+            description="Configure server-side request de-duplication (dedup)."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.dedup?.distributed_enabled || false}
+                      onChange={(e) => {
+                        setFieldValue('dedup.distributed_enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
+                      }}
+                      name="dedup.distributed_enabled"
+                    />
+                  }
+                  label="Enable Distributed De-duplication"
+                />
+                <Typography variant="body2" color="textSecondary">
+                  When enabled, de-duplication is coordinated across instances via Redis to avoid processing duplicate concurrent requests.
+                </Typography>
               </Grid>
             </Grid>
           </CollapsibleFormSection>

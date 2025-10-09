@@ -422,7 +422,8 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         'jwt_auth', 'instance_name', 'log', 'backends', 'features',
         'brute_force_protocols', 'ory_hydra_admin_url', 'dns', 'insights',
         'redis', 'master_user', 'frontend', 'prometheus_timer',
-        'default_http_request_header', 'http_client', 'compression', 'keep_alive'
+        'default_http_request_header', 'http_client', 'compression', 'keep_alive',
+        'dedup'
       ];
 
       serverProps.forEach(prop => {
