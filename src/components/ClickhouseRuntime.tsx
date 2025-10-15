@@ -267,7 +267,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Column selection
   const DEFAULT_COLUMNS = useMemo(() => ['ts','client_ip','username','service','features','proto','geoip_country','authenticated','failed_login_count','gp_attempts','dyn_threat'], []);
   const KNOWN_FIELDS = useMemo(() => [
-    'ts','session','service','features','client_ip','client_port','client_net','client_id','hostname','proto','user_agent','local_ip','local_port','display_name','account','account_field','unique_user_id','username','password_hash','pwnd_info','brute_force_bucket','brute_force_counter','oidc_cid','failed_login_count','failed_login_rank','failed_login_recognized','geoip_guid','geoip_country','geoip_iso_codes','geoip_status','gp_attempts','gp_unique_ips','gp_unique_users','gp_ips_per_user','prot_active','prot_reason','prot_backoff','prot_delay_ms','dyn_threat','dyn_response','debug','repeating','user_found','authenticated','no_auth','xssl_protocol','xssl_cipher','ssl_fingerprint'
+    'ts','session','service','features','client_ip','client_port','client_net','client_id','hostname','proto','user_agent','local_ip','local_port','display_name','account','username','password_hash','pwnd_info','brute_force_bucket','brute_force_counter','oidc_cid','failed_login_count','failed_login_rank','failed_login_recognized','geoip_guid','geoip_country','geoip_iso_codes','geoip_status','gp_attempts','gp_unique_ips','gp_unique_users','gp_ips_per_user','prot_active','prot_reason','prot_backoff','prot_delay_ms','dyn_threat','dyn_response','repeating','user_found','authenticated','xssl_protocol','xssl_cipher','ssl_fingerprint'
   ], []);
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
@@ -1037,12 +1037,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     const TEXT_COLS = [
       'session','service','features','client_ip','client_net','client_id',
       'hostname','proto','user_agent','local_ip',
-      'display_name','account','account_field','unique_user_id','username','password_hash',
+      'display_name','account','username','password_hash',
       'pwnd_info','brute_force_bucket','oidc_cid',
       'geoip_guid','geoip_country','geoip_iso_codes','geoip_status',
       'dyn_threat','dyn_response','xssl_protocol','xssl_cipher','ssl_fingerprint','prot_reason'
     ];
-    const BOOL_COL: Record<string, true> = { debug:true, repeating:true, user_found:true, authenticated:true, no_auth:true, prot_active:true, failed_login_recognized:true };
+    const BOOL_COL: Record<string, true> = { repeating:true, user_found:true, authenticated:true, prot_active:true, failed_login_recognized:true };
     const NUM_COL: Record<string, true> = { client_port:true, local_port:true, brute_force_counter:true, failed_login_count:true, failed_login_rank:true, gp_attempts:true, gp_unique_ips:true, gp_unique_users:true, gp_ips_per_user:true, prot_backoff:true, prot_delay_ms:true };
     const isAllowedKey = (k?: string) => !!(k && (BOOL_COL[k] || NUM_COL[k] || TEXT_COLS.includes(k)));
     const isCmpStart = (c: string) => c === '=' || c === '!' || c === '<' || c === '>';
