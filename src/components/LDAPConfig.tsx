@@ -11,6 +11,7 @@ import ValidationErrors from './common/ValidationErrors';
 import PasswordField from './common/PasswordField';
 import ProtocolsConfig from './ProtocolsConfig';
 import Grid from '@mui/material/Grid';
+import CollapsibleFormSection from './common/CollapsibleFormSection';
 
 // Validation schema
 const LDAPConfigSchema = Yup.object().shape({
@@ -415,6 +416,120 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
+                  <CollapsibleFormSection title="Tuning (LDAP)" description="Advanced tuning parameters. Neutral stance with hints; 0 often means unlimited/disabled.">
+                    <Grid container spacing={2}>
+                      <Grid size={12}>
+                        <Typography variant="subtitle2">Queues / Backpressure</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth label="Lookup Queue Length" name="config.lookup_queue_length" type="number" value={values.config.lookup_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth label="Auth Queue Length" name="config.auth_queue_length" type="number" value={values.config.auth_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Operation Timeouts</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Search Timeout" name="config.search_timeout" value={values.config.search_timeout || ''} onChange={handleChange} placeholder="2s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Bind Timeout" name="config.bind_timeout" value={values.config.bind_timeout || ''} onChange={handleChange} placeholder="1s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Modify Timeout" name="config.modify_timeout" value={values.config.modify_timeout || ''} onChange={handleChange} placeholder="2s" />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Server-side Limits</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth type="number" label="Search Size Limit" name="config.search_size_limit" value={values.config.search_size_limit ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = server default (unlimited)" /></InputAdornment>) }} />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth label="Search Time Limit" name="config.search_time_limit" value={values.config.search_time_limit || ''} onChange={handleChange} placeholder="3s" />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Retry / Backoff</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth type="number" label="Retry Max" name="config.retry_max" value={values.config.retry_max ?? ''} onChange={handleChange} />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Retry Base" name="config.retry_base" value={values.config.retry_base || ''} onChange={handleChange} placeholder="200ms" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Retry Max Backoff" name="config.retry_max_backoff" value={values.config.retry_max_backoff || ''} onChange={handleChange} placeholder="2s" />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Circuit Breaker</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth type="number" label="Failure Threshold" name="config.cb_failure_threshold" value={values.config.cb_failure_threshold ?? ''} onChange={handleChange} placeholder="5" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Cooldown" name="config.cb_cooldown" value={values.config.cb_cooldown || ''} onChange={handleChange} placeholder="30s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth type="number" label="Half-open Max" name="config.cb_half_open_max" value={values.config.cb_half_open_max ?? ''} onChange={handleChange} placeholder="1" />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Health Checks</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth label="Health Check Interval" name="config.health_check_interval" value={values.config.health_check_interval || ''} onChange={handleChange} placeholder="10s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth label="Health Check Timeout" name="config.health_check_timeout" value={values.config.health_check_timeout || ''} onChange={handleChange} placeholder="1.5s" />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Caching</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="DN Cache TTL" name="config.dn_cache_ttl" value={values.config.dn_cache_ttl || ''} onChange={handleChange} placeholder="60s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Membership Cache TTL" name="config.membership_cache_ttl" value={values.config.membership_cache_ttl || ''} onChange={handleChange} placeholder="120s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 4 }}>
+                        <TextField fullWidth label="Negative Cache TTL" name="config.negative_cache_ttl" value={values.config.negative_cache_ttl || ''} onChange={handleChange} placeholder="20s" />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth type="number" label="Cache Max Entries" name="config.cache_max_entries" value={values.config.cache_max_entries ?? ''} onChange={handleChange} />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <FormControl fullWidth>
+                          <InputLabel id="ldap-cache-impl-label">Cache Implementation</InputLabel>
+                          <Select labelId="ldap-cache-impl-label" label="Cache Implementation" name="config.cache_impl" value={values.config.cache_impl || ''} onChange={handleChange}>
+                            <MenuItem value="ttl">ttl</MenuItem>
+                            <MenuItem value="lru">lru</MenuItem>
+                          </Select>
+                          <Box sx={{ mt: 0.5 }}>
+                            <InfoTooltip title="ttl: sharded TTL cache (simple, time-based). lru: Least-Recently-Used with max_entries limit. Choose based on access patterns." />
+                          </Box>
+                        </FormControl>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <FormControlLabel control={<Switch name="config.include_raw_result" checked={values.config.include_raw_result || false} onChange={handleChange} />} label="Include Raw Result" />
+                      </Grid>
+
+                      <Grid size={12}>
+                        <Typography variant="subtitle2" sx={{ mt: 2 }}>Rate Limiting (Auth)</Typography>
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth type="number" label="Tokens per Second" name="config.auth_rate_limit_per_second" value={values.config.auth_rate_limit_per_second ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <TextField fullWidth type="number" label="Burst" name="config.auth_rate_limit_burst" value={values.config.auth_rate_limit_burst ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                      </Grid>
+                    </Grid>
+                  </CollapsibleFormSection>
+
                   <Grid size={12}>
                     <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
                       Server URIs
@@ -679,6 +794,120 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
+                          <CollapsibleFormSection title={`Tuning (LDAP) - ${poolName}`} description="Advanced tuning parameters for this pool.">
+                            <Grid container spacing={2}>
+                              <Grid size={12}>
+                                <Typography variant="subtitle2">Queues / Backpressure</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth label="Lookup Queue Length" name={`optional_ldap_pools.${poolName}.lookup_queue_length`} type="number" value={poolConfig.lookup_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth label="Auth Queue Length" name={`optional_ldap_pools.${poolName}.auth_queue_length`} type="number" value={poolConfig.auth_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Operation Timeouts</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Search Timeout" name={`optional_ldap_pools.${poolName}.search_timeout`} value={poolConfig.search_timeout || ''} onChange={handleChange} placeholder="2s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Bind Timeout" name={`optional_ldap_pools.${poolName}.bind_timeout`} value={poolConfig.bind_timeout || ''} onChange={handleChange} placeholder="1s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Modify Timeout" name={`optional_ldap_pools.${poolName}.modify_timeout`} value={poolConfig.modify_timeout || ''} onChange={handleChange} placeholder="2s" />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Server-side Limits</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Search Size Limit" name={`optional_ldap_pools.${poolName}.search_size_limit`} value={poolConfig.search_size_limit ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = server default (unlimited)" /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth label="Search Time Limit" name={`optional_ldap_pools.${poolName}.search_time_limit`} value={poolConfig.search_time_limit || ''} onChange={handleChange} placeholder="3s" />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Retry / Backoff</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth type="number" label="Retry Max" name={`optional_ldap_pools.${poolName}.retry_max`} value={poolConfig.retry_max ?? ''} onChange={handleChange} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Retry Base" name={`optional_ldap_pools.${poolName}.retry_base`} value={poolConfig.retry_base || ''} onChange={handleChange} placeholder="200ms" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Retry Max Backoff" name={`optional_ldap_pools.${poolName}.retry_max_backoff`} value={poolConfig.retry_max_backoff || ''} onChange={handleChange} placeholder="2s" />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Circuit Breaker</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth type="number" label="Failure Threshold" name={`optional_ldap_pools.${poolName}.cb_failure_threshold`} value={poolConfig.cb_failure_threshold ?? ''} onChange={handleChange} placeholder="5" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Cooldown" name={`optional_ldap_pools.${poolName}.cb_cooldown`} value={poolConfig.cb_cooldown || ''} onChange={handleChange} placeholder="30s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth type="number" label="Half-open Max" name={`optional_ldap_pools.${poolName}.cb_half_open_max`} value={poolConfig.cb_half_open_max ?? ''} onChange={handleChange} placeholder="1" />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Health Checks</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth label="Health Check Interval" name={`optional_ldap_pools.${poolName}.health_check_interval`} value={poolConfig.health_check_interval || ''} onChange={handleChange} placeholder="10s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth label="Health Check Timeout" name={`optional_ldap_pools.${poolName}.health_check_timeout`} value={poolConfig.health_check_timeout || ''} onChange={handleChange} placeholder="1.5s" />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Caching</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="DN Cache TTL" name={`optional_ldap_pools.${poolName}.dn_cache_ttl`} value={poolConfig.dn_cache_ttl || ''} onChange={handleChange} placeholder="60s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Membership Cache TTL" name={`optional_ldap_pools.${poolName}.membership_cache_ttl`} value={poolConfig.membership_cache_ttl || ''} onChange={handleChange} placeholder="120s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth label="Negative Cache TTL" name={`optional_ldap_pools.${poolName}.negative_cache_ttl`} value={poolConfig.negative_cache_ttl || ''} onChange={handleChange} placeholder="20s" />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Cache Max Entries" name={`optional_ldap_pools.${poolName}.cache_max_entries`} value={poolConfig.cache_max_entries ?? ''} onChange={handleChange} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <FormControl fullWidth>
+                                  <InputLabel id={`ldap-cache-impl-label-${poolName}`}>Cache Implementation</InputLabel>
+                                  <Select labelId={`ldap-cache-impl-label-${poolName}`} label="Cache Implementation" name={`optional_ldap_pools.${poolName}.cache_impl`} value={poolConfig.cache_impl || ''} onChange={handleChange}>
+                                    <MenuItem value="ttl">ttl</MenuItem>
+                                    <MenuItem value="lru">lru</MenuItem>
+                                  </Select>
+                                  <Box sx={{ mt: 0.5 }}>
+                                    <InfoTooltip title="ttl: sharded TTL cache (simple, time-based). lru: Least-Recently-Used with max_entries limit. Choose based on access patterns." />
+                                  </Box>
+                                </FormControl>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <FormControlLabel control={<Switch name={`optional_ldap_pools.${poolName}.include_raw_result`} checked={poolConfig.include_raw_result || false} onChange={handleChange} />} label="Include Raw Result" />
+                              </Grid>
+
+                              <Grid size={12}>
+                                <Typography variant="subtitle2" sx={{ mt: 2 }}>Rate Limiting (Auth)</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Tokens per Second" name={`optional_ldap_pools.${poolName}.auth_rate_limit_per_second`} value={poolConfig.auth_rate_limit_per_second ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Burst" name={`optional_ldap_pools.${poolName}.auth_rate_limit_burst`} value={poolConfig.auth_rate_limit_burst ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                              </Grid>
+                            </Grid>
+                          </CollapsibleFormSection>
+
                           <Grid size={12}>
                             <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
                               Server URIs

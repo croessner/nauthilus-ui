@@ -22,6 +22,23 @@ const ConfigPreview = (): React.JSX.Element => {
       delete configCopy.lua.hooks;
     }
 
+    // Migrate and drop deprecated Lua number_of_workers on export
+    if (configCopy.lua?.config) {
+      const c = configCopy.lua.config as any;
+      if (!c.backend_number_of_workers && typeof c.number_of_workers === 'number') {
+        c.backend_number_of_workers = c.number_of_workers;
+      }
+      delete c.number_of_workers; // drop deprecated
+    }
+    if (configCopy.lua?.optional_lua_backends) {
+      Object.values(configCopy.lua.optional_lua_backends).forEach((backend: any) => {
+        if (!backend.backend_number_of_workers && typeof backend.number_of_workers === 'number') {
+          backend.backend_number_of_workers = backend.number_of_workers;
+        }
+        delete backend.number_of_workers; // drop deprecated
+      });
+    }
+
     // Ensure refresh_token_expiry is set if refresh_token is enabled
     if (configCopy.server?.jwt_auth?.refresh_token && !configCopy.server.jwt_auth.refresh_token_expiry) {
       if (!configCopy.server.jwt_auth) {

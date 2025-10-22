@@ -225,21 +225,69 @@ export interface LDAPConfig {
 }
 
 export interface LDAPConfConfig {
+  // Core toggles
   pool_only?: boolean;
   start_tls?: boolean;
   tls_skip_verify?: boolean;
   sasl_external?: boolean;
-  number_of_workers?: number;
+
+  // Worker and pools (legacy worker retained for backward-compat only)
+  number_of_workers?: number; // Deprecated in v1.10.0 (kept for import-compat)
   lookup_pool_size: number;
   lookup_idle_pool_size?: number;
   auth_pool_size?: number;
   auth_idle_pool_size?: number;
+
+  // Queues / Backpressure (v1.10.0)
+  lookup_queue_length?: number; // 0 = unlimited
+  auth_queue_length?: number;   // 0 = unlimited
+
+  // Per-operation timeouts (v1.10.0)
+  search_timeout?: string; // e.g., "2s", "0" uses library default
+  bind_timeout?: string;   // e.g., "1s", "0" uses library default
+  modify_timeout?: string; // e.g., "2s", "0" uses library default
+
+  // Server-side limits (v1.10.0)
+  search_size_limit?: number; // 0 = server default/unlimited
+  search_time_limit?: string; // e.g., "3s", 0 = server default
+
+  // Retry/Backoff (v1.10.0)
+  retry_max?: number;
+  retry_base?: string;        // e.g., "200ms"
+  retry_max_backoff?: string; // e.g., "2s"
+
+  // Circuit breaker (v1.10.0)
+  cb_failure_threshold?: number; // default 5
+  cb_cooldown?: string;          // e.g., "30s"
+  cb_half_open_max?: number;     // default 1
+
+  // Health checks (v1.10.0)
+  health_check_interval?: string; // default 10s
+  health_check_timeout?: string;  // default 1.5s
+
+  // Caching (v1.10.0)
+  dn_cache_ttl?: string;          // 0 disables
+  membership_cache_ttl?: string;  // 0 disables
+  negative_cache_ttl?: string;    // 0 disables
+  cache_max_entries?: number;     // applies to LRU impl
+  cache_impl?: 'ttl' | 'lru';
+  include_raw_result?: boolean;   // default false
+
+  // Rate limiting (v1.10.0)
+  auth_rate_limit_per_second?: number; // 0 disables
+  auth_rate_limit_burst?: number;      // 0 disables
+
+  // Bind & TLS
   bind_dn?: string;
   bind_pw?: string;
   tls_ca_cert?: string;
   tls_client_cert?: string;
   tls_client_key?: string;
+
+  // Pool exhaustion fast-fail
   connect_abort_timeout?: string;
+
+  // Targets
   server_uri: string[];
 }
 
@@ -325,11 +373,28 @@ export interface LuaCustomHookConfig {
 }
 
 export interface LuaScriptConfig {
+  // Legacy worker count (deprecated in v1.10.0, use backend_number_of_workers)
   number_of_workers?: number;
+
+  // Core paths
   package_path?: string;
   backend_script_path?: string;
   init_script_path?: string;
   init_script_paths?: string[];
+
+  // Tuning (v1.10.0)
+  backend_number_of_workers?: number; // replaces number_of_workers
+  action_number_of_workers?: number;  // default: 10; VM pool coupled 1:1
+  queue_length?: number;              // 0 = unlimited
+
+  // VM pool sizes (fallback to backend_number_of_workers when unset)
+  feature_vm_pool_size?: number;
+  filter_vm_pool_size?: number;
+  hook_vm_pool_size?: number;
+
+  // IP Scoping (0 disables)
+  ip_scoping_v6_cidr?: number;
+  ip_scoping_v4_cidr?: number;
 }
 
 // Brute Force Configuration
