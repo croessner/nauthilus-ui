@@ -54,6 +54,16 @@ const LuaConfigSchema = Yup.object().shape({
     backend_script_path: Yup.string(),
     init_script_path: Yup.string(),
     init_script_paths: Yup.array().of(Yup.string()),
+    // Tuning fields (optional)
+    backend_number_of_workers: Yup.number().min(0),
+    action_number_of_workers: Yup.number().min(0),
+    queue_length: Yup.number().min(0),
+    feature_vm_pool_size: Yup.number().min(0),
+    filter_vm_pool_size: Yup.number().min(0),
+    hook_vm_pool_size: Yup.number().min(0),
+    // IP Scoping
+    ip_scoping_v6_cidr: Yup.number().min(0).max(128),
+    ip_scoping_v4_cidr: Yup.number().min(0).max(32),
   }),
   optional_lua_backends: Yup.object().shape({}).nullable(),
 });
@@ -133,6 +143,14 @@ const LuaConfig = (): React.JSX.Element => {
       backend_script_path: '',
       init_script_path: '',
       init_script_paths: [],
+      backend_number_of_workers: undefined,
+      action_number_of_workers: undefined,
+      queue_length: undefined,
+      feature_vm_pool_size: undefined,
+      filter_vm_pool_size: undefined,
+      hook_vm_pool_size: undefined,
+      ip_scoping_v6_cidr: 0,
+      ip_scoping_v4_cidr: 0,
     },
     optional_lua_backends: config?.lua?.optional_lua_backends || {},
   };
@@ -1178,6 +1196,8 @@ const LuaConfig = (): React.JSX.Element => {
                   backend_script_path: '',
                   init_script_path: '',
                   init_script_paths: [],
+                  ip_scoping_v6_cidr: 0,
+                  ip_scoping_v4_cidr: 0,
                 };
                 formikSetFieldValueRef.current('optional_lua_backends', newBackends);
                 setHasUnsavedChanges(true);

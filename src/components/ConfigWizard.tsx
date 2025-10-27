@@ -280,6 +280,12 @@ const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): React.JSX.Elemen
         if (!newConfig.lua.config) {
           newConfig.lua.config = {};
         }
+        if (newConfig.lua.config.ip_scoping_v6_cidr === undefined) {
+          newConfig.lua.config.ip_scoping_v6_cidr = 0;
+        }
+        if (newConfig.lua.config.ip_scoping_v4_cidr === undefined) {
+          newConfig.lua.config.ip_scoping_v4_cidr = 0;
+        }
         newConfig.lua.config.backend_script_path = luaScriptPath;
 
         // Add a package path if provided
