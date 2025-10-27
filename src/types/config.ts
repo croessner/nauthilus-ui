@@ -215,6 +215,7 @@ export interface KeepAliveConfig {
 
 export interface DeDupConfig {
   distributed_enabled?: boolean;
+  in_process_enabled?: boolean;
 }
 
 // LDAP Configuration

@@ -150,6 +150,7 @@ const ServerConfigSchema = Yup.object().shape({
   // De-duplication validation
   dedup: Yup.object().shape({
     distributed_enabled: Yup.boolean(),
+    in_process_enabled: Yup.boolean(),
   }),
 });
 
@@ -267,6 +268,7 @@ const ServerConfig = (): React.JSX.Element | null => {
     // Initialize de-duplication configuration
     dedup: {
       distributed_enabled: config.server.dedup?.distributed_enabled || false,
+      in_process_enabled: config.server.dedup?.in_process_enabled || false,
     },
 
     // Initialize log configuration
@@ -1445,6 +1447,24 @@ const ServerConfig = (): React.JSX.Element | null => {
                 />
                 <Typography variant="body2" color="textSecondary">
                   When enabled, de-duplication is coordinated across instances via Redis to avoid processing duplicate concurrent requests.
+                </Typography>
+              </Grid>
+              <Grid size={12} sx={{ mt: 1 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.dedup?.in_process_enabled || false}
+                      onChange={(e) => {
+                        setFieldValue('dedup.in_process_enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
+                      }}
+                      name="dedup.in_process_enabled"
+                    />
+                  }
+                  label="Enable In-Process De-duplication"
+                />
+                <Typography variant="body2" color="textSecondary">
+                  When enabled, the current process suppresses duplicate concurrent requests locally. Useful without Redis or in single-instance setups.
                 </Typography>
               </Grid>
             </Grid>
