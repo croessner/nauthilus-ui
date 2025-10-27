@@ -358,6 +358,9 @@ export interface LuaFeatureConfig {
 export interface LuaFilterConfig {
   name: string;
   script_path: string;
+  when_authenticated?: boolean;
+  when_unauthenticated?: boolean;
+  when_no_auth?: boolean;
 }
 
 export interface LuaActionConfig {

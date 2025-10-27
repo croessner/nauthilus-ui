@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { Formik, Form, getIn } from 'formik';
 import * as Yup from 'yup';
-import { TextField, Button, Box, Typography, Paper, IconButton, List, ListItem, FormControl, InputLabel, Select, MenuItem, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment } from '@mui/material';
+import { TextField, Button, Box, Typography, Paper, IconButton, List, ListItem, FormControl, InputLabel, Select, MenuItem, Tabs, Tab, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment, FormControlLabel, Checkbox } from '@mui/material';
 import AddIcon from '@mui/icons-material/Add';
 import DeleteIcon from '@mui/icons-material/Delete';
 import { LuaFeatureConfig, LuaFilterConfig, LuaActionConfig, LuaCustomHookConfig, LuaSearchProtocolConfig, LuaConfig as LuaConfigType, NauthilusConfig } from '../types/config';
@@ -115,7 +115,15 @@ const LuaConfig = (): React.JSX.Element => {
   // Initial values
   const initialValues = {
     features: config?.lua?.features || [],
-    filters: config?.lua?.filters || [],
+    filters: (config?.lua?.filters || []).map((f: any) => {
+      const wa = (f as any).when_authenticated;
+      const wu = (f as any).when_unauthenticated;
+      const wn = (f as any).when_no_auth;
+      if (wa === undefined && wu === undefined && wn === undefined) {
+        return { ...f, when_authenticated: true, when_unauthenticated: true, when_no_auth: false };
+      }
+      return f;
+    }),
     actions: config?.lua?.actions || [],
     custom_hooks: config?.lua?.custom_hooks || [],
     search: config?.lua?.search || [],
@@ -345,6 +353,40 @@ const LuaConfig = (): React.JSX.Element => {
                             <DeleteIcon />
                           </IconButton>
                         </Grid>
+                        <Grid size={12}>
+                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  name={`filters[${index}].when_authenticated`}
+                                  checked={Boolean(filter.when_authenticated)}
+                                  onChange={handleChange}
+                                />
+                              }
+                              label="When Authenticated"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  name={`filters[${index}].when_unauthenticated`}
+                                  checked={Boolean(filter.when_unauthenticated)}
+                                  onChange={handleChange}
+                                />
+                              }
+                              label="When Unauthenticated"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  name={`filters[${index}].when_no_auth`}
+                                  checked={Boolean(filter.when_no_auth)}
+                                  onChange={handleChange}
+                                />
+                              }
+                              label="When No Auth"
+                            />
+                          </Box>
+                        </Grid>
                       </Grid>
                     </ListItem>
                   ))}
@@ -357,7 +399,7 @@ const LuaConfig = (): React.JSX.Element => {
                     onClick={() => {
                       setFieldValue('filters', [
                         ...values.filters,
-                        { name: '', script_path: '' },
+                        { name: '', script_path: '', when_authenticated: true, when_unauthenticated: true, when_no_auth: false },
                       ])
                           .then(() => setHasUnsavedChanges(true));
                     }}
