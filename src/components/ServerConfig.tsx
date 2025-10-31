@@ -152,6 +152,17 @@ const ServerConfigSchema = Yup.object().shape({
     distributed_enabled: Yup.boolean(),
     in_process_enabled: Yup.boolean(),
   }),
+
+  // Timeouts validation
+  timeouts: Yup.object().shape({
+    redis_read: Yup.string(),
+    redis_write: Yup.string(),
+    ldap_search: Yup.string(),
+    ldap_bind: Yup.string(),
+    ldap_modify: Yup.string(),
+    singleflight_work: Yup.string(),
+    lua_backend: Yup.string(),
+  }),
 });
 
 const ServerConfig = (): React.JSX.Element | null => {
@@ -253,6 +264,17 @@ const ServerConfig = (): React.JSX.Element | null => {
       max_idle_connections_per_host: config.server.keep_alive?.max_idle_connections_per_host || 10,
     },
 
+    // Initialize timeouts configuration
+    timeouts: {
+      redis_read: config.server.timeouts?.redis_read || '1s',
+      redis_write: config.server.timeouts?.redis_write || '2s',
+      ldap_search: config.server.timeouts?.ldap_search || '3s',
+      ldap_bind: config.server.timeouts?.ldap_bind || '3s',
+      ldap_modify: config.server.timeouts?.ldap_modify || '5s',
+      singleflight_work: config.server.timeouts?.singleflight_work || '3s',
+      lua_backend: config.server.timeouts?.lua_backend || '5s',
+    },
+
     // Initialize HTTP client configuration
     http_client: {
       max_connections_per_host: config.server.http_client?.max_connections_per_host || 100,
@@ -315,6 +337,7 @@ const ServerConfig = (): React.JSX.Element | null => {
         dns: values.dns,
         master_user: values.master_user,
         dedup: values.dedup,
+        timeouts: values.timeouts,
         // prometheus_timer is now in MonitoringConfig
       };
       await updateConfigSection('server', updatedValues);
@@ -1337,6 +1360,141 @@ const ServerConfig = (): React.JSX.Element | null => {
                   </Grid>
                 </>
               )}
+            </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
+            title="Timeouts"
+            description="Configure operation-specific timeouts. Use Go duration strings like 200ms, 3s, 1m."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.redis_read"
+                  label="Redis Read Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for Redis read operations. Default 1s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.redis_read') && Boolean(getIn(errors, 'timeouts.redis_read'))}
+                  helperText={(getIn(touched, 'timeouts.redis_read') && getIn(errors, 'timeouts.redis_read')) || 'e.g., 1s, 500ms'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.redis_write"
+                  label="Redis Write Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for Redis write operations. Default 2s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.redis_write') && Boolean(getIn(errors, 'timeouts.redis_write'))}
+                  helperText={(getIn(touched, 'timeouts.redis_write') && getIn(errors, 'timeouts.redis_write')) || 'e.g., 2s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.ldap_search"
+                  label="LDAP Search Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for LDAP search operations. Default 3s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.ldap_search') && Boolean(getIn(errors, 'timeouts.ldap_search'))}
+                  helperText={(getIn(touched, 'timeouts.ldap_search') && getIn(errors, 'timeouts.ldap_search')) || 'e.g., 3s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.ldap_bind"
+                  label="LDAP Bind Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for LDAP bind/auth operations. Default 3s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.ldap_bind') && Boolean(getIn(errors, 'timeouts.ldap_bind'))}
+                  helperText={(getIn(touched, 'timeouts.ldap_bind') && getIn(errors, 'timeouts.ldap_bind')) || 'e.g., 3s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.ldap_modify"
+                  label="LDAP Modify Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for LDAP modify operations. Default 5s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.ldap_modify') && Boolean(getIn(errors, 'timeouts.ldap_modify'))}
+                  helperText={(getIn(touched, 'timeouts.ldap_modify') && getIn(errors, 'timeouts.ldap_modify')) || 'e.g., 5s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.singleflight_work"
+                  label="Singleflight Work Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for leader work in singleflight. Default 3s if unset." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.singleflight_work') && Boolean(getIn(errors, 'timeouts.singleflight_work'))}
+                  helperText={(getIn(touched, 'timeouts.singleflight_work') && getIn(errors, 'timeouts.singleflight_work')) || 'e.g., 3s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.lua_backend"
+                  label="Lua Backend Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for Lua backend operations. Default 5s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.lua_backend') && Boolean(getIn(errors, 'timeouts.lua_backend'))}
+                  helperText={(getIn(touched, 'timeouts.lua_backend') && getIn(errors, 'timeouts.lua_backend')) || 'e.g., 5s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
             </Grid>
           </CollapsibleFormSection>
 

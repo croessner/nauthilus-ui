@@ -26,6 +26,7 @@ export interface ServerConfig {
   http_client?: HTTPClientConfig;
   compression?: CompressionConfig;
   keep_alive?: KeepAliveConfig;
+  timeouts?: TimeoutsConfig;
   dedup?: DeDupConfig;
 }
 
@@ -211,6 +212,16 @@ export interface KeepAliveConfig {
   timeout?: string;
   max_idle_connections?: number;
   max_idle_connections_per_host?: number;
+}
+
+export interface TimeoutsConfig {
+  redis_read?: string;
+  redis_write?: string;
+  ldap_search?: string;
+  ldap_bind?: string;
+  ldap_modify?: string;
+  singleflight_work?: string;
+  lua_backend?: string;
 }
 
 export interface DeDupConfig {
