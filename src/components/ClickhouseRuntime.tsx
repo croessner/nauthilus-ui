@@ -2735,10 +2735,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                       <Box sx={{ flexGrow:1, minWidth:160 }}>
                         <Typography variant="body2" noWrap title={bm.name}>{bm.name}</Typography>
                       </Box>
-                      <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode='rename'; setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
+                      <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('rename'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Rename">
                         <DriveFileRenameOutlineIcon fontSize="small" />
                       </IconButton>
-                      <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode='delete'; setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
+                      <IconButton size="small" onClick={(e)=>{ e.stopPropagation(); setBmDialogMode('delete'); setBmDialogKind('search'); setBmDialogTargetId(bm.id); setBmDialogName(bm.name); setBmDialogError(''); setBmDialogOpen(true); }} aria-label="Delete">
                         <DeleteOutlineIcon fontSize="small" />
                       </IconButton>
                     </Box>
