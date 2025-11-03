@@ -1036,6 +1036,21 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         // Initialize feature configurations
         newConfig = initializeFeatureConfigurations(newConfig);
 
+        // Bridge: map server.timeouts.ldap_* into ldap.config.* operation timeouts when missing
+        if (newConfig.server?.timeouts && newConfig.ldap?.config) {
+          const t = newConfig.server.timeouts as any;
+          const lc = newConfig.ldap.config as any;
+          if (t.ldap_search && !lc.search_timeout) {
+            lc.search_timeout = t.ldap_search;
+          }
+          if (t.ldap_bind && !lc.bind_timeout) {
+            lc.bind_timeout = t.ldap_bind;
+          }
+          if (t.ldap_modify && !lc.modify_timeout) {
+            lc.modify_timeout = t.ldap_modify;
+          }
+        }
+
         // Check for custom hooks in the loaded configuration
         if (newConfig.lua?.custom_hooks && newConfig.lua?.custom_hooks.length > 0) {
           console.log('Found custom hooks in loaded configuration:', newConfig.lua?.custom_hooks);
