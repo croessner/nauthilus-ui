@@ -73,7 +73,7 @@ const SecurityPage = (): React.JSX.Element => {
         setStatusMessage(`Failed to load settings: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [currentProfileName]);
 
   // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
@@ -201,6 +201,71 @@ const SecurityPage = (): React.JSX.Element => {
           </span>
         </Tooltip>
       </Box>
+
+      {/* Heuristics & thresholds (documentation) */}
+      <Accordion sx={{ mb: 2 }}>
+        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+          <Typography variant="subtitle2" sx={{ display:'inline-flex', alignItems:'center', gap: 0.5 }}>
+            Account-centric Monitoring Heuristics (backend)
+            <InfoTooltip title="Backend uses per-window thresholds to detect distributed patterns with fewer false positives. Adjust via environment variables." />
+          </Typography>
+        </AccordionSummary>
+        <AccordionDetails>
+          <Grid container spacing={2}>
+            <Grid item xs={12} md={6}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Global Pattern</Typography>
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    <li><code>GPM_THRESH_UNIQ_1H</code> default 12</li>
+                    <li><code>GPM_THRESH_UNIQ_24H</code> default 25</li>
+                    <li><code>GPM_THRESH_UNIQ_7D</code> default 60</li>
+                    <li><code>GPM_MIN_FAILS_24H</code> default 8</li>
+                    <li><code>GPM_THRESH_IP_TO_FAIL_RATIO</code> default 1.2</li>
+                    <li><code>GPM_ATTACK_TTL_SEC</code> default 43200 (12h)</li>
+                  </ul>
+                  <Typography variant="caption" color="text.secondary">Short-term OR 24h must hit, plus 7d must hit, with minimum fails and ratio in 1h/24h.</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Soft Delay</Typography>
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    <li><code>SOFT_DELAY_MIN_MS</code> default 50</li>
+                    <li><code>SOFT_DELAY_MAX_MS</code> default 200</li>
+                    <li><code>SOFT_DELAY_THRESH_UNIQ24</code> default 8</li>
+                    <li><code>SOFT_DELAY_THRESH_UNIQ7D</code> default 20</li>
+                    <li><code>SOFT_DELAY_THRESH_FAIL24</code> default 5</li>
+                    <li><code>SOFT_DELAY_THRESH_FAIL7D</code> default 10</li>
+                  </ul>
+                  <Typography variant="caption" color="text.secondary">Adds small delays for risky patterns without blocking.</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+            <Grid item xs={12} md={6}>
+              <Card variant="outlined">
+                <CardContent>
+                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Account Protection Mode</Typography>
+                  <ul style={{ margin: 0, paddingLeft: 16 }}>
+                    <li><code>PROTECT_THRESH_UNIQ24</code> default 12</li>
+                    <li><code>PROTECT_THRESH_UNIQ7D</code> default 30</li>
+                    <li><code>PROTECT_THRESH_FAIL24</code> default 7</li>
+                    <li><code>PROTECT_THRESH_FAIL7D</code> default 15</li>
+                    <li><code>PROTECT_BACKOFF_MIN_MS</code> default 150</li>
+                    <li><code>PROTECT_BACKOFF_MAX_MS</code> default 1000</li>
+                    <li><code>PROTECT_BACKOFF_MAX_LEVEL</code> default 5</li>
+                    <li><code>PROTECT_MODE_TTL_SEC</code> default 3600 (1h)</li>
+                    <li><code>PROTECT_ENFORCE_REJECT</code> default false (dry-run; when true, reject on failed auth under protection)</li>
+                  </ul>
+                  <Typography variant="caption" color="text.secondary">Progressive, per-account backoff and optional Step-Up/Reject when long-window metrics or attack flag hit thresholds.</Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          </Grid>
+        </AccordionDetails>
+      </Accordion>
 
       {/* Warm-up notice from Admin metrics */}
       {warmup && (warmup as any)?.warmed_up === false && (() => {
