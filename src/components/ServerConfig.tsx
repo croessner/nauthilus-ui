@@ -149,7 +149,6 @@ const ServerConfigSchema = Yup.object().shape({
 
   // De-duplication validation
   dedup: Yup.object().shape({
-    distributed_enabled: Yup.boolean(),
     in_process_enabled: Yup.boolean(),
   }),
 
@@ -289,7 +288,6 @@ const ServerConfig = (): React.JSX.Element | null => {
 
     // Initialize de-duplication configuration
     dedup: {
-      distributed_enabled: config.server.dedup?.distributed_enabled || false,
       in_process_enabled: config.server.dedup?.in_process_enabled || false,
     },
 
@@ -1589,24 +1587,6 @@ const ServerConfig = (): React.JSX.Element | null => {
             defaultExpanded={false}
           >
             <Grid container spacing={3}>
-              <Grid size={12}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={values.dedup?.distributed_enabled || false}
-                      onChange={(e) => {
-                        setFieldValue('dedup.distributed_enabled', e.target.checked)
-                            .then(() => setHasUnsavedChanges(true));
-                      }}
-                      name="dedup.distributed_enabled"
-                    />
-                  }
-                  label="Enable Distributed De-duplication"
-                />
-                <Typography variant="body2" color="textSecondary">
-                  When enabled, de-duplication is coordinated across instances via Redis to avoid processing duplicate concurrent requests.
-                </Typography>
-              </Grid>
               <Grid size={12} sx={{ mt: 1 }}>
                 <FormControlLabel
                   control={
