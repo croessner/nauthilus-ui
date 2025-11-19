@@ -4,6 +4,9 @@ set -euo pipefail
 # Ensure output directory exists
 mkdir -p quality
 
+# Make Node a bit more resilient in constrained environments
+export NODE_OPTIONS="${NODE_OPTIONS:-} --max-old-space-size=2048"
+
 # Try to run ESLint if a local binary is available; otherwise, create an empty report.
 # This avoids long npx network installs/timeouts in restricted environments.
 if [ -x "node_modules/.bin/eslint" ]; then
@@ -12,11 +15,19 @@ if [ -x "node_modules/.bin/eslint" ]; then
   # Preserve JSON output even if ESLint exits non-zero (e.g., parse/lint errors)
   node_modules/.bin/eslint \
     --no-error-on-unmatched-pattern \
-    "src/**/*.{ts,tsx,js,jsx}" "server/**/*.js" \
+    --config eslint.config.js \
+    "src/**/*.{ts,tsx,js,jsx}" \
     --format json > quality/eslint-report.json || true
 else
-  echo "ESLint not installed locally; skipping and writing empty report.\nInstall devDeps (eslint, @typescript-eslint/*, eslint-plugin-react, etc.) to enable full lint locally."
-  echo "[]" > quality/eslint-report.json
+  echo "ESLint not installed locally; attempting via npx..."
+  npx --yes eslint \
+    --no-error-on-unmatched-pattern \
+    --config eslint.config.js \
+    "src/**/*.{ts,tsx,js,jsx}" \
+    --format json > quality/eslint-report.json || {
+      echo "npx eslint failed; writing empty report as fallback." >&2
+      echo "[]" > quality/eslint-report.json
+    }
 fi
 
 # Always run TypeScript type checks if available

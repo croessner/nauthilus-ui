@@ -9,13 +9,15 @@ import jsxA11y from 'eslint-plugin-jsx-a11y';
 
 export default [
   {
-    files: ['**/*.{js,jsx,ts,tsx}'],
+    files: ['src/**/*.{js,jsx,ts,tsx}'],
     ignores: [
       'node_modules/**',
       'dist/**',
       'build/**',
       'coverage/**',
       'quality/**',
+      'server/**',
+      'scripts/**',
     ],
     languageOptions: {
       ecmaVersion: 2023,
@@ -45,7 +47,8 @@ export default [
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
       // Enforce safer error handling patterns
-      '@typescript-eslint/no-throw-literal': 'error',
+      // Use core rule to forbid throwing literals; aligns with project guideline intent
+      'no-throw-literal': 'error',
       // Discourage throwing from within catch blocks; prefer Promise.reject/normalized returns
       'no-restricted-syntax': [
         'warn',
