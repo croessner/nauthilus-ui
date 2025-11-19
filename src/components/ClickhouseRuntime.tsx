@@ -1494,7 +1494,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         if (remaining <= 0) break;
         const perReqLimit = Math.min(chunkSize, remaining);
 
-        const url = buildHookUrl(conn, offsetLocal, perReqLimit);
+        // When starting analysis, respect the CURRENT text in the search box.
+        // If the user cleared the text (empty), do NOT apply any stale searchQuery filter.
+        // buildHookUrl allows us to opt-out of including the search filter.
+        const includeSearch = Boolean((searchDraft || '').trim());
+        const url = buildHookUrl(conn, offsetLocal, perReqLimit, includeSearch);
         const resp = await authenticatedFetch(url, { method: 'POST', signal: controller.signal });
         if (!resp.ok) {
           const msg = await extractErrorMessage(resp);
@@ -1544,7 +1548,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       setAnalysisLoading(false);
       analysisAbortRef.current = null;
     }
-  }, [limit, action, username, account, ip, authFilter, tsStart, tsEnd, rawSql]);
+  }, [limit, action, username, account, ip, authFilter, tsStart, tsEnd, rawSql, searchDraft]);
 
   const cancelAnalysisLoad = useCallback(() => {
     if (analysisAbortRef.current) {
