@@ -103,6 +103,15 @@ export interface RedisConfig {
   tls?: TLSConfig;
   positive_cache_ttl?: string;
   negative_cache_ttl?: string;
+  // New connection/timeout tuning fields (mirrors backend server/config)
+  // Note: durations are represented as strings like "80ms", "3s", "5m".
+  pool_timeout?: string;
+  dial_timeout?: string;
+  read_timeout?: string;
+  write_timeout?: string;
+  pool_fifo?: boolean;
+  conn_max_idle_time?: string;
+  max_retries?: number;
   master?: MasterConfig;
   replica?: ReplicaConfig;
   sentinels?: SentinelsConfig;

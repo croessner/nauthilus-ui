@@ -12,6 +12,15 @@ import PasswordField from './common/PasswordField';
 import InfoTooltip from './common/InfoTooltip';
 import Grid from '@mui/material/Grid';
 
+// Local form value type: allow empty-string/null for certain optional inputs used as placeholders
+type RedisFormValues = {
+  redis: Omit<ServerConfigType['redis'], 'max_retries'> & {
+    // Form allows empty string to show placeholder for unset value; coerce to number on submit
+    max_retries: number | '' | null | undefined;
+    // Keep other optional string fields as-is; many are already optional strings and we pass '' at runtime
+  };
+};
+
 // Validation schema
 const RedisConfigSchema = Yup.object().shape({
   redis: Yup.object().shape({
@@ -38,6 +47,28 @@ const RedisConfigSchema = Yup.object().shape({
     negative_cache_ttl: Yup.string()
       .required('Negative cache TTL is required')
       .matches(/^\d+[smhd]$/, 'Must be in format like 1m, 30s, 1h, 1d'),
+
+    // Connection & timeouts tuning (all optional)
+    pool_timeout: Yup.string()
+      .matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 80ms, 3s, 5m, 1h')
+      .nullable(),
+    dial_timeout: Yup.string()
+      .matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 200ms, 1s, 5m, 1h')
+      .nullable(),
+    read_timeout: Yup.string()
+      .matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 100ms, 1s, 5m, 1h')
+      .nullable(),
+    write_timeout: Yup.string()
+      .matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 100ms, 1s, 5m, 1h')
+      .nullable(),
+    pool_fifo: Yup.boolean().nullable(),
+    conn_max_idle_time: Yup.string()
+      .matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 90s, 1m, 5m, 1h')
+      .nullable(),
+    max_retries: Yup.number()
+      .transform((value, originalValue) => (originalValue === '' || originalValue === null ? undefined : value))
+      .min(0, 'Must be at least 0')
+      .nullable(),
 
     // TLS configuration
     tls: Yup.object().shape({
@@ -237,7 +268,7 @@ const RedisConfig = (): React.JSX.Element | null => {
     return null;
   }
 
-  const initialValues = {
+  const initialValues: RedisFormValues = {
     redis: {
       database_number: config.server.redis.database_number || 0,
       prefix: config.server.redis.prefix || '',
@@ -246,6 +277,15 @@ const RedisConfig = (): React.JSX.Element | null => {
       idle_pool_size: config.server.redis.idle_pool_size || 0,
       positive_cache_ttl: config.server.redis.positive_cache_ttl || '5m',
       negative_cache_ttl: config.server.redis.negative_cache_ttl || '1m',
+
+      // Connection & timeouts tuning (use empty to show placeholders with backend defaults)
+      pool_timeout: config.server.redis.pool_timeout || '',
+      dial_timeout: config.server.redis.dial_timeout || '',
+      read_timeout: config.server.redis.read_timeout || '',
+      write_timeout: config.server.redis.write_timeout || '',
+      pool_fifo: config.server.redis.pool_fifo ?? true,
+      conn_max_idle_time: config.server.redis.conn_max_idle_time || '',
+      max_retries: typeof config.server.redis.max_retries === 'number' ? config.server.redis.max_retries : '',
 
       // TLS configuration
       tls: {
@@ -295,7 +335,7 @@ const RedisConfig = (): React.JSX.Element | null => {
     },
   };
 
-  const handleSubmit = async (values: { redis: ServerConfigType['redis'] }) => {
+  const handleSubmit = async (values: RedisFormValues) => {
     try {
       // Create a filtered Redis configuration based on the selected setup type
       const filteredRedis: ServerConfigType['redis'] = {
@@ -309,6 +349,20 @@ const RedisConfig = (): React.JSX.Element | null => {
         negative_cache_ttl: values.redis.negative_cache_ttl,
         tls: values.redis.tls,
       };
+
+      // Optional connection & timeouts tuning
+      if (values.redis.pool_timeout) filteredRedis.pool_timeout = values.redis.pool_timeout;
+      if (values.redis.dial_timeout) filteredRedis.dial_timeout = values.redis.dial_timeout;
+      if (values.redis.read_timeout) filteredRedis.read_timeout = values.redis.read_timeout;
+      if (values.redis.write_timeout) filteredRedis.write_timeout = values.redis.write_timeout;
+      if (typeof values.redis.pool_fifo === 'boolean') filteredRedis.pool_fifo = values.redis.pool_fifo;
+      if (values.redis.conn_max_idle_time) filteredRedis.conn_max_idle_time = values.redis.conn_max_idle_time;
+      if (values.redis.max_retries !== '' && values.redis.max_retries !== undefined && values.redis.max_retries !== null) {
+        // ensure number
+        const mr = values.redis.max_retries;
+        // mr is narrowed to a number by the guard above; Number(...) is a no-op for numbers
+        filteredRedis.max_retries = Number(mr);
+      }
 
       // Add configuration specific to the selected setup type
       if (redisSetupType === 'master') {
@@ -508,6 +562,150 @@ const RedisConfig = (): React.JSX.Element | null => {
               </Grid>
             </Grid>
           </FormSection>
+
+          {/* Connection & Timeouts */}
+          <CollapsibleFormSection
+            title="Redis Connection & Timeouts"
+            description="Tune how the UI connects to Redis. Leave fields empty to use server defaults."
+            defaultExpanded={false}
+         >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.pool_timeout"
+                  label="Pool Timeout"
+                  placeholder="80ms"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Time to wait for a free connection from the pool before failing (default 80ms)." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'redis.pool_timeout') && Boolean(getIn(errors, 'redis.pool_timeout'))}
+                  helperText={(getIn(touched, 'redis.pool_timeout') && getIn(errors, 'redis.pool_timeout')) || "Duration like 80ms, 3s, 1m"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.dial_timeout"
+                  label="Dial Timeout"
+                  placeholder="200ms"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="TCP connect timeout (default 200ms)." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'redis.dial_timeout') && Boolean(getIn(errors, 'redis.dial_timeout'))}
+                  helperText={(getIn(touched, 'redis.dial_timeout') && getIn(errors, 'redis.dial_timeout')) || "Duration like 200ms, 1s"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.read_timeout"
+                  label="Read Timeout"
+                  placeholder="100ms"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Per-read operation timeout (default 100ms)." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'redis.read_timeout') && Boolean(getIn(errors, 'redis.read_timeout'))}
+                  helperText={(getIn(touched, 'redis.read_timeout') && getIn(errors, 'redis.read_timeout')) || "Duration like 100ms, 1s"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.write_timeout"
+                  label="Write Timeout"
+                  placeholder="100ms"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Per-write operation timeout (default 100ms)." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'redis.write_timeout') && Boolean(getIn(errors, 'redis.write_timeout'))}
+                  helperText={(getIn(touched, 'redis.write_timeout') && getIn(errors, 'redis.write_timeout')) || "Duration like 100ms, 1s"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.pool_fifo)}
+                      onChange={(e) => {
+                        setFieldValue('redis.pool_fifo', e.target.checked)
+                          .then(() => setHasUnsavedChanges(true));
+                      }}
+                      name="redis.pool_fifo"
+                    />
+                  }
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Use FIFO Connection Pool<InfoTooltip title="Controls connection pool order. On = FIFO (first in, first out); Off = LIFO (last in, first out)." /></Box>}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.conn_max_idle_time"
+                  label="Conn Max Idle Time"
+                  placeholder="90s"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Max time a connection may remain idle before being closed (default 90s)." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'redis.conn_max_idle_time') && Boolean(getIn(errors, 'redis.conn_max_idle_time'))}
+                  helperText={(getIn(touched, 'redis.conn_max_idle_time') && getIn(errors, 'redis.conn_max_idle_time')) || "Duration like 90s, 1m, 5m"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.max_retries"
+                  label="Max Retries"
+                  placeholder="1"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Maximum retry count for failed operations (default 1)." /></InputAdornment>
+                  ), inputProps: { min: 0 } }}
+                  error={getIn(touched, 'redis.max_retries') && Boolean(getIn(errors, 'redis.max_retries'))}
+                  helperText={(getIn(touched, 'redis.max_retries') && getIn(errors, 'redis.max_retries')) || "Non-negative integer"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+            </Grid>
+          </CollapsibleFormSection>
 
           {/* TLS Configuration */}
           <CollapsibleFormSection
