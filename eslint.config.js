@@ -44,6 +44,19 @@ export default [
         'warn',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_', ignoreRestSiblings: true },
       ],
+      // Enforce safer error handling patterns
+      '@typescript-eslint/no-throw-literal': 'error',
+      // Discourage throwing from within catch blocks; prefer Promise.reject/normalized returns
+      'no-restricted-syntax': [
+        'warn',
+        {
+          selector: 'CatchClause ThrowStatement',
+          message:
+            'Avoid throwing inside catch blocks. Prefer `return Promise.reject(err)` or handle/normalize and return a Result.',
+        },
+      ],
+      // Avoid useless catch that only rethrows
+      'no-useless-catch': 'warn',
     },
   },
 ];
