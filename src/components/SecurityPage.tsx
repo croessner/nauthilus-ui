@@ -9,8 +9,10 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
-import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
+import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil } from '../utils/apiUtils';
 import Grid from '@mui/material/Grid';
+import { useConnectionAccess } from '../hooks/useConnectionAccess';
+import { formatDuration } from '../utils/format';
 
 interface PerUserMetric {
   username: string;
@@ -49,14 +51,8 @@ const SecurityPage = (): React.JSX.Element => {
     warmup_window_seconds?: number;
   } | null>(null);
 
-  // Ensure runtime settings and connection are loaded
-  const connectionRef = React.useRef(connection);
-  React.useEffect(() => { connectionRef.current = connection; }, [connection]);
-  const getConnection = React.useCallback(() => connectionRef.current, []);
-
-  const checkConnection = React.useCallback(async (conn: any) => {
-    await checkConnectionUtil(conn, setConnStatus, (msg: string) => setStatusMessage(msg));
-  }, []);
+  // Ensure runtime settings and connection are loaded (deduped via hook)
+  const { getConnection, checkConnection } = useConnectionAccess(connection, setConnStatus, setStatusMessage);
 
   React.useEffect(() => {
     (async () => {
@@ -212,7 +208,7 @@ const SecurityPage = (): React.JSX.Element => {
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={2}>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Global Pattern</Typography>
@@ -228,7 +224,7 @@ const SecurityPage = (): React.JSX.Element => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Soft Delay</Typography>
@@ -244,7 +240,7 @@ const SecurityPage = (): React.JSX.Element => {
                 </CardContent>
               </Card>
             </Grid>
-            <Grid item xs={12} md={6}>
+            <Grid size={{ xs: 12, md: 6 }}>
               <Card variant="outlined">
                 <CardContent>
                   <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>Account Protection Mode</Typography>
@@ -272,27 +268,16 @@ const SecurityPage = (): React.JSX.Element => {
         const toNum = (x: any) => (typeof x === 'number' ? x : Number(x || 0));
         const prog = (warmup as any)?.progress || {};
         const req = (warmup as any)?.requirements || {};
-        const secondsPct = Math.round(Math.min(100, Math.max(0, toNum(prog.seconds) * 100)));
-        const usersPct = Math.round(Math.min(100, Math.max(0, toNum(prog.users) * 100)));
-        const attemptsPct = Math.round(Math.min(100, Math.max(0, toNum(prog.attempts) * 100)));
-        const overallPct = Math.round(Math.min(100, Math.max(0, toNum(prog.overall) * 100)));
+        const toPct = (v: unknown) => Math.round(Math.min(100, Math.max(0, toNum(v) * 100)));
+        const secondsPct = toPct(prog.seconds);
+        const usersPct = toPct(prog.users);
+        const attemptsPct = toPct(prog.attempts);
+        const overallPct = toPct(prog.overall);
         const elapsed = toNum((warmup as any)?.elapsed_seconds);
         const windowSec = toNum(req.seconds);
-        const fmtDur = (total: number) => {
-          let s = Math.max(0, Math.floor(total));
-          const d = Math.floor(s / 86400); s -= d * 86400;
-          const h = Math.floor(s / 3600); s -= h * 3600;
-          const m = Math.floor(s / 60); s -= m * 60;
-          const parts: string[] = [];
-          if (d) parts.push(`${d}d`);
-          if (h) parts.push(`${h}h`);
-          if (m) parts.push(`${m}m`);
-          if (!parts.length) parts.push(`${s}s`);
-          return parts.join(' ');
-        };
         return (
           <Alert severity="info" sx={{ mb: 2 }}>
-            System is in warm-up; sliding windows may not reflect steady-state yet. Overall: {overallPct}% — Time: {secondsPct}% · Min Users: {usersPct}% · Min Attempts: {attemptsPct}%. Uptime: {fmtDur(elapsed)} of {fmtDur(windowSec)} window.
+            System is in warm-up; sliding windows may not reflect steady-state yet. Overall: {overallPct}% — Time: {secondsPct}% · Min Users: {usersPct}% · Min Attempts: {attemptsPct}%. Uptime: {formatDuration(elapsed)} of {formatDuration(windowSec)} window.
           </Alert>
         );
       })()}

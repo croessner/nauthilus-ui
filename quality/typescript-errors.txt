@@ -1,2 +1,22 @@
-src/components/DistributedBruteForceTools.tsx(262,9): error TS2345: Argument of type '{ distributed_brute_force_admin: { enabled: boolean; endpoint_path: string; }; distributed_brute_force_test: { enabled: boolean; endpoint_path: string; }; distributed_brute_force_ui: any; }' is not assignable to parameter of type 'LuaHooksConfig'.
-  Object literal may only specify known properties, but 'distributed_brute_force_ui' does not exist in type 'LuaHooksConfig'. Did you mean to write 'distributed_brute_force_admin'?
+src/components/ClickhouseRuntime.tsx(1613,64): error TS2322: Type 'string | Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+  Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'BlobPart'.
+    Type 'Uint8Array<ArrayBufferLike>' is not assignable to type 'ArrayBufferView<ArrayBuffer>'.
+      Types of property 'buffer' are incompatible.
+        Type 'ArrayBufferLike' is not assignable to type 'ArrayBuffer'.
+          Type 'SharedArrayBuffer' is not assignable to type 'ArrayBuffer'.
+            Types of property '[Symbol.toStringTag]' are incompatible.
+              Type '"SharedArrayBuffer"' is not assignable to type '"ArrayBuffer"'.
+src/components/DistributedBruteForceTools.tsx(370,5): error TS2349: This expression is not callable.
+  Type 'String' has no call signatures.
+src/components/DistributedBruteForceTools.tsx(389,9): error TS2349: This expression is not callable.
+  Type 'String' has no call signatures.
+src/components/DistributedBruteForceTools.tsx(400,7): error TS2349: This expression is not callable.
+  Type 'String' has no call signatures.
+src/components/DistributedBruteForceTools.tsx(413,7): error TS2349: This expression is not callable.
+  Type 'String' has no call signatures.
+src/components/common/CollapsibleFormSection.tsx(21,34): error TS2503: Cannot find namespace 'JSX'.
+src/components/common/PasswordField.tsx(39,25): error TS2503: Cannot find namespace 'JSX'.
+src/dev/palette.tsx(7,8): error TS2307: Cannot find module '@react-buddy/ide-toolbox' or its corresponding type declarations.
+src/dev/palette.tsx(8,24): error TS2307: Cannot find module '@react-buddy/palette-mui' or its corresponding type declarations.
+src/dev/previews.tsx(1,42): error TS2307: Cannot find module '@react-buddy/ide-toolbox' or its corresponding type declarations.
+src/dev/useInitial.ts(2,33): error TS2307: Cannot find module '@react-buddy/ide-toolbox' or its corresponding type declarations.

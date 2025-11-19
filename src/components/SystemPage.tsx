@@ -1,11 +1,9 @@
 import React from 'react';
 import { usePersistedAutoRefresh } from '../hooks/usePersistedAutoRefresh';
-import { Box, Card, CardContent, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails, CircularProgress, Tooltip, IconButton } from '@mui/material';
+import { Box, Card, CardContent, LinearProgress, Typography, Chip, Stack, Button, Select, MenuItem, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import ErrorIcon from '@mui/icons-material/Error';
+import ConnectionStatus from './common/ConnectionStatus';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
 import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
@@ -343,23 +341,11 @@ const SystemPage = (): React.JSX.Element => {
       </Stack>
 
       {/* Connection status (unified banner) */}
-      <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-        <Typography variant="subtitle1" sx={{ mr: 2 }}>Connection Status:</Typography>
-        {connStatus === 'checking' && <CircularProgress size={20} sx={{ mr: 1 }} />}
-        {connStatus === 'connected' && <CheckCircleIcon color="success" sx={{ mr: 1 }} />}
-        {connStatus === 'disconnected' && <ErrorIcon color="error" sx={{ mr: 1 }} />}
-        {connStatus === 'unknown' && <Typography color="text.secondary">Not checked</Typography>}
-        {connStatus === 'disconnected' && (
-          <Typography color="error.main">{statusMessage}</Typography>
-        )}
-        <Tooltip title="Check connection">
-          <span>
-            <IconButton onClick={() => { void checkConnection(getConnection()); }} disabled={connStatus === 'checking'} sx={{ ml: 1 }}>
-              <RefreshIcon />
-            </IconButton>
-          </span>
-        </Tooltip>
-      </Box>
+      <ConnectionStatus
+        status={connStatus}
+        message={statusMessage}
+        onCheck={() => checkConnection(getConnection())}
+      />
 
       <Grid container spacing={2}>
         <Grid size={12}>

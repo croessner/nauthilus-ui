@@ -347,6 +347,11 @@ export interface LuaHookConfig {
 export interface LuaHooksConfig {
   distributed_brute_force_admin?: LuaHookConfig;
   distributed_brute_force_test?: LuaHookConfig;
+  // UI-only persisted state for the Distributed Brute-Force tools page.
+  // Note: This is not a backend Lua hook. It stores view preferences/state
+  // such as selected tab and form values. Kept broad on purpose to allow
+  // evolution without frequent type updates.
+  distributed_brute_force_ui?: any;
 }
 
 export interface LuaConfig {

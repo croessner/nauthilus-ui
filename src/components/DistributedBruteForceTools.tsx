@@ -14,6 +14,7 @@ import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings a
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 import Grid from '@mui/material/Grid';
+import { formatDuration } from '../utils/format';
 
 const prettyJson = (obj: any) => {
   try { return JSON.stringify(obj, null, 2); } catch { return String(obj); }
@@ -68,7 +69,8 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
 
   const [adminOperation, setAdminOperation] = useState<string>('get_metrics');
   const [adminUsername, setAdminUsername] = useState<string>('');
-  const [adminResponse, setAdminResponse] = useState<string>('');
+  // We only need the setter; ignore the current value
+  const [, setAdminResponse] = useState<string>('');
   const [adminResponseJson, setAdminResponseJson] = useState<any | null>(null);
   const [adminLoading, setAdminLoading] = useState<boolean>(false);
   const [showAdminRaw, setShowAdminRaw] = useState<boolean>(false);
@@ -86,7 +88,8 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
   const testBodyBytes = useMemo(() => byteLengthUtf8(testBodyText), [testBodyText]);
   const testBodyTooLarge = testBodyBytes > rawJsonMaxBytes;
   const [useAdvancedBody, setUseAdvancedBody] = useState<boolean>(false);
-  const [testResponse, setTestResponse] = useState<string>('');
+  // We only need the setter; ignore the current value
+  const [, setTestResponse] = useState<string>('');
   const [testResponseJson, setTestResponseJson] = useState<any | null>(null);
   const [lastTestAction, setLastTestAction] = useState<string>('run_test');
   const [showTestRaw, setShowTestRaw] = useState<boolean>(false);
@@ -216,6 +219,44 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
   }, [testRawPreviewFull, rawJsonMaxBytes]);
 
   const hasValidConnection = Boolean(runtimeConnection?.backend_url);
+
+  // Shared handler to apply/clamp raw JSON preview limit and recompute previews (DRY)
+  const applyRawLimitHandler = useCallback(() => {
+    const v = Number((rawLimitInput || '').trim());
+    const clamped = Math.max(
+      RAW_JSON_MIN_BYTES,
+      Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES)
+    );
+    setRawJsonMaxBytesOverride(clamped);
+    setRawJsonMaxBytes(clamped);
+    if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
+    if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
+  }, [rawLimitInput, setRawJsonMaxBytes, adminRawPreviewFull, testRawPreviewFull]);
+
+  // Small local component for the Raw JSON limit controls to remove duplication
+  const RawLimitControls: React.FC = () => (
+    <Box sx={{
+      display: 'flex', alignItems: 'center', gap: 1,
+      flexBasis: { xs: '100%', sm: 'auto' },
+      flexGrow: { xs: 1, sm: 0 },
+      justifyContent: { xs: 'flex-start', sm: 'flex-end' },
+      ml: { sm: 'auto' },
+      pt: 1,
+      pb: 0.5
+    }}>
+      <TextField
+        size="small"
+        type="number"
+        label="Raw JSON limit (bytes)"
+        value={rawLimitInput}
+        onChange={(e)=>{ setRawLimitInput(e.target.value); }}
+        onKeyDown={(e)=>{ if ((e as any).key === 'Enter') { applyRawLimitHandler(); } }}
+        slotProps={{ input: { inputProps: { min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 } } }}
+        sx={{ minWidth: { xs: 160, sm: 210 } }}
+      />
+      <Button size="small" variant="outlined" onClick={applyRawLimitHandler}>Apply</Button>
+    </Box>
+  );
 
   // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
   useEffect(() => {
@@ -494,7 +535,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
               label="Admin Endpoint Path"
               value={adminPath}
               onChange={(e) => setAdminPath(e.target.value)}
-              InputProps={{ endAdornment: (
+              slotProps={{ input: { endAdornment: (
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
                     <span>
@@ -505,7 +546,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   </Tooltip>
                   <InputAdornment position="end"><InfoTooltip title="Path of the Admin hook as configured in the backend (e.g., /hooks/distributed-brute-force-admin)." /></InputAdornment>
                 </Box>
-              )}}
+              ) }}}
               helperText={undefined}
               sx={{ mt: 1 }}
             />
@@ -526,7 +567,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
               label="Test Endpoint Path"
               value={testPath}
               onChange={(e) => setTestPath(e.target.value)}
-              InputProps={{ endAdornment: (
+              slotProps={{ input: { endAdornment: (
                 <Box sx={{ display: 'flex', alignItems: 'center' }}>
                   <Tooltip title={effectiveEndpointSuggestions.length ? 'Pick from known hook paths detected in runtime settings' : 'No known hook paths detected'}>
                     <span>
@@ -537,7 +578,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   </Tooltip>
                   <InputAdornment position="end"><InfoTooltip title="Path of the Test hook as configured in the backend (e.g., /hooks/distributed-brute-force-test)." /></InputAdornment>
                 </Box>
-              )}}
+              ) }}}
               helperText={undefined}
               sx={{ mt: 1 }}
             />
@@ -590,9 +631,9 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                     label="Username (required)"
                     value={adminUsername}
                     onChange={(e) => setAdminUsername(e.target.value)}
-                    InputProps={{ endAdornment: (
+                    slotProps={{ input: { endAdornment: (
                       <InputAdornment position="end"><InfoTooltip title="Required field: Username of the account to reset." /></InputAdornment>
-                    )}}
+                    ) }}}
                   />
                 </Grid>
               )}
@@ -623,22 +664,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                         const blockedRegions = Array.isArray(m.blocked_regions) ? m.blocked_regions.length : 0;
                         const captchaAccounts = Array.isArray(m.captcha_accounts) ? m.captcha_accounts.length : 0;
                         const rateLimitedIPs = Array.isArray(m.rate_limited_ips) ? m.rate_limited_ips.length : 0;
-                        const warmupProgress = toNum(m.warmup_progress) || 0;
-                        const warmupProgressPct = Math.round(Math.min(100, Math.max(0, warmupProgress * 100)));
-                        const uptimeSeconds = toNum(m.uptime_seconds) || 0;
-                        const warmupWindowSeconds = toNum(m.warmup_window_seconds) || 0;
-                        const fmtDur = (total: number) => {
-                          let s = Math.max(0, Math.floor(total));
-                          const d = Math.floor(s / 86400); s -= d * 86400;
-                          const h = Math.floor(s / 3600); s -= h * 3600;
-                          const mnt = Math.floor(s / 60); s -= mnt * 60;
-                          const parts: string[] = [];
-                          if (d) parts.push(`${d}d`);
-                          if (h) parts.push(`${h}h`);
-                          if (mnt) parts.push(`${mnt}m`);
-                          if (!parts.length) parts.push(`${s}s`);
-                          return parts.join(' ');
-                        };
+                        // Note: warm-up details are rendered in the banner below when not fully warmed up.
                         return (
                           <>
                             {/* Status message shown above detailed metrics */}
@@ -659,21 +685,10 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                               const overallPct = Math.round(Math.min(100, Math.max(0, toNum(prog.overall) * 100)));
                               const elapsed = toNum(warm.elapsed_seconds);
                               const windowSec = toNum(req.seconds);
-                              const fmtDur = (total: number) => {
-                                let s = Math.max(0, Math.floor(total));
-                                const d = Math.floor(s / 86400); s -= d * 86400;
-                                const h = Math.floor(s / 3600); s -= h * 3600;
-                                const mnt = Math.floor(s / 60); s -= mnt * 60;
-                                const parts: string[] = [];
-                                if (d) parts.push(`${d}d`);
-                                if (h) parts.push(`${h}h`);
-                                if (mnt) parts.push(`${mnt}m`);
-                                if (!parts.length) parts.push(`${s}s`);
-                                return parts.join(' ');
-                              };
+                              
                               return (
                                 <Alert severity="info" sx={{ mb: 2 }}>
-                                  System is in warm-up; sliding windows may not reflect steady-state yet. Overall: {overallPct}% — Time: {secondsPct}% · Min Users: {usersPct}% · Min Attempts: {attemptsPct}%. Uptime: {fmtDur(elapsed)} of {fmtDur(windowSec)} window.
+                                  System is in warm-up; sliding windows may not reflect steady-state yet. Overall: {overallPct}% — Time: {secondsPct}% · Min Users: {usersPct}% · Min Attempts: {attemptsPct}%. Uptime: {formatDuration(elapsed)} of {formatDuration(windowSec)} window.
                                 </Alert>
                               );
                             })()}
@@ -776,41 +791,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                     {showAdminRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                   </Button>
                   {/* Right-side controls: wrap below on small screens */}
-                  <Box sx={{
-                    display: 'flex', alignItems: 'center', gap: 1,
-                    flexBasis: { xs: '100%', sm: 'auto' },
-                    flexGrow: { xs: 1, sm: 0 },
-                    justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-                    ml: { sm: 'auto' },
-                    pt: 1,
-                    pb: 0.5
-                  }}>
-                    <TextField
-                      size="small"
-                      type="number"
-                      label="Raw JSON limit (bytes)"
-                      value={rawLimitInput}
-                      onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-                      onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
-                        const v = Number((rawLimitInput || '').trim());
-                        const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                        setRawJsonMaxBytesOverride(clamped);
-                        setRawJsonMaxBytes(clamped);
-                        if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
-                        if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                      } }}
-                      inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                      sx={{ minWidth: { xs: 160, sm: 210 } }}
-                    />
-                    <Button size="small" variant="outlined" onClick={()=>{
-                      const v = Number((rawLimitInput || '').trim());
-                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                      setRawJsonMaxBytesOverride(clamped);
-                      setRawJsonMaxBytes(clamped);
-                      if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
-                      if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                    }}>Apply</Button>
-                  </Box>
+                  <RawLimitControls />
                 </Stack>
                 {showAdminRaw && (
                   <TextField
@@ -818,7 +799,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                     fullWidth
                     multiline
                     minRows={8}
-                    InputProps={{ readOnly: true }}
+                    slotProps={{ input: { readOnly: true } }}
                     sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
                   />
                 )}
@@ -862,7 +843,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                     label="Username"
                     value={testFields.username}
                     onChange={(e) => setTestFields({ ...testFields, username: e.target.value })}
-                    InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Required for all actions." /></InputAdornment>) }}
+                    slotProps={{ input: { endAdornment: (<InputAdornment position="end"><InfoTooltip title="Required for all actions." /></InputAdornment>) } }}
                   />
                 </Grid>
                 {testFields.action !== 'check_detection' && (
@@ -873,7 +854,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                       type="number"
                       value={testFields.num_ips}
                       onChange={(e) => setTestFields({ ...testFields, num_ips: Number(e.target.value || 0) })}
-                      InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Number of IPs to simulate (default 20)." /></InputAdornment>) }}
+                      slotProps={{ input: { endAdornment: (<InputAdornment position="end"><InfoTooltip title="Number of IPs to simulate (default 20)." /></InputAdornment>) } }}
                     />
                   </Grid>
                 )}
@@ -954,21 +935,9 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                           const pct = Math.round(Math.min(100, Math.max(0, progress * 100)));
                           const uptime = toNum(warm.uptime_seconds) || 0;
                           const windowSec = toNum(warm.warmup_window_seconds) || 0;
-                          const fmtDur = (total: number) => {
-                            let s = Math.max(0, Math.floor(total));
-                            const d = Math.floor(s / 86400); s -= d * 86400;
-                            const h = Math.floor(s / 3600); s -= h * 3600;
-                            const m = Math.floor(s / 60); s -= m * 60;
-                            const parts: string[] = [];
-                            if (d) parts.push(`${d}d`);
-                            if (h) parts.push(`${h}h`);
-                            if (m) parts.push(`${m}m`);
-                            if (!parts.length) parts.push(`${s}s`);
-                            return parts.join(' ');
-                          };
                           return (
                             <Alert severity="info" sx={{ mb: 2 }}>
-                              System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {pct}% — Uptime: {fmtDur(uptime)} of {fmtDur(windowSec)} window.
+                              System is in warm-up; sliding windows may not reflect steady-state yet. Progress: {pct}% — Uptime: {formatDuration(uptime)} of {formatDuration(windowSec)} window.
                             </Alert>
                           );
                         })()}
@@ -1012,41 +981,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   {showTestRaw ? 'HIDE RAW JSON' : 'SHOW RAW JSON'}
                 </Button>
                 {/* Right-side controls: wrap below on small screens */}
-                <Box sx={{
-                  display: 'flex', alignItems: 'center', gap: 1,
-                  flexBasis: { xs: '100%', sm: 'auto' },
-                  flexGrow: { xs: 1, sm: 0 },
-                  justifyContent: { xs: 'flex-start', sm: 'flex-end' },
-                  ml: { sm: 'auto' },
-                  pt: 1,
-                  pb: 0.5
-                }}>
-                  <TextField
-                    size="small"
-                    type="number"
-                    label="Raw JSON limit (bytes)"
-                    value={rawLimitInput}
-                    onChange={(e)=>{ setRawLimitInput(e.target.value); }}
-                    onKeyDown={(e)=>{ if ((e as any).key === 'Enter') {
-                      const v = Number((rawLimitInput || '').trim());
-                      const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                      setRawJsonMaxBytesOverride(clamped);
-                      setRawJsonMaxBytes(clamped);
-                      if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
-                      if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                    } }}
-                    inputProps={{ min: RAW_JSON_MIN_BYTES, max: RAW_JSON_MAX_BYTES, step: 256 }}
-                    sx={{ minWidth: { xs: 160, sm: 210 } }}
-                  />
-                  <Button size="small" variant="outlined" onClick={()=>{
-                    const v = Number((rawLimitInput || '').trim());
-                    const clamped = Math.max(RAW_JSON_MIN_BYTES, Math.min(RAW_JSON_MAX_BYTES, Number.isFinite(v) ? v : RAW_JSON_MIN_BYTES));
-                    setRawJsonMaxBytesOverride(clamped);
-                    setRawJsonMaxBytes(clamped);
-                    if (adminRawPreviewFull) setAdminRawPreview(applyPreviewLimit(adminRawPreviewFull, clamped));
-                    if (testRawPreviewFull) setTestRawPreview(applyPreviewLimit(testRawPreviewFull, clamped));
-                  }}>Apply</Button>
-                </Box>
+                <RawLimitControls />
               </Stack>
               {showTestRaw && (
                 <TextField
@@ -1054,7 +989,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
                   fullWidth
                   multiline
                   minRows={8}
-                  InputProps={{ readOnly: true }}
+                  slotProps={{ input: { readOnly: true } }}
                   sx={{ mt:1, '& .MuiInputBase-input': { fontFamily:'monospace', fontSize:12 } }}
                 />
               )}
