@@ -18,7 +18,7 @@ const CollapsibleFormSection = ({
   children, 
   defaultExpanded = false,
   required = false
-}: CollapsibleFormSectionProps): JSX.Element => {
+}: CollapsibleFormSectionProps): React.ReactElement => {
   // Determine a per-user, per-page storage key for this section
   const username = useMemo(() => {
     try {

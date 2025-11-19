@@ -1610,7 +1610,16 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   };
 
   const downloadBlob = (content: Blob | string | Uint8Array, mime: string, filename: string) => {
-    const blob = content instanceof Blob ? content : new Blob([content], { type: mime });
+    // Normalize content to a BlobPart compatible with DOM typings
+    // Note: Creating a fresh Uint8Array ensures its generic parameter resolves to ArrayBuffer (not ArrayBufferLike),
+    // which satisfies BlobPart typings across TS/lib.dom versions.
+    const blob = content instanceof Blob
+      ? content
+      : new Blob([
+          typeof content === 'string'
+            ? content
+            : (content instanceof Uint8Array ? new Uint8Array(content) : String(content))
+        ], { type: mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;

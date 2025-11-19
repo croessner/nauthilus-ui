@@ -36,7 +36,7 @@ const PasswordField = ({
   className,
   margin,
   infoTitle,
-}: PasswordFieldProps): JSX.Element => {
+}: PasswordFieldProps): React.ReactElement => {
   const [showPassword, setShowPassword] = useState(false);
 
   const handleClickShowPassword = () => {
