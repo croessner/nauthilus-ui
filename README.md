@@ -42,7 +42,7 @@ ui/
 
 ### Prerequisites
 
-- Go 1.22 or higher (for the API server)
+- Go 1.25 or higher (for the API server)
 - Node.js 14.x or higher (for building the React frontend)
 - npm 6.x or higher (for building the React frontend)
 - MongoDB 4.x or higher
@@ -550,7 +550,7 @@ ui/
 
 ### Prerequisites
 
-- Go 1.22 or higher (for the API server)
+- Go 1.25 or higher (for the API server)
 - Node.js 14.x or higher (for building the React frontend)
 - npm 6.x or higher (for building the React frontend)
 - MongoDB 4.x or higher
