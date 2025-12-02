@@ -70,6 +70,25 @@ const RedisConfigSchema = Yup.object().shape({
       .min(0, 'Must be at least 0')
       .nullable(),
 
+    // Account local cache
+    account_local_cache: Yup.object().shape({
+      enabled: Yup.boolean(),
+      ttl: Yup.string().matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 30s, 5m, 1h').nullable(),
+      shards: Yup.number().min(1, 'Must be at least 1').max(1024, 'Must be at most 1024').nullable(),
+      cleanup_interval: Yup.string().matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 5s, 1m').nullable(),
+      max_items: Yup.number().min(0, 'Must be at least 0').nullable(),
+    }),
+
+    // Batching
+    batching: Yup.object().shape({
+      enabled: Yup.boolean(),
+      max_batch_size: Yup.number().min(2, 'Must be at least 2').max(1024, 'Must be at most 1024').nullable(),
+      max_wait: Yup.string().matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 2ms, 10ms, 1s').nullable(),
+      queue_capacity: Yup.number().min(0, 'Must be at least 0').nullable(),
+      skip_commands: Yup.array().of(Yup.string().matches(/^[\w:]+$/i, 'Use simple command names').nullable()).nullable(),
+      pipeline_timeout: Yup.string().matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 100ms, 1s').nullable(),
+    }),
+
     // TLS configuration
     tls: Yup.object().shape({
       enabled: Yup.boolean(),
@@ -332,6 +351,25 @@ const RedisConfig = (): React.JSX.Element | null => {
         read_timeout: config.server.redis.cluster?.read_timeout || '3s',
         write_timeout: config.server.redis.cluster?.write_timeout || '3s',
       },
+
+      // Account local cache
+      account_local_cache: {
+        enabled: config.server.redis.account_local_cache?.enabled || false,
+        ttl: config.server.redis.account_local_cache?.ttl || '',
+        shards: config.server.redis.account_local_cache?.shards ?? undefined,
+        cleanup_interval: config.server.redis.account_local_cache?.cleanup_interval || '',
+        max_items: config.server.redis.account_local_cache?.max_items ?? undefined,
+      },
+
+      // Batching
+      batching: {
+        enabled: config.server.redis.batching?.enabled || false,
+        max_batch_size: config.server.redis.batching?.max_batch_size ?? undefined,
+        max_wait: config.server.redis.batching?.max_wait || '',
+        queue_capacity: config.server.redis.batching?.queue_capacity ?? undefined,
+        skip_commands: config.server.redis.batching?.skip_commands?.length ? config.server.redis.batching.skip_commands : [''],
+        pipeline_timeout: config.server.redis.batching?.pipeline_timeout || '',
+      },
     },
   };
 
@@ -362,6 +400,30 @@ const RedisConfig = (): React.JSX.Element | null => {
         const mr = values.redis.max_retries;
         // mr is narrowed to a number by the guard above; Number(...) is a no-op for numbers
         filteredRedis.max_retries = Number(mr);
+      }
+
+      // Account local cache
+      if (values.redis.account_local_cache) {
+        const alc: any = { enabled: Boolean(values.redis.account_local_cache.enabled) };
+        if (values.redis.account_local_cache.ttl) alc.ttl = values.redis.account_local_cache.ttl;
+        if (typeof values.redis.account_local_cache.shards === 'number') alc.shards = values.redis.account_local_cache.shards;
+        if (values.redis.account_local_cache.cleanup_interval) alc.cleanup_interval = values.redis.account_local_cache.cleanup_interval;
+        if (typeof values.redis.account_local_cache.max_items === 'number') alc.max_items = values.redis.account_local_cache.max_items;
+        filteredRedis.account_local_cache = alc;
+      }
+
+      // Batching
+      if (values.redis.batching) {
+        const bt: any = { enabled: Boolean(values.redis.batching.enabled) };
+        if (typeof values.redis.batching.max_batch_size === 'number') bt.max_batch_size = values.redis.batching.max_batch_size;
+        if (values.redis.batching.max_wait) bt.max_wait = values.redis.batching.max_wait;
+        if (typeof values.redis.batching.queue_capacity === 'number') bt.queue_capacity = values.redis.batching.queue_capacity;
+        if (Array.isArray(values.redis.batching.skip_commands)) {
+          const sc = values.redis.batching.skip_commands.filter((s) => (s || '').trim() !== '');
+          if (sc.length) bt.skip_commands = sc;
+        }
+        if (values.redis.batching.pipeline_timeout) bt.pipeline_timeout = values.redis.batching.pipeline_timeout;
+        filteredRedis.batching = bt;
       }
 
       // Add configuration specific to the selected setup type
@@ -563,6 +625,215 @@ const RedisConfig = (): React.JSX.Element | null => {
             </Grid>
           </FormSection>
 
+          <CollapsibleFormSection
+            title="Account Local Cache"
+            description="Configure in-process cache for username → account mapping."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, sm: 12, md: 12 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.account_local_cache?.enabled)}
+                      onChange={(e) => {
+                        void setFieldValue('redis.account_local_cache.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Enabled <InfoTooltip title="Toggle the in-process account cache." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.account_local_cache.ttl"
+                  label="TTL"
+                  placeholder="e.g., 5m"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Entry time-to-live, e.g., 5m, 1h. Empty to use server default." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.account_local_cache.ttl') && Boolean(getIn(errors, 'redis.account_local_cache.ttl'))}
+                  helperText={getIn(touched, 'redis.account_local_cache.ttl') && getIn(errors, 'redis.account_local_cache.ttl')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  type="number"
+                  name="redis.account_local_cache.shards"
+                  label="Shards"
+                  placeholder="e.g., 256"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Number of hash shards (1–1024)." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.account_local_cache.shards') && Boolean(getIn(errors, 'redis.account_local_cache.shards'))}
+                  helperText={getIn(touched, 'redis.account_local_cache.shards') && getIn(errors, 'redis.account_local_cache.shards')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.account_local_cache.cleanup_interval"
+                  label="Cleanup Interval"
+                  placeholder="e.g., 30s"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Cleanup sweep interval." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.account_local_cache.cleanup_interval') && Boolean(getIn(errors, 'redis.account_local_cache.cleanup_interval'))}
+                  helperText={getIn(touched, 'redis.account_local_cache.cleanup_interval') && getIn(errors, 'redis.account_local_cache.cleanup_interval')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  type="number"
+                  name="redis.account_local_cache.max_items"
+                  label="Max Items"
+                  placeholder="0 = unlimited"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Upper bound on items; 0 for unlimited." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.account_local_cache.max_items') && Boolean(getIn(errors, 'redis.account_local_cache.max_items'))}
+                  helperText={getIn(touched, 'redis.account_local_cache.max_items') && getIn(errors, 'redis.account_local_cache.max_items')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+            </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
+            title="Redis Batching"
+            description="Client-side command batching to reduce Redis round-trips."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, sm: 12, md: 12 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.batching?.enabled)}
+                      onChange={(e) => {
+                        void setFieldValue('redis.batching.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Enabled <InfoTooltip title="Enable client-side command batching." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  type="number"
+                  name="redis.batching.max_batch_size"
+                  label="Max Batch Size"
+                  placeholder="e.g., 16"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Upper bound of commands in a single pipeline (2–1024)." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.batching.max_batch_size') && Boolean(getIn(errors, 'redis.batching.max_batch_size'))}
+                  helperText={getIn(touched, 'redis.batching.max_batch_size') && getIn(errors, 'redis.batching.max_batch_size')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.batching.max_wait"
+                  label="Max Wait"
+                  placeholder="e.g., 2ms"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Max time to queue before flushing; 0 disables timer." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.batching.max_wait') && Boolean(getIn(errors, 'redis.batching.max_wait'))}
+                  helperText={getIn(touched, 'redis.batching.max_wait') && getIn(errors, 'redis.batching.max_wait')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  type="number"
+                  name="redis.batching.queue_capacity"
+                  label="Queue Capacity"
+                  placeholder="e.g., 8192"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Internal queue size; 0 for unbuffered." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.batching.queue_capacity') && Boolean(getIn(errors, 'redis.batching.queue_capacity'))}
+                  helperText={getIn(touched, 'redis.batching.queue_capacity') && getIn(errors, 'redis.batching.queue_capacity')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="subtitle1" gutterBottom>Skip Commands</Typography>
+                <FieldArray name="redis.batching.skip_commands">
+                  {({ push, remove }) => (
+                    <Box>
+                      {values.redis.batching?.skip_commands?.map((cmd, idx) => (
+                        <Box key={idx} display="flex" alignItems="center" gap={1} mb={1}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name={`redis.batching.skip_commands.${idx}`}
+                            placeholder="e.g., blpop"
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                          <IconButton aria-label="delete" onClick={() => { remove(idx); setHasUnsavedChanges(true); }}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      ))}
+                      <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={() => { push(''); setHasUnsavedChanges(true); }}>
+                        Add Command
+                      </Button>
+                    </Box>
+                  )}
+                </FieldArray>
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="redis.batching.pipeline_timeout"
+                  label="Pipeline Timeout"
+                  placeholder="e.g., 500ms"
+                  InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Max time to wait for a pipeline send." /></InputAdornment>) }}
+                  error={getIn(touched, 'redis.batching.pipeline_timeout') && Boolean(getIn(errors, 'redis.batching.pipeline_timeout'))}
+                  helperText={getIn(touched, 'redis.batching.pipeline_timeout') && getIn(errors, 'redis.batching.pipeline_timeout')}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+            </Grid>
+          </CollapsibleFormSection>
+
           {/* Connection & Timeouts */}
           <CollapsibleFormSection
             title="Redis Connection & Timeouts"
@@ -654,7 +925,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     <Switch
                       checked={Boolean(values.redis.pool_fifo)}
                       onChange={(e) => {
-                        setFieldValue('redis.pool_fifo', e.target.checked)
+                        void setFieldValue('redis.pool_fifo', e.target.checked)
                           .then(() => setHasUnsavedChanges(true));
                       }}
                       name="redis.pool_fifo"
@@ -720,7 +991,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                     <Switch
                       checked={values.redis.tls?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('redis.tls.enabled', e.target.checked)
+                        void setFieldValue('redis.tls.enabled', e.target.checked)
                             .then(() => setHasUnsavedChanges(true));
                       }}
                       name="redis.tls.enabled"
@@ -773,7 +1044,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                         <Switch
                           checked={values.redis.tls?.skip_verify || false}
                           onChange={(e) => {
-                            setFieldValue('redis.tls.skip_verify', e.target.checked)
+                            void setFieldValue('redis.tls.skip_verify', e.target.checked)
                                 .then(() => setHasUnsavedChanges(true));
                           }}
                           name="redis.tls.skip_verify"
@@ -1156,7 +1427,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                       <Switch
                         checked={values.redis.cluster?.route_by_latency || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.route_by_latency', e.target.checked)
+                          void setFieldValue('redis.cluster.route_by_latency', e.target.checked)
                               .then(() => setHasUnsavedChanges(true));
                         }}
                         name="redis.cluster.route_by_latency"
@@ -1171,7 +1442,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                       <Switch
                         checked={values.redis.cluster?.route_randomly || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.route_randomly', e.target.checked)
+                          void setFieldValue('redis.cluster.route_randomly', e.target.checked)
                               .then(() => setHasUnsavedChanges(true));
                         }}
                         name="redis.cluster.route_randomly"
@@ -1186,7 +1457,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                       <Switch
                         checked={values.redis.cluster?.route_reads_to_replicas || false}
                         onChange={(e) => {
-                          setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked)
+                          void setFieldValue('redis.cluster.route_reads_to_replicas', e.target.checked)
                               .then(() => setHasUnsavedChanges(true));
                         }}
                         name="redis.cluster.route_reads_to_replicas"

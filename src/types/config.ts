@@ -26,6 +26,8 @@ export interface ServerConfig {
   http_client?: HTTPClientConfig;
   compression?: CompressionConfig;
   keep_alive?: KeepAliveConfig;
+  // New: server.middlewares (feature switches for HTTP middlewares)
+  middlewares?: MiddlewaresConfig;
   timeouts?: TimeoutsConfig;
   dedup?: DeDupConfig;
 }
@@ -116,6 +118,10 @@ export interface RedisConfig {
   replica?: ReplicaConfig;
   sentinels?: SentinelsConfig;
   cluster?: ClusterConfig;
+  // New: server.redis.account_local_cache
+  account_local_cache?: AccountLocalCacheConfig;
+  // New: server.redis.batching
+  batching?: RedisBatchingConfig;
 }
 
 export interface MasterConfig {
@@ -147,6 +153,17 @@ export interface ClusterConfig {
   max_redirects?: number;
   read_timeout?: string;
   write_timeout?: string;
+}
+
+// Matches backend: ServerSection.Middlewares
+export interface MiddlewaresConfig {
+  logging?: boolean;
+  limit?: boolean;
+  recovery?: boolean;
+  trusted_proxies?: boolean;
+  request_decompression?: boolean;
+  response_compression?: boolean;
+  metrics?: boolean;
 }
 
 export interface MasterUserConfig {
@@ -235,6 +252,25 @@ export interface TimeoutsConfig {
 
 export interface DeDupConfig {
   in_process_enabled?: boolean;
+}
+
+// Matches backend: AccountLocalCache
+export interface AccountLocalCacheConfig {
+  enabled?: boolean;
+  ttl?: string; // duration string, e.g., "5m"
+  shards?: number;
+  cleanup_interval?: string; // duration string
+  max_items?: number;
+}
+
+// Matches backend: RedisBatching
+export interface RedisBatchingConfig {
+  enabled?: boolean;
+  max_batch_size?: number;
+  max_wait?: string; // duration string, e.g., "2ms"
+  queue_capacity?: number;
+  skip_commands?: string[];
+  pipeline_timeout?: string; // duration string
 }
 
 // LDAP Configuration

@@ -162,6 +162,17 @@ const ServerConfigSchema = Yup.object().shape({
     singleflight_work: Yup.string(),
     lua_backend: Yup.string(),
   }),
+
+  // Middlewares validation
+  middlewares: Yup.object().shape({
+    logging: Yup.boolean(),
+    limit: Yup.boolean(),
+    recovery: Yup.boolean(),
+    trusted_proxies: Yup.boolean(),
+    request_decompression: Yup.boolean(),
+    response_compression: Yup.boolean(),
+    metrics: Yup.boolean(),
+  }),
 });
 
 const ServerConfig = (): React.JSX.Element | null => {
@@ -274,6 +285,17 @@ const ServerConfig = (): React.JSX.Element | null => {
       lua_backend: config.server.timeouts?.lua_backend || '5s',
     },
 
+    // Initialize middlewares configuration (default to true when undefined)
+    middlewares: {
+      logging: config.server.middlewares?.logging ?? true,
+      limit: config.server.middlewares?.limit ?? true,
+      recovery: config.server.middlewares?.recovery ?? true,
+      trusted_proxies: config.server.middlewares?.trusted_proxies ?? true,
+      request_decompression: config.server.middlewares?.request_decompression ?? true,
+      response_compression: config.server.middlewares?.response_compression ?? true,
+      metrics: config.server.middlewares?.metrics ?? true,
+    },
+
     // Initialize HTTP client configuration
     http_client: {
       max_connections_per_host: config.server.http_client?.max_connections_per_host || 100,
@@ -336,6 +358,7 @@ const ServerConfig = (): React.JSX.Element | null => {
         master_user: values.master_user,
         dedup: values.dedup,
         timeouts: values.timeouts,
+        middlewares: values.middlewares,
         // prometheus_timer is now in MonitoringConfig
       };
       await updateConfigSection('server', updatedValues);
@@ -471,6 +494,113 @@ const ServerConfig = (): React.JSX.Element | null => {
               </Grid>
             </Grid>
           </FormSection>
+
+          <CollapsibleFormSection
+            title="Middlewares"
+            description="Enable or disable HTTP middlewares. Unset values default to enabled to preserve legacy behavior."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.logging)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.logging', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Logging <InfoTooltip title="Request/response logging middleware." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.limit)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.limit', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Limit <InfoTooltip title="Concurrency/requests limiting middleware." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.recovery)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.recovery', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Recovery <InfoTooltip title="Panic recovery middleware." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.trusted_proxies)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.trusted_proxies', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Trusted Proxies <InfoTooltip title="Honor X-Forwarded-* from trusted proxies." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.request_decompression)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.request_decompression', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Request Decompression <InfoTooltip title="Accept compressed request bodies." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.response_compression)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.response_compression', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Response Compression <InfoTooltip title="Compress HTTP responses (gzip/zstd/br as configured)." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.metrics)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.metrics', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Metrics <InfoTooltip title="Prometheus metrics middleware." /></Typography>}
+                />
+              </Grid>
+            </Grid>
+          </CollapsibleFormSection>
 
           <CollapsibleFormSection
             title="TLS Configuration"
