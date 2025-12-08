@@ -584,7 +584,12 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     if (!hasData) return; // wait until runtimeHooks deliver data
     const ui = cq?.ui || {};
     if (ui && typeof ui === 'object') {
-      if (ui.action) setAction(ui.action as Action);
+      // Default UX: on first load or revisit, prefer "recent" over persisted "raw_sql"
+      // Rationale: raw_sql is an ad-hoc mode; users expect the page to open on the overview (recent)
+      const persistedAction = ui.action as Action | undefined;
+      if (persistedAction && persistedAction !== 'raw_sql') {
+        setAction(persistedAction);
+      }
       if (typeof ui.username === 'string') setUsername(ui.username);
       if (typeof ui.account === 'string') setAccount(ui.account);
       if (typeof ui.ip === 'string') setIp(ui.ip);
