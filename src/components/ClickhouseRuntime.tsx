@@ -2832,10 +2832,21 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         ) : (
           <Box sx={{ opacity: changePulse && !hasAnyExpanded ? 0.6 : 1, transition: 'opacity 120ms ease' }}>
             <Box sx={{ overflowX:'auto' }}>
-              <table style={{ width:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
+              <table style={{ width:'max-content', minWidth:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
                   <tr>
-                    <th style={{ width:32, minWidth:32, maxWidth:32 }} />
+                    <th
+                      style={{
+                        width: 48,
+                        minWidth: 32,
+                        maxWidth: 48,
+                        position: 'sticky',
+                        left: 0,
+                        zIndex: 2,
+                        background: theme.palette.background.paper,
+                        boxShadow: `inset -1px 0 0 ${theme.palette.divider}`
+                      }}
+                    />
                     {selectedFields.map((h, idx) => {
                       const active = sortBy === h;
                       const indicator = active ? (sortDir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -2924,7 +2935,22 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           ref={el => { rowRefs.current[k] = el; }}
                           style={{ color: isDimmed ? theme.palette.text.disabled : undefined, transition: 'color 120ms linear' }}
                         >
-                          <td style={{ padding:'0 4px', borderBottom:`1px solid ${theme.palette.divider}`, textAlign:'center', verticalAlign:'middle' }}>
+                          <td
+                            style={{
+                              width: 48,
+                              minWidth: 32,
+                              maxWidth: 48,
+                              position: 'sticky',
+                              left: 0,
+                              zIndex: 1,
+                              background: theme.palette.background.paper,
+                              padding: '0 4px',
+                              borderBottom: `1px solid ${theme.palette.divider}`,
+                              textAlign: 'center',
+                              verticalAlign: 'middle',
+                              boxShadow: `inset -1px 0 0 ${theme.palette.divider}`
+                            }}
+                          >
                             <IconButton size="small" onClick={()=>toggleExpanded(k, r)} aria-label="Expand row" aria-expanded={expanded} sx={{ transition:'transform 0.2s', transform: expanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>
                               <ChevronRightIcon fontSize="small" />
                             </IconButton>
@@ -2945,23 +2971,56 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                           })}
                         </tr>
                         <tr>
-                          <td style={{ borderBottom: expanded ? `1px solid ${theme.palette.divider}` : 'none' }} />
+                          <td
+                            style={{
+                              width: 48,
+                              minWidth: 32,
+                              maxWidth: 48,
+                              position: 'sticky',
+                              left: 0,
+                              zIndex: 1,
+                              background: theme.palette.background.paper,
+                              borderBottom: expanded ? `1px solid ${theme.palette.divider}` : 'none',
+                              boxShadow: `inset -1px 0 0 ${theme.palette.divider}`
+                            }}
+                          />
                           <td colSpan={selectedFields.length} style={{ padding:'0 8px', borderBottom: expanded ? `1px solid ${theme.palette.divider}` : 'none' }}>
                             <Collapse in={expanded} timeout="auto" unmountOnExit>
                               <Box sx={{ p:1.25, bgcolor:'rgba(25,118,210,0.06)', border:'1px solid', borderColor:'primary.light', borderRadius:1 }}>
-                                <Grid container spacing={0.5}>
-                                  {selectedFields.filter(kf => !isEmptyValue(((expandedSnapshotsRef.current.get(k) || r) as any)?.[kf])).map(kf => {
-                                    const src = (expandedSnapshotsRef.current.get(k) || r) as any;
-                                    const rawV = src?.[kf];
-                                    const textV = kf === 'ts' ? formatTsForZone(rawV, tsTimeZone) : (typeof rawV === 'object' ? JSON.stringify(rawV) : String(rawV));
-                                    return (
-                                      <React.Fragment key={kf}>
-                                        <Grid size={{ xs: 1, sm: 3, md: 2 }}><Typography variant="caption" sx={{ fontWeight:600, color:'text.secondary' }}>{kf}</Typography></Grid>
-                                        <Grid size={{ xs: 11, sm: 9, md: 10 }}><Typography variant="body2" sx={{ fontFamily:'monospace', wordBreak:'break-word' }}>{textV}</Typography></Grid>
-                                      </React.Fragment>
-                                    );
-                                  })}
-                                </Grid>
+                                {/* Use an intrinsic two-column grid so that values stay right next to keys regardless of overall table width */}
+                                <Box
+                                  sx={{
+                                    display: 'grid',
+                                    gridTemplateColumns: 'max-content 1fr',
+                                    columnGap: 1,
+                                    rowGap: 0.5,
+                                    alignItems: 'start',
+                                    width: 'fit-content',
+                                    maxWidth: '100%'
+                                  }}
+                                >
+                                  {selectedFields
+                                    .filter(kf => !isEmptyValue(((expandedSnapshotsRef.current.get(k) || r) as any)?.[kf]))
+                                    .flatMap(kf => {
+                                      const src = (expandedSnapshotsRef.current.get(k) || r) as any;
+                                      const rawV = src?.[kf];
+                                      const textV = kf === 'ts'
+                                        ? formatTsForZone(rawV, tsTimeZone)
+                                        : (typeof rawV === 'object' ? JSON.stringify(rawV) : String(rawV));
+                                      return [
+                                        (
+                                          <Typography key={`${k}-${kf}-key`} variant="caption" sx={{ fontWeight: 600, color: 'text.secondary', pr: 1 }}>
+                                            {kf}
+                                          </Typography>
+                                        ),
+                                        (
+                                          <Typography key={`${k}-${kf}-val`} variant="body2" sx={{ fontFamily: 'monospace', wordBreak: 'break-word', overflowWrap: 'anywhere' }}>
+                                            {textV}
+                                          </Typography>
+                                        )
+                                      ];
+                                    })}
+                                </Box>
                               </Box>
                             </Collapse>
                           </td>
