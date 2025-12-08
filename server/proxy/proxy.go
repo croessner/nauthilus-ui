@@ -591,10 +591,14 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 	router.GET("/proxy/cache/flush", h.CacheFlushProxy)
 	router.POST("/proxy/cache/flush", h.CacheFlushProxy)
 	router.DELETE("/proxy/cache/flush", h.CacheFlushProxy)
+	// Async variant for cache flush
+	router.DELETE("/proxy/cache/flush/async", h.CacheFlushAsyncProxy)
 
 	router.GET("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
 	router.POST("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
 	router.DELETE("/proxy/bruteforce/flush", h.BruteforceFlushProxy)
+	// Async variant for brute-force flush
+	router.DELETE("/proxy/bruteforce/flush/async", h.BruteforceFlushAsyncProxy)
 
 	router.GET("/proxy/config/load", h.ConfigLoadProxy)
 	router.POST("/proxy/config/load", h.ConfigLoadProxy)
@@ -617,6 +621,8 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 	// IPAPI capability and lookup routes
 	router.GET("/proxy/ipapi/status", h.IpapiStatus)
 	router.GET("/proxy/ipapi/lookup", h.IpapiLookupProxy)
+	// Async job status polling
+	router.GET("/proxy/async/:jobId/status", h.AsyncJobStatusProxy)
 }
 
 // PingProxy handles the /proxy/ping endpoint
@@ -659,6 +665,18 @@ func (h *ProxyHandler) CacheFlushProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath: "/api/v1/cache/flush",
 		LogEndpoint:  "/proxy/cache/flush",
+		RequiresAuth: true,
+		ContentType:  "application/json",
+	}
+
+	h.handleProxyRequest(ctx, config)
+}
+
+// CacheFlushAsyncProxy handles the /proxy/cache/flush/async endpoint
+func (h *ProxyHandler) CacheFlushAsyncProxy(ctx *gin.Context) {
+	config := ProxyConfig{
+		EndpointPath: "/api/v1/cache/flush/async",
+		LogEndpoint:  "/proxy/cache/flush/async",
 		RequiresAuth: true,
 		ContentType:  "application/json",
 	}
@@ -756,6 +774,38 @@ func (h *ProxyHandler) BruteforceFlushProxy(ctx *gin.Context) {
 		LogEndpoint:  "/proxy/bruteforce/flush",
 		RequiresAuth: true,
 		ContentType:  "application/json",
+	}
+
+	h.handleProxyRequest(ctx, config)
+}
+
+// BruteforceFlushAsyncProxy handles the /proxy/bruteforce/flush/async endpoint
+func (h *ProxyHandler) BruteforceFlushAsyncProxy(ctx *gin.Context) {
+	config := ProxyConfig{
+		EndpointPath: "/api/v1/bruteforce/flush/async",
+		LogEndpoint:  "/proxy/bruteforce/flush/async",
+		RequiresAuth: true,
+		ContentType:  "application/json",
+	}
+
+	h.handleProxyRequest(ctx, config)
+}
+
+// AsyncJobStatusProxy handles the /proxy/async/:jobId/status endpoint
+func (h *ProxyHandler) AsyncJobStatusProxy(ctx *gin.Context) {
+	jobID := ctx.Param("jobId")
+	if jobID == "" {
+		ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "jobId is required"})
+		return
+	}
+
+	// Backend expects /api/v1/async/jobs/:jobId (no trailing /status segment)
+	endpoint := "/api/v1/async/jobs/" + jobID
+
+	config := ProxyConfig{
+		EndpointPath: endpoint,
+		LogEndpoint:  "/proxy/async/:jobId/status",
+		RequiresAuth: true,
 	}
 
 	h.handleProxyRequest(ctx, config)

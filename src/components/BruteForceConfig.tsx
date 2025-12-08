@@ -40,6 +40,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import InfoTooltip from './common/InfoTooltip';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
+import { startAsyncJob, awaitJob, AsyncJobStatusResponse } from '../utils/asyncJobs';
 
 // Helper function to convert time period strings (like "1h", "30m") to seconds
 const convertPeriodToSeconds = (period: string): number => {
@@ -351,7 +352,7 @@ const BruteForceConfig: React.FC = () => {
     })();
   }, [config, currentProfileName, loadRuntimeSettings, checkConnection, getRuntimeConnection]);
 
-  // Function to free user by account
+  // Function to free user by account (async job aware)
   const freeUserByAccount = async (connectionConfig: any, username: string) => {
     if (!connectionConfig.backend_url) {
       setNotification({
@@ -365,39 +366,23 @@ const BruteForceConfig: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Prepare authentication parameters for the proxy
-      const { authType, authValue } = prepareAuthParams(connectionConfig);
+      // Start async job
+      const { jobId } = await startAsyncJob('/proxy/cache/flush/async', connectionConfig, 'DELETE', { user: username });
 
-      // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/cache/flush', getProxyOrigin());
-      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
+      // Poll until completion
+      const status: AsyncJobStatusResponse = await awaitJob(jobId, { connectionConfig });
 
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-
-      const response = await authenticatedFetch(proxyUrl.toString(), {
-        method: 'DELETE',
-        body: JSON.stringify({ user: username }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await extractErrorMessage(response);
-        console.error('Error freeing user by account:', errorMessage);
-        setNotification({
-          open: true,
-          message: `Failed to free user ${username}: ${errorMessage}`,
-          severity: 'error'
-        });
+      if (status.status === 'ERROR') {
+        const msg = status.error || 'Unknown error';
+        setNotification({ open: true, message: `Failed to free user ${username}: ${msg}`, severity: 'error' });
         return;
       }
 
-      const json = await response.json();
-      const { text, note } = formatResponseForDisplay(json);
+      const count = typeof status.resultCount === 'string' ? parseInt(status.resultCount as string, 10) : (status.resultCount || 0);
+      const text = `Job ${jobId} finished. Removed entries: ${isNaN(count as number) ? 'n/a' : count}`;
       setResultDialogTitle('Cache Flush Result');
       setResultDialogText(text);
-      setResultDialogNote(note);
+      setResultDialogNote('The operation completed successfully.');
       setResultDialogOpen(true);
 
       setNotification({
@@ -421,7 +406,7 @@ const BruteForceConfig: React.FC = () => {
     }
   };
 
-  // Function to free user by IP address
+  // Function to free user by IP address (async job aware)
   const freeUserByIp = async (connectionConfig: any, ipAddress: string, ruleName: string, protocol?: string, oidcCid?: string) => {
     if (!connectionConfig.backend_url) {
       setNotification({
@@ -435,54 +420,31 @@ const BruteForceConfig: React.FC = () => {
     setIsProcessing(true);
 
     try {
-      // Prepare authentication parameters for the proxy
-      const { authType, authValue } = prepareAuthParams(connectionConfig);
-
-      // Use the proxy endpoint to make the request server-side
-      const proxyUrl = new URL('/proxy/bruteforce/flush', getProxyOrigin());
-      proxyUrl.searchParams.append('url', connectionConfig.backend_url);
-
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-
       // Prepare the request body
       const requestBody: any = {
         ip_address: ipAddress,
-        rule_name: ruleName
+        rule_name: ruleName,
       };
+      if (protocol) requestBody.protocol = protocol;
+      if (oidcCid) requestBody.oidc_cid = oidcCid;
 
-      // Add optional parameters if provided
-      if (protocol) {
-        requestBody.protocol = protocol;
-      }
+      // Start async job
+      const { jobId } = await startAsyncJob('/proxy/bruteforce/flush/async', connectionConfig, 'DELETE', requestBody);
 
-      if (oidcCid) {
-        requestBody.oidc_cid = oidcCid;
-      }
+      // Poll until completion
+      const status: AsyncJobStatusResponse = await awaitJob(jobId, { connectionConfig });
 
-      const response = await authenticatedFetch(proxyUrl.toString(), {
-        method: 'DELETE',
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await extractErrorMessage(response);
-        console.error('Error freeing user by IP address:', errorMessage);
-        setNotification({
-          open: true,
-          message: `Failed to free IP ${ipAddress}: ${errorMessage}`,
-          severity: 'error'
-        });
+      if (status.status === 'ERROR') {
+        const msg = status.error || 'Unknown error';
+        setNotification({ open: true, message: `Failed to free IP ${ipAddress}: ${msg}`, severity: 'error' });
         return;
       }
 
-      const json = await response.json();
-      const { text, note } = formatResponseForDisplay(json);
+      const count = typeof status.resultCount === 'string' ? parseInt(status.resultCount as string, 10) : (status.resultCount || 0);
+      const text = `Job ${jobId} finished. Removed entries: ${isNaN(count as number) ? 'n/a' : count}`;
       setResultDialogTitle('Brute Force Flush Result');
       setResultDialogText(text);
-      setResultDialogNote(note);
+      setResultDialogNote('The operation completed successfully.');
       setResultDialogOpen(true);
 
       setNotification({
