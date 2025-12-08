@@ -89,6 +89,25 @@ const RedisConfigSchema = Yup.object().shape({
       pipeline_timeout: Yup.string().matches(/^\d+(ms|s|m|h)$/i, 'Use duration like 100ms, 1s').nullable(),
     }),
 
+    // Client Tracking (RESP3 client-side caching)
+    client_tracking: Yup.object().shape({
+      enabled: Yup.boolean(),
+      bcast: Yup.boolean(),
+      noloop: Yup.boolean(),
+      opt_in: Yup.boolean(),
+      opt_out: Yup.boolean(),
+      prefixes: Yup.array()
+        .of(Yup.string().matches(/^\S*$/, 'No spaces allowed in prefix').nullable())
+        .nullable(),
+    }).test('optin-optout-exclusive', 'Opt-In and Opt-Out cannot be enabled at the same time', (ct: any) => {
+      if (!ct || !ct.enabled) return true;
+      return !(ct.opt_in && ct.opt_out);
+    }).test('bcast-prefix-exclusive', 'BCAST cannot be combined with PREFIX. Disable BCAST or remove prefixes.', (ct: any) => {
+      if (!ct || !ct.enabled) return true;
+      const hasPrefixes = Array.isArray(ct.prefixes) && ct.prefixes.filter((p: any) => (p || '').trim() !== '').length > 0;
+      return !(ct.bcast && hasPrefixes);
+    }),
+
     // TLS configuration
     tls: Yup.object().shape({
       enabled: Yup.boolean(),
@@ -370,6 +389,16 @@ const RedisConfig = (): React.JSX.Element | null => {
         skip_commands: config.server.redis.batching?.skip_commands?.length ? config.server.redis.batching.skip_commands : [''],
         pipeline_timeout: config.server.redis.batching?.pipeline_timeout || '',
       },
+
+      // Client Tracking
+      client_tracking: {
+        enabled: config.server.redis.client_tracking?.enabled || false,
+        bcast: config.server.redis.client_tracking?.bcast || false,
+        noloop: config.server.redis.client_tracking?.noloop || false,
+        opt_in: config.server.redis.client_tracking?.opt_in || false,
+        opt_out: config.server.redis.client_tracking?.opt_out || false,
+        prefixes: config.server.redis.client_tracking?.prefixes?.length ? config.server.redis.client_tracking.prefixes : [''],
+      },
     },
   };
 
@@ -424,6 +453,21 @@ const RedisConfig = (): React.JSX.Element | null => {
         }
         if (values.redis.batching.pipeline_timeout) bt.pipeline_timeout = values.redis.batching.pipeline_timeout;
         filteredRedis.batching = bt;
+      }
+
+      // Client Tracking
+      if (values.redis.client_tracking) {
+        const ctSrc = values.redis.client_tracking as any;
+        const ct: any = { enabled: Boolean(ctSrc.enabled) };
+        if (typeof ctSrc.bcast === 'boolean') ct.bcast = ctSrc.bcast;
+        if (typeof ctSrc.noloop === 'boolean') ct.noloop = ctSrc.noloop;
+        if (typeof ctSrc.opt_in === 'boolean') ct.opt_in = ctSrc.opt_in;
+        if (typeof ctSrc.opt_out === 'boolean') ct.opt_out = ctSrc.opt_out;
+        if (Array.isArray(ctSrc.prefixes)) {
+          const pf = ctSrc.prefixes.filter((p: any) => (p || '').trim() !== '');
+          if (pf.length) ct.prefixes = pf;
+        }
+        filteredRedis.client_tracking = ct;
       }
 
       // Add configuration specific to the selected setup type
@@ -715,6 +759,150 @@ const RedisConfig = (): React.JSX.Element | null => {
           </CollapsibleFormSection>
 
           <CollapsibleFormSection
+            title="Redis Client Tracking"
+            description="Enable RESP3 client-side caching via Redis CLIENT TRACKING. When enabled, read replies can be served from a per-connection cache, and Redis pushes invalidation messages whenever cached keys change. Requires Redis 6+ and RESP3. Choose the options below to balance cache hit rate, correctness, and network churn."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="body2" color="text.secondary" component="div" sx={{ mt: -1 }}>
+                  <strong>Guidance:</strong>
+                  <ul style={{ marginTop: 4, marginBottom: 0 }}>
+                    <li>Read-heavy workloads: use Default or Opt-Out with NoLoop for best hit rate.</li>
+                    <li>Mixed or correctness-sensitive paths: use Opt-In so only selected reads are cached (requires client to send <code>CACHING yes</code>).</li>
+                    <li>Many distinct/unpredictable keys: consider Broadcast (BCAST) + NoLoop; expect more invalidation traffic.</li>
+                    <li>Known key namespaces: prefer PREFIX filters to limit tracking to specific keyspaces (cannot be combined with BCAST).</li>
+                  </ul>
+                </Typography>
+              </Grid>
+              <Grid size={{ xs: 12 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.client_tracking?.enabled)}
+                      onChange={async (e) => {
+                        await setFieldValue('redis.client_tracking.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Enabled <InfoTooltip title="Turn on Redis CLIENT TRACKING for this server's Redis connections (Redis 6+, RESP3). The client keeps a per-connection read cache and receives server push invalidations when keys change." /></Typography>}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.client_tracking?.bcast)}
+                      onChange={async (e) => {
+                        const checked = e.target.checked;
+                        await setFieldValue('redis.client_tracking.bcast', checked);
+                        // BCAST cannot be combined with PREFIX; clear prefixes when enabling to avoid conflicts
+                        if (checked) {
+                          await setFieldValue('redis.client_tracking.prefixes', ['']);
+                        }
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Broadcast (BCAST) <InfoTooltip title="Broadcast mode: Redis sends invalidations for any key change, and the client drops notifications for keys it does not cache. Useful when you read many distinct/unpredictable keys. Increases network traffic. Incompatible with PREFIX filters." /></Typography>}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.client_tracking?.noloop)}
+                      onChange={async (e) => {
+                        await setFieldValue('redis.client_tracking.noloop', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>NoLoop <InfoTooltip title="Do not receive invalidations for writes issued by the same connection. Reduces churn after your own writes, but the cache may be briefly stale immediately after you write." /></Typography>}
+                />
+              </Grid>
+
+              <Grid size={{ xs: 12, sm: 12, md: 12 }}>
+                <FormControl component="fieldset">
+                  <FormLabel component="legend">Tracking Mode</FormLabel>
+                  <RadioGroup
+                    row
+                    value={values.redis.client_tracking?.opt_in ? 'opt_in' : values.redis.client_tracking?.opt_out ? 'opt_out' : 'default'}
+                    onChange={async (_e, v) => {
+                      if (v === 'opt_in') {
+                        await setFieldValue('redis.client_tracking.opt_in', true);
+                        await setFieldValue('redis.client_tracking.opt_out', false);
+                      } else if (v === 'opt_out') {
+                        await setFieldValue('redis.client_tracking.opt_in', false);
+                        await setFieldValue('redis.client_tracking.opt_out', true);
+                      } else {
+                        await setFieldValue('redis.client_tracking.opt_in', false);
+                        await setFieldValue('redis.client_tracking.opt_out', false);
+                      }
+                      setHasUnsavedChanges(true);
+                    }}
+                  >
+                    <FormControlLabel value="default" control={<Radio />} label={<Typography>Default <InfoTooltip title="Track all reads (neither OPTIN nor OPTOUT). Per-command CACHING hints are ignored. Choose when you want caching for all read commands and do not need per-command control." /></Typography>} />
+                    <FormControlLabel value="opt_in" control={<Radio />} label={<Typography>Opt-In <InfoTooltip title="Only track reads explicitly tagged with 'CACHING yes'. Good when most reads should not be cached or when you need tight control. Requires the client to send the CACHING modifier." /></Typography>} />
+                    <FormControlLabel value="opt_out" control={<Radio />} label={<Typography>Opt-Out <InfoTooltip title="Track reads by default, but allow opting out per-command with 'CACHING no'. Suited for read-heavy paths that occasionally require strict consistency." /></Typography>} />
+                  </RadioGroup>
+                  {getIn(errors, 'redis.client_tracking') && values.redis.client_tracking?.enabled && (
+                    <Typography color="error" variant="body2">{String(getIn(errors, 'redis.client_tracking'))}</Typography>
+                  )}
+                </FormControl>
+              </Grid>
+
+              <Grid size={{ xs: 12 }}>
+                <Typography variant="subtitle1" gutterBottom>
+                  Prefix Filters
+                  <InfoTooltip title="Limit tracking to specific key prefixes (Redis TRACKING PREFIX), e.g., 'nt:'. Reduces invalidations and memory overhead by focusing on known namespaces. Cannot be used together with BCAST." />
+                </Typography>
+                <FieldArray name="redis.client_tracking.prefixes">
+                  {({ push, remove }) => (
+                    <Box>
+                      {values.redis.client_tracking?.prefixes?.map((_pfx, idx) => (
+                        <Box key={idx} display="flex" alignItems="center" gap={1} mb={1}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            disabled={Boolean(values.redis.client_tracking?.bcast)}
+                            name={`redis.client_tracking.prefixes.${idx}`}
+                            placeholder="e.g., nt:"
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                          <IconButton aria-label="delete" disabled={Boolean(values.redis.client_tracking?.bcast)} onClick={() => { remove(idx); setHasUnsavedChanges(true); }}>
+                            <DeleteIcon />
+                          </IconButton>
+                        </Box>
+                      ))}
+                      <Button
+                        startIcon={<AddIcon />}
+                        variant="outlined"
+                        size="small"
+                        disabled={Boolean(values.redis.client_tracking?.bcast)}
+                        onClick={() => { push(''); setHasUnsavedChanges(true); }}
+                      >
+                        Add Prefix
+                      </Button>
+                      {Boolean(values.redis.client_tracking?.bcast) && (
+                        <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                          BCAST is enabled: prefix filters are disabled by Redis when BCAST is on.
+                        </Typography>
+                      )}
+                    </Box>
+                  )}
+                </FieldArray>
+              </Grid>
+            </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
             title="Redis Batching"
             description="Client-side command batching to reduce Redis round-trips."
             defaultExpanded={false}
@@ -790,7 +978,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                 <FieldArray name="redis.batching.skip_commands">
                   {({ push, remove }) => (
                     <Box>
-                      {values.redis.batching?.skip_commands?.map((cmd, idx) => (
+                      {values.redis.batching?.skip_commands?.map((_cmd, idx) => (
                         <Box key={idx} display="flex" alignItems="center" gap={1} mb={1}>
                           <Field
                             as={TextField}

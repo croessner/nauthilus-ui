@@ -122,6 +122,8 @@ export interface RedisConfig {
   account_local_cache?: AccountLocalCacheConfig;
   // New: server.redis.batching
   batching?: RedisBatchingConfig;
+  // New: server.redis.client_tracking
+  client_tracking?: RedisClientTrackingConfig;
 }
 
 export interface MasterConfig {
@@ -271,6 +273,16 @@ export interface RedisBatchingConfig {
   queue_capacity?: number;
   skip_commands?: string[];
   pipeline_timeout?: string; // duration string
+}
+
+// Matches backend: RedisClientTracking
+export interface RedisClientTrackingConfig {
+  enabled?: boolean;
+  bcast?: boolean;
+  noloop?: boolean;
+  opt_in?: boolean;
+  opt_out?: boolean;
+  prefixes?: string[];
 }
 
 // LDAP Configuration

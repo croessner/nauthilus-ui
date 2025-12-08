@@ -1587,6 +1587,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
+              {/*
               <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
@@ -1605,6 +1606,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
+              */}
               <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
@@ -1711,6 +1713,7 @@ const ServerConfig = (): React.JSX.Element | null => {
             </Grid>
           </CollapsibleFormSection>
 
+          {/*
           <CollapsibleFormSection
             title="De-duplication"
             description="Configure server-side request de-duplication (dedup)."
@@ -1737,6 +1740,7 @@ const ServerConfig = (): React.JSX.Element | null => {
               </Grid>
             </Grid>
           </CollapsibleFormSection>
+          */}
 
           <CollapsibleFormSection
             title="Log Configuration"
@@ -1808,6 +1812,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                     renderValue={(selected) => (Array.isArray(selected) ? selected.join(', ') : '')}
                   >
                     <MenuItem value="all">all</MenuItem>
+                    <MenuItem value="account">account</MenuItem>
                     <MenuItem value="auth">auth</MenuItem>
                     <MenuItem value="backend">backend</MenuItem>
                     <MenuItem value="brute_force">brute_force</MenuItem>
