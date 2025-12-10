@@ -94,6 +94,20 @@ export interface InsightsConfig {
   enable_pprof?: boolean;
   enable_block_profile?: boolean;
   monitor_connections?: boolean;
+  // New: tracing block
+  tracing?: TracingConfig;
+}
+
+export interface TracingConfig {
+  enabled?: boolean;
+  exporter?: 'otlphttp' | 'none';
+  endpoint?: string;
+  sampler_ratio?: number; // 0..1
+  service_name?: string;
+  propagators?: Array<'tracecontext' | 'baggage' | 'b3' | 'b3multi' | 'jaeger'>;
+  enable_redis?: boolean;
+  tls?: TLSConfig;
+  log_export_results?: boolean;
 }
 
 export interface RedisConfig {
@@ -124,6 +138,9 @@ export interface RedisConfig {
   batching?: RedisBatchingConfig;
   // New: server.redis.client_tracking
   client_tracking?: RedisClientTrackingConfig;
+  // New: feature flags
+  identity_enabled?: boolean;
+  maint_notifications_enabled?: boolean;
 }
 
 export interface MasterConfig {

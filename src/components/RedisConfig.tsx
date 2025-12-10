@@ -69,6 +69,9 @@ const RedisConfigSchema = Yup.object().shape({
       .transform((value, originalValue) => (originalValue === '' || originalValue === null ? undefined : value))
       .min(0, 'Must be at least 0')
       .nullable(),
+    // Feature flags
+    identity_enabled: Yup.boolean().nullable(),
+    maint_notifications_enabled: Yup.boolean().nullable(),
 
     // Account local cache
     account_local_cache: Yup.object().shape({
@@ -121,6 +124,7 @@ const RedisConfigSchema = Yup.object().shape({
         then: (schema) => schema.required('Key is required when TLS is enabled'),
         otherwise: (schema) => schema.nullable(),
       }),
+      ca_file: Yup.string().nullable(),
       skip_verify: Yup.boolean(),
     }),
 
@@ -315,6 +319,9 @@ const RedisConfig = (): React.JSX.Element | null => {
       idle_pool_size: config.server.redis.idle_pool_size || 0,
       positive_cache_ttl: config.server.redis.positive_cache_ttl || '5m',
       negative_cache_ttl: config.server.redis.negative_cache_ttl || '1m',
+      // Feature flags
+      identity_enabled: config.server.redis.identity_enabled ?? false,
+      maint_notifications_enabled: config.server.redis.maint_notifications_enabled ?? false,
 
       // Connection & timeouts tuning (use empty to show placeholders with backend defaults)
       pool_timeout: config.server.redis.pool_timeout || '',
@@ -330,6 +337,7 @@ const RedisConfig = (): React.JSX.Element | null => {
         enabled: config.server.redis.tls?.enabled || false,
         cert: config.server.redis.tls?.cert || '',
         key: config.server.redis.tls?.key || '',
+        ca_file: config.server.redis.tls?.ca_file || '',
         skip_verify: config.server.redis.tls?.skip_verify || false,
       },
 
@@ -415,6 +423,9 @@ const RedisConfig = (): React.JSX.Element | null => {
         positive_cache_ttl: values.redis.positive_cache_ttl,
         negative_cache_ttl: values.redis.negative_cache_ttl,
         tls: values.redis.tls,
+        // Feature flags
+        identity_enabled: Boolean(values.redis.identity_enabled),
+        maint_notifications_enabled: Boolean(values.redis.maint_notifications_enabled),
       };
 
       // Optional connection & timeouts tuning
@@ -556,6 +567,37 @@ const RedisConfig = (): React.JSX.Element | null => {
                     handleChange(e);
                     setHasUnsavedChanges(true);
                   }}
+                />
+              </Grid>
+              {/* Feature flags */}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.identity_enabled)}
+                      onChange={(e) => {
+                        setFieldValue('redis.identity_enabled', e.target.checked)
+                          .then(() => setHasUnsavedChanges(true));
+                      }}
+                      name="redis.identity_enabled"
+                    />
+                  }
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Identity Cache<InfoTooltip title="Stores identity-related lookups (e.g., user/account info) in Redis to reduce backend load." /></Box>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.redis.maint_notifications_enabled)}
+                      onChange={(e) => {
+                        setFieldValue('redis.maint_notifications_enabled', e.target.checked)
+                          .then(() => setHasUnsavedChanges(true));
+                      }}
+                      name="redis.maint_notifications_enabled"
+                    />
+                  }
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Maintenance Notifications<InfoTooltip title="Publishes/consumes maintenance notifications (e.g., cache flush events) via Redis channels." /></Box>}
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -1202,6 +1244,24 @@ const RedisConfig = (): React.JSX.Element | null => {
                       variant="outlined"
                       error={getIn(touched, 'redis.tls.cert') && Boolean(getIn(errors, 'redis.tls.cert'))}
                       helperText={getIn(touched, 'redis.tls.cert') && getIn(errors, 'redis.tls.cert')}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        handleChange(e);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 12 }}>
+                    <Field
+                      as={TextField}
+                      fullWidth
+                      name="redis.tls.ca_file"
+                      label="TLS CA File Path"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Path to CA certificate file used to validate the Redis server certificate." /></InputAdornment>
+                      ) }}
+                      variant="outlined"
+                      error={getIn(touched, 'redis.tls.ca_file') && Boolean(getIn(errors, 'redis.tls.ca_file'))}
+                      helperText={getIn(touched, 'redis.tls.ca_file') && getIn(errors, 'redis.tls.ca_file')}
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);
                         setHasUnsavedChanges(true);
