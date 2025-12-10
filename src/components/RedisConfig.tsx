@@ -569,37 +569,7 @@ const RedisConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              {/* Feature flags */}
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(values.redis.identity_enabled)}
-                      onChange={(e) => {
-                        setFieldValue('redis.identity_enabled', e.target.checked)
-                          .then(() => setHasUnsavedChanges(true));
-                      }}
-                      name="redis.identity_enabled"
-                    />
-                  }
-                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Identity Cache<InfoTooltip title="Stores identity-related lookups (e.g., user/account info) in Redis to reduce backend load." /></Box>}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={Boolean(values.redis.maint_notifications_enabled)}
-                      onChange={(e) => {
-                        setFieldValue('redis.maint_notifications_enabled', e.target.checked)
-                          .then(() => setHasUnsavedChanges(true));
-                      }}
-                      name="redis.maint_notifications_enabled"
-                    />
-                  }
-                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Maintenance Notifications<InfoTooltip title="Publishes/consumes maintenance notifications (e.g., cache flush events) via Redis channels." /></Box>}
-                />
-              </Grid>
+              {/* Other common settings */}
               <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
@@ -707,6 +677,55 @@ const RedisConfig = (): React.JSX.Element | null => {
                     setHasUnsavedChanges(true);
                   }}
                 />
+              </Grid>
+
+              {/* Compatibility settings header and side-by-side switches */}
+              <Grid size={12}>
+                <Typography variant="overline" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  Compatibility settings
+                </Typography>
+                <Grid container spacing={2} alignItems="flex-end">
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={Boolean(values.redis.identity_enabled)}
+                          onChange={(e) => {
+                            setFieldValue('redis.identity_enabled', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
+                          }}
+                          name="redis.identity_enabled"
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Enable CLIENT SETINFO
+                          <InfoTooltip title="When enabled, the application sends CLIENT SETINFO to Redis." />
+                        </Box>
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <FormControlLabel
+                      control={
+                        <Switch
+                          checked={Boolean(values.redis.maint_notifications_enabled)}
+                          onChange={(e) => {
+                            setFieldValue('redis.maint_notifications_enabled', e.target.checked)
+                              .then(() => setHasUnsavedChanges(true));
+                          }}
+                          name="redis.maint_notifications_enabled"
+                        />
+                      }
+                      label={
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Enable CLIENT MAINT_NOTIFICATIONS
+                          <InfoTooltip title="When enabled, the application sends CLIENT MAINT_NOTIFICATIONS to Redis." />
+                        </Box>
+                      }
+                    />
+                  </Grid>
+                </Grid>
               </Grid>
             </Grid>
           </FormSection>
