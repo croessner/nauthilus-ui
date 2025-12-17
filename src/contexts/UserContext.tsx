@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import * as userManager from '../utils/userManager';
 
 // Define the user type
@@ -94,8 +94,8 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     })();
   }, []);
 
-  // Login function
-  const login = async (username: string, password: string): Promise<User | null> => {
+  // Login function (stable)
+  const login = useCallback(async (username: string, password: string): Promise<User | null> => {
     setLoading(true);
     setError(null);
 
@@ -118,10 +118,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Login after MFA completion function
-  const loginAfterMfa = async (username: string): Promise<User | null> => {
+  // Login after MFA completion function (stable)
+  const loginAfterMfa = useCallback(async (username: string): Promise<User | null> => {
     setLoading(true);
     setError(null);
 
@@ -147,10 +147,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Logout function
-  const logout = async (): Promise<void> => {
+  // Logout function (stable)
+  const logout = useCallback(async (): Promise<void> => {
     setLoading(true);
 
     try {
@@ -163,10 +163,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Add user function
-  const addUser = async (username: string, password: string, roles: string[]): Promise<void> => {
+  // Add user function (stable)
+  const addUser = useCallback(async (username: string, password: string, roles: string[]): Promise<void> => {
     setLoading(true);
     setError(null);
 
@@ -179,10 +179,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Remove user function
-  const removeUser = async (username: string): Promise<void> => {
+  // Remove user function (stable)
+  const removeUser = useCallback(async (username: string): Promise<void> => {
     setLoading(true);
     setError(null);
 
@@ -195,10 +195,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Get users function
-  const getUsers = async (): Promise<User[]> => {
+  // Get users function (stable)
+  const getUsers = useCallback(async (): Promise<User[]> => {
     setLoading(true);
     setError(null);
 
@@ -211,10 +211,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Update password function
-  const updatePassword = async (username: string, password: string): Promise<void> => {
+  // Update password function (stable)
+  const updatePassword = useCallback(async (username: string, password: string): Promise<void> => {
     setLoading(true);
     setError(null);
 
@@ -241,10 +241,10 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  // Update user profile function
-  const updateUserProfile = async (username: string, profileData: Partial<Omit<User, 'username'>>): Promise<void> => {
+  // Update user profile function (stable)
+  const updateUserProfile = useCallback(async (username: string, profileData: Partial<Omit<User, 'username'>>): Promise<void> => {
     setLoading(true);
     setError(null);
 
@@ -312,15 +312,15 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
-  // Clear error function
-  const clearError = (): void => {
+  // Clear error function (stable)
+  const clearError = useCallback((): void => {
     setError(null);
-  };
+  }, []);
 
   // Provide the context value
-  const contextValue: UserContextType = {
+  const contextValue: UserContextType = useMemo(() => ({
     isAuthenticated,
     user,
     loading,
@@ -334,7 +334,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     updatePassword,
     updateUserProfile,
     clearError
-  };
+  }), [isAuthenticated, user, loading, error, login, loginAfterMfa, logout, addUser, removeUser, getUsers, updatePassword, updateUserProfile, clearError]);
 
   return (
     <UserContext.Provider value={contextValue}>

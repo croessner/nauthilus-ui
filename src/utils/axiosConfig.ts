@@ -13,7 +13,6 @@ axios.interceptors.request.use(
         config.url.includes('/api/auth/login') ||
         config.url.includes('/api/auth/refresh') ||
         config.url.includes('/api/auth/logout') ||
-        config.url.includes('/api/auth/me') ||
         config.url.includes('/api/auth/webauthn/') ||
         config.url.includes('/api/auth/totp/')
       )
@@ -38,7 +37,8 @@ let pendingResolvers: Array<(ok: boolean) => void> = [];
 
 async function refreshSession(): Promise<boolean> {
   try {
-    await axios.post(`${getProxyOrigin()}/api/auth/refresh`, {}, { withCredentials: true });
+    // Use relative URL to ensure cookies for the current origin are sent reliably in dev/prod
+    await axios.post('/api/auth/refresh', {}, { withCredentials: true });
     return true;
   } catch {
     return false;
@@ -60,8 +60,7 @@ axios.interceptors.response.use(
       !url ||
       url.includes('/api/auth/login') ||
       url.includes('/api/auth/refresh') ||
-      url.includes('/api/auth/logout') ||
-      url.includes('/api/auth/me')
+      url.includes('/api/auth/logout')
     ) {
       // Do not attempt refresh for auth endpoints themselves
       return Promise.reject(error);

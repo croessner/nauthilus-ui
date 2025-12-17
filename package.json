@@ -40,6 +40,7 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "echo \"No test runner configured with Vite yet\" && exit 0",
+    "smoke:auth": "node scripts/smoke.auth-endpoints.test.mjs",
 
     "deps:outdated": "npm outdated || true",
     "deps:deprecated": "npx npm-check-updates --deprecated",

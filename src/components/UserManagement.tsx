@@ -68,6 +68,8 @@ const UserManagement = (): React.JSX.Element => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Reference for the Add User button to restore focus
   const addUserButtonRef = useRef<HTMLButtonElement>(null);
+  // One-time load guard
+  const loadedRef = useRef<boolean>(false);
 
   // Check if the user has the admin role
   const isAdmin = currentUser?.roles.includes('admin');
@@ -78,12 +80,20 @@ const UserManagement = (): React.JSX.Element => {
     setUsers(usersList);
   }, [getUsers, setUsers]);
 
-  // Load users on component mount
+  // Load users once when admin is available (avoids loops and missing initial load)
   useEffect(() => {
+    if (!isAdmin) return; // wait until we know the user is admin
+    if (loadedRef.current) return; // only once
+    loadedRef.current = true;
     (async () => {
-      await loadUsers();
+      try {
+        await loadUsers();
+      } catch (e) {
+        // Do not retry automatically on errors to avoid request storms
+        // Errors are handled via context error state
+      }
     })();
-  }, [loadUsers]);
+  }, [isAdmin, loadUsers]);
 
   const handleToggleEnabled = async (targetUsername: string, newEnabled: boolean, targetRoles: string[]) => {
     if (!isAdmin) {
