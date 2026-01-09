@@ -72,6 +72,7 @@ const RedisConfigSchema = Yup.object().shape({
     // Feature flags
     identity_enabled: Yup.boolean().nullable(),
     maint_notifications_enabled: Yup.boolean().nullable(),
+    protocol: Yup.number().oneOf([0, 2, 3]).nullable(),
 
     // Account local cache
     account_local_cache: Yup.object().shape({
@@ -322,6 +323,7 @@ const RedisConfig = (): React.JSX.Element | null => {
       // Feature flags
       identity_enabled: config.server.redis.identity_enabled ?? false,
       maint_notifications_enabled: config.server.redis.maint_notifications_enabled ?? false,
+      protocol: config.server.redis.protocol ?? 2,
 
       // Connection & timeouts tuning (use empty to show placeholders with backend defaults)
       pool_timeout: config.server.redis.pool_timeout || '',
@@ -426,6 +428,7 @@ const RedisConfig = (): React.JSX.Element | null => {
         // Feature flags
         identity_enabled: Boolean(values.redis.identity_enabled),
         maint_notifications_enabled: Boolean(values.redis.maint_notifications_enabled),
+        protocol: values.redis.protocol as 0 | 2 | 3,
       };
 
       // Optional connection & timeouts tuning
@@ -724,6 +727,29 @@ const RedisConfig = (): React.JSX.Element | null => {
                         </Box>
                       }
                     />
+                  </Grid>
+                  <Grid size={12} sx={{ mt: 1 }}>
+                    <FormControl component="fieldset">
+                      <FormLabel component="legend">
+                        <Box sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                          Redis Protocol
+                          <InfoTooltip title="Select the Redis RESP protocol version." />
+                        </Box>
+                      </FormLabel>
+                      <RadioGroup
+                        row
+                        name="redis.protocol"
+                        value={values.redis.protocol ?? 2}
+                        onChange={(e) => {
+                          void setFieldValue('redis.protocol', parseInt(e.target.value, 10));
+                          setHasUnsavedChanges(true);
+                        }}
+                      >
+                        <FormControlLabel value={0} control={<Radio />} label="auto (0)" />
+                        <FormControlLabel value={2} control={<Radio />} label="RESP2" />
+                        <FormControlLabel value={3} control={<Radio />} label="RESP3" />
+                      </RadioGroup>
+                    </FormControl>
                   </Grid>
                 </Grid>
               </Grid>

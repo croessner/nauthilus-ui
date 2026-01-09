@@ -141,6 +141,7 @@ export interface RedisConfig {
   // New: feature flags
   identity_enabled?: boolean;
   maint_notifications_enabled?: boolean;
+  protocol?: 0 | 2 | 3;
 }
 
 export interface MasterConfig {
