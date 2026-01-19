@@ -60,6 +60,29 @@ const FrontendConfigSchema = Yup.object().shape({
             value => !value || !value.includes(' ')
           ),
       }),
+    html_static_content_path: Yup.string(),
+    default_logo_image: Yup.string(),
+    login_page: Yup.string(),
+    login_page_welcome: Yup.string(),
+    login_page_logo_image_alt: Yup.string(),
+    two_factor_page: Yup.string(),
+    consent_page: Yup.string(),
+    logout_page: Yup.string(),
+    error_page: Yup.string(),
+    notify_page: Yup.string(),
+    device_page: Yup.string(),
+    homepage: Yup.string().url('Must be a valid URL'),
+    logout_page_welcome: Yup.string(),
+    consent_page_welcome: Yup.string(),
+    consent_page_logo_image_alt: Yup.string(),
+    notify_page_welcome: Yup.string(),
+    notify_page_logo_image_alt: Yup.string(),
+    language_resources: Yup.string(),
+    default_language: Yup.string(),
+    hydra_admin_uri: Yup.string().url('Must be a valid URL'),
+    totp_issuer: Yup.string(),
+    totp_skew: Yup.number().min(0, 'Must be at least 0'),
+    login_remember_for: Yup.number(),
   }),
   ory_hydra_admin_url: Yup.string()
     .url('Must be a valid URL')
@@ -129,6 +152,29 @@ const FrontendConfig = (): React.JSX.Element => {
       csrf_secret: '',
       cookie_store_auth_key: '',
       cookie_store_encryption_key: '',
+      html_static_content_path: '',
+      default_logo_image: '',
+      login_page: '',
+      login_page_welcome: '',
+      login_page_logo_image_alt: '',
+      two_factor_page: '',
+      consent_page: '',
+      logout_page: '',
+      error_page: '',
+      notify_page: '',
+      device_page: '',
+      homepage: '',
+      logout_page_welcome: '',
+      consent_page_welcome: '',
+      consent_page_logo_image_alt: '',
+      notify_page_welcome: '',
+      notify_page_logo_image_alt: '',
+      language_resources: '',
+      default_language: '',
+      hydra_admin_uri: '',
+      totp_issuer: '',
+      totp_skew: 0,
+      login_remember_for: 0,
     },
     ory_hydra_admin_url: config?.server?.ory_hydra_admin_url || '',
     oauth2: config?.oauth2 || {
@@ -265,6 +311,204 @@ const FrontendConfig = (): React.JSX.Element => {
                           "Must be 16, 24, or 32 characters long, used for cookie encryption"
                         }
                       />
+                    </Grid>
+
+                    <Grid size={12}>
+                      <Divider sx={{ my: 2 }} />
+                      <Typography variant="h6" gutterBottom>
+                        Frontend UI Customization
+                      </Typography>
+                    </Grid>
+
+                    <Grid size={12}>
+                      <Accordion>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography>Paths & Resources</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <Grid container spacing={2}>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                label="Static Content Path"
+                                name="frontend.html_static_content_path"
+                                value={values.frontend?.html_static_content_path || ''}
+                                onChange={handleChange}
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Path to custom HTML/static content." /></InputAdornment>
+                                ) }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                label="Language Resources Path"
+                                name="frontend.language_resources"
+                                value={values.frontend?.language_resources || ''}
+                                onChange={handleChange}
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Path to language translation files." /></InputAdornment>
+                                ) }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                label="Default Language"
+                                name="frontend.default_language"
+                                value={values.frontend?.default_language || ''}
+                                onChange={handleChange}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                label="Homepage URL"
+                                name="frontend.homepage"
+                                value={values.frontend?.homepage || ''}
+                                onChange={handleChange}
+                                error={Boolean(getIn(touched, 'frontend.homepage') && getIn(errors, 'frontend.homepage'))}
+                                helperText={getIn(touched, 'frontend.homepage') && getIn(errors, 'frontend.homepage')}
+                              />
+                            </Grid>
+                          </Grid>
+                        </AccordionDetails>
+                      </Accordion>
+
+                      <Accordion>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography>Identity & Auth Settings</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <Grid container spacing={2}>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                label="TOTP Issuer"
+                                name="frontend.totp_issuer"
+                                value={values.frontend?.totp_issuer || ''}
+                                onChange={handleChange}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                type="number"
+                                label="TOTP Skew"
+                                name="frontend.totp_skew"
+                                value={values.frontend?.totp_skew || 0}
+                                onChange={handleChange}
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Allowed time skew for TOTP tokens (steps)." /></InputAdornment>
+                                ) }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                type="number"
+                                label="Login Remember For"
+                                name="frontend.login_remember_for"
+                                value={values.frontend?.login_remember_for || 0}
+                                onChange={handleChange}
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Duration in seconds for 'Remember Me' sessions." /></InputAdornment>
+                                ) }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 6 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                label="Hydra Admin URI"
+                                name="frontend.hydra_admin_uri"
+                                value={values.frontend?.hydra_admin_uri || ''}
+                                onChange={handleChange}
+                                error={Boolean(getIn(touched, 'frontend.hydra_admin_uri') && getIn(errors, 'frontend.hydra_admin_uri'))}
+                                helperText={getIn(touched, 'frontend.hydra_admin_uri') && getIn(errors, 'frontend.hydra_admin_uri')}
+                              />
+                            </Grid>
+                          </Grid>
+                        </AccordionDetails>
+                      </Accordion>
+
+                      <Accordion>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography>Login & Consent Pages</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <Grid container spacing={2}>
+                            <Grid size={12}><Typography variant="subtitle2">Login Page</Typography></Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Page Path" name="frontend.login_page" value={values.frontend?.login_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Welcome Message" name="frontend.login_page_welcome" value={values.frontend?.login_page_welcome || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Logo Alt Text" name="frontend.login_page_logo_image_alt" value={values.frontend?.login_page_logo_image_alt || ''} onChange={handleChange} />
+                            </Grid>
+
+                            <Grid size={12} sx={{ mt: 1 }}><Typography variant="subtitle2">Consent Page</Typography></Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Page Path" name="frontend.consent_page" value={values.frontend?.consent_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Welcome Message" name="frontend.consent_page_welcome" value={values.frontend?.consent_page_welcome || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Logo Alt Text" name="frontend.consent_page_logo_image_alt" value={values.frontend?.consent_page_logo_image_alt || ''} onChange={handleChange} />
+                            </Grid>
+                          </Grid>
+                        </AccordionDetails>
+                      </Accordion>
+
+                      <Accordion>
+                        <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                          <Typography>Notify & Other Pages</Typography>
+                        </AccordionSummary>
+                        <AccordionDetails>
+                          <Grid container spacing={2}>
+                            <Grid size={12}><Typography variant="subtitle2">Notify Page</Typography></Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Page Path" name="frontend.notify_page" value={values.frontend?.notify_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Welcome Message" name="frontend.notify_page_welcome" value={values.frontend?.notify_page_welcome || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Logo Alt Text" name="frontend.notify_page_logo_image_alt" value={values.frontend?.notify_page_logo_image_alt || ''} onChange={handleChange} />
+                            </Grid>
+
+                            <Grid size={12} sx={{ mt: 1 }}><Typography variant="subtitle2">Other Pages</Typography></Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Logout Page Path" name="frontend.logout_page" value={values.frontend?.logout_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 8 }}>
+                              <Field as={TextField} fullWidth label="Logout Welcome Message" name="frontend.logout_page_welcome" value={values.frontend?.logout_page_welcome || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="2FA Page" name="frontend.two_factor_page" value={values.frontend?.two_factor_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Error Page" name="frontend.error_page" value={values.frontend?.error_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field as={TextField} fullWidth label="Device Page" name="frontend.device_page" value={values.frontend?.device_page || ''} onChange={handleChange} />
+                            </Grid>
+                            <Grid size={12}>
+                              <Field as={TextField} fullWidth label="Default Logo Image" name="frontend.default_logo_image" value={values.frontend?.default_logo_image || ''} onChange={handleChange} helperText="Path or URL to the default logo image." />
+                            </Grid>
+                          </Grid>
+                        </AccordionDetails>
+                      </Accordion>
                     </Grid>
                   </>
                 )}

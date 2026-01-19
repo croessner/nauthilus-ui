@@ -225,9 +225,15 @@ const HookTester = (): React.JSX.Element => {
             const target = conn?.backend_url || '';
             if (!target) throw new Error('No backend URL configured in Runtime > Connection');
 
+            // Normalisierung des Pfades für den Proxy
+            let effectivePath = endpointPath;
+            if (effectivePath && !effectivePath.startsWith('/api/v1/custom') && !effectivePath.startsWith('/api')) {
+                effectivePath = `/api/v1/custom${effectivePath.startsWith('/') ? '' : '/'}${effectivePath}`;
+            }
+
             const params = new URLSearchParams();
             params.set('url', target);
-            if (endpointPath) params.set('endpoint_path', endpointPath);
+            if (effectivePath) params.set('endpoint_path', effectivePath);
             // add query rows
             for (const row of query) {
                 if (row.key && row.value) params.append(row.key, row.value);
@@ -339,8 +345,14 @@ const HookTester = (): React.JSX.Element => {
                 const baseUrl = conn?.backend_url || '';
                 if (!baseUrl) { setNotif({ open: true, severity: 'error', message: 'No backend URL configured in Runtime > Connection' }); return; }
 
+                // Normalisierung des Pfades
+                let effectivePath = endpointPath;
+                if (effectivePath && !effectivePath.startsWith('/api/v1/custom') && !effectivePath.startsWith('/api')) {
+                    effectivePath = `/api/v1/custom${effectivePath.startsWith('/') ? '' : '/'}${effectivePath}`;
+                }
+
                 // Ensure endpoint path is applied relative to backend_url
-                const path = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
+                const path = effectivePath.startsWith('/') ? effectivePath : `/${effectivePath}`;
                 const target = new URL(path, baseUrl);
 
                 // Append query params

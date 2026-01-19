@@ -19,6 +19,7 @@ export type Row = {
   service?: string;
   local_port?: number | string;
   proto?: string;
+  method?: string;
   username?: string;
   authenticated?: boolean | string;
   user_found?: boolean | string;
@@ -34,6 +35,9 @@ export type Row = {
   blocklist?: string;
   pwnd_info?: string;
   ssl_fingerprint?: string;
+  latency?: number | string;
+  http_status?: number | string;
+  status_msg?: string;
   xssl_cipher?: string;
   xssl_protocol?: string;
   user_agent?: string;
@@ -69,6 +73,7 @@ export function normalizeRow(r: any): Row {
     service: r.service,
     local_port: toN(r.local_port),
     proto: r.proto,
+    method: r.method,
     username: r.username?.toLowerCase?.(),
     authenticated: toB(r.authenticated),
     user_found: toB(r.user_found),
@@ -84,6 +89,9 @@ export function normalizeRow(r: any): Row {
     blocklist: r.blocklist,
     pwnd_info: r.pwnd_info,
     ssl_fingerprint: r.ssl_fingerprint,
+    latency: toN(r.latency),
+    http_status: toN(r.http_status),
+    status_msg: r.status_msg,
     xssl_cipher: r.xssl_cipher,
     xssl_protocol: r.xssl_protocol,
     user_agent: r.user_agent,

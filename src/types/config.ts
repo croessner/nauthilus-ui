@@ -4,6 +4,8 @@ export interface ServerConfig {
   address?: string;
   max_concurrent_requests?: number;
   max_password_history_entries?: number;
+  rate_limit_per_second?: number;
+  rate_limit_burst?: number;
   http3?: boolean;
   haproxy_v2?: boolean;
   disabled_endpoints?: EndpointConfig;
@@ -184,6 +186,7 @@ export interface MiddlewaresConfig {
   request_decompression?: boolean;
   response_compression?: boolean;
   metrics?: boolean;
+  rate?: boolean;
 }
 
 export interface MasterUserConfig {
@@ -196,6 +199,29 @@ export interface FrontendConfig {
   csrf_secret?: string;
   cookie_store_auth_key?: string;
   cookie_store_encryption_key?: string;
+  html_static_content_path?: string;
+  default_logo_image?: string;
+  login_page?: string;
+  login_page_welcome?: string;
+  login_page_logo_image_alt?: string;
+  two_factor_page?: string;
+  consent_page?: string;
+  logout_page?: string;
+  error_page?: string;
+  notify_page?: string;
+  device_page?: string;
+  homepage?: string;
+  logout_page_welcome?: string;
+  consent_page_welcome?: string;
+  consent_page_logo_image_alt?: string;
+  notify_page_welcome?: string;
+  notify_page_logo_image_alt?: string;
+  language_resources?: string;
+  default_language?: string;
+  hydra_admin_uri?: string;
+  totp_issuer?: string;
+  totp_skew?: number;
+  login_remember_for?: number;
 }
 
 export interface PrometheusTimerConfig {

@@ -36,6 +36,12 @@ const ServerConfigSchema = Yup.object().shape({
   max_password_history_entries: Yup.number()
     .min(1, 'Must be at least 1')
     .required('Max password history entries is required'),
+  rate_limit_per_second: Yup.number()
+    .min(0, 'Must be at least 0')
+    .nullable(),
+  rate_limit_burst: Yup.number()
+    .min(0, 'Must be at least 0')
+    .nullable(),
   http3: Yup.boolean(),
   haproxy_v2: Yup.boolean(),
   instance_name: Yup.string()
@@ -172,6 +178,7 @@ const ServerConfigSchema = Yup.object().shape({
     request_decompression: Yup.boolean(),
     response_compression: Yup.boolean(),
     metrics: Yup.boolean(),
+    rate: Yup.boolean(),
   }),
 });
 
@@ -190,8 +197,10 @@ const ServerConfig = (): React.JSX.Element | null => {
 
   const initialValues: ServerConfigType = {
     address: config.server.address || '',
-    max_concurrent_requests: config.server.max_concurrent_requests || 100,
-    max_password_history_entries: config.server.max_password_history_entries || 10,
+    max_concurrent_requests: config.server.max_concurrent_requests || 1000,
+    max_password_history_entries: config.server.max_password_history_entries || 100,
+    rate_limit_per_second: config.server.rate_limit_per_second || 100,
+    rate_limit_burst: config.server.rate_limit_burst || 200,
     http3: config.server.http3 || false,
     haproxy_v2: config.server.haproxy_v2 || false,
     instance_name: config.server.instance_name || 'nauthilus',
@@ -294,6 +303,7 @@ const ServerConfig = (): React.JSX.Element | null => {
       request_decompression: config.server.middlewares?.request_decompression ?? true,
       response_compression: config.server.middlewares?.response_compression ?? true,
       metrics: config.server.middlewares?.metrics ?? true,
+      rate: config.server.middlewares?.rate ?? true,
     },
 
     // Initialize HTTP client configuration
@@ -463,6 +473,44 @@ const ServerConfig = (): React.JSX.Element | null => {
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="rate_limit_per_second"
+                  label="Rate Limit Per Second"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Average number of requests per second allowed per IP." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  type="number"
+                  error={touched.rate_limit_per_second && Boolean(errors.rate_limit_per_second)}
+                  helperText={touched.rate_limit_per_second && errors.rate_limit_per_second}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="rate_limit_burst"
+                  label="Rate Limit Burst"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Maximum number of requests that can be performed in a single burst." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  type="number"
+                  error={touched.rate_limit_burst && Boolean(errors.rate_limit_burst)}
+                  helperText={touched.rate_limit_burst && errors.rate_limit_burst}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControlLabel
                   control={
                     <Switch
@@ -597,6 +645,20 @@ const ServerConfig = (): React.JSX.Element | null => {
                     />
                   }
                   label={<Typography>Metrics <InfoTooltip title="Prometheus metrics middleware." /></Typography>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6, md: 4 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={Boolean(values.middlewares?.rate)}
+                      onChange={(e) => {
+                        void setFieldValue('middlewares.rate', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                    />
+                  }
+                  label={<Typography>Rate Limiting <InfoTooltip title="IP-based rate limiting middleware." /></Typography>}
                 />
               </Grid>
             </Grid>
