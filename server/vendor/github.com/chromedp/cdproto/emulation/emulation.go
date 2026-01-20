@@ -92,7 +92,7 @@ func (p *SetFocusEmulationEnabledParams) Do(ctx context.Context) (err error) {
 // SetAutoDarkModeOverrideParams automatically render all web contents using
 // a dark theme.
 type SetAutoDarkModeOverrideParams struct {
-	Enabled bool `json:"enabled,omitempty,omitzero"` // Whether to enable or disable automatic dark mode. If not specified, any existing override will be cleared.
+	Enabled bool `json:"enabled"` // Whether to enable or disable automatic dark mode. If not specified, any existing override will be cleared.
 }
 
 // SetAutoDarkModeOverride automatically render all web contents using a dark
@@ -102,7 +102,9 @@ type SetAutoDarkModeOverrideParams struct {
 //
 // parameters:
 func SetAutoDarkModeOverride() *SetAutoDarkModeOverrideParams {
-	return &SetAutoDarkModeOverrideParams{}
+	return &SetAutoDarkModeOverrideParams{
+		Enabled: false,
+	}
 }
 
 // WithEnabled whether to enable or disable automatic dark mode. If not
@@ -203,18 +205,18 @@ func (p *SetSafeAreaInsetsOverrideParams) Do(ctx context.Context) (err error) {
 // window.innerHeight, and "device-width"/"device-height"-related CSS media
 // query results).
 type SetDeviceMetricsOverrideParams struct {
-	Width              int64              `json:"width"`                                 // Overriding width value in pixels (minimum 0, maximum 10000000). 0 disables the override.
-	Height             int64              `json:"height"`                                // Overriding height value in pixels (minimum 0, maximum 10000000). 0 disables the override.
-	DeviceScaleFactor  float64            `json:"deviceScaleFactor"`                     // Overriding device scale factor value. 0 disables the override.
-	Mobile             bool               `json:"mobile"`                                // Whether to emulate mobile device. This includes viewport meta tag, overlay scrollbars, text autosizing and more.
-	Scale              float64            `json:"scale,omitempty,omitzero"`              // Scale to apply to resulting view image.
-	ScreenWidth        int64              `json:"screenWidth,omitempty,omitzero"`        // Overriding screen width value in pixels (minimum 0, maximum 10000000).
-	ScreenHeight       int64              `json:"screenHeight,omitempty,omitzero"`       // Overriding screen height value in pixels (minimum 0, maximum 10000000).
-	PositionX          int64              `json:"positionX,omitempty,omitzero"`          // Overriding view X position on screen in pixels (minimum 0, maximum 10000000).
-	PositionY          int64              `json:"positionY,omitempty,omitzero"`          // Overriding view Y position on screen in pixels (minimum 0, maximum 10000000).
-	DontSetVisibleSize bool               `json:"dontSetVisibleSize,omitempty,omitzero"` // Do not set visible view size, rely upon explicit setVisibleSize call.
-	ScreenOrientation  *ScreenOrientation `json:"screenOrientation,omitempty,omitzero"`  // Screen orientation override.
-	Viewport           *page.Viewport     `json:"viewport,omitempty,omitzero"`           // If set, the visible area of the page will be overridden to this viewport. This viewport change is not observed by the page, e.g. viewport-relative elements do not change positions.
+	Width              int64              `json:"width"`                                // Overriding width value in pixels (minimum 0, maximum 10000000). 0 disables the override.
+	Height             int64              `json:"height"`                               // Overriding height value in pixels (minimum 0, maximum 10000000). 0 disables the override.
+	DeviceScaleFactor  float64            `json:"deviceScaleFactor"`                    // Overriding device scale factor value. 0 disables the override.
+	Mobile             bool               `json:"mobile"`                               // Whether to emulate mobile device. This includes viewport meta tag, overlay scrollbars, text autosizing and more.
+	Scale              float64            `json:"scale,omitempty,omitzero"`             // Scale to apply to resulting view image.
+	ScreenWidth        int64              `json:"screenWidth,omitempty,omitzero"`       // Overriding screen width value in pixels (minimum 0, maximum 10000000).
+	ScreenHeight       int64              `json:"screenHeight,omitempty,omitzero"`      // Overriding screen height value in pixels (minimum 0, maximum 10000000).
+	PositionX          int64              `json:"positionX,omitempty,omitzero"`         // Overriding view X position on screen in pixels (minimum 0, maximum 10000000).
+	PositionY          int64              `json:"positionY,omitempty,omitzero"`         // Overriding view Y position on screen in pixels (minimum 0, maximum 10000000).
+	DontSetVisibleSize bool               `json:"dontSetVisibleSize"`                   // Do not set visible view size, rely upon explicit setVisibleSize call.
+	ScreenOrientation  *ScreenOrientation `json:"screenOrientation,omitempty,omitzero"` // Screen orientation override.
+	Viewport           *page.Viewport     `json:"viewport,omitempty,omitzero"`          // If set, the visible area of the page will be overridden to this viewport. This viewport change is not observed by the page, e.g. viewport-relative elements do not change positions.
 }
 
 // SetDeviceMetricsOverride overrides the values of device screen dimensions
@@ -232,10 +234,11 @@ type SetDeviceMetricsOverrideParams struct {
 //	mobile - Whether to emulate mobile device. This includes viewport meta tag, overlay scrollbars, text autosizing and more.
 func SetDeviceMetricsOverride(width int64, height int64, deviceScaleFactor float64, mobile bool) *SetDeviceMetricsOverrideParams {
 	return &SetDeviceMetricsOverrideParams{
-		Width:             width,
-		Height:            height,
-		DeviceScaleFactor: deviceScaleFactor,
-		Mobile:            mobile,
+		Width:              width,
+		Height:             height,
+		DeviceScaleFactor:  deviceScaleFactor,
+		Mobile:             mobile,
+		DontSetVisibleSize: false,
 	}
 }
 
@@ -529,16 +532,45 @@ func (p *SetEmulatedVisionDeficiencyParams) Do(ctx context.Context) (err error) 
 	return cdp.Execute(ctx, CommandSetEmulatedVisionDeficiency, p, nil)
 }
 
+// SetEmulatedOSTextScaleParams emulates the given OS text scale.
+type SetEmulatedOSTextScaleParams struct {
+	Scale float64 `json:"scale,omitempty,omitzero"`
+}
+
+// SetEmulatedOSTextScale emulates the given OS text scale.
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#method-setEmulatedOSTextScale
+//
+// parameters:
+func SetEmulatedOSTextScale() *SetEmulatedOSTextScaleParams {
+	return &SetEmulatedOSTextScaleParams{}
+}
+
+// WithScale [no description].
+func (p SetEmulatedOSTextScaleParams) WithScale(scale float64) *SetEmulatedOSTextScaleParams {
+	p.Scale = scale
+	return &p
+}
+
+// Do executes Emulation.setEmulatedOSTextScale against the provided context.
+func (p *SetEmulatedOSTextScaleParams) Do(ctx context.Context) (err error) {
+	return cdp.Execute(ctx, CommandSetEmulatedOSTextScale, p, nil)
+}
+
 // SetGeolocationOverrideParams overrides the Geolocation Position or Error.
-// Omitting any of the parameters emulates position unavailable.
+// Omitting latitude, longitude or accuracy emulates position unavailable.
 type SetGeolocationOverrideParams struct {
-	Latitude  float64 `json:"latitude,omitempty,omitzero"`  // Mock latitude
-	Longitude float64 `json:"longitude,omitempty,omitzero"` // Mock longitude
-	Accuracy  float64 `json:"accuracy,omitempty,omitzero"`  // Mock accuracy
+	Latitude         float64 `json:"latitude,omitempty,omitzero"`         // Mock latitude
+	Longitude        float64 `json:"longitude,omitempty,omitzero"`        // Mock longitude
+	Accuracy         float64 `json:"accuracy,omitempty,omitzero"`         // Mock accuracy
+	Altitude         float64 `json:"altitude,omitempty,omitzero"`         // Mock altitude
+	AltitudeAccuracy float64 `json:"altitudeAccuracy,omitempty,omitzero"` // Mock altitudeAccuracy
+	Heading          float64 `json:"heading,omitempty,omitzero"`          // Mock heading
+	Speed            float64 `json:"speed,omitempty,omitzero"`            // Mock speed
 }
 
 // SetGeolocationOverride overrides the Geolocation Position or Error.
-// Omitting any of the parameters emulates position unavailable.
+// Omitting latitude, longitude or accuracy emulates position unavailable.
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#method-setGeolocationOverride
 //
@@ -562,6 +594,30 @@ func (p SetGeolocationOverrideParams) WithLongitude(longitude float64) *SetGeolo
 // WithAccuracy mock accuracy.
 func (p SetGeolocationOverrideParams) WithAccuracy(accuracy float64) *SetGeolocationOverrideParams {
 	p.Accuracy = accuracy
+	return &p
+}
+
+// WithAltitude mock altitude.
+func (p SetGeolocationOverrideParams) WithAltitude(altitude float64) *SetGeolocationOverrideParams {
+	p.Altitude = altitude
+	return &p
+}
+
+// WithAltitudeAccuracy mock altitudeAccuracy.
+func (p SetGeolocationOverrideParams) WithAltitudeAccuracy(altitudeAccuracy float64) *SetGeolocationOverrideParams {
+	p.AltitudeAccuracy = altitudeAccuracy
+	return &p
+}
+
+// WithHeading mock heading.
+func (p SetGeolocationOverrideParams) WithHeading(heading float64) *SetGeolocationOverrideParams {
+	p.Heading = heading
+	return &p
+}
+
+// WithSpeed mock speed.
+func (p SetGeolocationOverrideParams) WithSpeed(speed float64) *SetGeolocationOverrideParams {
+	p.Speed = speed
 	return &p
 }
 
@@ -717,7 +773,8 @@ func (p *SetPressureSourceOverrideEnabledParams) Do(ctx context.Context) (err er
 	return cdp.Execute(ctx, CommandSetPressureSourceOverrideEnabled, p, nil)
 }
 
-// SetPressureStateOverrideParams provides a given pressure state that will
+// SetPressureStateOverrideParams tODO: OBSOLETE: To remove when
+// setPressureDataOverride is merged. Provides a given pressure state that will
 // be processed and eventually be delivered to PressureObserver users. |source|
 // must have been previously overridden by setPressureSourceOverrideEnabled.
 type SetPressureStateOverrideParams struct {
@@ -725,8 +782,9 @@ type SetPressureStateOverrideParams struct {
 	State  PressureState  `json:"state"`
 }
 
-// SetPressureStateOverride provides a given pressure state that will be
-// processed and eventually be delivered to PressureObserver users. |source|
+// SetPressureStateOverride tODO: OBSOLETE: To remove when
+// setPressureDataOverride is merged. Provides a given pressure state that will
+// be processed and eventually be delivered to PressureObserver users. |source|
 // must have been previously overridden by setPressureSourceOverrideEnabled.
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#method-setPressureStateOverride
@@ -745,6 +803,43 @@ func SetPressureStateOverride(source PressureSource, state PressureState) *SetPr
 // Do executes Emulation.setPressureStateOverride against the provided context.
 func (p *SetPressureStateOverrideParams) Do(ctx context.Context) (err error) {
 	return cdp.Execute(ctx, CommandSetPressureStateOverride, p, nil)
+}
+
+// SetPressureDataOverrideParams provides a given pressure data set that will
+// be processed and eventually be delivered to PressureObserver users. |source|
+// must have been previously overridden by setPressureSourceOverrideEnabled.
+type SetPressureDataOverrideParams struct {
+	Source                  PressureSource `json:"source"`
+	State                   PressureState  `json:"state"`
+	OwnContributionEstimate float64        `json:"ownContributionEstimate,omitempty,omitzero"`
+}
+
+// SetPressureDataOverride provides a given pressure data set that will be
+// processed and eventually be delivered to PressureObserver users. |source|
+// must have been previously overridden by setPressureSourceOverrideEnabled.
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#method-setPressureDataOverride
+//
+// parameters:
+//
+//	source
+//	state
+func SetPressureDataOverride(source PressureSource, state PressureState) *SetPressureDataOverrideParams {
+	return &SetPressureDataOverrideParams{
+		Source: source,
+		State:  state,
+	}
+}
+
+// WithOwnContributionEstimate [no description].
+func (p SetPressureDataOverrideParams) WithOwnContributionEstimate(ownContributionEstimate float64) *SetPressureDataOverrideParams {
+	p.OwnContributionEstimate = ownContributionEstimate
+	return &p
+}
+
+// Do executes Emulation.setPressureDataOverride against the provided context.
+func (p *SetPressureDataOverrideParams) Do(ctx context.Context) (err error) {
+	return cdp.Execute(ctx, CommandSetPressureDataOverride, p, nil)
 }
 
 // SetIdleOverrideParams overrides the Idle state.
@@ -1010,6 +1105,35 @@ func (p *SetDisabledImageTypesParams) Do(ctx context.Context) (err error) {
 	return cdp.Execute(ctx, CommandSetDisabledImageTypes, p, nil)
 }
 
+// SetDataSaverOverrideParams override the value of
+// navigator.connection.saveData.
+type SetDataSaverOverrideParams struct {
+	DataSaverEnabled bool `json:"dataSaverEnabled"` // Override value. Omitting the parameter disables the override.
+}
+
+// SetDataSaverOverride override the value of navigator.connection.saveData.
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#method-setDataSaverOverride
+//
+// parameters:
+func SetDataSaverOverride() *SetDataSaverOverrideParams {
+	return &SetDataSaverOverrideParams{
+		DataSaverEnabled: false,
+	}
+}
+
+// WithDataSaverEnabled override value. Omitting the parameter disables the
+// override.
+func (p SetDataSaverOverrideParams) WithDataSaverEnabled(dataSaverEnabled bool) *SetDataSaverOverrideParams {
+	p.DataSaverEnabled = dataSaverEnabled
+	return &p
+}
+
+// Do executes Emulation.setDataSaverOverride against the provided context.
+func (p *SetDataSaverOverrideParams) Do(ctx context.Context) (err error) {
+	return cdp.Execute(ctx, CommandSetDataSaverOverride, p, nil)
+}
+
 // SetHardwareConcurrencyOverrideParams [no description].
 type SetHardwareConcurrencyOverrideParams struct {
 	HardwareConcurrency int64 `json:"hardwareConcurrency"` // Hardware concurrency to report
@@ -1103,42 +1227,74 @@ func (p *SetAutomationOverrideParams) Do(ctx context.Context) (err error) {
 	return cdp.Execute(ctx, CommandSetAutomationOverride, p, nil)
 }
 
+// SetSmallViewportHeightDifferenceOverrideParams allows overriding the
+// difference between the small and large viewport sizes, which determine the
+// value of the svh and lvh unit, respectively. Only supported for top-level
+// frames.
+type SetSmallViewportHeightDifferenceOverrideParams struct {
+	Difference int64 `json:"difference"` // This will cause an element of size 100svh to be difference pixels smaller than an element of size 100lvh.
+}
+
+// SetSmallViewportHeightDifferenceOverride allows overriding the difference
+// between the small and large viewport sizes, which determine the value of the
+// svh and lvh unit, respectively. Only supported for top-level frames.
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#method-setSmallViewportHeightDifferenceOverride
+//
+// parameters:
+//
+//	difference - This will cause an element of size 100svh to be difference pixels smaller than an element of size 100lvh.
+func SetSmallViewportHeightDifferenceOverride(difference int64) *SetSmallViewportHeightDifferenceOverrideParams {
+	return &SetSmallViewportHeightDifferenceOverrideParams{
+		Difference: difference,
+	}
+}
+
+// Do executes Emulation.setSmallViewportHeightDifferenceOverride against the provided context.
+func (p *SetSmallViewportHeightDifferenceOverrideParams) Do(ctx context.Context) (err error) {
+	return cdp.Execute(ctx, CommandSetSmallViewportHeightDifferenceOverride, p, nil)
+}
+
 // Command names.
 const (
-	CommandClearDeviceMetricsOverride        = "Emulation.clearDeviceMetricsOverride"
-	CommandClearGeolocationOverride          = "Emulation.clearGeolocationOverride"
-	CommandResetPageScaleFactor              = "Emulation.resetPageScaleFactor"
-	CommandSetFocusEmulationEnabled          = "Emulation.setFocusEmulationEnabled"
-	CommandSetAutoDarkModeOverride           = "Emulation.setAutoDarkModeOverride"
-	CommandSetCPUThrottlingRate              = "Emulation.setCPUThrottlingRate"
-	CommandSetDefaultBackgroundColorOverride = "Emulation.setDefaultBackgroundColorOverride"
-	CommandSetSafeAreaInsetsOverride         = "Emulation.setSafeAreaInsetsOverride"
-	CommandSetDeviceMetricsOverride          = "Emulation.setDeviceMetricsOverride"
-	CommandSetDevicePostureOverride          = "Emulation.setDevicePostureOverride"
-	CommandClearDevicePostureOverride        = "Emulation.clearDevicePostureOverride"
-	CommandSetDisplayFeaturesOverride        = "Emulation.setDisplayFeaturesOverride"
-	CommandClearDisplayFeaturesOverride      = "Emulation.clearDisplayFeaturesOverride"
-	CommandSetScrollbarsHidden               = "Emulation.setScrollbarsHidden"
-	CommandSetDocumentCookieDisabled         = "Emulation.setDocumentCookieDisabled"
-	CommandSetEmitTouchEventsForMouse        = "Emulation.setEmitTouchEventsForMouse"
-	CommandSetEmulatedMedia                  = "Emulation.setEmulatedMedia"
-	CommandSetEmulatedVisionDeficiency       = "Emulation.setEmulatedVisionDeficiency"
-	CommandSetGeolocationOverride            = "Emulation.setGeolocationOverride"
-	CommandGetOverriddenSensorInformation    = "Emulation.getOverriddenSensorInformation"
-	CommandSetSensorOverrideEnabled          = "Emulation.setSensorOverrideEnabled"
-	CommandSetSensorOverrideReadings         = "Emulation.setSensorOverrideReadings"
-	CommandSetPressureSourceOverrideEnabled  = "Emulation.setPressureSourceOverrideEnabled"
-	CommandSetPressureStateOverride          = "Emulation.setPressureStateOverride"
-	CommandSetIdleOverride                   = "Emulation.setIdleOverride"
-	CommandClearIdleOverride                 = "Emulation.clearIdleOverride"
-	CommandSetPageScaleFactor                = "Emulation.setPageScaleFactor"
-	CommandSetScriptExecutionDisabled        = "Emulation.setScriptExecutionDisabled"
-	CommandSetTouchEmulationEnabled          = "Emulation.setTouchEmulationEnabled"
-	CommandSetVirtualTimePolicy              = "Emulation.setVirtualTimePolicy"
-	CommandSetLocaleOverride                 = "Emulation.setLocaleOverride"
-	CommandSetTimezoneOverride               = "Emulation.setTimezoneOverride"
-	CommandSetDisabledImageTypes             = "Emulation.setDisabledImageTypes"
-	CommandSetHardwareConcurrencyOverride    = "Emulation.setHardwareConcurrencyOverride"
-	CommandSetUserAgentOverride              = "Emulation.setUserAgentOverride"
-	CommandSetAutomationOverride             = "Emulation.setAutomationOverride"
+	CommandClearDeviceMetricsOverride               = "Emulation.clearDeviceMetricsOverride"
+	CommandClearGeolocationOverride                 = "Emulation.clearGeolocationOverride"
+	CommandResetPageScaleFactor                     = "Emulation.resetPageScaleFactor"
+	CommandSetFocusEmulationEnabled                 = "Emulation.setFocusEmulationEnabled"
+	CommandSetAutoDarkModeOverride                  = "Emulation.setAutoDarkModeOverride"
+	CommandSetCPUThrottlingRate                     = "Emulation.setCPUThrottlingRate"
+	CommandSetDefaultBackgroundColorOverride        = "Emulation.setDefaultBackgroundColorOverride"
+	CommandSetSafeAreaInsetsOverride                = "Emulation.setSafeAreaInsetsOverride"
+	CommandSetDeviceMetricsOverride                 = "Emulation.setDeviceMetricsOverride"
+	CommandSetDevicePostureOverride                 = "Emulation.setDevicePostureOverride"
+	CommandClearDevicePostureOverride               = "Emulation.clearDevicePostureOverride"
+	CommandSetDisplayFeaturesOverride               = "Emulation.setDisplayFeaturesOverride"
+	CommandClearDisplayFeaturesOverride             = "Emulation.clearDisplayFeaturesOverride"
+	CommandSetScrollbarsHidden                      = "Emulation.setScrollbarsHidden"
+	CommandSetDocumentCookieDisabled                = "Emulation.setDocumentCookieDisabled"
+	CommandSetEmitTouchEventsForMouse               = "Emulation.setEmitTouchEventsForMouse"
+	CommandSetEmulatedMedia                         = "Emulation.setEmulatedMedia"
+	CommandSetEmulatedVisionDeficiency              = "Emulation.setEmulatedVisionDeficiency"
+	CommandSetEmulatedOSTextScale                   = "Emulation.setEmulatedOSTextScale"
+	CommandSetGeolocationOverride                   = "Emulation.setGeolocationOverride"
+	CommandGetOverriddenSensorInformation           = "Emulation.getOverriddenSensorInformation"
+	CommandSetSensorOverrideEnabled                 = "Emulation.setSensorOverrideEnabled"
+	CommandSetSensorOverrideReadings                = "Emulation.setSensorOverrideReadings"
+	CommandSetPressureSourceOverrideEnabled         = "Emulation.setPressureSourceOverrideEnabled"
+	CommandSetPressureStateOverride                 = "Emulation.setPressureStateOverride"
+	CommandSetPressureDataOverride                  = "Emulation.setPressureDataOverride"
+	CommandSetIdleOverride                          = "Emulation.setIdleOverride"
+	CommandClearIdleOverride                        = "Emulation.clearIdleOverride"
+	CommandSetPageScaleFactor                       = "Emulation.setPageScaleFactor"
+	CommandSetScriptExecutionDisabled               = "Emulation.setScriptExecutionDisabled"
+	CommandSetTouchEmulationEnabled                 = "Emulation.setTouchEmulationEnabled"
+	CommandSetVirtualTimePolicy                     = "Emulation.setVirtualTimePolicy"
+	CommandSetLocaleOverride                        = "Emulation.setLocaleOverride"
+	CommandSetTimezoneOverride                      = "Emulation.setTimezoneOverride"
+	CommandSetDisabledImageTypes                    = "Emulation.setDisabledImageTypes"
+	CommandSetDataSaverOverride                     = "Emulation.setDataSaverOverride"
+	CommandSetHardwareConcurrencyOverride           = "Emulation.setHardwareConcurrencyOverride"
+	CommandSetUserAgentOverride                     = "Emulation.setUserAgentOverride"
+	CommandSetAutomationOverride                    = "Emulation.setAutomationOverride"
+	CommandSetSmallViewportHeightDifferenceOverride = "Emulation.setSmallViewportHeightDifferenceOverride"
 )

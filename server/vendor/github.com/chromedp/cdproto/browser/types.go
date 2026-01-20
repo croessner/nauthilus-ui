@@ -243,12 +243,12 @@ func (t *PermissionSetting) UnmarshalJSON(buf []byte) error {
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Browser#type-PermissionDescriptor
 type PermissionDescriptor struct {
-	Name                     string `json:"name"`                                        // Name of permission. See https://cs.chromium.org/chromium/src/third_party/blink/renderer/modules/permissions/permission_descriptor.idl for valid permission names.
-	Sysex                    bool   `json:"sysex,omitempty,omitzero"`                    // For "midi" permission, may also specify sysex control.
-	UserVisibleOnly          bool   `json:"userVisibleOnly,omitempty,omitzero"`          // For "push" permission, may specify userVisibleOnly. Note that userVisibleOnly = true is the only currently supported type.
-	AllowWithoutSanitization bool   `json:"allowWithoutSanitization,omitempty,omitzero"` // For "clipboard" permission, may specify allowWithoutSanitization.
-	AllowWithoutGesture      bool   `json:"allowWithoutGesture,omitempty,omitzero"`      // For "fullscreen" permission, must specify allowWithoutGesture:true.
-	PanTiltZoom              bool   `json:"panTiltZoom,omitempty,omitzero"`              // For "camera" permission, may specify panTiltZoom.
+	Name                     string `json:"name"`                     // Name of permission. See https://cs.chromium.org/chromium/src/third_party/blink/renderer/modules/permissions/permission_descriptor.idl for valid permission names.
+	Sysex                    bool   `json:"sysex"`                    // For "midi" permission, may also specify sysex control.
+	UserVisibleOnly          bool   `json:"userVisibleOnly"`          // For "push" permission, may specify userVisibleOnly. Note that userVisibleOnly = true is the only currently supported type.
+	AllowWithoutSanitization bool   `json:"allowWithoutSanitization"` // For "clipboard" permission, may specify allowWithoutSanitization.
+	AllowWithoutGesture      bool   `json:"allowWithoutGesture"`      // For "fullscreen" permission, must specify allowWithoutGesture:true.
+	PanTiltZoom              bool   `json:"panTiltZoom"`              // For "camera" permission, may specify panTiltZoom.
 }
 
 // CommandID browser command ids used by executeBrowserCommand.
@@ -265,6 +265,7 @@ func (t CommandID) String() string {
 const (
 	CommandIDOpenTabSearch  CommandID = "openTabSearch"
 	CommandIDCloseTabSearch CommandID = "closeTabSearch"
+	CommandIDOpenGlic       CommandID = "openGlic"
 )
 
 // UnmarshalJSON satisfies [json.Unmarshaler].
@@ -277,6 +278,8 @@ func (t *CommandID) UnmarshalJSON(buf []byte) error {
 		*t = CommandIDOpenTabSearch
 	case CommandIDCloseTabSearch:
 		*t = CommandIDCloseTabSearch
+	case CommandIDOpenGlic:
+		*t = CommandIDOpenGlic
 	default:
 		return fmt.Errorf("unknown CommandID value: %v", s)
 	}

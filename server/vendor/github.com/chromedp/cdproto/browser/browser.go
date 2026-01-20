@@ -127,7 +127,7 @@ type SetDownloadBehaviorParams struct {
 	Behavior         SetDownloadBehaviorBehavior `json:"behavior"`                            // Whether to allow all or deny all download requests, or use default Chrome behavior if available (otherwise deny). |allowAndName| allows download and names files according to their download guids.
 	BrowserContextID cdp.BrowserContextID        `json:"browserContextId,omitempty,omitzero"` // BrowserContext to set download behavior. When omitted, default browser context is used.
 	DownloadPath     string                      `json:"downloadPath,omitempty,omitzero"`     // The default path to save downloaded files to. This is required if behavior is set to 'allow' or 'allowAndName'.
-	EventsEnabled    bool                        `json:"eventsEnabled,omitempty,omitzero"`    // Whether to emit download events (defaults to false).
+	EventsEnabled    bool                        `json:"eventsEnabled"`                       // Whether to emit download events (defaults to false).
 }
 
 // SetDownloadBehavior set the behavior when downloading a file.
@@ -139,7 +139,8 @@ type SetDownloadBehaviorParams struct {
 //	behavior - Whether to allow all or deny all download requests, or use default Chrome behavior if available (otherwise deny). |allowAndName| allows download and names files according to their download guids.
 func SetDownloadBehavior(behavior SetDownloadBehaviorBehavior) *SetDownloadBehaviorParams {
 	return &SetDownloadBehaviorParams{
-		Behavior: behavior,
+		Behavior:      behavior,
+		EventsEnabled: false,
 	}
 }
 
@@ -319,7 +320,7 @@ func (p *GetBrowserCommandLineParams) Do(ctx context.Context) (arguments []strin
 // GetHistogramsParams get Chrome histograms.
 type GetHistogramsParams struct {
 	Query string `json:"query,omitempty,omitzero"` // Requested substring in name. Only histograms which have query as a substring in their name are extracted. An empty or absent query returns all histograms.
-	Delta bool   `json:"delta,omitempty,omitzero"` // If true, retrieve delta since last delta call.
+	Delta bool   `json:"delta"`                    // If true, retrieve delta since last delta call.
 }
 
 // GetHistograms get Chrome histograms.
@@ -328,7 +329,9 @@ type GetHistogramsParams struct {
 //
 // parameters:
 func GetHistograms() *GetHistogramsParams {
-	return &GetHistogramsParams{}
+	return &GetHistogramsParams{
+		Delta: false,
+	}
 }
 
 // WithQuery requested substring in name. Only histograms which have query as
@@ -368,8 +371,8 @@ func (p *GetHistogramsParams) Do(ctx context.Context) (histograms []*Histogram, 
 
 // GetHistogramParams get a Chrome histogram by name.
 type GetHistogramParams struct {
-	Name  string `json:"name"`                     // Requested histogram name.
-	Delta bool   `json:"delta,omitempty,omitzero"` // If true, retrieve delta since last delta call.
+	Name  string `json:"name"`  // Requested histogram name.
+	Delta bool   `json:"delta"` // If true, retrieve delta since last delta call.
 }
 
 // GetHistogram get a Chrome histogram by name.
@@ -381,7 +384,8 @@ type GetHistogramParams struct {
 //	name - Requested histogram name.
 func GetHistogram(name string) *GetHistogramParams {
 	return &GetHistogramParams{
-		Name: name,
+		Name:  name,
+		Delta: false,
 	}
 }
 
@@ -521,6 +525,47 @@ func SetWindowBounds(windowID WindowID, bounds *Bounds) *SetWindowBoundsParams {
 // Do executes Browser.setWindowBounds against the provided context.
 func (p *SetWindowBoundsParams) Do(ctx context.Context) (err error) {
 	return cdp.Execute(ctx, CommandSetWindowBounds, p, nil)
+}
+
+// SetContentsSizeParams set size of the browser contents resizing browser
+// window as necessary.
+type SetContentsSizeParams struct {
+	WindowID WindowID `json:"windowId"`                  // Browser window id.
+	Width    int64    `json:"width,omitempty,omitzero"`  // The window contents width in DIP. Assumes current width if omitted. Must be specified if 'height' is omitted.
+	Height   int64    `json:"height,omitempty,omitzero"` // The window contents height in DIP. Assumes current height if omitted. Must be specified if 'width' is omitted.
+}
+
+// SetContentsSize set size of the browser contents resizing browser window
+// as necessary.
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Browser#method-setContentsSize
+//
+// parameters:
+//
+//	windowID - Browser window id.
+func SetContentsSize(windowID WindowID) *SetContentsSizeParams {
+	return &SetContentsSizeParams{
+		WindowID: windowID,
+	}
+}
+
+// WithWidth the window contents width in DIP. Assumes current width if
+// omitted. Must be specified if 'height' is omitted.
+func (p SetContentsSizeParams) WithWidth(width int64) *SetContentsSizeParams {
+	p.Width = width
+	return &p
+}
+
+// WithHeight the window contents height in DIP. Assumes current height if
+// omitted. Must be specified if 'width' is omitted.
+func (p SetContentsSizeParams) WithHeight(height int64) *SetContentsSizeParams {
+	p.Height = height
+	return &p
+}
+
+// Do executes Browser.setContentsSize against the provided context.
+func (p *SetContentsSizeParams) Do(ctx context.Context) (err error) {
+	return cdp.Execute(ctx, CommandSetContentsSize, p, nil)
 }
 
 // SetDockTileParams set dock tile details, platform-specific.
@@ -666,6 +711,7 @@ const (
 	CommandGetWindowBounds                       = "Browser.getWindowBounds"
 	CommandGetWindowForTarget                    = "Browser.getWindowForTarget"
 	CommandSetWindowBounds                       = "Browser.setWindowBounds"
+	CommandSetContentsSize                       = "Browser.setContentsSize"
 	CommandSetDockTile                           = "Browser.setDockTile"
 	CommandExecuteBrowserCommand                 = "Browser.executeBrowserCommand"
 	CommandAddPrivacySandboxEnrollmentOverride   = "Browser.addPrivacySandboxEnrollmentOverride"

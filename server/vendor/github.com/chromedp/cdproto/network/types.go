@@ -45,6 +45,7 @@ const (
 	ResourceTypePing               ResourceType = "Ping"
 	ResourceTypeCSPViolationReport ResourceType = "CSPViolationReport"
 	ResourceTypePreflight          ResourceType = "Preflight"
+	ResourceTypeFedCM              ResourceType = "FedCM"
 	ResourceTypeOther              ResourceType = "Other"
 )
 
@@ -88,6 +89,8 @@ func (t *ResourceType) UnmarshalJSON(buf []byte) error {
 		*t = ResourceTypeCSPViolationReport
 	case ResourceTypePreflight:
 		*t = ResourceTypePreflight
+	case ResourceTypeFedCM:
+		*t = ResourceTypeFedCM
 	case ResourceTypeOther:
 		*t = ResourceTypeOther
 	default:
@@ -437,14 +440,14 @@ type Request struct {
 	URLFragment      string                    `json:"urlFragment,omitempty,omitzero"`      // Fragment of the requested URL starting with hash, if present.
 	Method           string                    `json:"method"`                              // HTTP request method.
 	Headers          Headers                   `json:"headers"`                             // HTTP request headers.
-	HasPostData      bool                      `json:"hasPostData,omitempty,omitzero"`      // True when the request has POST data. Note that postData might still be omitted when this flag is true when the data is too long.
+	HasPostData      bool                      `json:"hasPostData"`                         // True when the request has POST data. Note that postData might still be omitted when this flag is true when the data is too long.
 	PostDataEntries  []*PostDataEntry          `json:"postDataEntries,omitempty,omitzero"`  // Request body elements (post data broken into individual entries).
 	MixedContentType security.MixedContentType `json:"mixedContentType,omitempty,omitzero"` // The mixed content type of the request.
 	InitialPriority  ResourcePriority          `json:"initialPriority"`                     // Priority of the resource request at the time request is sent.
 	ReferrerPolicy   ReferrerPolicy            `json:"referrerPolicy"`                      // The referrer policy of the request, as defined in https://www.w3.org/TR/referrer-policy/
-	IsLinkPreload    bool                      `json:"isLinkPreload,omitempty,omitzero"`    // Whether is loaded via link preload.
+	IsLinkPreload    bool                      `json:"isLinkPreload"`                       // Whether is loaded via link preload.
 	TrustTokenParams *TrustTokenParams         `json:"trustTokenParams,omitempty,omitzero"` // Set for requests when the TrustToken API is used. Contains the parameters passed by the developer (e.g. via "fetch") as understood by the backend.
-	IsSameSite       bool                      `json:"isSameSite,omitempty,omitzero"`       // True if this resource request is considered to be the 'same site' as the request corresponding to the main frame.
+	IsSameSite       bool                      `json:"isSameSite"`                          // True if this resource request is considered to be the 'same site' as the request corresponding to the main frame.
 }
 
 // SignedCertificateTimestamp details of a signed certificate timestamp
@@ -536,6 +539,7 @@ const (
 	BlockedReasonMixedContent                                            BlockedReason = "mixed-content"
 	BlockedReasonOrigin                                                  BlockedReason = "origin"
 	BlockedReasonInspector                                               BlockedReason = "inspector"
+	BlockedReasonIntegrity                                               BlockedReason = "integrity"
 	BlockedReasonSubresourceFilter                                       BlockedReason = "subresource-filter"
 	BlockedReasonContentType                                             BlockedReason = "content-type"
 	BlockedReasonCoepFrameResourceNeedsCoepHeader                        BlockedReason = "coep-frame-resource-needs-coep-header"
@@ -564,6 +568,8 @@ func (t *BlockedReason) UnmarshalJSON(buf []byte) error {
 		*t = BlockedReasonOrigin
 	case BlockedReasonInspector:
 		*t = BlockedReasonInspector
+	case BlockedReasonIntegrity:
+		*t = BlockedReasonIntegrity
 	case BlockedReasonSubresourceFilter:
 		*t = BlockedReasonSubresourceFilter
 	case BlockedReasonContentType:
@@ -880,6 +886,7 @@ const (
 	ServiceWorkerRouterSourceCache                      ServiceWorkerRouterSource = "cache"
 	ServiceWorkerRouterSourceFetchEvent                 ServiceWorkerRouterSource = "fetch-event"
 	ServiceWorkerRouterSourceRaceNetworkAndFetchHandler ServiceWorkerRouterSource = "race-network-and-fetch-handler"
+	ServiceWorkerRouterSourceRaceNetworkAndCache        ServiceWorkerRouterSource = "race-network-and-cache"
 )
 
 // UnmarshalJSON satisfies [json.Unmarshaler].
@@ -896,6 +903,8 @@ func (t *ServiceWorkerRouterSource) UnmarshalJSON(buf []byte) error {
 		*t = ServiceWorkerRouterSourceFetchEvent
 	case ServiceWorkerRouterSourceRaceNetworkAndFetchHandler:
 		*t = ServiceWorkerRouterSourceRaceNetworkAndFetchHandler
+	case ServiceWorkerRouterSourceRaceNetworkAndCache:
+		*t = ServiceWorkerRouterSourceRaceNetworkAndCache
 	default:
 		return fmt.Errorf("unknown ServiceWorkerRouterSource value: %v", s)
 	}
@@ -926,10 +935,10 @@ type Response struct {
 	ConnectionID                float64                     `json:"connectionId"`                                   // Physical connection id that was actually used for this request.
 	RemoteIPAddress             string                      `json:"remoteIPAddress,omitempty,omitzero"`             // Remote IP address.
 	RemotePort                  int64                       `json:"remotePort,omitempty,omitzero"`                  // Remote port.
-	FromDiskCache               bool                        `json:"fromDiskCache,omitempty,omitzero"`               // Specifies that the request was served from the disk cache.
-	FromServiceWorker           bool                        `json:"fromServiceWorker,omitempty,omitzero"`           // Specifies that the request was served from the ServiceWorker.
-	FromPrefetchCache           bool                        `json:"fromPrefetchCache,omitempty,omitzero"`           // Specifies that the request was served from the prefetch cache.
-	FromEarlyHints              bool                        `json:"fromEarlyHints,omitempty,omitzero"`              // Specifies that the request was served from the prefetch cache.
+	FromDiskCache               bool                        `json:"fromDiskCache"`                                  // Specifies that the request was served from the disk cache.
+	FromServiceWorker           bool                        `json:"fromServiceWorker"`                              // Specifies that the request was served from the ServiceWorker.
+	FromPrefetchCache           bool                        `json:"fromPrefetchCache"`                              // Specifies that the request was served from the prefetch cache.
+	FromEarlyHints              bool                        `json:"fromEarlyHints"`                                 // Specifies that the request was served from the prefetch cache.
 	ServiceWorkerRouterInfo     *ServiceWorkerRouterInfo    `json:"serviceWorkerRouterInfo,omitempty,omitzero"`     // Information about how ServiceWorker Static Router API was used. If this field is set with matchedSourceType field, a matching rule is found. If this field is set without matchedSource, no matching rule is found. Otherwise, the API is not used.
 	EncodedDataLength           float64                     `json:"encodedDataLength"`                              // Total number of bytes received for this request so far.
 	Timing                      *ResourceTiming             `json:"timing,omitempty,omitzero"`                      // Timing information for the given request.
@@ -940,6 +949,7 @@ type Response struct {
 	AlternateProtocolUsage      AlternateProtocolUsage      `json:"alternateProtocolUsage,omitempty,omitzero"`      // The reason why Chrome uses a specific transport protocol for HTTP semantics.
 	SecurityState               security.State              `json:"securityState"`                                  // Security state of the request resource.
 	SecurityDetails             *SecurityDetails            `json:"securityDetails,omitempty,omitzero"`             // Security details for the request.
+	IsIPProtectionUsed          bool                        `json:"isIpProtectionUsed"`                             // Indicates whether the request was sent through IP Protection proxies. If set to true, the request used the IP Protection privacy feature.
 }
 
 // WebSocketRequest webSocket request data.
@@ -1027,21 +1037,21 @@ func (t *CookiePartitionKey) OrigUnmarshalJSON(buf []byte) error {
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Network#type-Cookie
 type Cookie struct {
-	Name               string              `json:"name"`                                  // Cookie name.
-	Value              string              `json:"value"`                                 // Cookie value.
-	Domain             string              `json:"domain"`                                // Cookie domain.
-	Path               string              `json:"path"`                                  // Cookie path.
-	Expires            float64             `json:"expires"`                               // Cookie expiration date as the number of seconds since the UNIX epoch.
-	Size               int64               `json:"size"`                                  // Cookie size.
-	HTTPOnly           bool                `json:"httpOnly"`                              // True if cookie is http-only.
-	Secure             bool                `json:"secure"`                                // True if cookie is secure.
-	Session            bool                `json:"session"`                               // True in case of session cookie.
-	SameSite           CookieSameSite      `json:"sameSite,omitempty,omitzero"`           // Cookie SameSite type.
-	Priority           CookiePriority      `json:"priority"`                              // Cookie Priority
-	SourceScheme       CookieSourceScheme  `json:"sourceScheme"`                          // Cookie source scheme type.
-	SourcePort         int64               `json:"sourcePort"`                            // Cookie source port. Valid values are {-1, [1, 65535]}, -1 indicates an unspecified port. An unspecified port value allows protocol clients to emulate legacy cookie scope for the port. This is a temporary ability and it will be removed in the future.
-	PartitionKey       *CookiePartitionKey `json:"partitionKey,omitempty,omitzero"`       // Cookie partition key.
-	PartitionKeyOpaque bool                `json:"partitionKeyOpaque,omitempty,omitzero"` // True if cookie partition key is opaque.
+	Name               string              `json:"name"`                            // Cookie name.
+	Value              string              `json:"value"`                           // Cookie value.
+	Domain             string              `json:"domain"`                          // Cookie domain.
+	Path               string              `json:"path"`                            // Cookie path.
+	Expires            float64             `json:"expires"`                         // Cookie expiration date as the number of seconds since the UNIX epoch.
+	Size               int64               `json:"size"`                            // Cookie size.
+	HTTPOnly           bool                `json:"httpOnly"`                        // True if cookie is http-only.
+	Secure             bool                `json:"secure"`                          // True if cookie is secure.
+	Session            bool                `json:"session"`                         // True in case of session cookie.
+	SameSite           CookieSameSite      `json:"sameSite,omitempty,omitzero"`     // Cookie SameSite type.
+	Priority           CookiePriority      `json:"priority"`                        // Cookie Priority
+	SourceScheme       CookieSourceScheme  `json:"sourceScheme"`                    // Cookie source scheme type.
+	SourcePort         int64               `json:"sourcePort"`                      // Cookie source port. Valid values are {-1, [1, 65535]}, -1 indicates an unspecified port. An unspecified port value allows protocol clients to emulate legacy cookie scope for the port. This is a temporary ability and it will be removed in the future.
+	PartitionKey       *CookiePartitionKey `json:"partitionKey,omitempty,omitzero"` // Cookie partition key.
+	PartitionKeyOpaque bool                `json:"partitionKeyOpaque"`              // True if cookie partition key is opaque.
 }
 
 // SetCookieBlockedReason types of reasons why a cookie may not be stored
@@ -1168,6 +1178,7 @@ const (
 	CookieBlockedReasonNameValuePairExceedsMaxSize              CookieBlockedReason = "NameValuePairExceedsMaxSize"
 	CookieBlockedReasonPortMismatch                             CookieBlockedReason = "PortMismatch"
 	CookieBlockedReasonSchemeMismatch                           CookieBlockedReason = "SchemeMismatch"
+	CookieBlockedReasonAnonymousContext                         CookieBlockedReason = "AnonymousContext"
 )
 
 // UnmarshalJSON satisfies [json.Unmarshaler].
@@ -1212,6 +1223,8 @@ func (t *CookieBlockedReason) UnmarshalJSON(buf []byte) error {
 		*t = CookieBlockedReasonPortMismatch
 	case CookieBlockedReasonSchemeMismatch:
 		*t = CookieBlockedReasonSchemeMismatch
+	case CookieBlockedReasonAnonymousContext:
+		*t = CookieBlockedReasonAnonymousContext
 	default:
 		return fmt.Errorf("unknown CookieBlockedReason value: %v", s)
 	}
@@ -1319,12 +1332,12 @@ type CookieParam struct {
 	URL          string              `json:"url,omitempty,omitzero"`          // The request-URI to associate with the setting of the cookie. This value can affect the default domain, path, source port, and source scheme values of the created cookie.
 	Domain       string              `json:"domain,omitempty,omitzero"`       // Cookie domain.
 	Path         string              `json:"path,omitempty,omitzero"`         // Cookie path.
-	Secure       bool                `json:"secure,omitempty,omitzero"`       // True if cookie is secure.
-	HTTPOnly     bool                `json:"httpOnly,omitempty,omitzero"`     // True if cookie is http-only.
+	Secure       bool                `json:"secure"`                          // True if cookie is secure.
+	HTTPOnly     bool                `json:"httpOnly"`                        // True if cookie is http-only.
 	SameSite     CookieSameSite      `json:"sameSite,omitempty,omitzero"`     // Cookie SameSite type.
 	Expires      *cdp.TimeSinceEpoch `json:"expires,omitempty,omitzero"`      // Cookie expiration date, session cookie if not set
 	Priority     CookiePriority      `json:"priority,omitempty,omitzero"`     // Cookie Priority.
-	SameParty    bool                `json:"sameParty,omitempty,omitzero"`    // True if cookie is SameParty.
+	SameParty    bool                `json:"sameParty"`                       // True if cookie is SameParty.
 	SourceScheme CookieSourceScheme  `json:"sourceScheme,omitempty,omitzero"` // Cookie source scheme type.
 	SourcePort   int64               `json:"sourcePort,omitempty,omitzero"`   // Cookie source port. Valid values are {-1, [1, 65535]}, -1 indicates an unspecified port. An unspecified port value allows protocol clients to emulate legacy cookie scope for the port. This is a temporary ability and it will be removed in the future.
 	PartitionKey *CookiePartitionKey `json:"partitionKey,omitempty,omitzero"` // Cookie partition key. If not set, the cookie will be set as not partitioned.
@@ -1478,6 +1491,7 @@ type SignedExchangeError struct {
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Network#type-SignedExchangeInfo
 type SignedExchangeInfo struct {
 	OuterResponse   *Response              `json:"outerResponse"`                      // The outer response of signed HTTP exchange which was received from network.
+	HasExtraInfo    bool                   `json:"hasExtraInfo"`                       // Whether network response for the signed exchange was accompanied by extra headers.
 	Header          *SignedExchangeHeader  `json:"header,omitempty,omitzero"`          // Information about the signed exchange header.
 	SecurityDetails *SecurityDetails       `json:"securityDetails,omitempty,omitzero"` // Security details for the signed exchange header.
 	Errors          []*SignedExchangeError `json:"errors,omitempty,omitzero"`          // Errors occurred while handling the signed exchange.
@@ -1564,6 +1578,28 @@ type DirectTCPSocketOptions struct {
 	DNSQueryType      DirectSocketDNSQueryType `json:"dnsQueryType,omitempty,omitzero"`
 }
 
+// DirectUDPSocketOptions [no description].
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Network#type-DirectUDPSocketOptions
+type DirectUDPSocketOptions struct {
+	RemoteAddr        string                   `json:"remoteAddr,omitempty,omitzero"`
+	RemotePort        int64                    `json:"remotePort,omitempty,omitzero"` // Unsigned int 16.
+	LocalAddr         string                   `json:"localAddr,omitempty,omitzero"`
+	LocalPort         int64                    `json:"localPort,omitempty,omitzero"` // Unsigned int 16.
+	DNSQueryType      DirectSocketDNSQueryType `json:"dnsQueryType,omitempty,omitzero"`
+	SendBufferSize    float64                  `json:"sendBufferSize,omitempty,omitzero"`    // Expected to be unsigned integer.
+	ReceiveBufferSize float64                  `json:"receiveBufferSize,omitempty,omitzero"` // Expected to be unsigned integer.
+}
+
+// DirectUDPMessage [no description].
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Network#type-DirectUDPMessage
+type DirectUDPMessage struct {
+	Data       string `json:"data"`
+	RemoteAddr string `json:"remoteAddr,omitempty,omitzero"` // Null for connected mode.
+	RemotePort int64  `json:"remotePort,omitempty,omitzero"` // Null for connected mode. Expected to be unsigned integer.
+}
+
 // PrivateNetworkRequestPolicy [no description].
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Network#type-PrivateNetworkRequestPolicy
@@ -1623,10 +1659,10 @@ func (t IPAddressSpace) String() string {
 
 // IPAddressSpace values.
 const (
-	IPAddressSpaceLocal   IPAddressSpace = "Local"
-	IPAddressSpacePrivate IPAddressSpace = "Private"
-	IPAddressSpacePublic  IPAddressSpace = "Public"
-	IPAddressSpaceUnknown IPAddressSpace = "Unknown"
+	IPAddressSpaceLoopback IPAddressSpace = "Loopback"
+	IPAddressSpaceLocal    IPAddressSpace = "Local"
+	IPAddressSpacePublic   IPAddressSpace = "Public"
+	IPAddressSpaceUnknown  IPAddressSpace = "Unknown"
 )
 
 // UnmarshalJSON satisfies [json.Unmarshaler].
@@ -1635,10 +1671,10 @@ func (t *IPAddressSpace) UnmarshalJSON(buf []byte) error {
 	s = strings.TrimSuffix(strings.TrimPrefix(s, `"`), `"`)
 
 	switch IPAddressSpace(s) {
+	case IPAddressSpaceLoopback:
+		*t = IPAddressSpaceLoopback
 	case IPAddressSpaceLocal:
 		*t = IPAddressSpaceLocal
-	case IPAddressSpacePrivate:
-		*t = IPAddressSpacePrivate
 	case IPAddressSpacePublic:
 		*t = IPAddressSpacePublic
 	case IPAddressSpaceUnknown:

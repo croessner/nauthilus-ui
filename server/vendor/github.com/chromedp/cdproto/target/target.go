@@ -40,7 +40,7 @@ func (p *ActivateTargetParams) Do(ctx context.Context) (err error) {
 // AttachToTargetParams attaches to the target with given id.
 type AttachToTargetParams struct {
 	TargetID ID   `json:"targetId"`
-	Flatten  bool `json:"flatten,omitempty,omitzero"` // Enables "flat" access to the session via specifying sessionId attribute in the commands. We plan to make this the default, deprecate non-flattened mode, and eventually retire it. See crbug.com/991325.
+	Flatten  bool `json:"flatten"` // Enables "flat" access to the session via specifying sessionId attribute in the commands. We plan to make this the default, deprecate non-flattened mode, and eventually retire it. See crbug.com/991325.
 }
 
 // AttachToTarget attaches to the target with given id.
@@ -53,6 +53,7 @@ type AttachToTargetParams struct {
 func AttachToTarget(targetID ID) *AttachToTargetParams {
 	return &AttachToTargetParams{
 		TargetID: targetID,
+		Flatten:  false,
 	}
 }
 
@@ -151,8 +152,8 @@ func (p *CloseTargetParams) Do(ctx context.Context) (err error) {
 // will be called for the protocol notifications and command responses.
 type ExposeDevToolsProtocolParams struct {
 	TargetID           ID     `json:"targetId"`
-	BindingName        string `json:"bindingName,omitempty,omitzero"`        // Binding name, 'cdp' if not specified.
-	InheritPermissions bool   `json:"inheritPermissions,omitempty,omitzero"` // If true, inherits the current root session's permissions (default: false).
+	BindingName        string `json:"bindingName,omitempty,omitzero"` // Binding name, 'cdp' if not specified.
+	InheritPermissions bool   `json:"inheritPermissions"`             // If true, inherits the current root session's permissions (default: false).
 }
 
 // ExposeDevToolsProtocol inject object to the target's main frame that
@@ -169,7 +170,8 @@ type ExposeDevToolsProtocolParams struct {
 //	targetID
 func ExposeDevToolsProtocol(targetID ID) *ExposeDevToolsProtocolParams {
 	return &ExposeDevToolsProtocolParams{
-		TargetID: targetID,
+		TargetID:           targetID,
+		InheritPermissions: false,
 	}
 }
 
@@ -194,7 +196,7 @@ func (p *ExposeDevToolsProtocolParams) Do(ctx context.Context) (err error) {
 // CreateBrowserContextParams creates a new empty BrowserContext. Similar to
 // an incognito profile but you can have more than one.
 type CreateBrowserContextParams struct {
-	DisposeOnDetach                   bool     `json:"disposeOnDetach,omitempty,omitzero"`                   // If specified, disposes this context when debugging session disconnects.
+	DisposeOnDetach                   bool     `json:"disposeOnDetach"`                                      // If specified, disposes this context when debugging session disconnects.
 	ProxyServer                       string   `json:"proxyServer,omitempty,omitzero"`                       // Proxy server, similar to the one passed to --proxy-server
 	ProxyBypassList                   string   `json:"proxyBypassList,omitempty,omitzero"`                   // Proxy bypass list, similar to the one passed to --proxy-bypass-list
 	OriginsWithUniversalNetworkAccess []string `json:"originsWithUniversalNetworkAccess,omitempty,omitzero"` // An optional list of origins to grant unlimited cross-origin access to. Parts of the URL other than those constituting origin are ignored.
@@ -207,7 +209,9 @@ type CreateBrowserContextParams struct {
 //
 // parameters:
 func CreateBrowserContext() *CreateBrowserContextParams {
-	return &CreateBrowserContextParams{}
+	return &CreateBrowserContextParams{
+		DisposeOnDetach: false,
+	}
 }
 
 // WithDisposeOnDetach if specified, disposes this context when debugging
@@ -294,17 +298,18 @@ func (p *GetBrowserContextsParams) Do(ctx context.Context) (browserContextIDs []
 
 // CreateTargetParams creates a new page.
 type CreateTargetParams struct {
-	URL                     string               `json:"url"`                                        // The initial URL the page will be navigated to. An empty string indicates about:blank.
-	Left                    int64                `json:"left,omitempty,omitzero"`                    // Frame left origin in DIP (requires newWindow to be true or headless shell).
-	Top                     int64                `json:"top,omitempty,omitzero"`                     // Frame top origin in DIP (requires newWindow to be true or headless shell).
-	Width                   int64                `json:"width,omitempty,omitzero"`                   // Frame width in DIP (requires newWindow to be true or headless shell).
-	Height                  int64                `json:"height,omitempty,omitzero"`                  // Frame height in DIP (requires newWindow to be true or headless shell).
-	WindowState             WindowState          `json:"windowState,omitempty,omitzero"`             // Frame window state (requires newWindow to be true or headless shell). Default is normal.
-	BrowserContextID        cdp.BrowserContextID `json:"browserContextId,omitempty,omitzero"`        // The browser context to create the page in.
-	EnableBeginFrameControl bool                 `json:"enableBeginFrameControl,omitempty,omitzero"` // Whether BeginFrames for this target will be controlled via DevTools (headless shell only, not supported on MacOS yet, false by default).
-	NewWindow               bool                 `json:"newWindow,omitempty,omitzero"`               // Whether to create a new Window or Tab (false by default, not supported by headless shell).
-	Background              bool                 `json:"background,omitempty,omitzero"`              // Whether to create the target in background or foreground (false by default, not supported by headless shell).
-	ForTab                  bool                 `json:"forTab,omitempty,omitzero"`                  // Whether to create the target of type "tab".
+	URL                     string               `json:"url"`                                 // The initial URL the page will be navigated to. An empty string indicates about:blank.
+	Left                    int64                `json:"left,omitempty,omitzero"`             // Frame left origin in DIP (requires newWindow to be true or headless shell).
+	Top                     int64                `json:"top,omitempty,omitzero"`              // Frame top origin in DIP (requires newWindow to be true or headless shell).
+	Width                   int64                `json:"width,omitempty,omitzero"`            // Frame width in DIP (requires newWindow to be true or headless shell).
+	Height                  int64                `json:"height,omitempty,omitzero"`           // Frame height in DIP (requires newWindow to be true or headless shell).
+	WindowState             WindowState          `json:"windowState,omitempty,omitzero"`      // Frame window state (requires newWindow to be true or headless shell). Default is normal.
+	BrowserContextID        cdp.BrowserContextID `json:"browserContextId,omitempty,omitzero"` // The browser context to create the page in.
+	EnableBeginFrameControl bool                 `json:"enableBeginFrameControl"`             // Whether BeginFrames for this target will be controlled via DevTools (headless shell only, not supported on MacOS yet, false by default).
+	NewWindow               bool                 `json:"newWindow"`                           // Whether to create a new Window or Tab (false by default, not supported by headless shell).
+	Background              bool                 `json:"background"`                          // Whether to create the target in background or foreground (false by default, not supported by headless shell).
+	ForTab                  bool                 `json:"forTab"`                              // Whether to create the target of type "tab".
+	Hidden                  bool                 `json:"hidden"`                              // Whether to create a hidden target. The hidden target is observable via protocol, but not present in the tab UI strip. Cannot be created with forTab: true, newWindow: true or background: false. The life-time of the tab is limited to the life-time of the session.
 }
 
 // CreateTarget creates a new page.
@@ -316,7 +321,12 @@ type CreateTargetParams struct {
 //	url - The initial URL the page will be navigated to. An empty string indicates about:blank.
 func CreateTarget(url string) *CreateTargetParams {
 	return &CreateTargetParams{
-		URL: url,
+		URL:                     url,
+		EnableBeginFrameControl: false,
+		NewWindow:               false,
+		Background:              false,
+		ForTab:                  false,
+		Hidden:                  false,
 	}
 }
 
@@ -386,6 +396,15 @@ func (p CreateTargetParams) WithBackground(background bool) *CreateTargetParams 
 // WithForTab whether to create the target of type "tab".
 func (p CreateTargetParams) WithForTab(forTab bool) *CreateTargetParams {
 	p.ForTab = forTab
+	return &p
+}
+
+// WithHidden whether to create a hidden target. The hidden target is
+// observable via protocol, but not present in the tab UI strip. Cannot be
+// created with forTab: true, newWindow: true or background: false. The
+// life-time of the tab is limited to the life-time of the session.
+func (p CreateTargetParams) WithHidden(hidden bool) *CreateTargetParams {
+	p.Hidden = hidden
 	return &p
 }
 
@@ -545,23 +564,27 @@ func (p *GetTargetsParams) Do(ctx context.Context) (targetInfos []*Info, err err
 }
 
 // SetAutoAttachParams controls whether to automatically attach to new
-// targets which are considered to be related to this one. When turned on,
-// attaches to all existing related targets as well. When turned off,
-// automatically detaches from all currently attached targets. This also clears
-// all targets added by autoAttachRelated from the list of targets to watch for
-// creation of related targets.
+// targets which are considered to be directly related to this one (for example,
+// iframes or workers). When turned on, attaches to all existing related targets
+// as well. When turned off, automatically detaches from all currently attached
+// targets. This also clears all targets added by autoAttachRelated from the
+// list of targets to watch for creation of related targets. You might want to
+// call this recursively for auto-attached targets to attach to all available
+// targets.
 type SetAutoAttachParams struct {
-	AutoAttach             bool   `json:"autoAttach"`                 // Whether to auto-attach to related targets.
-	WaitForDebuggerOnStart bool   `json:"waitForDebuggerOnStart"`     // Whether to pause new targets when attaching to them. Use Runtime.runIfWaitingForDebugger to run paused targets.
-	Flatten                bool   `json:"flatten,omitempty,omitzero"` // Enables "flat" access to the session via specifying sessionId attribute in the commands. We plan to make this the default, deprecate non-flattened mode, and eventually retire it. See crbug.com/991325.
-	Filter                 Filter `json:"filter,omitempty,omitzero"`  // Only targets matching filter will be attached.
+	AutoAttach             bool   `json:"autoAttach"`                // Whether to auto-attach to related targets.
+	WaitForDebuggerOnStart bool   `json:"waitForDebuggerOnStart"`    // Whether to pause new targets when attaching to them. Use Runtime.runIfWaitingForDebugger to run paused targets.
+	Flatten                bool   `json:"flatten"`                   // Enables "flat" access to the session via specifying sessionId attribute in the commands. We plan to make this the default, deprecate non-flattened mode, and eventually retire it. See crbug.com/991325.
+	Filter                 Filter `json:"filter,omitempty,omitzero"` // Only targets matching filter will be attached.
 }
 
 // SetAutoAttach controls whether to automatically attach to new targets
-// which are considered to be related to this one. When turned on, attaches to
-// all existing related targets as well. When turned off, automatically detaches
-// from all currently attached targets. This also clears all targets added by
-// autoAttachRelated from the list of targets to watch for creation of related
+// which are considered to be directly related to this one (for example, iframes
+// or workers). When turned on, attaches to all existing related targets as
+// well. When turned off, automatically detaches from all currently attached
+// targets. This also clears all targets added by autoAttachRelated from the
+// list of targets to watch for creation of related targets. You might want to
+// call this recursively for auto-attached targets to attach to all available
 // targets.
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Target#method-setAutoAttach
@@ -574,6 +597,7 @@ func SetAutoAttach(autoAttach bool, waitForDebuggerOnStart bool) *SetAutoAttachP
 	return &SetAutoAttachParams{
 		AutoAttach:             autoAttach,
 		WaitForDebuggerOnStart: waitForDebuggerOnStart,
+		Flatten:                false,
 	}
 }
 
@@ -697,6 +721,45 @@ func (p *SetRemoteLocationsParams) Do(ctx context.Context) (err error) {
 	return cdp.Execute(ctx, CommandSetRemoteLocations, p, nil)
 }
 
+// OpenDevToolsParams opens a DevTools window for the target.
+type OpenDevToolsParams struct {
+	TargetID ID `json:"targetId"` // This can be the page or tab target ID.
+}
+
+// OpenDevTools opens a DevTools window for the target.
+//
+// See: https://chromedevtools.github.io/devtools-protocol/tot/Target#method-openDevTools
+//
+// parameters:
+//
+//	targetID - This can be the page or tab target ID.
+func OpenDevTools(targetID ID) *OpenDevToolsParams {
+	return &OpenDevToolsParams{
+		TargetID: targetID,
+	}
+}
+
+// OpenDevToolsReturns return values.
+type OpenDevToolsReturns struct {
+	TargetID ID `json:"targetId,omitempty,omitzero"` // The targetId of DevTools page target.
+}
+
+// Do executes Target.openDevTools against the provided context.
+//
+// returns:
+//
+//	targetID - The targetId of DevTools page target.
+func (p *OpenDevToolsParams) Do(ctx context.Context) (targetID ID, err error) {
+	// execute
+	var res OpenDevToolsReturns
+	err = cdp.Execute(ctx, CommandOpenDevTools, p, &res)
+	if err != nil {
+		return "", err
+	}
+
+	return res.TargetID, nil
+}
+
 // Command names.
 const (
 	CommandActivateTarget         = "Target.activateTarget"
@@ -715,4 +778,5 @@ const (
 	CommandAutoAttachRelated      = "Target.autoAttachRelated"
 	CommandSetDiscoverTargets     = "Target.setDiscoverTargets"
 	CommandSetRemoteLocations     = "Target.setRemoteLocations"
+	CommandOpenDevTools           = "Target.openDevTools"
 )

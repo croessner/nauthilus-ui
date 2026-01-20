@@ -115,7 +115,8 @@ type UserAgentMetadata struct {
 	Model           string                   `json:"model"`
 	Mobile          bool                     `json:"mobile"`
 	Bitness         string                   `json:"bitness,omitempty,omitzero"`
-	Wow64           bool                     `json:"wow64,omitempty,omitzero"`
+	Wow64           bool                     `json:"wow64"`
+	FormFactors     []string                 `json:"formFactors,omitempty,omitzero"` // Used to specify User Agent form-factor values. See https://wicg.github.io/ua-client-hints/#sec-ch-ua-form-factors
 }
 
 // SensorType used to specify sensor types to emulate. See
@@ -173,7 +174,7 @@ func (t *SensorType) UnmarshalJSON(buf []byte) error {
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#type-SensorMetadata
 type SensorMetadata struct {
-	Available        bool    `json:"available,omitempty,omitzero"`
+	Available        bool    `json:"available"`
 	MinimumFrequency float64 `json:"minimumFrequency,omitempty,omitzero"`
 	MaximumFrequency float64 `json:"maximumFrequency,omitempty,omitzero"`
 }
@@ -284,7 +285,7 @@ func (t *PressureState) UnmarshalJSON(buf []byte) error {
 //
 // See: https://chromedevtools.github.io/devtools-protocol/tot/Emulation#type-PressureMetadata
 type PressureMetadata struct {
-	Available bool `json:"available,omitempty,omitzero"`
+	Available bool `json:"available"`
 }
 
 // DisabledImageType enum of image types that can be disabled.
