@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"math"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -1043,19 +1044,19 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 			seenConnections = true
 		// Redis exporter metrics
 		case "redis_up":
-			redisUp = v
+			redisUp = math.Max(redisUp, v)
 			seenRedisUp = true
 		case "redis_connected_clients":
-			redisConnectedClients = v
+			redisConnectedClients = math.Max(redisConnectedClients, v)
 			seenRedisClients = true
 		case "redis_memory_used_bytes", "redis_used_memory_bytes":
-			redisUsedMemoryBytes = v
+			redisUsedMemoryBytes = math.Max(redisUsedMemoryBytes, v)
 			seenRedisMem = true
 		case "redis_keyspace_hits_total", "redis_keyspace_hits":
-			redisKeyspaceHits = v
+			redisKeyspaceHits = math.Max(redisKeyspaceHits, v)
 			seenRedisHits = true
 		case "redis_keyspace_misses_total", "redis_keyspace_misses":
-			redisKeyspaceMisses = v
+			redisKeyspaceMisses = math.Max(redisKeyspaceMisses, v)
 			seenRedisMisses = true
 		case "redis_instance_info":
 			// Try to extract role label if present
