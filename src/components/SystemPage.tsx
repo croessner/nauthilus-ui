@@ -26,14 +26,8 @@ interface MetricsResponse {
   cpu_iowait_usage_percent?: number;
   cpu_steal_usage_percent?: number;
 
-  // Newly added fields for connections and Redis
+  // Newly added fields for connections
   connections_current?: number;
-  redis_up?: number; // 1=up, 0=down
-  redis_connected_clients?: number;
-  redis_used_memory_bytes?: number;
-  redis_keyspace_hits?: number;
-  redis_keyspace_misses?: number;
-  redis_role?: string;
 }
 
 const formatBytes = (bytes?: number): string => {
@@ -221,7 +215,7 @@ const SystemPage = (): React.JSX.Element => {
         setStatusMessage(`Failed to load settings: ${err instanceof Error ? err.message : String(err)}`);
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [currentProfileName]);
 
   // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
@@ -281,13 +275,11 @@ const SystemPage = (): React.JSX.Element => {
   const [cpuExpanded, setCpuExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:cpu', true));
   const [memoryExpanded, setMemoryExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:memory', true));
   const [runtimeExpanded, setRuntimeExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:runtime', true));
-  const [redisExpanded, setRedisExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:redis', true));
   const [detailsExpanded, setDetailsExpanded] = React.useState<boolean>(() => getSessionBool('ui:system:details', true));
 
   React.useEffect(() => setSessionBool('ui:system:cpu', cpuExpanded), [cpuExpanded]);
   React.useEffect(() => setSessionBool('ui:system:memory', memoryExpanded), [memoryExpanded]);
   React.useEffect(() => setSessionBool('ui:system:runtime', runtimeExpanded), [runtimeExpanded]);
-  React.useEffect(() => setSessionBool('ui:system:redis', redisExpanded), [redisExpanded]);
   React.useEffect(() => setSessionBool('ui:system:details', detailsExpanded), [detailsExpanded]);
 
   // Prepare display values
@@ -301,16 +293,6 @@ const SystemPage = (): React.JSX.Element => {
 
   // Connections
   const connectionsCurrent = data?.connections_current;
-
-  // Redis derived values
-  const redisUp = data?.redis_up === undefined ? undefined : (data.redis_up >= 0.5);
-  const redisRole = (data?.redis_role || '').trim();
-  const redisClients = data?.redis_connected_clients;
-  const redisMem = formatBytes(data?.redis_used_memory_bytes);
-  const hits = data?.redis_keyspace_hits ?? 0;
-  const misses = data?.redis_keyspace_misses ?? 0;
-  const totalGets = (Number.isFinite(hits) ? hits : 0) + (Number.isFinite(misses) ? misses : 0);
-  const hitRate = totalGets > 0 ? Math.round((hits / totalGets) * 100) : NaN;
 
   return (
     <Box>
@@ -430,88 +412,6 @@ const SystemPage = (): React.JSX.Element => {
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <StatCard icon="🔌" title="Connections" value={Number.isFinite(connectionsCurrent || NaN) ? String(connectionsCurrent) : 'N/A'} />
-                </Grid>
-              </Grid>
-            </AccordionDetails>
-          </Accordion>
-        </Grid>
-
-        <Grid size={12}>
-          <Accordion
-            expanded={redisExpanded}
-            onChange={() => setRedisExpanded(prev => !prev)}
-          >
-            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Stack direction="row" spacing={1} alignItems="center">
-                <Typography variant="h6" sx={{ fontWeight: 700 }}>Redis</Typography>
-                <InfoTooltip title="Status information for the Redis backend: Up/Down, role, connected clients, memory usage, and cache hit rate." />
-              </Stack>
-            </AccordionSummary>
-            <AccordionDetails>
-              <Grid container spacing={2}>
-                <Grid size={12}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Stack direction="row" spacing={2} alignItems="center" flexWrap="wrap" rowGap={1}>
-                        <Chip size="small" label={`Status: ${redisUp === undefined ? 'N/A' : (redisUp ? 'Up' : 'Down')}`} color={redisUp === undefined ? 'default' : (redisUp ? 'success' : 'error')} />
-                        {redisRole && <Chip size="small" label={`Role: ${redisRole}`} />}
-                        <Typography variant="body2" color="text.secondary">
-                          Clients: {Number.isFinite(redisClients || NaN) ? String(redisClients) : 'N/A'}
-                        </Typography>
-                        <Typography variant="body2" color="text.secondary">
-                          Memory: {redisMem}
-                        </Typography>
-                      </Stack>
-                    </CardContent>
-                  </Card>
-                </Grid>
-                <Grid size={{ xs: 12, md: 6 }}>
-                  <Card variant="outlined">
-                    <CardContent>
-                      <Typography variant="subtitle1" sx={{ fontWeight: 'bold', mb: 1 }}>Redis Hit Rate</Typography>
-                      <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                        {Number.isFinite(hitRate) ? (
-                          <svg width="180" height="120" viewBox="0 0 180 120" preserveAspectRatio="xMidYMid meet" aria-label="Hit Rate Gauge">
-                            {(() => {
-                              const value = Math.max(0, Math.min(hitRate || 0, 100));
-                              const cx = 90, cy = 112, rOuter = 70, rInner = 58;
-                              const baseStart = -90, totalAngle = 180, endAngle = baseStart + (totalAngle * value) / 100;
-                              const toRad = (deg: number) => (deg - 90) * Math.PI / 180;
-                              const polar = (ang: number, r: number) => ({ x: cx + r * Math.cos(toRad(ang)), y: cy + r * Math.sin(toRad(ang)) });
-                              const arcPath = (start: number, end: number, ro: number, ri: number) => {
-                                const largeArc = end - start > 180 ? 1 : 0;
-                                const p1 = polar(start, ro), p2 = polar(end, ro), p3 = polar(end, ri), p4 = polar(start, ri);
-                                return `M ${p1.x} ${p1.y} A ${ro} ${ro} 0 ${largeArc} 1 ${p2.x} ${p2.y} L ${p3.x} ${p3.y} A ${ri} ${ri} 0 ${largeArc} 0 ${p4.x} ${p4.y} Z`;
-                              };
-                              const colorFor = (val: number) => {
-                                if (val >= 70) return '#4caf50';
-                                if (val >= 40) return '#ff9800';
-                                return '#f44336';
-                              };
-                              const track = arcPath(baseStart, baseStart + totalAngle, rOuter, rInner);
-                              const fill = arcPath(baseStart, endAngle, rOuter, rInner);
-                              return (
-                                <g>
-                                  <path d={track} fill="#e0e0e0" />
-                                  <path d={fill} fill={colorFor(value)} />
-                                  {Array.from({ length: 7 }).map((_, idx) => {
-                                    const ang = baseStart + (idx * totalAngle) / 6;
-                                    const po = polar(ang, rOuter);
-                                    const pi = polar(ang, rOuter - 8);
-                                    return <line key={idx} x1={pi.x} y1={pi.y} x2={po.x} y2={po.y} stroke="#bdbdbd" strokeWidth={1}/>;
-                                  })}
-                                  <text x={cx} y={cy - 14} textAnchor="middle" fontSize="16" fill="#424242">{Math.round(value)}%</text>
-                                  <text x={cx} y={cy + 2} textAnchor="middle" fontSize="12" fill="#616161">Hit Rate</text>
-                                </g>
-                              );
-                            })()}
-                          </svg>
-                        ) : (
-                          <Typography variant="body2" color="text.secondary">No data for hit rate</Typography>
-                        )}
-                      </Box>
-                    </CardContent>
-                  </Card>
                 </Grid>
               </Grid>
             </AccordionDetails>
