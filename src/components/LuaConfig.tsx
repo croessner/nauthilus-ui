@@ -18,6 +18,7 @@ const LuaConfigSchema = Yup.object().shape({
     Yup.object().shape({
       name: Yup.string().required('Feature name is required'),
       script_path: Yup.string().required('Script path is required'),
+      when_no_auth: Yup.boolean(),
     })
   ),
   filters: Yup.array().of(
@@ -124,7 +125,10 @@ const LuaConfig = (): React.JSX.Element => {
 
   // Initial values
   const initialValues = {
-    features: config?.lua?.features || [],
+    features: (config?.lua?.features || []).map((f: LuaFeatureConfig) => ({
+      ...f,
+      when_no_auth: f.when_no_auth || false,
+    })),
     filters: (config?.lua?.filters || []).map((f: any) => {
       const wa = (f as any).when_authenticated;
       const wu = (f as any).when_unauthenticated;
@@ -229,7 +233,7 @@ const LuaConfig = (): React.JSX.Element => {
               <Paper sx={{ p: 2, mb: 2 }}>
                 <List>
                   {values.features.map((feature: LuaFeatureConfig, index: number) => (
-                    <ListItem key={index} divider={index < values.features.length - 1}>
+                    <ListItem key={index} divider={index < values.features.length - 1} sx={{ py: 2 }}>
                       <Grid container spacing={2} alignItems="center">
                         <Grid size={5}>
                           <TextField
@@ -284,6 +288,20 @@ const LuaConfig = (): React.JSX.Element => {
                             <DeleteIcon />
                           </IconButton>
                         </Grid>
+                        <Grid size={12}>
+                          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  name={`features[${index}].when_no_auth`}
+                                  checked={Boolean(feature.when_no_auth)}
+                                  onChange={handleChange}
+                                />
+                              }
+                              label="When No Auth"
+                            />
+                          </Box>
+                        </Grid>
                       </Grid>
                     </ListItem>
                   ))}
@@ -296,7 +314,7 @@ const LuaConfig = (): React.JSX.Element => {
                     onClick={() => {
                       setFieldValue('features', [
                         ...values.features,
-                        { name: '', script_path: '' },
+                        { name: '', script_path: '', when_no_auth: false },
                       ])
                           .then(() => setHasUnsavedChanges(true));
                     }}
@@ -316,7 +334,7 @@ const LuaConfig = (): React.JSX.Element => {
               <Paper sx={{ p: 2, mb: 2 }}>
                 <List>
                   {values.filters.map((filter: LuaFilterConfig, index: number) => (
-                    <ListItem key={index} divider={index < values.filters.length - 1}>
+                    <ListItem key={index} divider={index < values.filters.length - 1} sx={{ py: 2 }}>
                       <Grid container spacing={2} alignItems="center">
                         <Grid size={5}>
                           <TextField
@@ -437,7 +455,7 @@ const LuaConfig = (): React.JSX.Element => {
               <Paper sx={{ p: 2, mb: 2 }}>
                 <List>
                   {values.actions.map((action: LuaActionConfig, index: number) => (
-                    <ListItem key={index} divider={index < values.actions.length - 1}>
+                    <ListItem key={index} divider={index < values.actions.length - 1} sx={{ py: 2 }}>
                       <Grid container spacing={2} alignItems="center">
                         <Grid size={3}>
                           <FormControl fullWidth>
@@ -547,7 +565,7 @@ const LuaConfig = (): React.JSX.Element => {
               <Paper sx={{ p: 2, mb: 2 }}>
                 <List>
                   {values.custom_hooks.map((hook: LuaCustomHookConfig, index: number) => (
-                    <ListItem key={index} divider={index < values.custom_hooks.length - 1}>
+                    <ListItem key={index} divider={index < values.custom_hooks.length - 1} sx={{ py: 2 }}>
                       <Grid container spacing={2} alignItems="center">
                         <Grid size={2}>
                           <TextField
@@ -673,7 +691,7 @@ const LuaConfig = (): React.JSX.Element => {
               <Paper sx={{ p: 2, mb: 2 }}>
                 <List>
                   {values.search.map((searchProtocol: LuaSearchProtocolConfig, index: number) => (
-                    <ListItem key={index} divider={index < values.search.length - 1}>
+                    <ListItem key={index} divider={index < values.search.length - 1} sx={{ py: 2 }}>
                       <Grid container spacing={2} alignItems="center">
                         <Grid size={4}>
                           <ProtocolsConfig
@@ -856,7 +874,7 @@ const LuaConfig = (): React.JSX.Element => {
                             </Typography>
                             <List>
                               {(backendConfig.init_script_paths || []).map((path: string, pathIndex: number) => (
-                                <ListItem key={pathIndex} divider={pathIndex < (backendConfig.init_script_paths || []).length - 1}>
+                                <ListItem key={pathIndex} divider={pathIndex < (backendConfig.init_script_paths || []).length - 1} sx={{ py: 2 }}>
                                   <Grid container spacing={2} alignItems="center">
                                     <Grid size={10}>
                                       <TextField
@@ -1059,7 +1077,7 @@ const LuaConfig = (): React.JSX.Element => {
                     </Typography>
                     <List>
                       {(values.config.init_script_paths || []).map((path: string, index: number) => (
-                        <ListItem key={index} divider={index < (values.config.init_script_paths || []).length - 1}>
+                        <ListItem key={index} divider={index < (values.config.init_script_paths || []).length - 1} sx={{ py: 2 }}>
                           <Grid container spacing={2} alignItems="center">
                             <Grid size={10}>
                               <TextField

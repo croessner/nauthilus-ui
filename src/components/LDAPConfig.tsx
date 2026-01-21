@@ -86,7 +86,7 @@ const LDAPConfig = (): React.JSX.Element => {
   // Initial values
   const initialValues = {
     config: config?.ldap?.config || {
-      pool_only: false,
+      lookup_pool_only: false,
       start_tls: false,
       tls_skip_verify: false,
       sasl_external: false,
@@ -176,12 +176,12 @@ const LDAPConfig = (): React.JSX.Element => {
                     <FormControlLabel
                       control={
                         <Switch
-                          name="config.pool_only"
-                          checked={values.config.pool_only || false}
+                          name="config.lookup_pool_only"
+                          checked={values.config.lookup_pool_only || false}
                           onChange={handleChange}
                         />
                       }
-                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Pool Only<InfoTooltip title="Use only pooled connections; disables direct binds on demand." /></Box>}
+                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Lookup Pool Only<InfoTooltip title="Use only pooled connections for lookups." /></Box>}
                     />
                   </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
@@ -646,12 +646,12 @@ const LDAPConfig = (): React.JSX.Element => {
                             <FormControlLabel
                               control={
                                 <Switch
-                                  name={`optional_ldap_pools.${poolName}.pool_only`}
-                                  checked={poolConfig.pool_only || false}
+                                  name={`optional_ldap_pools.${poolName}.lookup_pool_only`}
+                                  checked={poolConfig.lookup_pool_only || false}
                                   onChange={handleChange}
                                 />
                               }
-                              label="Pool Only"
+                              label="Lookup Pool Only"
                             />
                           </Grid>
                           <Grid size={{ xs: 12, md: 6 }}>
@@ -1436,7 +1436,7 @@ const LDAPConfig = (): React.JSX.Element => {
               if (newPoolName && newPoolName.trim() !== '' && newPoolName !== 'default' && formikValues && formikSetFieldValueRef.current) {
                 const newPools = { ...formikValues.optional_ldap_pools };
                 newPools[newPoolName] = {
-                  pool_only: false,
+                  lookup_pool_only: false,
                   start_tls: false,
                   tls_skip_verify: false,
                   sasl_external: false,

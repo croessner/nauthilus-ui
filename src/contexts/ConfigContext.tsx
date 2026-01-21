@@ -423,7 +423,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         'brute_force_protocols', 'ory_hydra_admin_url', 'dns', 'insights',
         'redis', 'master_user', 'frontend', 'prometheus_timer',
         'default_http_request_header', 'http_client', 'compression', 'keep_alive',
-        'dedup', 'timeouts'
+        'timeouts'
       ];
 
       serverProps.forEach(prop => {

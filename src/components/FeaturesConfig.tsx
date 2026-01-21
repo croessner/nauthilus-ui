@@ -67,6 +67,7 @@ const FeaturesConfigSchema = Yup.object().shape({
   selectedFeatures: Yup.array().of(
     Yup.string().required('Feature is required')
   ),
+  featureWhenNoAuth: Yup.object(),
   cleartext_networks: Yup.array().when('selectedFeatures', (selectedFeatures: string[], schema) => {
     return selectedFeatures && selectedFeatures.includes('tls_encryption')
       ? schema.of(Yup.string())
@@ -178,8 +179,23 @@ const FeaturesConfig: React.FC = () => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
   const [tabValue, setTabValue] = useState(0);
 
-  // Get existing features (already as strings)
-  const existingFeatureNames = config?.server?.features || [];
+  // Determine selected feature names and their when_no_auth status
+  const featuresData = useMemo(() => {
+    const names: string[] = [];
+    const whenNoAuthMap: Record<string, boolean> = {};
+
+    config?.server?.features?.forEach(f => {
+      if (typeof f === 'string') {
+        names.push(f);
+        whenNoAuthMap[f] = false;
+      } else {
+        names.push(f.name);
+        whenNoAuthMap[f.name] = !!f.when_no_auth;
+      }
+    });
+
+    return { names, whenNoAuthMap };
+  }, [config?.server?.features]);
 
   // Filter feature types based on Lua configuration
   const filteredFeatureTypes = useMemo(() => {
@@ -202,7 +218,8 @@ const FeaturesConfig: React.FC = () => {
 
   // Initial values
   const initialValues = {
-    selectedFeatures: existingFeatureNames,
+    selectedFeatures: featuresData.names,
+    featureWhenNoAuth: featuresData.whenNoAuthMap,
     cleartext_networks: config?.cleartext_networks || [],
     realtime_blackhole_lists: {
       soft_whitelist: config?.realtime_blackhole_lists?.soft_whitelist || {},
@@ -266,13 +283,22 @@ const FeaturesConfig: React.FC = () => {
     if (!config) return;
 
     try {
+      // Map features back to (string | FeatureConfig)[]
+      const features: (string | any)[] = values.selectedFeatures.map((name: string) => {
+        const when_no_auth = values.featureWhenNoAuth[name];
+        if (when_no_auth && name !== 'brute_force' && name !== 'backend_server_monitoring') {
+          return { name, when_no_auth };
+        }
+        return name;
+      });
+
       // Create a properly typed copy of the config
       const updatedConfig: NauthilusConfig = { 
         ...config as NauthilusConfig,
         // Ensure the server is properly initialized
         server: {
           ...(config?.server || {}) as ServerConfig,
-          features: values.selectedFeatures,
+          features: features,
         }
       };
 
@@ -427,6 +453,45 @@ const FeaturesConfig: React.FC = () => {
                         )}
                       </FormControl>
                     </Paper>
+
+                    {values.selectedFeatures.length > 0 && (
+                      <Box sx={{ mt: 3 }}>
+                        <Typography variant="subtitle2" gutterBottom>Feature Specific Options</Typography>
+                        <Grid container spacing={2}>
+                          {values.selectedFeatures.map((name: string) => {
+                            const featureType = builtInFeatureTypes.find(t => t.value === name);
+                            const label = featureType ? featureType.label : name;
+                            const isIgnored = name === 'brute_force' || name === 'backend_server_monitoring';
+                            
+                            return (
+                              <Grid size={{ xs: 12, sm: 6, md: 4 }} key={name}>
+                                <Paper variant="outlined" sx={{ p: 2 }}>
+                                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>{label}</Typography>
+                                  <FormControlLabel
+                                    control={
+                                      <Switch
+                                        checked={values.featureWhenNoAuth[name] || false}
+                                        onChange={(e) => {
+                                          setFieldValue(`featureWhenNoAuth.${name}`, e.target.checked)
+                                            .then(() => setHasUnsavedChanges(true));
+                                        }}
+                                        disabled={isIgnored}
+                                      />
+                                    }
+                                    label={
+                                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                                        <Typography variant="body2">When No Auth</Typography>
+                                        <InfoTooltip title={isIgnored ? "This option is ignored for this feature." : "If enabled, this feature will be active even when the server is in no-auth mode."} />
+                                      </Box>
+                                    }
+                                  />
+                                </Paper>
+                              </Grid>
+                            );
+                          })}
+                        </Grid>
+                      </Box>
+                    )}
                   </Grid>
                 </Grid>
               </FormSection>

@@ -48,6 +48,7 @@ const ServerConfigSchema = Yup.object().shape({
     .min(1, 'Must be at least 1 character')
     .max(255, 'Must be at most 255 characters')
     .required('Instance name is required'),
+  trusted_proxies: Yup.array().of(Yup.string()),
 
   // TLS configuration validation
   tls: Yup.object().shape({
@@ -153,11 +154,6 @@ const ServerConfigSchema = Yup.object().shape({
     }),
   }),
 
-  // De-duplication validation
-  dedup: Yup.object().shape({
-    in_process_enabled: Yup.boolean(),
-  }),
-
   // Timeouts validation
   timeouts: Yup.object().shape({
     redis_read: Yup.string(),
@@ -204,6 +200,7 @@ const ServerConfig = (): React.JSX.Element | null => {
     http3: config.server.http3 || false,
     haproxy_v2: config.server.haproxy_v2 || false,
     instance_name: config.server.instance_name || 'nauthilus',
+    trusted_proxies: config.server.trusted_proxies || [],
     redis: config.server.redis,
 
     // Initialize TLS configuration
@@ -273,6 +270,7 @@ const ServerConfig = (): React.JSX.Element | null => {
       level_zstd: config.server.compression?.level_zstd || 0,
       level_gzip: config.server.compression?.level_gzip || 5,
       min_length: config.server.compression?.min_length || 1024,
+      content_types: config.server.compression?.content_types || [],
     },
 
     // Initialize keep-alive configuration
@@ -292,6 +290,7 @@ const ServerConfig = (): React.JSX.Element | null => {
       ldap_modify: config.server.timeouts?.ldap_modify || '5s',
       singleflight_work: config.server.timeouts?.singleflight_work || '3s',
       lua_backend: config.server.timeouts?.lua_backend || '5s',
+      lua_script: config.server.timeouts?.lua_script || '3s',
     },
 
     // Initialize middlewares configuration (default to true when undefined)
@@ -318,17 +317,13 @@ const ServerConfig = (): React.JSX.Element | null => {
       },
     },
 
-    // Initialize de-duplication configuration
-    dedup: {
-      in_process_enabled: config.server.dedup?.in_process_enabled || false,
-    },
-
     // Initialize log configuration
     log: {
       json: config.server.log?.json || false,
       color: config.server.log?.color || true,
       level: config.server.log?.level || 'info',
       debug_modules: config.server.log?.debug_modules || [],
+      add_source: config.server.log?.add_source || false,
     },
 
     // Initialize brute force protocols
@@ -366,7 +361,6 @@ const ServerConfig = (): React.JSX.Element | null => {
         brute_force_protocols: values.brute_force_protocols,
         dns: values.dns,
         master_user: values.master_user,
-        dedup: values.dedup,
         timeouts: values.timeouts,
         middlewares: values.middlewares,
         // prometheus_timer is now in MonitoringConfig
@@ -432,6 +426,27 @@ const ServerConfig = (): React.JSX.Element | null => {
                     handleChange(e);
                     setHasUnsavedChanges(true);
                   }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="trusted_proxies"
+                  label="Trusted Proxies (comma-separated)"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="List of trusted proxy IP addresses or CIDR ranges. Required for proper client IP detection behind load balancers." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  value={Array.isArray(values.trusted_proxies) ? values.trusted_proxies.join(', ') : values.trusted_proxies}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    const val = e.target.value;
+                    const proxies = val.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '');
+                    setFieldValue('trusted_proxies', proxies);
+                    setHasUnsavedChanges(true);
+                  }}
+                  error={touched.trusted_proxies && Boolean(errors.trusted_proxies)}
+                  helperText={touched.trusted_proxies && errors.trusted_proxies}
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
@@ -1397,6 +1412,27 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <Field
+                      as={TextField}
+                      fullWidth
+                      name="compression.content_types"
+                      label="Content Types (comma-separated)"
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Only compress responses with these Content-Types. Leave empty to compress all configured by the server." /></InputAdornment>
+                      ) }}
+                      variant="outlined"
+                      value={Array.isArray(values.compression?.content_types) ? values.compression.content_types.join(', ') : values.compression?.content_types}
+                      onChange={(e: React.ChangeEvent<any>) => {
+                        const val = e.target.value;
+                        const types = val.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '');
+                        setFieldValue('compression.content_types', types);
+                        setHasUnsavedChanges(true);
+                      }}
+                      error={getIn(touched, 'compression.content_types') && Boolean(getIn(errors, 'compression.content_types'))}
+                      helperText={getIn(touched, 'compression.content_types') && getIn(errors, 'compression.content_types')}
+                    />
+                  </Grid>
                   <Grid size={12} />
                   <Grid size={{ xs: 12, md: 6 }}>
                     <FormControl fullWidth error={getIn(touched, 'compression.algorithms') && Boolean(getIn(errors, 'compression.algorithms'))}>
@@ -1687,6 +1723,24 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="timeouts.lua_script"
+                  label="Lua Script Timeout"
+                  variant="outlined"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Timeout for Lua script execution. Default 3s." /></InputAdornment>
+                  ) }}
+                  error={getIn(touched, 'timeouts.lua_script') && Boolean(getIn(errors, 'timeouts.lua_script'))}
+                  helperText={(getIn(touched, 'timeouts.lua_script') && getIn(errors, 'timeouts.lua_script')) || 'e.g., 3s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
             </Grid>
           </CollapsibleFormSection>
 
@@ -1775,34 +1829,6 @@ const ServerConfig = (): React.JSX.Element | null => {
             </Grid>
           </CollapsibleFormSection>
 
-          {/*
-          <CollapsibleFormSection
-            title="De-duplication"
-            description="Configure server-side request de-duplication (dedup)."
-            defaultExpanded={false}
-          >
-            <Grid container spacing={3}>
-              <Grid size={12} sx={{ mt: 1 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={values.dedup?.in_process_enabled || false}
-                      onChange={(e) => {
-                        setFieldValue('dedup.in_process_enabled', e.target.checked)
-                            .then(() => setHasUnsavedChanges(true));
-                      }}
-                      name="dedup.in_process_enabled"
-                    />
-                  }
-                  label="Enable In-Process De-duplication"
-                />
-                <Typography variant="body2" color="textSecondary">
-                  When enabled, the current process suppresses duplicate concurrent requests locally. Useful without Redis or in single-instance setups.
-                </Typography>
-              </Grid>
-            </Grid>
-          </CollapsibleFormSection>
-          */}
 
           <CollapsibleFormSection
             title="Log Configuration"
@@ -1841,6 +1867,21 @@ const ServerConfig = (): React.JSX.Element | null => {
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.log?.add_source || false}
+                      onChange={(e) => {
+                        setFieldValue('log.add_source', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
+                      }}
+                      name="log.add_source"
+                    />
+                  }
+                  label="Add Source to Logs"
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
                 <FormControl fullWidth>
                   <InputLabel>Log Level</InputLabel>
                   <Select
@@ -1853,6 +1894,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                   >
                     <MenuItem value="debug">Debug</MenuItem>
                     <MenuItem value="info">Info</MenuItem>
+                    <MenuItem value="notice">Notice</MenuItem>
                     <MenuItem value="warn">Warn</MenuItem>
                     <MenuItem value="error">Error</MenuItem>
                   </Select>

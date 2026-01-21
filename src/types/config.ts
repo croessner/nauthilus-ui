@@ -1,5 +1,10 @@
 // Configuration interfaces based on the Go structs in the config package
 
+export interface FeatureConfig {
+  name: string;
+  when_no_auth?: boolean;
+}
+
 export interface ServerConfig {
   address?: string;
   max_concurrent_requests?: number;
@@ -15,7 +20,7 @@ export interface ServerConfig {
   instance_name?: string;
   log?: LogConfig;
   backends?: BackendConfig[];
-  features?: string[];
+  features?: (string | FeatureConfig)[];
   brute_force_protocols?: string[];
   ory_hydra_admin_url?: string;
   dns?: DNSConfig;
@@ -31,7 +36,7 @@ export interface ServerConfig {
   // New: server.middlewares (feature switches for HTTP middlewares)
   middlewares?: MiddlewaresConfig;
   timeouts?: TimeoutsConfig;
-  dedup?: DeDupConfig;
+  trusted_proxies?: string[];
 }
 
 export interface EndpointConfig {
@@ -82,6 +87,7 @@ export interface LogConfig {
   color?: boolean;
   level?: string;
   debug_modules?: string[];
+  add_source?: boolean;
 }
 
 export type BackendConfig = string;
@@ -277,6 +283,7 @@ export interface CompressionConfig {
   level_zstd?: number;
   level_brotli?: number;
   min_length?: number;
+  content_types?: string[];
 }
 
 export interface KeepAliveConfig {
@@ -294,11 +301,9 @@ export interface TimeoutsConfig {
   ldap_modify?: string;
   singleflight_work?: string;
   lua_backend?: string;
+  lua_script?: string;
 }
 
-export interface DeDupConfig {
-  in_process_enabled?: boolean;
-}
 
 // Matches backend: AccountLocalCache
 export interface AccountLocalCacheConfig {
@@ -338,7 +343,7 @@ export interface LDAPConfig {
 
 export interface LDAPConfConfig {
   // Core toggles
-  pool_only?: boolean;
+  lookup_pool_only?: boolean;
   start_tls?: boolean;
   tls_skip_verify?: boolean;
   sasl_external?: boolean;
@@ -469,6 +474,7 @@ export interface LuaConfig {
 export interface LuaFeatureConfig {
   name: string;
   script_path: string;
+  when_no_auth?: boolean;
 }
 
 export interface LuaFilterConfig {
@@ -633,7 +639,7 @@ export interface Oauth2ClientConfig {
 
 export interface IdTokenClaimsConfig {
   email?: string;
-  email_verified?: boolean;
+  email_verified?: string;
   name?: string;
   given_name?: string;
   family_name?: string;
@@ -648,9 +654,10 @@ export interface IdTokenClaimsConfig {
   zoneinfo?: string;
   locale?: string;
   phone_number?: string;
-  phone_number_verified?: boolean;
+  phone_number_verified?: string;
   address?: string;
   updated_at?: string;
+  groups?: string;
 }
 
 // Connection Configuration

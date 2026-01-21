@@ -114,7 +114,7 @@ const FrontendConfigSchema = Yup.object().shape({
           .matches(/^[a-zA-Z0-9]+$/, 'Subject must contain only alphanumeric characters'),
         claims: Yup.object().shape({
           email: Yup.string(),
-          email_verified: Yup.boolean(),
+          email_verified: Yup.string(),
           name: Yup.string(),
           given_name: Yup.string(),
           family_name: Yup.string(),
@@ -129,9 +129,10 @@ const FrontendConfigSchema = Yup.object().shape({
           zoneinfo: Yup.string(),
           locale: Yup.string(),
           phone_number: Yup.string(),
-          phone_number_verified: Yup.boolean(),
+          phone_number_verified: Yup.string(),
           address: Yup.string(),
           updated_at: Yup.string(),
+          groups: Yup.string(),
         }),
       })
     ),
@@ -826,16 +827,12 @@ const FrontendConfig = (): React.JSX.Element => {
                                             />
                                           </Grid>
                                           <Grid size={{ xs: 12, sm: 6 }}>
-                                            <FormControlLabel
-                                              control={
-                                                <Field
-                                                  as={Switch}
-                                                  name={`oauth2.clients.${clientIndex}.claims.email_verified`}
-                                                  color="primary"
-                                                  checked={client.claims?.email_verified || false}
-                                                />
-                                              }
-                                              label="Email Verified"
+                                            <Field
+                                              as={TextField}
+                                              fullWidth
+                                              label="Email Verified (Field Mapping)"
+                                              name={`oauth2.clients.${clientIndex}.claims.email_verified`}
+                                              helperText="LDAP field mapping for email verification status"
                                             />
                                           </Grid>
                                           <Grid size={{ xs: 12, sm: 6 }}>
@@ -884,6 +881,46 @@ const FrontendConfig = (): React.JSX.Element => {
                                               fullWidth
                                               label="Preferred Username"
                                               name={`oauth2.clients.${clientIndex}.claims.preferred_username`}
+                                            />
+                                          </Grid>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
+                                            <Field
+                                              as={TextField}
+                                              fullWidth
+                                              label="Phone Number"
+                                              name={`oauth2.clients.${clientIndex}.claims.phone_number`}
+                                            />
+                                          </Grid>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
+                                            <Field
+                                              as={TextField}
+                                              fullWidth
+                                              label="Phone Number Verified (Mapping)"
+                                              name={`oauth2.clients.${clientIndex}.claims.phone_number_verified`}
+                                            />
+                                          </Grid>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
+                                            <Field
+                                              as={TextField}
+                                              fullWidth
+                                              label="Address"
+                                              name={`oauth2.clients.${clientIndex}.claims.address`}
+                                            />
+                                          </Grid>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
+                                            <Field
+                                              as={TextField}
+                                              fullWidth
+                                              label="Updated At"
+                                              name={`oauth2.clients.${clientIndex}.claims.updated_at`}
+                                            />
+                                          </Grid>
+                                          <Grid size={{ xs: 12, sm: 6 }}>
+                                            <Field
+                                              as={TextField}
+                                              fullWidth
+                                              label="Groups"
+                                              name={`oauth2.clients.${clientIndex}.claims.groups`}
                                             />
                                           </Grid>
                                         </Grid>
