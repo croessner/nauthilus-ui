@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
+import { formatConfigAsYaml } from '../utils/yamlUtils';
 import axios from '../utils/axiosConfig';
 import { withErrorHandling as apiWithErrorHandling, prepareAuthParams, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 
@@ -687,35 +688,11 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         return;
       }
 
-      // Create a deep copy of the configuration to ensure all nested objects are included
-      const configToDownload = JSON.parse(JSON.stringify(config));
-
-      // Exclude connection and hooks settings from the download
-      delete configToDownload.connection;
-      if (configToDownload.lua && configToDownload.lua.hooks) {
-        delete configToDownload.lua.hooks;
-      }
-
       // Add a profile name as a comment in the YAML
       const profileComment = `# Profile: ${currentProfileName}`;
 
-      // Ensure brute_force_protocols are lowercase
-      if (configToDownload.server?.brute_force_protocols) {
-        configToDownload.server.brute_force_protocols = configToDownload.server.brute_force_protocols.map((protocol: string) => 
-          protocol.toLowerCase()
-        );
-      }
-
-      // Ensure refresh_token_expiry is set if refresh_token is enabled
-      if (configToDownload.server?.jwt_auth?.refresh_token && !configToDownload.server.jwt_auth.refresh_token_expiry) {
-        if (!configToDownload.server.jwt_auth) {
-          configToDownload.server.jwt_auth = {};
-        }
-        configToDownload.server.jwt_auth.refresh_token_expiry = '24h'; // Default value
-      }
-
-      // Convert the configuration to YAML
-      const yamlContent = yaml.dump(configToDownload);
+      // Convert the configuration to YAML using the utility function
+      const yamlContent = formatConfigAsYaml(config);
 
       // Create a blob and download the link with the profile comment at the top
       const contentWithComment = `${profileComment}\n\n${yamlContent}`;

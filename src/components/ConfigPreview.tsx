@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Paper, Typography, useTheme, Alert, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
 import yaml from 'js-yaml';
+import { formatConfigAsYaml } from '../utils/yamlUtils';
 import { useConfig } from '../contexts/ConfigContext';
 import { BackendConfig } from '../types/config';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
@@ -11,44 +12,7 @@ const ConfigPreview = (): React.JSX.Element => {
   const theme = useTheme();
 
   // Convert config to YAML
-  let yamlContent = '';
-  if (config) {
-    // Create a deep copy of the config object
-    const configCopy = JSON.parse(JSON.stringify(config));
-
-    // Exclude connection and hooks settings from the preview
-    delete configCopy.connection;
-    if (configCopy.lua && configCopy.lua.hooks) {
-      delete configCopy.lua.hooks;
-    }
-
-    // Migrate and drop deprecated Lua number_of_workers on export
-    if (configCopy.lua?.config) {
-      const c = configCopy.lua.config as any;
-      if (!c.backend_number_of_workers && typeof c.number_of_workers === 'number') {
-        c.backend_number_of_workers = c.number_of_workers;
-      }
-      delete c.number_of_workers; // drop deprecated
-    }
-    if (configCopy.lua?.optional_lua_backends) {
-      Object.values(configCopy.lua.optional_lua_backends).forEach((backend: any) => {
-        if (!backend.backend_number_of_workers && typeof backend.number_of_workers === 'number') {
-          backend.backend_number_of_workers = backend.number_of_workers;
-        }
-        delete backend.number_of_workers; // drop deprecated
-      });
-    }
-
-    // Ensure refresh_token_expiry is set if refresh_token is enabled
-    if (configCopy.server?.jwt_auth?.refresh_token && !configCopy.server.jwt_auth.refresh_token_expiry) {
-      if (!configCopy.server.jwt_auth) {
-        configCopy.server.jwt_auth = {};
-      }
-      configCopy.server.jwt_auth.refresh_token_expiry = '24h'; // Default value
-    }
-
-    yamlContent = yaml.dump(configCopy);
-  }
+  const yamlContent = config ? formatConfigAsYaml(config) : '';
 
   // Validate essential settings
   const validateEssentialSettings = () => {
