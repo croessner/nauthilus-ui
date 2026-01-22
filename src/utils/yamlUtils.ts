@@ -127,7 +127,15 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
       } else if (isSecondLevel) {
         const prevLine = lines[i - 1];
         const isPrevTopLevel = /^[a-z0-9_]+:/.test(prevLine);
-        if (!isPrevTopLevel && resultLines[resultLines.length - 1] !== '') {
+        const isPrevSecondLevel = /^  [a-z0-9_]+:/.test(prevLine);
+        
+        // If current element is second-level and has children (ends with :)
+        // AND previous element was second-level but had NO children (didn't end with :)
+        // THEN add a newline.
+        const currentHasChildren = line.trimEnd().endsWith(':');
+        const prevWasSecondLevelNoChildren = isPrevSecondLevel && !prevLine.trimEnd().endsWith(':');
+
+        if (!isPrevTopLevel && (!isPrevSecondLevel || (currentHasChildren && prevWasSecondLevelNoChildren)) && resultLines[resultLines.length - 1] !== '') {
           resultLines.push('');
         }
       }
