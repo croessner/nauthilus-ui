@@ -42,23 +42,23 @@ import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 import { startAsyncJob, awaitJob, AsyncJobStatusResponse } from '../utils/asyncJobs';
 
-// Helper function to convert time period strings (like "1h", "30m") to seconds
-const convertPeriodToSeconds = (period: string): number => {
-  if (!period) return 0;
-  
-  const match = period.match(/^(\d+)([smhd])$/);
-  if (!match) return 0;
-  
-  const value = parseInt(match[1], 10);
-  const unit = match[2];
-  
-  switch (unit) {
-    case 's': return value; // seconds
-    case 'm': return value * 60; // minutes to seconds
-    case 'h': return value * 60 * 60; // hours to seconds
-    case 'd': return value * 24 * 60 * 60; // days to seconds
-    default: return 0;
-  }
+// Helper function to format nanosecond durations into human-readable strings
+const formatNanoDuration = (nanos: number): string => {
+  const totalSeconds = Math.floor(nanos / 1_000_000_000);
+  if (totalSeconds <= 0) return '0s';
+
+  const days = Math.floor(totalSeconds / 86400);
+  const hours = Math.floor((totalSeconds % 86400) / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = totalSeconds % 60;
+
+  const parts: string[] = [];
+  if (days > 0) parts.push(`${days}d`);
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0) parts.push(`${minutes}m`);
+  if (seconds > 0 || parts.length === 0) parts.push(`${seconds}s`);
+
+  return parts.join(' ');
 };
 
 // Brute force protection types
@@ -68,7 +68,8 @@ interface BruteForceListItem {
   protocol?: string;
   oidc_cid?: string;
   ttl: number;
-  attempts: number;
+  ban_time: number;
+  banned_at: string;
 }
 
 interface AffectedAccount {
@@ -183,32 +184,15 @@ const BruteForceConfig: React.FC = () => {
       if (data.result && Array.isArray(data.result)) {
         // Process IP addresses (first item in the result array)
         const ipAddressesResult = data.result[0];
-        if (ipAddressesResult && ipAddressesResult.ip_addresses) {
-          // Convert the ip_addresses object to an array of BruteForceListItem
-          Object.entries(ipAddressesResult.ip_addresses).forEach(([ip, rule]) => {
-            // Find the matching bucket configuration for this rule
-            const ruleName = rule as string;
-            let ttl = 0;
-            let attempts = 0;
-            
-            // Try to find the matching bucket in the configuration
-            if (config?.brute_force?.buckets && config.brute_force.buckets.length > 0) {
-              const matchingBucket = config.brute_force.buckets.find(bucket => bucket.name === ruleName);
-              if (matchingBucket) {
-                // Extract TTL from period (e.g., "1h" -> 3600 seconds)
-                const periodStr = matchingBucket.period || '';
-                ttl = convertPeriodToSeconds(periodStr);
-                
-                // Get the failed_requests value as attempts
-                attempts = matchingBucket.failed_requests || 0;
-              }
-            }
-            
+        if (ipAddressesResult && ipAddressesResult.entries && Array.isArray(ipAddressesResult.entries)) {
+          // Convert the entries array to an array of BruteForceListItem
+          ipAddressesResult.entries.forEach((entry: { network: string; bucket: string; ban_time: number; ttl: number; banned_at: string }) => {
             transformedData.blocked_ips.push({
-              ip_address: ip,
-              rule_name: ruleName,
-              ttl: ttl,
-              attempts: attempts
+              ip_address: entry.network,
+              rule_name: entry.bucket,
+              ttl: entry.ttl,
+              ban_time: entry.ban_time,
+              banned_at: entry.banned_at,
             });
           });
         }
@@ -687,13 +671,17 @@ const BruteForceConfig: React.FC = () => {
                               secondary={
                                 <>
                                   <Typography component="span" variant="body2">
-                                    Rule: {item.rule_name}
+                                    Bucket: {item.rule_name}
                                     {item.protocol && ` | Protocol: ${item.protocol}`}
                                     {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
                                   </Typography>
                                   <br />
                                   <Typography component="span" variant="body2">
-                                    TTL: {item.ttl} seconds | Attempts: {item.attempts}
+                                    Ban duration: {formatNanoDuration(item.ban_time)} | Remaining: {formatNanoDuration(item.ttl)}
+                                  </Typography>
+                                  <br />
+                                  <Typography component="span" variant="body2">
+                                    Banned at: {new Date(item.banned_at).toLocaleString()}
                                   </Typography>
                                 </>
                               }
