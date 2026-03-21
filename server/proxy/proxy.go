@@ -582,8 +582,8 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 	router.GET("/proxy/ping", h.PingProxy)
 	router.POST("/proxy/ping", h.PingProxy)
 
-	router.GET("/proxy/jwt-token", h.JWTTokenProxy)
-	router.POST("/proxy/jwt-token", h.JWTTokenProxy)
+	router.GET("/proxy/oidc-token", h.OIDCTokenProxy)
+	router.POST("/proxy/oidc-token", h.OIDCTokenProxy)
 
 	router.GET("/proxy/bruteforce/list", h.BruteforceListProxy)
 	router.POST("/proxy/bruteforce/list", h.BruteforceListProxy)
@@ -637,13 +637,13 @@ func (h *ProxyHandler) PingProxy(ctx *gin.Context) {
 	h.handleProxyRequest(ctx, config)
 }
 
-// JWTTokenProxy handles the /proxy/jwt-token endpoint
-func (h *ProxyHandler) JWTTokenProxy(ctx *gin.Context) {
+// OIDCTokenProxy handles the /proxy/oidc-token endpoint
+func (h *ProxyHandler) OIDCTokenProxy(ctx *gin.Context) {
 	config := ProxyConfig{
-		EndpointPath: "/api/v1/jwt/token",
-		LogEndpoint:  "/proxy/jwt-token",
+		EndpointPath: "/oidc/token",
+		LogEndpoint:  "/proxy/oidc-token",
 		RequiresAuth: false,
-		ContentType:  "application/json",
+		ContentType:  "application/x-www-form-urlencoded",
 	}
 
 	h.handleProxyRequest(ctx, config)

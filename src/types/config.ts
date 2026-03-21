@@ -22,7 +22,6 @@ export interface ServerConfig {
   backends?: BackendConfig[];
   features?: (string | FeatureConfig)[];
   brute_force_protocols?: string[];
-  ory_hydra_admin_url?: string;
   dns?: DNSConfig;
   insights?: InsightsConfig;
   redis: RedisConfig;
@@ -122,6 +121,7 @@ export interface RedisConfig {
   database_number?: number;
   prefix?: string;
   password_nonce?: string;
+  encryption_secret?: string;
   pool_size?: number;
   idle_pool_size?: number;
   tls?: TLSConfig;
@@ -202,32 +202,30 @@ export interface MasterUserConfig {
 
 export interface FrontendConfig {
   enabled?: boolean;
-  csrf_secret?: string;
-  cookie_store_auth_key?: string;
-  cookie_store_encryption_key?: string;
+  encryption_secret?: string;
   html_static_content_path?: string;
-  default_logo_image?: string;
-  login_page?: string;
-  login_page_welcome?: string;
-  login_page_logo_image_alt?: string;
-  two_factor_page?: string;
-  consent_page?: string;
-  logout_page?: string;
-  error_page?: string;
-  notify_page?: string;
-  device_page?: string;
-  homepage?: string;
-  logout_page_welcome?: string;
-  consent_page_welcome?: string;
-  consent_page_logo_image_alt?: string;
-  notify_page_welcome?: string;
-  notify_page_logo_image_alt?: string;
   language_resources?: string;
+  languages?: string[];
   default_language?: string;
-  hydra_admin_uri?: string;
   totp_issuer?: string;
   totp_skew?: number;
-  login_remember_for?: number;
+  security_headers?: FrontendSecurityHeadersConfig;
+}
+
+export interface FrontendSecurityHeadersConfig {
+  enabled?: boolean;
+  content_security_policy?: string;
+  content_security_policy_report_only?: boolean;
+  strict_transport_security?: string;
+  x_content_type_options?: string;
+  x_frame_options?: string;
+  referrer_policy?: string;
+  permissions_policy?: string;
+  cross_origin_opener_policy?: string;
+  cross_origin_resource_policy?: string;
+  cross_origin_embedder_policy?: string;
+  x_permitted_cross_domain_policies?: string;
+  x_dns_prefetch_control?: string;
 }
 
 export interface PrometheusTimerConfig {
@@ -397,6 +395,7 @@ export interface LDAPConfConfig {
   // Bind & TLS
   bind_dn?: string;
   bind_pw?: string;
+  encryption_secret?: string;
   tls_ca_cert?: string;
   tls_client_cert?: string;
   tls_client_key?: string;
@@ -474,6 +473,8 @@ export interface LuaConfig {
 export interface LuaFeatureConfig {
   name: string;
   script_path: string;
+  when_authenticated?: boolean;
+  when_unauthenticated?: boolean;
   when_no_auth?: boolean;
 }
 
@@ -494,8 +495,9 @@ export interface LuaActionConfig {
 export interface LuaCustomHookConfig {
   http_location: string;
   http_method: string;
+  content_type?: string;
   script_path: string;
-  roles?: string[];
+  scopes?: string[];
 }
 
 export interface LuaScriptConfig {
@@ -530,14 +532,13 @@ export interface BruteForceConfig {
   buckets?: BruteForceRuleConfig[];
   tolerate_percent?: number;
   custom_tolerations?: TolerateConfig[];
+  learning?: (string | FeatureConfig)[];
   tolerate_ttl?: string;
   adaptive_toleration?: boolean;
   min_tolerate_percent?: number;
   max_tolerate_percent?: number;
   scale_factor?: number;
   pw_history_for_known_accounts?: boolean; // mapstructure: "pw_history_for_known_accounts"
-  cold_start_grace_enabled?: boolean;
-  cold_start_grace_ttl?: string;
   ip_scoping?: IPScoping; // mapstructure: "ip_scoping"
   rwp_allowed_unique_hashes?: number;
   rwp_window?: string;
@@ -611,69 +612,173 @@ export interface BackendServerConfig {
   haproxy_v2?: boolean;
 }
 
-// OAuth2 Configuration
-export interface Oauth2Config {
-  custom_scopes?: Oauth2CustomScopeConfig[];
-  clients?: Oauth2ClientConfig[];
+// IdP Configuration
+export interface IdPConfig {
+  oidc?: IdPOIDCConfig;
+  saml2?: IdPSAML2Config;
+  webauthn?: IdPWebAuthnConfig;
+  remember_me_ttl?: string;
+  terms_of_service_url?: string;
+  privacy_policy_url?: string;
 }
 
-export interface Oauth2CustomScopeConfig {
-  name: string;
-  description: string;
-  claims: OIDCCustomClaimConfig[];
+export interface IdPWebAuthnConfig {
+  rp_display_name?: string;
+  rp_id?: string;
+  rp_origins?: string[];
+  authenticator_attachment?: string;
+  resident_key?: string;
+  user_verification?: string;
 }
 
-export interface OIDCCustomClaimConfig {
-  name: string;
-  type: string;
+export interface IdPOIDCConfig {
+  enabled?: boolean;
+  issuer?: string;
+  signing_keys?: IdPOIDCKeyConfig[];
+  auto_key_rotation?: boolean;
+  key_rotation_interval?: string;
+  key_max_age?: string;
+  clients?: IdPOIDCClientConfig[];
+  custom_scopes?: IdPOIDCCustomScopeConfig[];
+  scopes_supported?: string[];
+  response_types_supported?: string[];
+  subject_types_supported?: string[];
+  id_token_signing_alg_values_supported?: string[];
+  token_endpoint_auth_methods_supported?: string[];
+  code_challenge_methods_supported?: string[];
+  claims_supported?: string[];
+  front_channel_logout_supported?: boolean;
+  front_channel_logout_session_supported?: boolean;
+  back_channel_logout_supported?: boolean;
+  back_channel_logout_session_supported?: boolean;
+  access_token_type?: string;
+  default_access_token_lifetime?: string;
+  default_refresh_token_lifetime?: string;
+  consent_ttl?: string;
+  consent_mode?: string;
+  token_endpoint_allow_get?: boolean;
+  device_code_expiry?: string;
+  device_code_polling_interval?: number;
+  device_code_user_code_length?: number;
 }
 
-export interface Oauth2ClientConfig {
-  skip_consent?: boolean;
-  skip_totp?: boolean;
-  name: string;
-  client_id: string;
-  subject: string;
-  claims: IdTokenClaimsConfig;
+export interface IdPOIDCKeyConfig {
+  id?: string;
+  key?: string;
+  key_file?: string;
+  algorithm?: string;
+  active?: boolean;
 }
 
-export interface IdTokenClaimsConfig {
-  email?: string;
-  email_verified?: string;
+export interface IdPOIDCCustomScopeConfig {
   name?: string;
-  given_name?: string;
-  family_name?: string;
-  middle_name?: string;
-  nickname?: string;
-  preferred_username?: string;
-  profile?: string;
-  picture?: string;
-  website?: string;
-  gender?: string;
-  birthdate?: string;
-  zoneinfo?: string;
-  locale?: string;
-  phone_number?: string;
-  phone_number_verified?: string;
-  address?: string;
-  updated_at?: string;
-  groups?: string;
+  description?: string;
+  claims?: IdPOIDCCustomClaimConfig[];
+}
+
+export interface IdPOIDCCustomClaimConfig {
+  name?: string;
+  type?: string;
+}
+
+export interface IdPOIDCClaimMappingConfig {
+  claim?: string;
+  attribute?: string;
+  type?: string;
+}
+
+export interface IdPOIDCIdTokenClaimsConfig {
+  mappings?: IdPOIDCClaimMappingConfig[];
+}
+
+export interface IdPOIDCAccessTokenClaimsConfig {
+  mappings?: IdPOIDCClaimMappingConfig[];
+}
+
+export interface IdPOIDCClientConfig {
+  name?: string;
+  client_id?: string;
+  client_secret?: string;
+  redirect_uris?: string[];
+  scopes?: string[];
+  grant_types?: string[];
+  require_mfa?: string[];
+  supported_mfa?: string[];
+  post_logout_redirect_uris?: string[];
+  backchannel_logout_uri?: string;
+  frontchannel_logout_uri?: string;
+  logout_redirect_uri?: string;
+  access_token_type?: string;
+  token_endpoint_auth_method?: string;
+  client_public_key?: string;
+  client_public_key_file?: string;
+  client_public_key_algorithm?: string;
+  id_token_claims?: IdPOIDCIdTokenClaimsConfig;
+  access_token_claims?: IdPOIDCAccessTokenClaimsConfig;
+  access_token_lifetime?: string;
+  refresh_token_lifetime?: string;
+  consent_ttl?: string;
+  consent_mode?: string;
+  required_scopes?: string[];
+  optional_scopes?: string[];
+  skip_consent?: boolean;
+  delayed_response?: boolean;
+  frontchannel_logout_session_required?: boolean;
+}
+
+export interface IdPSAML2Config {
+  enabled?: boolean;
+  entity_id?: string;
+  cert?: string;
+  cert_file?: string;
+  key?: string;
+  key_file?: string;
+  service_providers?: IdPSAML2ServiceProviderConfig[];
+  signature_method?: string;
+  default_expire_time?: string;
+  name_id_format?: string;
+  slo?: IdPSAML2SLOConfig;
+}
+
+export interface IdPSAML2SLOConfig {
+  enabled?: boolean;
+  front_channel_enabled?: boolean;
+  back_channel_enabled?: boolean;
+  request_timeout?: string;
+  max_participants?: number;
+  back_channel_max_retries?: number;
+}
+
+export interface IdPSAML2ServiceProviderConfig {
+  name?: string;
+  entity_id?: string;
+  acs_url?: string;
+  slo_url?: string;
+  slo_back_channel_url?: string;
+  cert?: string;
+  cert_file?: string;
+  authn_requests_signed?: boolean;
+  allowed_attributes?: string[];
+  require_mfa?: string[];
+  supported_mfa?: string[];
+  logout_redirect_uri?: string;
+  delayed_response?: boolean;
 }
 
 // Connection Configuration
-export interface ConnectionJWTAuthConfig {
+export interface ConnectionOIDCAuthConfig {
   enabled?: boolean;
-  username?: string;
-  password?: string;
+  client_id?: string;
+  client_secret?: string;
+  scope?: string;
   token?: string;
-  refresh_token?: string;
   expires_at?: number;
 }
 
 export interface ConnectionConfig {
   backend_url?: string;
   basic_auth?: BasicAuthConfig;
-  jwt_auth?: ConnectionJWTAuthConfig;
+  oidc_auth?: ConnectionOIDCAuthConfig;
 }
 
 // Complete Configuration
@@ -681,7 +786,7 @@ export interface NauthilusConfig {
   server: ServerConfig;
   ldap?: LDAPConfig;
   lua?: LuaConfig;
-  oauth2?: Oauth2Config;
+  idp?: IdPConfig;
   brute_force?: BruteForceConfig;
   realtime_blackhole_lists?: RBLConfig;
   relay_domains?: RelayDomainsConfig;

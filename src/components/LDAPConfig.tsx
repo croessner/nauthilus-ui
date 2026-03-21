@@ -21,6 +21,7 @@ const LDAPConfigSchema = Yup.object().shape({
     auth_pool_size: Yup.number().min(0, 'Must be at least 0'),
     auth_idle_pool_size: Yup.number().min(0, 'Must be at least 0'),
     number_of_workers: Yup.number().min(1, 'Must be at least 1'),
+    encryption_secret: Yup.string().min(16, 'Encryption secret must be at least 16 characters').matches(/^\S*$/, 'Encryption secret cannot contain spaces'),
     server_uri: Yup.array().of(Yup.string()).required('At least one server URI is required'),
   }),
   optional_ldap_pools: Yup.object().shape({}).nullable(),
@@ -97,6 +98,7 @@ const LDAPConfig = (): React.JSX.Element => {
       auth_idle_pool_size: 5,
       bind_dn: '',
       bind_pw: '',
+      encryption_secret: config?.ldap?.config?.encryption_secret || '',
       tls_ca_cert: '',
       tls_client_cert: '',
       tls_client_key: '',
@@ -345,6 +347,24 @@ const LDAPConfig = (): React.JSX.Element => {
                       helperText={
                         getIn(touched, 'config.bind_pw') &&
                         getIn(errors, 'config.bind_pw')
+                      }
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 6 }}>
+                    <PasswordField
+                      fullWidth
+                      name="config.encryption_secret"
+                      label="Encryption Secret"
+                      infoTitle="Optional local encryption secret for LDAP-related protected values."
+                      value={values.config.encryption_secret || ''}
+                      onChange={handleChange}
+                      error={Boolean(
+                        getIn(touched, 'config.encryption_secret') &&
+                        getIn(errors, 'config.encryption_secret')
+                      )}
+                      helperText={
+                        getIn(touched, 'config.encryption_secret') &&
+                        getIn(errors, 'config.encryption_secret')
                       }
                     />
                   </Grid>
@@ -755,6 +775,15 @@ const LDAPConfig = (): React.JSX.Element => {
                               name={`optional_ldap_pools.${poolName}.bind_pw`}
                               label="Bind Password"
                               value={poolConfig.bind_pw || ''}
+                              onChange={handleChange}
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, md: 6 }}>
+                            <PasswordField
+                              fullWidth
+                              name={`optional_ldap_pools.${poolName}.encryption_secret`}
+                              label="Encryption Secret"
+                              value={poolConfig.encryption_secret || ''}
                               onChange={handleChange}
                             />
                           </Grid>
@@ -1447,6 +1476,7 @@ const LDAPConfig = (): React.JSX.Element => {
                   auth_idle_pool_size: 5,
                   bind_dn: '',
                   bind_pw: '',
+                  encryption_secret: '',
                   tls_ca_cert: '',
                   tls_client_cert: '',
                   tls_client_key: '',

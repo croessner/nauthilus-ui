@@ -290,9 +290,13 @@ func (m *MongoDB) initializeDefaultProfile(ctx context.Context) error {
 					"username": "",
 					"password": "",
 				},
-				"jwt_auth": map[string]interface{}{
-					"enabled": false,
-					"token":   "",
+				"oidc_auth": map[string]interface{}{
+					"enabled":       false,
+					"client_id":     "",
+					"client_secret": "",
+					"scope":         "nauthilus:authenticate nauthilus:security",
+					"token":         "",
+					"expires_at":    0,
 				},
 			},
 		}

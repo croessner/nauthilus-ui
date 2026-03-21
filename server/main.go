@@ -357,7 +357,7 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 		path := ctx.Request.URL.Path
 
 		// Skip authentication for specific public proxy endpoints
-		if strings.HasPrefix(path, "/proxy/jwt-token") {
+		if strings.HasPrefix(path, "/proxy/oidc-token") {
 			ctx.Next()
 
 			return

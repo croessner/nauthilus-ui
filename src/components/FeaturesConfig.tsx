@@ -156,14 +156,13 @@ const FeaturesConfigSchema = Yup.object().shape({
               scale_factor: Yup.number().min(0.1).max(10),
             })
           ),
+          learning: Yup.array().of(Yup.string()),
           tolerate_ttl: Yup.string(),
           adaptive_toleration: Yup.boolean(),
           min_tolerate_percent: Yup.number().min(0).max(100),
           max_tolerate_percent: Yup.number().min(0).max(100),
           scale_factor: Yup.number().min(0.1).max(10),
           pw_history_for_known_accounts: Yup.boolean(),
-          cold_start_grace_enabled: Yup.boolean(),
-          cold_start_grace_ttl: Yup.string(),
           ip_scoping: Yup.object().shape({
             rwp_ipv6_cidr: Yup.number().min(0).max(128),
             tolerations_ipv6_cidr: Yup.number().min(0).max(128)
@@ -260,14 +259,15 @@ const FeaturesConfig: React.FC = () => {
       }],
       tolerate_percent: config?.brute_force?.tolerate_percent || 0,
       custom_tolerations: config?.brute_force?.custom_tolerations || [],
+      learning: (config?.brute_force?.learning || [])
+        .map((entry: any) => (typeof entry === 'string' ? entry : entry?.name))
+        .filter(Boolean),
       tolerate_ttl: config?.brute_force?.tolerate_ttl || '1h',
       adaptive_toleration: config?.brute_force?.adaptive_toleration || false,
       min_tolerate_percent: config?.brute_force?.min_tolerate_percent || 10,
       max_tolerate_percent: config?.brute_force?.max_tolerate_percent || 50,
       scale_factor: config?.brute_force?.scale_factor || 1.0,
       pw_history_for_known_accounts: config?.brute_force?.pw_history_for_known_accounts || false,
-      cold_start_grace_enabled: config?.brute_force?.cold_start_grace_enabled || false,
-      cold_start_grace_ttl: config?.brute_force?.cold_start_grace_ttl || '1m',
       ip_scoping: {
         rwp_ipv6_cidr: config?.brute_force?.ip_scoping?.rwp_ipv6_cidr ?? 128,
         tolerations_ipv6_cidr: config?.brute_force?.ip_scoping?.tolerations_ipv6_cidr ?? 128,
@@ -1486,38 +1486,24 @@ const FeaturesConfig: React.FC = () => {
                   </Grid>
 
                   <Grid size={12}>
-                    <CollapsibleFormSection title="Cold Start Grace">
-                      <FormControlLabel
-                        control={
-                          <Switch
-                            checked={values.brute_force?.cold_start_grace_enabled || false}
-                            onChange={(e) => {
-                              setFieldValue('brute_force.cold_start_grace_enabled', e.target.checked)
-                                .then(() => setHasUnsavedChanges(true));
-                            }}
-                            name="brute_force.cold_start_grace_enabled"
-                          />
-                        }
-                        label="Enable cold start grace period"
+                    <CollapsibleFormSection title="Learning Features">
+                      <Field
+                        as={TextField}
+                        fullWidth
+                        name="brute_force.learning"
+                        label="Learning (comma-separated feature names)"
+                        variant="outlined"
+                        value={Array.isArray(values.brute_force?.learning) ? values.brute_force.learning.join(', ') : ''}
+                        helperText="Features whose rejections should still contribute learning data (e.g., rbl, relay_domains, lua)."
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          const learning = e.target.value
+                            .split(',')
+                            .map((item: string) => item.trim())
+                            .filter((item: string) => item.length > 0);
+                          setFieldValue('brute_force.learning', learning)
+                            .then(() => setHasUnsavedChanges(true));
+                        }}
                       />
-                      <Box sx={{ mt: 2 }}>
-                        <Field
-                          as={TextField}
-                          fullWidth
-                          name="brute_force.cold_start_grace_ttl"
-                          label="Grace TTL"
-                          variant="outlined"
-                          disabled={!values.brute_force?.cold_start_grace_enabled}
-                          helperText="Duration for the grace period (e.g., 30s, 1m, 5m)."
-                          onChange={(e: React.ChangeEvent<any>) => {
-                            handleChange(e);
-                            setHasUnsavedChanges(true);
-                          }}
-                        />
-                      </Box>
-                      <Typography variant="body2" color="textSecondary" sx={{ mt: 1 }}>
-                        When enabled, applies a temporary grace period after startup before enforcing brute-force penalties.
-                      </Typography>
                     </CollapsibleFormSection>
                   </Grid>
 

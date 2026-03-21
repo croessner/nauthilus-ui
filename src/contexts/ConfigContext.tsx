@@ -421,7 +421,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         'address', 'max_concurrent_requests', 'max_password_history_entries',
         'http3', 'haproxy_v2', 'disabled_endpoints', 'tls', 'basic_auth',
         'jwt_auth', 'instance_name', 'log', 'backends', 'features',
-        'brute_force_protocols', 'ory_hydra_admin_url', 'dns', 'insights',
+        'brute_force_protocols', 'dns', 'insights',
         'redis', 'master_user', 'frontend', 'prometheus_timer',
         'default_http_request_header', 'http_client', 'compression', 'keep_alive',
         'timeouts'
@@ -438,7 +438,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
     // Copy other known top-level properties
     const knownProps = [
-      'ldap', 'lua', 'oauth2', 'brute_force', 'realtime_blackhole_lists',
+      'ldap', 'lua', 'idp', 'brute_force', 'realtime_blackhole_lists',
       'relay_domains', 'backend_server_monitoring', 'cleartext_networks'
     ];
 

@@ -9,7 +9,7 @@ import { NauthilusConfig } from '../types/config';
  * 2. Other features (alphabetical)
  * 3. Backend Server Monitoring
  * 4. Brute Force
- * 5. OAuth2 Settings
+ * 5. IdP Settings
  * 6. Lua
  * 7. LDAP
  * 
@@ -71,7 +71,7 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   }
   
   // 2. Features/sections that are not in the fixed list follow alphabetically
-  const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'oauth2', 'lua', 'ldap'];
+  const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
   const featureKeys = Object.keys(configCopy)
     .filter(key => !fixedKeys.includes(key))
     .sort();
@@ -81,7 +81,7 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   });
   
   // 3-7. Remaining sections in fixed order
-  const remainingKeys = ['backend_server_monitoring', 'brute_force', 'oauth2', 'lua', 'ldap'];
+  const remainingKeys = ['backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
   remainingKeys.forEach(key => {
     if (configCopy[key] !== undefined) {
       // Special sorting for lua and ldap: put "config" at the top of the section

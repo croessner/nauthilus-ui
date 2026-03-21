@@ -10,8 +10,11 @@ const DEFAULT_CONFIG: ConnectionConfig = {
     username: '',
     password: ''
   },
-  jwt_auth: {
+  oidc_auth: {
     enabled: false,
+    client_id: '',
+    client_secret: '',
+    scope: '',
     token: ''
   }
 }

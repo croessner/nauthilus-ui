@@ -18,6 +18,8 @@ const LuaConfigSchema = Yup.object().shape({
     Yup.object().shape({
       name: Yup.string().required('Feature name is required'),
       script_path: Yup.string().required('Script path is required'),
+      when_authenticated: Yup.boolean(),
+      when_unauthenticated: Yup.boolean(),
       when_no_auth: Yup.boolean(),
     })
   ),
@@ -38,8 +40,9 @@ const LuaConfigSchema = Yup.object().shape({
     Yup.object().shape({
       http_location: Yup.string().required('HTTP location is required'),
       http_method: Yup.string().required('HTTP method is required'),
+      content_type: Yup.string(),
       script_path: Yup.string().required('Script path is required'),
-      roles: Yup.array().of(Yup.string()),
+      scopes: Yup.array().of(Yup.string()),
     })
   ),
   search: Yup.array().of(
@@ -125,10 +128,20 @@ const LuaConfig = (): React.JSX.Element => {
 
   // Initial values
   const initialValues = {
-    features: (config?.lua?.features || []).map((f: LuaFeatureConfig) => ({
-      ...f,
-      when_no_auth: f.when_no_auth || false,
-    })),
+    features: (config?.lua?.features || []).map((f: LuaFeatureConfig) => {
+      const wa = (f as any).when_authenticated;
+      const wu = (f as any).when_unauthenticated;
+      const wn = (f as any).when_no_auth;
+      if (wa === undefined && wu === undefined && wn === undefined) {
+        return { ...f, when_authenticated: true, when_unauthenticated: true, when_no_auth: false };
+      }
+      return {
+        ...f,
+        when_authenticated: wa ?? true,
+        when_unauthenticated: wu ?? true,
+        when_no_auth: wn ?? false,
+      };
+    }),
     filters: (config?.lua?.filters || []).map((f: any) => {
       const wa = (f as any).when_authenticated;
       const wu = (f as any).when_unauthenticated;
@@ -139,7 +152,15 @@ const LuaConfig = (): React.JSX.Element => {
       return f;
     }),
     actions: config?.lua?.actions || [],
-    custom_hooks: config?.lua?.custom_hooks || [],
+    custom_hooks: (config?.lua?.custom_hooks || []).map((hook: any) => {
+      const rest = { ...hook };
+      delete rest.roles;
+      return {
+        ...rest,
+        content_type: hook?.content_type || '',
+        scopes: Array.isArray(hook?.scopes) ? hook.scopes : [],
+      };
+    }),
     search: config?.lua?.search || [],
     config: config?.lua?.config || {
       number_of_workers: 10,
@@ -166,6 +187,16 @@ const LuaConfig = (): React.JSX.Element => {
   const handleSubmit = (values: any) => {
     if (!config) return;
 
+    const sanitizedHooks = (values.custom_hooks || []).map((hook: any) => {
+      const scopes = Array.isArray(hook.scopes) ? hook.scopes : [];
+      const rest = { ...hook };
+      delete rest.roles;
+      return {
+        ...rest,
+        scopes,
+      };
+    });
+
     // Create a properly typed copy of the config
     const updatedConfig: NauthilusConfig = { 
       ...config as NauthilusConfig,
@@ -177,7 +208,7 @@ const LuaConfig = (): React.JSX.Element => {
       features: values.features,
       filters: values.filters,
       actions: values.actions,
-      custom_hooks: values.custom_hooks,
+      custom_hooks: sanitizedHooks,
       search: values.search,
       config: values.config,
       optional_lua_backends: values.optional_lua_backends,
@@ -293,6 +324,26 @@ const LuaConfig = (): React.JSX.Element => {
                             <FormControlLabel
                               control={
                                 <Checkbox
+                                  name={`features[${index}].when_authenticated`}
+                                  checked={Boolean((feature as any).when_authenticated)}
+                                  onChange={handleChange}
+                                />
+                              }
+                              label="When Authenticated"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  name={`features[${index}].when_unauthenticated`}
+                                  checked={Boolean((feature as any).when_unauthenticated)}
+                                  onChange={handleChange}
+                                />
+                              }
+                              label="When Unauthenticated"
+                            />
+                            <FormControlLabel
+                              control={
+                                <Checkbox
                                   name={`features[${index}].when_no_auth`}
                                   checked={Boolean(feature.when_no_auth)}
                                   onChange={handleChange}
@@ -314,7 +365,7 @@ const LuaConfig = (): React.JSX.Element => {
                     onClick={() => {
                       setFieldValue('features', [
                         ...values.features,
-                        { name: '', script_path: '', when_no_auth: false },
+                        { name: '', script_path: '', when_authenticated: true, when_unauthenticated: true, when_no_auth: false },
                       ])
                           .then(() => setHasUnsavedChanges(true));
                     }}
@@ -610,7 +661,19 @@ const LuaConfig = (): React.JSX.Element => {
                             </Select>
                           </FormControl>
                         </Grid>
-                        <Grid size={4}>
+                        <Grid size={2}>
+                          <TextField
+                            fullWidth
+                            label="Content-Type"
+                            name={`custom_hooks[${index}].content_type`}
+                            value={hook.content_type || ''}
+                            onChange={handleChange}
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Optional response content type (default: application/json)." /></InputAdornment>
+                            ) }}
+                          />
+                        </Grid>
+                        <Grid size={3}>
                           <TextField
                             fullWidth
                             label="Script Path"
@@ -633,20 +696,20 @@ const LuaConfig = (): React.JSX.Element => {
                         <Grid size={2}>
                           <TextField
                             fullWidth
-                            label="Roles (comma-separated)"
-                            name={`custom_hooks[${index}].roles`}
-                            value={hook.roles ? (Array.isArray(hook.roles) ? hook.roles.join(',') : hook.roles) : ''}
+                            label="Scopes (comma-separated)"
+                            name={`custom_hooks[${index}].scopes`}
+                            value={hook.scopes ? (Array.isArray(hook.scopes) ? hook.scopes.join(',') : hook.scopes) : ''}
                             onChange={(e) => {
-                              const roles = e.target.value.split(',').map(role => role.trim()).filter(role => role);
-                              setFieldValue(`custom_hooks[${index}].roles`, roles)
+                              const scopes = e.target.value.split(',').map(scope => scope.trim()).filter(scope => scope);
+                              setFieldValue(`custom_hooks[${index}].scopes`, scopes)
                                   .then(() => setHasUnsavedChanges(true));
                             }}
                             InputProps={{ endAdornment: (
-                              <InputAdornment position="end"><InfoTooltip title="List of roles allowed to access this hook (e.g., admin,user)." /></InputAdornment>
+                              <InputAdornment position="end"><InfoTooltip title="List of scopes allowed to access this hook (e.g., admin,user)." /></InputAdornment>
                             ) }}
                           />
                         </Grid>
-                        <Grid size={2}>
+                        <Grid size={1}>
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -671,7 +734,7 @@ const LuaConfig = (): React.JSX.Element => {
                     onClick={() => {
                       setFieldValue('custom_hooks', [
                         ...values.custom_hooks,
-                        { http_location: '', http_method: 'GET', script_path: '', roles: [] },
+                        { http_location: '', http_method: 'GET', content_type: '', script_path: '', scopes: [] },
                       ])
                           .then(() => setHasUnsavedChanges(true));
                     }}

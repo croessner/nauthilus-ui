@@ -36,21 +36,20 @@ const ConnectionConfigSchema = Yup.object().shape({
     }),
   }),
 
-  // JWT Auth validation
-  jwt_auth: Yup.object().shape({
+  // OIDC client credentials validation
+  oidc_auth: Yup.object().shape({
     enabled: Yup.boolean(),
-    username: Yup.string().when(['enabled'], {
+    client_id: Yup.string().when(['enabled'], {
       is: (enabled: any) => Boolean(enabled),
       then: (schema) => schema
-        .required('Username is required when JWT Auth is enabled')
-        .matches(/^\S+$/, 'Username cannot contain spaces'),
+        .required('Client ID is required when OIDC Authentication is enabled')
+        .matches(/^\S+$/, 'Client ID cannot contain spaces'),
       otherwise: (schema) => schema,
     }),
-    password: Yup.string().when(['enabled'], {
+    client_secret: Yup.string().when(['enabled'], {
       is: (enabled: any) => Boolean(enabled),
       then: (schema) => schema
-        .required('Password is required when JWT Auth is enabled')
-        .matches(/^\S+$/, 'Password cannot contain spaces'),
+        .required('Client secret is required when OIDC Authentication is enabled'),
       otherwise: (schema) => schema,
     }),
   }),
@@ -148,50 +147,64 @@ const ConnectionConfig: React.FC = () => {
       username: connectionSource.basic_auth?.username || '',
       password: connectionSource.basic_auth?.password || '',
     },
-    jwt_auth: {
-      enabled: connectionSource.jwt_auth?.enabled || false,
-      username: connectionSource.jwt_auth?.username || '',
-      password: connectionSource.jwt_auth?.password || '',
-      token: connectionSource.jwt_auth?.token || '',
-      refresh_token: connectionSource.jwt_auth?.refresh_token || '',
-      expires_at: connectionSource.jwt_auth?.expires_at || 0,
+    oidc_auth: {
+      enabled: connectionSource.oidc_auth?.enabled || false,
+      client_id: connectionSource.oidc_auth?.client_id || '',
+      client_secret: connectionSource.oidc_auth?.client_secret || '',
+      scope: connectionSource.oidc_auth?.scope || 'nauthilus:authenticate nauthilus:security',
+      token: connectionSource.oidc_auth?.token || '',
+      expires_at: connectionSource.oidc_auth?.expires_at || 0,
     },
   };
 
-  // Function to fetch JWT token
-  const fetchJWTToken = async (backendUrl: string, username: string, password: string): Promise<{ token: string, refresh_token: string, expires_at: number } | null> => {
+  // Function to fetch OIDC access token using client_credentials
+  const fetchOIDCToken = async (
+    backendUrl: string,
+    clientId: string,
+    clientSecret: string,
+    scope?: string
+  ): Promise<{ token: string, expires_at: number } | null> => {
     try {
       // Use the proxy endpoint to make the request server-side
       // This avoids CORS issues by making the request through the Go backend
-      const proxyUrl = new URL('/proxy/jwt-token', getProxyOrigin());
+      const proxyUrl = new URL('/proxy/oidc-token', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
+
+      const body = new URLSearchParams();
+      body.append('grant_type', 'client_credentials');
+      body.append('client_id', clientId);
+      body.append('client_secret', clientSecret);
+      if (scope && scope.trim() !== '') {
+        body.append('scope', scope.trim());
+      }
 
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'POST',
-        body: JSON.stringify({ username, password }),
+        body: body.toString(),
       });
 
       if (!response.ok) {
-        console.error('Error fetching JWT token:', response.statusText);
+        console.error('Error fetching OIDC token:', response.statusText);
         setNotification({
           open: true,
-          message: `Failed to fetch JWT token: ${response.statusText}`,
+          message: `Failed to fetch OIDC token: ${response.statusText}`,
           severity: 'error'
         });
         return null;
       }
 
       const data = await response.json();
+      const expiresIn = Number(data.expires_in) || 0;
+      const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
       return {
-        token: data.token,
-        refresh_token: data.refresh_token,
-        expires_at: data.expires_at
+        token: data.access_token,
+        expires_at: expiresAt
       };
     } catch (error) {
-      console.error('Error fetching JWT token:', error);
+      console.error('Error fetching OIDC token:', error);
       setNotification({
         open: true,
-        message: `Failed to fetch JWT token: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to fetch OIDC token: ${error instanceof Error ? error.message : String(error)}`,
         severity: 'error'
       });
       return null;
@@ -201,22 +214,24 @@ const ConnectionConfig: React.FC = () => {
 
   const handleSubmit = async (values: any) => {
     try {
-      // If JWT Auth is enabled, and we have a username/password but no token, fetch a token
-      if (values.jwt_auth?.enabled && 
-          values.jwt_auth.username && 
-          values.jwt_auth.password && 
-          !values.jwt_auth.token) {
-        const tokenData = await fetchJWTToken(
+      // If OIDC auth is enabled, fetch token when missing or expired.
+      if (
+        values.oidc_auth?.enabled &&
+        values.oidc_auth.client_id &&
+        values.oidc_auth.client_secret &&
+        (!values.oidc_auth.token || (values.oidc_auth.expires_at || 0) <= Math.floor(Date.now() / 1000))
+      ) {
+        const tokenData = await fetchOIDCToken(
           values.backend_url,
-          values.jwt_auth.username,
-          values.jwt_auth.password
+          values.oidc_auth.client_id,
+          values.oidc_auth.client_secret,
+          values.oidc_auth.scope
         );
 
         if (tokenData) {
           // Update the values with the new token data
-          values.jwt_auth.token = tokenData.token;
-          values.jwt_auth.refresh_token = tokenData.refresh_token;
-          values.jwt_auth.expires_at = tokenData.expires_at;
+          values.oidc_auth.token = tokenData.token;
+          values.oidc_auth.expires_at = tokenData.expires_at;
         }
       }
 
@@ -228,7 +243,7 @@ const ConnectionConfig: React.FC = () => {
         {
           backend_url: values.backend_url,
           basic_auth: values.basic_auth,
-          jwt_auth: values.jwt_auth,
+          oidc_auth: values.oidc_auth,
         },
         runtimeHooks || {}
       );
@@ -261,19 +276,18 @@ const ConnectionConfig: React.FC = () => {
 
 
 
-  // Function to reset JWT token
-  const resetJwtToken = async () => {
+  // Function to reset OIDC token
+  const resetOIDCToken = async () => {
     try {
       // Get the current connection data
       const connectionData = runtimeConnection || {};
 
-      // Create updated connection data with a reset JWT token
+      // Create updated connection data with a reset OIDC token
       const updatedConnection = {
         ...connectionData,
-        jwt_auth: {
-          ...connectionData.jwt_auth,
+        oidc_auth: {
+          ...connectionData.oidc_auth,
           token: '',
-          refresh_token: '',
           expires_at: 0
         }
       };
@@ -293,16 +307,16 @@ const ConnectionConfig: React.FC = () => {
 
       setNotification({
         open: true,
-        message: 'JWT token has been reset. A new token will be fetched on the next request.',
+        message: 'OIDC token has been reset. A new token will be fetched on the next save.',
         severity: 'success'
       });
 
       setHasUnsavedChanges(false);
     } catch (error) {
-      console.error('Error resetting JWT token:', error);
+      console.error('Error resetting OIDC token:', error);
       setNotification({
         open: true,
-        message: `Failed to reset JWT token: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to reset OIDC token: ${error instanceof Error ? error.message : String(error)}`,
         severity: 'error'
       });
     }
@@ -394,16 +408,16 @@ const ConnectionConfig: React.FC = () => {
                         onChange={(e) => {
                           setFieldValue('basic_auth.enabled', e.target.checked)
                               .then(() => setHasUnsavedChanges(true));
-                          // If enabling Basic Auth, disable JWT Auth
-                          if (e.target.checked && values.jwt_auth?.enabled) {
-                            setFieldValue('jwt_auth.enabled', false)
+                          // If enabling Basic Auth, disable OIDC auth
+                          if (e.target.checked && values.oidc_auth?.enabled) {
+                            setFieldValue('oidc_auth.enabled', false)
                                 .then(() => setHasUnsavedChanges(true));
                           }
                         }}
                         name="basic_auth.enabled"
                       />
                     }
-                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Basic Authentication<InfoTooltip title="Enable HTTP Basic Auth for connecting to the backend. Do not use together with JWT here." /></Box>}
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Basic Authentication<InfoTooltip title="Enable HTTP Basic Auth for connecting to the backend. Do not use together with OIDC credentials here." /></Box>}
                   />
                 </Grid>
                 {values.basic_auth?.enabled && (
@@ -452,31 +466,31 @@ const ConnectionConfig: React.FC = () => {
                   </>
                 )}
 
-                {/* JWT Authentication */}
+                {/* OIDC Client Credentials Authentication */}
                 <Grid size={12}>
-                  <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>JWT Authentication</Typography>
+                  <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>OIDC Authentication (Client Credentials)</Typography>
                 </Grid>
                 <Grid size={{ xs: 12, md: 6 }}>
                   <FormControlLabel
                     control={
                       <Switch
-                        checked={values.jwt_auth?.enabled || false}
+                        checked={values.oidc_auth?.enabled || false}
                         onChange={(e) => {
-                          setFieldValue('jwt_auth.enabled', e.target.checked)
+                          setFieldValue('oidc_auth.enabled', e.target.checked)
                               .then(() => setHasUnsavedChanges(true));
-                          // If enabling JWT Auth, disable Basic Auth
+                          // If enabling OIDC auth, disable Basic Auth
                           if (e.target.checked && values.basic_auth?.enabled) {
                             setFieldValue('basic_auth.enabled', false)
                                 .then(() => setHasUnsavedChanges(true));
                           }
                         }}
-                        name="jwt_auth.enabled"
+                        name="oidc_auth.enabled"
                       />
                     }
-                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable JWT Authentication<InfoTooltip title="Use JWT-based auth when your backend expects JWT credentials. Do not use together with Basic here." /></Box>}
+                    label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable OIDC Authentication<InfoTooltip title="Use OIDC client credentials to obtain a Bearer token from /oidc/token. Do not use together with Basic Auth here." /></Box>}
                   />
                 </Grid>
-                {values.jwt_auth?.enabled && (
+                {values.oidc_auth?.enabled && (
                   <>
                     <Grid size={12}>
                       <Grid container spacing={2}>
@@ -484,16 +498,16 @@ const ConnectionConfig: React.FC = () => {
                           <Field
                             as={TextField}
                             fullWidth
-                            name="jwt_auth.username"
-                            label="Username"
+                            name="oidc_auth.client_id"
+                            label="Client ID"
                             InputProps={{ endAdornment: (
-                              <InputAdornment position="end"><InfoTooltip title="Username for JWT authentication (if required by your backend)." /></InputAdornment>
+                              <InputAdornment position="end"><InfoTooltip title="OIDC client_id used for client_credentials token requests." /></InputAdornment>
                             ) }}
                             variant="outlined"
-                            error={getIn(touched, 'jwt_auth.username') && Boolean(getIn(errors, 'jwt_auth.username'))}
+                            error={getIn(touched, 'oidc_auth.client_id') && Boolean(getIn(errors, 'oidc_auth.client_id'))}
                             helperText={
-                              (getIn(touched, 'jwt_auth.username') && getIn(errors, 'jwt_auth.username')) ||
-                              "Username for JWT authentication"
+                              (getIn(touched, 'oidc_auth.client_id') && getIn(errors, 'oidc_auth.client_id')) ||
+                              "OIDC client ID"
                             }
                             onChange={(e: React.ChangeEvent<any>) => {
                               handleChange(e);
@@ -505,15 +519,32 @@ const ConnectionConfig: React.FC = () => {
                           <Field
                             as={PasswordField}
                             fullWidth
-                            name="jwt_auth.password"
-                            label="Password"
-                            infoTitle="Password for JWT authentication if needed by backend. Keep it secure."
+                            name="oidc_auth.client_secret"
+                            label="Client Secret"
+                            infoTitle="OIDC client_secret used for token retrieval. Keep it secure."
                             variant="outlined"
-                            error={getIn(touched, 'jwt_auth.password') && Boolean(getIn(errors, 'jwt_auth.password'))}
+                            error={getIn(touched, 'oidc_auth.client_secret') && Boolean(getIn(errors, 'oidc_auth.client_secret'))}
                             helperText={
-                              (getIn(touched, 'jwt_auth.password') && getIn(errors, 'jwt_auth.password')) ||
-                              "Password for JWT authentication"
+                              (getIn(touched, 'oidc_auth.client_secret') && getIn(errors, 'oidc_auth.client_secret')) ||
+                              "OIDC client secret"
                             }
+                            onChange={(e: React.ChangeEvent<any>) => {
+                              handleChange(e);
+                              setHasUnsavedChanges(true);
+                            }}
+                          />
+                        </Grid>
+                        <Grid size={{ xs: 12 }}>
+                          <Field
+                            as={TextField}
+                            fullWidth
+                            name="oidc_auth.scope"
+                            label="Scope"
+                            InputProps={{ endAdornment: (
+                              <InputAdornment position="end"><InfoTooltip title="Space-separated OIDC scopes, e.g. nauthilus:authenticate nauthilus:security. Add nauthilus:admin when administrative endpoints are needed." /></InputAdornment>
+                            ) }}
+                            variant="outlined"
+                            helperText="Space-separated scopes for the token request"
                             onChange={(e: React.ChangeEvent<any>) => {
                               handleChange(e);
                               setHasUnsavedChanges(true);
@@ -524,23 +555,23 @@ const ConnectionConfig: React.FC = () => {
                     </Grid>
 
                     {/* Token Status and Reset-Button */}
-                    {values.jwt_auth?.token && (
+                    {values.oidc_auth?.token && (
                       <Grid sx={{ mt: 2 }} size={12}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                           <Box>
                             <Typography variant="subtitle2" color="primary">
-                              JWT Token Status
+                              OIDC Access Token Status
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              {values.jwt_auth.expires_at > Date.now() / 1000 
-                                ? `Valid until: ${new Date(values.jwt_auth.expires_at * 1000).toLocaleString()}`
+                              {values.oidc_auth.expires_at > Date.now() / 1000
+                                ? `Valid until: ${new Date(values.oidc_auth.expires_at * 1000).toLocaleString()}`
                                 : 'Token has expired'}
                             </Typography>
                           </Box>
                           <Button
                             variant="outlined"
                             color="secondary"
-                            onClick={resetJwtToken}
+                            onClick={resetOIDCToken}
                             startIcon={<RefreshIcon />}
                           >
                             Reset Token

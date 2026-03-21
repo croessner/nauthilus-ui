@@ -71,10 +71,10 @@ export const prepareAuthParams = (connectionConfig: any): { authType: string, au
     authValue = btoa(`${connectionConfig.basic_auth.username}:${connectionConfig.basic_auth.password}`);
   }
 
-  // For JWT Auth, use existing token if available
-  if (connectionConfig.jwt_auth?.enabled && connectionConfig.jwt_auth.token) {
+  // For OIDC Client Credentials, use existing token if available
+  if (connectionConfig.oidc_auth?.enabled && connectionConfig.oidc_auth.token) {
     authType = 'bearer';
-    authValue = connectionConfig.jwt_auth.token;
+    authValue = connectionConfig.oidc_auth.token;
   }
 
   return { authType, authValue };

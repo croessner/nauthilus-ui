@@ -30,6 +30,7 @@ const FormikValidationErrors: React.FC<FormikValidationErrorsProps> = ({
     if (redisErrors.database_number) errorMessages.push(`Database Number: ${redisErrors.database_number}`);
     if (redisErrors.prefix) errorMessages.push(`Key Prefix: ${redisErrors.prefix}`);
     if (redisErrors.password_nonce) errorMessages.push(`Password Nonce: ${redisErrors.password_nonce}`);
+    if (redisErrors.encryption_secret) errorMessages.push(`Encryption Secret: ${redisErrors.encryption_secret}`);
     if (redisErrors.pool_size) errorMessages.push(`Pool Size: ${redisErrors.pool_size}`);
     if (redisErrors.idle_pool_size) errorMessages.push(`Idle Pool Size: ${redisErrors.idle_pool_size}`);
     if (redisErrors.positive_cache_ttl) errorMessages.push(`Positive Cache TTL: ${redisErrors.positive_cache_ttl}`);

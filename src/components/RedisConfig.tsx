@@ -35,6 +35,11 @@ const RedisConfigSchema = Yup.object().shape({
       .min(16, 'Password nonce must be at least 16 characters')
       .matches(/^\S*$/, 'Password nonce cannot contain spaces')
       .nullable(),
+    encryption_secret: Yup.string()
+      .required('Encryption secret is required')
+      .min(16, 'Encryption secret must be at least 16 characters')
+      .matches(/^\S*$/, 'Encryption secret cannot contain spaces')
+      .nullable(),
     pool_size: Yup.number()
       .required('Pool size is required')
       .min(1, 'Must be at least 1'),
@@ -316,6 +321,7 @@ const RedisConfig = (): React.JSX.Element | null => {
       database_number: config.server.redis.database_number || 0,
       prefix: config.server.redis.prefix || '',
       password_nonce: config.server.redis.password_nonce || '',
+      encryption_secret: config.server.redis.encryption_secret || '',
       pool_size: config.server.redis.pool_size || 10,
       idle_pool_size: config.server.redis.idle_pool_size || 0,
       positive_cache_ttl: config.server.redis.positive_cache_ttl || '5m',
@@ -420,6 +426,7 @@ const RedisConfig = (): React.JSX.Element | null => {
         database_number: values.redis.database_number,
         prefix: values.redis.prefix,
         password_nonce: values.redis.password_nonce,
+        encryption_secret: values.redis.encryption_secret,
         pool_size: values.redis.pool_size,
         idle_pool_size: values.redis.idle_pool_size,
         positive_cache_ttl: values.redis.positive_cache_ttl,
@@ -601,6 +608,22 @@ const RedisConfig = (): React.JSX.Element | null => {
                   variant="outlined"
                   error={getIn(touched, 'redis.password_nonce') && Boolean(getIn(errors, 'redis.password_nonce'))}
                   helperText={(getIn(touched, 'redis.password_nonce') && getIn(errors, 'redis.password_nonce')) || "Nonce for password encryption (min 16 characters, can include symbols)"}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={PasswordField}
+                  fullWidth
+                  name="redis.encryption_secret"
+                  label="Encryption Secret"
+                  infoTitle="Secret used to encrypt Redis-stored values. Minimum 16 chars; keep it secret."
+                  variant="outlined"
+                  error={getIn(touched, 'redis.encryption_secret') && Boolean(getIn(errors, 'redis.encryption_secret'))}
+                  helperText={(getIn(touched, 'redis.encryption_secret') && getIn(errors, 'redis.encryption_secret')) || "Secret for Redis value encryption (min 16 characters, can include symbols)"}
                   onChange={(e: React.ChangeEvent<any>) => {
                     handleChange(e);
                     setHasUnsavedChanges(true);

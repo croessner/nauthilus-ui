@@ -1931,7 +1931,7 @@ const ServerConfig = (): React.JSX.Element | null => {
                     <MenuItem value="lua">lua</MenuItem>
                     <MenuItem value="mail">mail</MenuItem>
                     <MenuItem value="metrics">metrics</MenuItem>
-                    <MenuItem value="oauth2">oauth2</MenuItem>
+                    <MenuItem value="idp">idp</MenuItem>
                     <MenuItem value="password">password</MenuItem>
                     <MenuItem value="rbl">rbl</MenuItem>
                     <MenuItem value="redis">redis</MenuItem>
