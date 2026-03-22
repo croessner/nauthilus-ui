@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"strings"
 	"syscall"
 	"time"
 
@@ -20,6 +19,7 @@ import (
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/middleware"
 	"nauthilus-ui/server/proxy"
+	"nauthilus-ui/server/utils"
 )
 
 // version will be set during build using ldflags
@@ -129,9 +129,8 @@ func startAuditCleanupScheduler(cfg *config.Config, mongoDB *db.MongoDB) {
 func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Create a custom middleware that strictly enforces JWT authentication
 	strictJWTMiddleware := func(ctx *gin.Context) {
-		// Skip authentication for auth and health endpoints
 		path := ctx.Request.URL.Path
-		if strings.HasPrefix(path, "/api/auth/") || strings.HasPrefix(path, "/api/health") || strings.HasPrefix(path, "/api/i18n/") {
+		if middleware.IsPublicPath(path) {
 			ctx.Next()
 
 			return
@@ -163,12 +162,7 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 
 	// Register user routes (will be protected by middleware)
 	userHandler := api.NewUserHandler(mongoDB)
-	// Register user routes directly since UserHandler.RegisterRoutes is deprecated
-	apiGroup.GET("/users", userHandler.GetUsers)
-	apiGroup.GET("/users/:username", userHandler.GetUser)
-	apiGroup.POST("/users", userHandler.CreateUser)
-	apiGroup.PUT("/users/:username", userHandler.UpdateUser)
-	apiGroup.DELETE("/users/:username", userHandler.DeleteUser)
+	userHandler.RegisterRoutes(r)
 
 	// Register profile routes (will be protected by middleware)
 	profileHandler := api.NewProfileHandler(mongoDB)
@@ -205,9 +199,19 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 
 // registerMiddleware registers all middleware with the router
 func registerMiddleware(r *gin.Engine, cfg *config.Config, _ *db.MongoDB) {
+	requestContext := middleware.NewRequestContextHandler(cfg)
+	requestContext.RegisterMiddleware(r)
+
+	securityHeaders := middleware.NewSecurityHeadersHandler()
+	securityHeaders.RegisterMiddleware(r)
+
 	// Register CORS middleware first (should be registered before other middleware)
-	corsHandler := middleware.NewCORSHandler()
+	corsHandler := middleware.NewCORSHandler(cfg)
 	corsHandler.RegisterMiddleware(r)
+
+	// Protect cookie-authenticated mutating requests with CSRF validation.
+	csrfProtection := middleware.NewCSRFProtection(cfg)
+	csrfProtection.RegisterMiddleware(r)
 
 	// Register static file middleware
 	staticHandler := middleware.NewStaticHandler(cfg)
@@ -305,15 +309,20 @@ func performGracefulShutdown(rootCtx context.Context, servers []*Server, mongoDB
 // setupFrontendRouter creates and configures the Gin router for frontend with API routes and middleware
 func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r := gin.New()
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		slog.Error("Failed to configure trusted proxies for frontend router; falling back to trust-none mode", "error", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 	// Use recovery and our custom slog-based logger to replace Gin's default logger
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
 
-	// Register API handlers
-	registerAPIHandlers(r, mongoDB)
-
 	// Register middleware
 	registerMiddleware(r, cfg, mongoDB)
+
+	// Register API handlers after global middleware so request metadata, CORS, CSRF and headers
+	// are applied to every endpoint.
+	registerAPIHandlers(r, mongoDB)
 
 	return r
 }
@@ -321,45 +330,40 @@ func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 // setupProxyRouter creates and configures the Gin router for proxy with proxy routes
 func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r := gin.New()
+	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+		slog.Error("Failed to configure trusted proxies for proxy router; falling back to trust-none mode", "error", err)
+		_ = r.SetTrustedProxies(nil)
+	}
 	// Use recovery and our custom slog-based logger to replace Gin's default logger
 	r.Use(gin.Recovery())
 	r.Use(middleware.Logger())
+	requestContext := middleware.NewRequestContextHandler(cfg)
+	requestContext.RegisterMiddleware(r)
+	securityHeaders := middleware.NewSecurityHeadersHandler()
+	securityHeaders.RegisterMiddleware(r)
+	originPolicy := middleware.NewOriginPolicy(cfg)
+	csrfProtection := middleware.NewCSRFProtection(cfg)
 
-	// Strict JWT middleware for proxy routes (with CORS headers applied early)
-	strictProxyJWTMiddleware := func(ctx *gin.Context) {
-		// Always set CORS headers so that even 401/403 responses are visible to browsers
-		origin := ctx.Request.Header.Get("Origin")
-		if origin == "" {
-			// Default to localhost:3000 for development
-			origin = "http://localhost:3000"
-		}
-
-		ctx.Header("Access-Control-Allow-Origin", origin)
-		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
-		allowReq := ctx.GetHeader("Access-Control-Request-Headers")
-		baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
-		if allowReq != "" {
-			ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
-		} else {
-			ctx.Header("Access-Control-Allow-Headers", baseAllow)
-		}
-		ctx.Header("Access-Control-Allow-Credentials", "true")
-		ctx.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location")
-		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
-
-		method := ctx.Request.Method
-		if method == http.MethodOptions {
-			// Preflight handled here
-			ctx.AbortWithStatus(204)
+	r.Use(func(ctx *gin.Context) {
+		if ok := originPolicy.Apply(ctx, middleware.CORSExposeHeaders); !ok {
+			ctx.AbortWithStatus(http.StatusForbidden)
 			return
 		}
 
-		path := ctx.Request.URL.Path
+		if ctx.Request.Method == http.MethodOptions {
+			ctx.AbortWithStatus(http.StatusNoContent)
+			return
+		}
 
-		// Skip authentication for specific public proxy endpoints
-		if strings.HasPrefix(path, "/proxy/oidc-token") {
-			ctx.Next()
+		ctx.Next()
+	})
+	r.Use(csrfProtection.Middleware())
 
+	// Strict JWT middleware for proxy routes.
+	strictProxyJWTMiddleware := func(ctx *gin.Context) {
+		if utils.HasLegacyAuthQueryParams(ctx.Request) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Backend auth must be sent via x-auth-type/x-auth-value headers"})
+			ctx.Abort()
 			return
 		}
 
@@ -373,9 +377,6 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	// Register proxy handlers
 	proxyHandler := proxy.NewProxyHandler(mongoDB)
 	proxyHandler.RegisterRoutes(r)
-
-	// Register middleware
-	registerMiddleware(r, cfg, mongoDB)
 
 	return r
 }

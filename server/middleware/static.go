@@ -28,15 +28,6 @@ func NewStaticHandler(cfg *config.Config) *StaticHandler {
 
 // RegisterMiddleware registers the static file middleware
 func (h *StaticHandler) RegisterMiddleware(router *gin.Engine) {
-	// Security headers (override any upstream invalid directives)
-	router.Use(func(ctx *gin.Context) {
-		// Remove any existing Permissions-Policy header and set a minimal, valid one (no deprecated 'vr')
-		h := ctx.Writer.Header()
-		h.Del("Permissions-Policy")
-		h.Set("Permissions-Policy", "geolocation=(), camera=(), microphone=(), usb=()")
-		ctx.Next()
-	})
-
 	// Check if the build directory exists in the current directory (for Docker)
 	if _, err := os.Stat("./build"); err == nil {
 		// Serve static files from the React build in the current directory (for Docker)
@@ -83,6 +74,7 @@ func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 
 	// Serve as JavaScript that sets window._env_
 	ctx.Header("Content-Type", "application/javascript")
+	ctx.Header("Cache-Control", "no-store")
 	ctx.String(http.StatusOK, fmt.Sprintf("window._env_ = %s;", string(envConfigJSON)))
 }
 
@@ -103,25 +95,29 @@ func (h *StaticHandler) IndexHandler(ctx *gin.Context) {
 		return
 	}
 
-	// Inject the env-config.js script before the closing head tag
 	indexHTML := string(indexData)
-	modifiedHTML := injectScript(indexHTML, "</head>", "<script src=\"/env-config.js\"></script></head>")
+	modifiedHTML := ensureEnvConfigScript(indexHTML)
 
 	ctx.Header("Content-Type", "text/html")
 	ctx.String(http.StatusOK, modifiedHTML)
 }
 
-// injectScript is a helper function to inject a script into HTML before the target string.
-// It replaces the last occurrence of the target string with the replacement string.
-// This is used to inject the env-config.js script before the closing head tag.
-func injectScript(html, target, replacement string) string {
-	// Find the last occurrence of the target string safely
-	idx := strings.LastIndex(html, target)
-	if idx == -1 {
-		// Target string not found, return original HTML
+func ensureEnvConfigScript(html string) string {
+	if strings.Contains(html, `src="/env-config-loader.js"`) || strings.Contains(html, "src='/env-config-loader.js'") ||
+		strings.Contains(html, `src="/env-config.js"`) || strings.Contains(html, "src='/env-config.js'") {
 		return html
 	}
 
-	// Replace the last occurrence of the target string
-	return html[:idx] + replacement + html[idx+len(target):]
+	return injectBeforeClosingHead(html, `<script src="/env-config-loader.js"></script>`)
+}
+
+// injectBeforeClosingHead injects markup before the closing head tag.
+func injectBeforeClosingHead(html, markup string) string {
+	// Find the last occurrence of the target string safely
+	idx := strings.LastIndex(html, "</head>")
+	if idx == -1 {
+		return html
+	}
+
+	return html[:idx] + markup + html[idx:]
 }

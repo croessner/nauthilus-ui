@@ -235,9 +235,9 @@ func NewRuntimeHandler(mongoDB *db.MongoDB) *RuntimeHandler {
 
 // RegisterRoutes registers the runtime settings routes
 func (h *RuntimeHandler) RegisterRoutes(router *gin.Engine) {
-	router.GET("/api/runtime/:userId/:profileName", h.GetRuntimeSettings)
-	router.POST("/api/runtime/:userId/:profileName", h.SaveRuntimeSettings)
-	router.DELETE("/api/runtime/:userId/:profileName", h.DeleteRuntimeSettings)
+	router.GET("/api/runtime/:userId/:profileName", RequireSelfOrAdmin("userId"), h.GetRuntimeSettings)
+	router.POST("/api/runtime/:userId/:profileName", RequireSelfOrAdmin("userId"), h.SaveRuntimeSettings)
+	router.DELETE("/api/runtime/:userId/:profileName", RequireSelfOrAdmin("userId"), h.DeleteRuntimeSettings)
 }
 
 // GetRuntimeSettings handles the GET /api/runtime/:userId/:profileName endpoint
@@ -257,7 +257,7 @@ func (h *RuntimeHandler) GetRuntimeSettings(ctx *gin.Context) {
 	var runtimeSettings models.RuntimeSettings
 
 	err := h.MongoDB.RuntimeColl.FindOne(
-		context.Background(),
+		ctx.Request.Context(),
 		bson.M{"userId": userID, "profileName": profileName},
 	).Decode(&runtimeSettings)
 

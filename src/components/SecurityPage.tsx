@@ -9,7 +9,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
-import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil } from '../utils/apiUtils';
+import { getProxyOrigin, buildBackendAuthHeaders, authenticatedFetch, loadSettings as loadSettingsUtil } from '../utils/apiUtils';
 import Grid from '@mui/material/Grid';
 import { useConnectionAccess } from '../hooks/useConnectionAccess';
 import { formatDuration } from '../utils/format';
@@ -90,12 +90,8 @@ const SecurityPage = (): React.JSX.Element => {
       // 1) Fetch Prometheus-derived security metrics for the page
       const proxyUrl = new URL('/proxy/security/metrics', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
-      const { authType, authValue } = prepareAuthParams(getConnection());
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-      const res = await authenticatedFetch(proxyUrl.toString());
+      const backendAuthHeaders = buildBackendAuthHeaders(getConnection());
+      const res = await authenticatedFetch(proxyUrl.toString(), { headers: backendAuthHeaders });
       if (!res.ok) {
         setStatusMessage(`Failed to fetch security metrics: ${res.status} ${res.statusText}`);
       } else {
@@ -109,12 +105,8 @@ const SecurityPage = (): React.JSX.Element => {
         const adminProxy = new URL('/proxy/hooks/distributed-brute-force-admin', getProxyOrigin());
         adminProxy.searchParams.append('url', backendUrl);
         adminProxy.searchParams.append('endpoint_path', hooks?.distributed_brute_force_admin?.endpoint_path || '/hooks/distributed-brute-force-admin');
-        if (authType && authValue) {
-          adminProxy.searchParams.append('authType', authType);
-          adminProxy.searchParams.append('authValue', authValue);
-        }
         adminProxy.searchParams.append('action', 'get_metrics');
-        const ares = await authenticatedFetch(adminProxy.toString());
+        const ares = await authenticatedFetch(adminProxy.toString(), { headers: backendAuthHeaders });
         if (ares.ok) {
           const aj = await ares.json().catch(() => ({} as any));
           const m = aj?.metrics || {};

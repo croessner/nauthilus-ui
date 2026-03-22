@@ -10,7 +10,7 @@ import LinkIcon from '@mui/icons-material/Link';
 import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { getProxyOrigin, authenticatedFetch, extractErrorMessage, loadSettings as loadSettingsUtil, prepareAuthParams, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
+import { getProxyOrigin, authenticatedFetch, buildBackendAuthHeaders, extractErrorMessage, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 import Grid from '@mui/material/Grid';
@@ -306,15 +306,10 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
       return;
     }
 
-    const { authType, authValue } = prepareAuthParams(conn);
     const proxyBase = isAdmin ? '/proxy/hooks/distributed-brute-force-admin' : '/proxy/hooks/distributed-brute-force-test';
     const url = new URL(proxyBase, getProxyOrigin());
     url.searchParams.append('url', conn.backend_url!);
     url.searchParams.append('endpoint_path', path);
-    if (authType && authValue) {
-      url.searchParams.append('authType', authType);
-      url.searchParams.append('authValue', authValue);
-    }
     if (isAdmin && adminOperation) {
       url.searchParams.append('action', adminOperation);
     }
@@ -385,7 +380,10 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
     }
     try {
       const options: RequestInit = { method: 'GET' } as any;
-      const resp = await authenticatedFetch(url.toString(), options);
+      const resp = await authenticatedFetch(url.toString(), {
+        ...options,
+        headers: buildBackendAuthHeaders(conn, options.headers),
+      });
       if (!resp.ok) {
         const msg = await extractErrorMessage(resp);
         setResp(`Request failed: ${msg}`);

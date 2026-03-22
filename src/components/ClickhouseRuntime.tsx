@@ -25,11 +25,11 @@ import {useConfig} from '../contexts/ConfigContext';
 import {getCurrentUserId, useRuntime} from '../contexts/RuntimeContext';
 import {
     authenticatedFetch,
+    buildBackendAuthHeaders,
     checkConnection as checkConnectionUtil,
     extractErrorMessage,
     getProxyOrigin,
-    loadSettings as loadSettingsUtil,
-    prepareAuthParams
+    loadSettings as loadSettingsUtil
 } from '../utils/apiUtils';
 import {getKnownHookEndpointSuggestions} from '../utils/hooks';
 import {usePersistedAutoRefresh} from '../hooks/usePersistedAutoRefresh';
@@ -722,11 +722,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         if (iso) proxyUrl.searchParams.set('ts_end', iso);
       }
     }
-    const { authType, authValue } = prepareAuthParams(connectionConfig || {});
-    if (authType && authValue) {
-      proxyUrl.searchParams.append('authType', authType);
-      proxyUrl.searchParams.append('authValue', authValue);
-    }
     return proxyUrl.toString();
   }, [endpointPath, action, username, account, ip, rawSql, pageSize, page, authFilter, tsStart, tsEnd, tsTimeZone, searchQuery]);
 
@@ -812,7 +807,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const timer = setTimeout(() => controller?.abort(), UI_TIMEOUT_MS);
       let resp: Response | null = null;
       try {
-        resp = await authenticatedFetch(url, { method: 'POST', signal: controller.signal });
+        resp = await authenticatedFetch(url, {
+          method: 'POST',
+          headers: buildBackendAuthHeaders(conn),
+          signal: controller.signal,
+        });
       } finally {
         clearTimeout(timer);
       }
@@ -1504,7 +1503,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         // buildHookUrl allows us to opt-out of including the search filter.
         const includeSearch = Boolean((searchDraft || '').trim());
         const url = buildHookUrl(conn, offsetLocal, perReqLimit, includeSearch);
-        const resp = await authenticatedFetch(url, { method: 'POST', signal: controller.signal });
+        const resp = await authenticatedFetch(url, {
+          method: 'POST',
+          headers: buildBackendAuthHeaders(conn),
+          signal: controller.signal,
+        });
         if (!resp.ok) {
           const msg = await extractErrorMessage(resp);
           setError(msg);
@@ -1662,7 +1665,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const perReqLimit = Math.min(chunkSize, remaining);
 
       const url = buildHookUrl(conn, offsetLocal, perReqLimit, true);
-      const resp = await authenticatedFetch(url, { method: 'POST' });
+      const resp = await authenticatedFetch(url, {
+        method: 'POST',
+        headers: buildBackendAuthHeaders(conn),
+      });
       if (!resp.ok) throw new Error(await extractErrorMessage(resp));
       const resJson = await resp.json();
       if (resJson?.status !== 'success' || !resJson?.clickhouse) throw new Error(resJson?.message || 'Hook returned no data');
@@ -1709,7 +1715,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const perReqLimit = Math.min(chunkSize, remaining);
 
       const url = buildHookUrl(conn, offsetLocal, perReqLimit, false);
-      const resp = await authenticatedFetch(url, { method: 'POST' });
+      const resp = await authenticatedFetch(url, {
+        method: 'POST',
+        headers: buildBackendAuthHeaders(conn),
+      });
       if (!resp.ok) throw new Error(await extractErrorMessage(resp));
       const resJson = await resp.json();
       if (resJson?.status !== 'success' || !resJson?.clickhouse) throw new Error(resJson?.message || 'Hook returned no data');

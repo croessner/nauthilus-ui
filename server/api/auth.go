@@ -67,18 +67,30 @@ func (h *AuthHandler) generateToken(user *models.User, expiryTime int) (string, 
 // RegisterRoutes registers the authentication routes
 func (h *AuthHandler) RegisterRoutes(router *gin.Engine) {
 	// Apply rate limiting to login endpoint
+	router.GET("/api/auth/csrf", h.CSRF)
 	router.POST("/api/auth/login", LoginRateLimitMiddleware(), AdaptiveCaptchaMiddleware(loginIPLimiter), h.Login)
 	router.POST("/api/auth/refresh", h.Refresh)
 	router.POST("/api/auth/logout", h.Logout)
 	router.GET("/api/auth/me", h.Me)
 }
 
+// CSRF ensures a readable CSRF cookie exists for double-submit protection.
+func (h *AuthHandler) CSRF(ctx *gin.Context) {
+	if _, err := EnsureCSRFCookie(ctx); err != nil {
+		slog.Error("Failed to ensure CSRF cookie", "error", err)
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to initialize CSRF protection"})
+		return
+	}
+
+	ctx.Header("Cache-Control", "no-store")
+	ctx.Status(http.StatusNoContent)
+}
+
 // LoginRequest represents a login request
 type LoginRequest struct {
-	Username    string `json:"username" binding:"required"`
-	Password    string `json:"password" binding:"required"`
-	MfaVerified bool   `json:"mfaVerified"`
-	RememberMe  bool   `json:"rememberMe"`
+	Username   string `json:"username" binding:"required"`
+	Password   string `json:"password" binding:"required"`
+	RememberMe bool   `json:"rememberMe"`
 }
 
 // Login handles the POST /api/auth/login endpoint
@@ -172,98 +184,42 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 		return
 	}
 
-	// Check if MFA is required and not already verified
-	if !loginRequest.MfaVerified {
-		// Determine enabled MFA methods
-		hasTOTP := user.TOTPEnabled
-		hasWebAuthn := user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0
+	// Determine enabled MFA methods after password verification.
+	hasTOTP := user.TOTPEnabled
+	hasWebAuthn := user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0
 
-		if hasTOTP && hasWebAuthn {
-			// Both methods available: let the client choose
-			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-				MFARequired:     true,
-				MFAType:         "choice",
-				Username:        user.Username,
-				TotpEnabled:     true,
-				WebAuthnEnabled: true,
-			})
-			return
-		} else if hasTOTP {
-			// Only TOTP available
-			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-				MFARequired:     true,
-				MFAType:         "totp",
-				Username:        user.Username,
-				TotpEnabled:     true,
-				WebAuthnEnabled: false,
-			})
-			return
-		} else if hasWebAuthn {
-			// Only WebAuthn available
-			ctx.JSON(http.StatusOK, models.MFARequiredResponse{
-				MFARequired:     true,
-				MFAType:         "webauthn",
-				Username:        user.Username,
-				TotpEnabled:     false,
-				WebAuthnEnabled: true,
-			})
+	if hasTOTP || hasWebAuthn {
+		clearPendingMFASession(ctx)
+		if err := createPendingMFASession(ctx, user.Username, loginRequest.RememberMe); err != nil {
+			slog.Error("Failed to create pending MFA session", "username", user.Username, "error", err)
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to start MFA challenge"})
 			return
 		}
-	} else {
-		slog.Info("MFA verification bypassed due to mfaVerified flag", "username", loginRequest.Username)
+
+		mfaType := "choice"
+		if hasTOTP && !hasWebAuthn {
+			mfaType = "totp"
+		} else if hasWebAuthn && !hasTOTP {
+			mfaType = "webauthn"
+		}
+
+		ctx.JSON(http.StatusOK, models.MFARequiredResponse{
+			MFARequired:     true,
+			MFAType:         mfaType,
+			Username:        user.Username,
+			TotpEnabled:     hasTOTP,
+			WebAuthnEnabled: hasWebAuthn,
+		})
+		return
 	}
 
-	// Get JWT config for token expiry times
-	jwtConfig, err := h.MongoDB.GetJWTConfig()
+	clearPendingMFASession(ctx)
+	response, err := issueLoginResponse(ctx, h.MongoDB, &user, loginRequest.RememberMe)
 	if err != nil {
-		slog.Error("Failed to get JWT config", "error", err)
+		slog.Error("Failed to generate login response", "username", user.Username, "error", err)
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})
 		return
 	}
-
-	slog.Info("JWT config retrieved", "secret_length", len(jwtConfig.Secret), "token_expiry", jwtConfig.TokenExpiry, "refresh_token_expiry", jwtConfig.RefreshTokenExpiry)
-
-	// Determine access token expiry based on rememberMe flag
-	accessExpiry := jwtConfig.TokenExpiry
-	if loginRequest.RememberMe && jwtConfig.RememberMeExpiry > 0 {
-		accessExpiry = jwtConfig.RememberMeExpiry
-	}
-
-	// Generate access token
-	token, expiresAt, err := h.generateToken(&user, accessExpiry)
-	if err != nil {
-		slog.Error("Failed to generate token", "error", err)
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate authentication token"})
-		return
-	}
-
-	slog.Info("Access token generated", "username", user.Username, "token_length", len(token), "expires_at", time.Unix(expiresAt, 0))
-
-	// Generate refresh token
-	refreshToken, refreshExpiresAt, err := h.generateToken(&user, jwtConfig.RefreshTokenExpiry)
-	if err != nil {
-		slog.Error("Failed to generate refresh token", "error", err)
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate refresh token"})
-		return
-	}
-
-	slog.Info("Refresh token generated", "username", user.Username, "token_length", len(refreshToken), "expires_at", time.Unix(refreshExpiresAt, 0))
-
-	// Return user without passwordHash and with tokens
-	user.PasswordHash = ""
-
-	// Create response
-	response := models.LoginResponse{
-		User:         user,
-		Token:        token,
-		RefreshToken: refreshToken,
-		ExpiresAt:    expiresAt,
-	}
-
-	// Set secure cookies for access and refresh tokens
-	SetAuthCookies(ctx, token, expiresAt, refreshToken, refreshExpiresAt)
-
-	slog.Info("Sending login response", "username", user.Username, "token_present", token != "", "refresh_token_present", refreshToken != "")
 
 	// Write audit log for successful password login
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
@@ -347,13 +303,14 @@ func (h *AuthHandler) Refresh(ctx *gin.Context) {
 	}
 
 	// Set cookies
-	SetAuthCookies(ctx, accessToken, accessExp, newRefresh, refreshExp)
-
-	// Sanitize user for response
-	user.PasswordHash = ""
+	if err := SetAuthCookies(ctx, accessToken, accessExp, newRefresh, refreshExp); err != nil {
+		slog.Error("Refresh: failed to rotate CSRF cookie", "error", err)
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to refresh session"})
+		return
+	}
 
 	ctx.JSON(http.StatusOK, models.LoginResponse{
-		User:         *user,
+		User:         models.ToUserView(*user),
 		Token:        accessToken,
 		RefreshToken: newRefresh,
 		ExpiresAt:    accessExp,
@@ -396,6 +353,7 @@ func (h *AuthHandler) Logout(ctx *gin.Context) {
 
 	// Clear cookies after extracting actor
 	ClearAuthCookies(ctx)
+	clearPendingMFASession(ctx)
 	// Audit logout (ensure actor is set when possible)
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
 		Actor:  actor,
@@ -453,6 +411,5 @@ func (h *AuthHandler) Me(ctx *gin.Context) {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 		return
 	}
-	user.PasswordHash = ""
-	ctx.JSON(http.StatusOK, models.UserResponse{User: *user})
+	ctx.JSON(http.StatusOK, models.UserResponse{User: models.ToUserView(*user)})
 }

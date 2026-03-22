@@ -14,6 +14,7 @@ import (
 
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
+	"nauthilus-ui/server/requestmeta"
 )
 
 // OIDCHandler handles OIDC login and callback
@@ -26,6 +27,16 @@ func NewOIDCHandler(mongoDB *db.MongoDB) *OIDCHandler {
 	return &OIDCHandler{MongoDB: mongoDB}
 }
 
+func finalizeOIDCSession(ctx *gin.Context, accessToken string, accessExpiresAt int64, refreshToken string, refreshExpiresAt int64) {
+	if err := SetAuthCookies(ctx, accessToken, accessExpiresAt, refreshToken, refreshExpiresAt); err != nil {
+		slog.Error("OIDC: failed to set auth cookies", "error", err)
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to finalize OIDC session"})
+		return
+	}
+	clearPendingMFASession(ctx)
+	ctx.Redirect(http.StatusFound, "/")
+}
+
 // RegisterRoutes registers OIDC routes under /api/auth/oidc/*
 func (h *OIDCHandler) RegisterRoutes(router *gin.Engine) {
 	router.GET("/api/auth/oidc/login", h.StartLogin)
@@ -33,21 +44,10 @@ func (h *OIDCHandler) RegisterRoutes(router *gin.Engine) {
 }
 
 // computeOIDCCallbackURL builds the absolute redirect URI to the backend callback endpoint
-// using request information and common reverse-proxy headers.
+// using trusted-proxy-aware request metadata.
 func computeOIDCCallbackURL(ctx *gin.Context) string {
-	scheme := ctx.Request.Header.Get("X-Forwarded-Proto")
-	if scheme == "" {
-		if ctx.Request.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-
-	host := ctx.Request.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = ctx.Request.Host
-	}
+	scheme := requestmeta.EffectiveScheme(ctx.Request)
+	host := requestmeta.EffectiveHost(ctx.Request)
 
 	return fmt.Sprintf("%s://%s/api/auth/oidc/callback", scheme, host)
 }
@@ -94,7 +94,14 @@ func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 	state := fmt.Sprintf("st_%d", time.Now().UnixNano())
 
 	// 5 minutes expiry
-	cookie := &http.Cookie{Name: "oidc_state", Value: state, Path: "/", Expires: time.Now().Add(5 * time.Minute), HttpOnly: true, Secure: ctx.Request.TLS != nil}
+	cookie := &http.Cookie{
+		Name:     "oidc_state",
+		Value:    state,
+		Path:     "/",
+		Expires:  time.Now().Add(5 * time.Minute),
+		HttpOnly: true,
+		Secure:   requestmeta.IsSecureRequest(ctx.Request),
+	}
 
 	http.SetCookie(ctx.Writer, cookie)
 
@@ -104,8 +111,8 @@ func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 	ctx.Redirect(http.StatusFound, authURL)
 }
 
-// Callback handles the redirect from the OIDC provider, exchanges code, verifies ID token,
-// maps/creates the user, issues an application JWT, then redirects to frontend callback route
+// Callback handles the redirect from the OIDC provider, exchanges code, verifies the ID token,
+// maps/creates the user, issues an application session, then redirects without exposing tokens in the URL.
 func (h *OIDCHandler) Callback(ctx *gin.Context) {
 	cfg := h.MongoDB.Config
 	if !cfg.OIDCEnabled {
@@ -368,10 +375,7 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 		return
 	}
 
-	// Redirect back to frontend callback route to set cookies in JS
-	// Expect frontend route at /oidc/callback
-	redirect := fmt.Sprintf("/oidc/callback?token=%s&refreshToken=%s&expiresAt=%d", urlQueryEscape(tokenStr), urlQueryEscape(refreshStr), expiresAt)
-	ctx.Redirect(http.StatusFound, redirect)
+	finalizeOIDCSession(ctx, tokenStr, expiresAt, refreshStr, refreshExp)
 }
 
 // signHS256 signs simple map claims with HS256
@@ -380,25 +384,4 @@ func signHS256(claims map[string]interface{}, secret string) (string, error) {
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(claims))
 
 	return t.SignedString([]byte(secret))
-}
-
-// urlQueryEscape escapes special characters in a URL query string using percent-encoded values.
-func urlQueryEscape(s string) string {
-	replacer := strings.NewReplacer(
-		"%", "%25",
-		" ", "%20",
-		"\"", "%22",
-		"#", "%23",
-		"&", "%26",
-		"+", "%2B",
-		",", "%2C",
-		"/", "%2F",
-		":", "%3A",
-		";", "%3B",
-		"=", "%3D",
-		"?", "%3F",
-		"@", "%40",
-	)
-
-	return replacer.Replace(s)
 }

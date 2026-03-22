@@ -52,7 +52,7 @@ type WebAuthnCredential struct {
 // User represents a user in the system
 type User struct {
 	Username     string   `bson:"username" json:"username"`
-	PasswordHash string   `bson:"passwordHash" json:"passwordHash,omitempty"`
+	PasswordHash string   `bson:"passwordHash" json:"-"`
 	Roles        []string `bson:"roles" json:"roles"`
 	DisplayName  string   `bson:"displayName,omitempty" json:"displayName,omitempty"`
 	Email        string   `bson:"email,omitempty" json:"email,omitempty"`
@@ -62,10 +62,25 @@ type User struct {
 	LastModified string   `bson:"lastModified" json:"lastModified"`
 	// TOTP fields
 	TOTPEnabled bool   `bson:"totpEnabled" json:"totpEnabled"`
-	TOTPSecret  string `bson:"totpSecret,omitempty" json:"totpSecret,omitempty"`
+	TOTPSecret  string `bson:"totpSecret,omitempty" json:"-"`
 	// WebAuthn fields
 	WebAuthnEnabled bool                 `bson:"webAuthnEnabled" json:"webAuthnEnabled"`
 	WebAuthnDevices []WebAuthnCredential `bson:"webAuthnDevices,omitempty" json:"webAuthnDevices,omitempty"`
+}
+
+// UserView is the sanitized API representation of a user.
+type UserView struct {
+	Username        string               `json:"username"`
+	Roles           []string             `json:"roles"`
+	DisplayName     string               `json:"displayName,omitempty"`
+	Email           string               `json:"email,omitempty"`
+	Avatar          string               `json:"avatar,omitempty"`
+	Enabled         bool                 `json:"enabled"`
+	LastLogin       *string              `json:"lastLogin"`
+	LastModified    string               `json:"lastModified"`
+	TOTPEnabled     bool                 `json:"totpEnabled"`
+	WebAuthnEnabled bool                 `json:"webAuthnEnabled"`
+	WebAuthnDevices []WebAuthnCredential `json:"webAuthnDevices,omitempty"`
 }
 
 // ProfileData represents a single profile configuration
@@ -83,20 +98,37 @@ type Profile struct {
 
 // JWTConfig represents JWT configuration
 type JWTConfig struct {
-	JWTSecret          string `bson:"jwtSecret" json:"jwtSecret"`
+	JWTSecret          string `bson:"jwtSecret" json:"-"`
 	TokenExpiry        int    `bson:"tokenExpiry" json:"tokenExpiry"`
 	RefreshTokenExpiry int    `bson:"refreshTokenExpiry" json:"refreshTokenExpiry"`
 	RememberMeExpiry   int    `bson:"rememberMeExpiry" json:"rememberMeExpiry"`
 }
 
+// JWTConfigView is the sanitized API representation of JWT configuration.
+type JWTConfigView struct {
+	TokenExpiry         int  `json:"tokenExpiry"`
+	RefreshTokenExpiry  int  `json:"refreshTokenExpiry"`
+	RememberMeExpiry    int  `json:"rememberMeExpiry"`
+	JWTSecretConfigured bool `json:"jwtSecretConfigured"`
+}
+
+// JWTConfigUpdateRequest accepts updates for JWT configuration.
+// jwtSecret is write-only and will never be echoed back in responses.
+type JWTConfigUpdateRequest struct {
+	JWTSecret          *string `json:"jwtSecret,omitempty"`
+	TokenExpiry        *int    `json:"tokenExpiry,omitempty"`
+	RefreshTokenExpiry *int    `json:"refreshTokenExpiry,omitempty"`
+	RememberMeExpiry   *int    `json:"rememberMeExpiry,omitempty"`
+}
+
 // UserResponse represents a user response without the password hash
 type UserResponse struct {
-	User User `json:"user"`
+	User UserView `json:"user"`
 }
 
 // UsersResponse represents a list of users response
 type UsersResponse struct {
-	Users []User `json:"users"`
+	Users []UserView `json:"users"`
 }
 
 // ProfileResponse represents a profile response
@@ -107,7 +139,7 @@ type ProfileResponse struct {
 
 // JWTConfigResponse represents a JWT configuration response
 type JWTConfigResponse struct {
-	JWTConfig JWTConfig `json:"jwtConfig"`
+	JWTConfig JWTConfigView `json:"jwtConfig"`
 }
 
 // ErrorResponse represents an error response
@@ -152,8 +184,35 @@ type MFARequiredResponse struct {
 
 // LoginResponse represents a successful login response with JWT token
 type LoginResponse struct {
-	User         User   `json:"user"`
-	Token        string `json:"token"`
-	RefreshToken string `json:"refreshToken,omitempty"`
-	ExpiresAt    int64  `json:"expiresAt,omitempty"`
+	User         UserView `json:"user"`
+	Token        string   `json:"token"`
+	RefreshToken string   `json:"refreshToken,omitempty"`
+	ExpiresAt    int64    `json:"expiresAt,omitempty"`
+}
+
+// ToUserView strips sensitive fields from a user for API responses.
+func ToUserView(user User) UserView {
+	return UserView{
+		Username:        user.Username,
+		Roles:           user.Roles,
+		DisplayName:     user.DisplayName,
+		Email:           user.Email,
+		Avatar:          user.Avatar,
+		Enabled:         user.Enabled,
+		LastLogin:       user.LastLogin,
+		LastModified:    user.LastModified,
+		TOTPEnabled:     user.TOTPEnabled,
+		WebAuthnEnabled: user.WebAuthnEnabled,
+		WebAuthnDevices: user.WebAuthnDevices,
+	}
+}
+
+// ToJWTConfigView strips the signing secret from JWT configuration responses.
+func ToJWTConfigView(jwtConfig JWTConfig) JWTConfigView {
+	return JWTConfigView{
+		TokenExpiry:         jwtConfig.TokenExpiry,
+		RefreshTokenExpiry:  jwtConfig.RefreshTokenExpiry,
+		RememberMeExpiry:    jwtConfig.RememberMeExpiry,
+		JWTSecretConfigured: jwtConfig.JWTSecret != "",
+	}
 }

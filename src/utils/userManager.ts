@@ -42,7 +42,6 @@ export interface WebAuthnCredential {
 // User interface
 export interface User {
   username: string;
-  passwordHash: string;
   roles: string[];
   displayName?: string;
   email?: string;
@@ -52,7 +51,6 @@ export interface User {
   lastModified?: string;
   // TOTP fields
   totpEnabled?: boolean;
-  totpSecret?: string;
   // WebAuthn fields
   webAuthnEnabled?: boolean;
   webAuthnDevices?: WebAuthnCredential[];
@@ -103,8 +101,6 @@ const DEFAULT_CONFIG: UserManagerConfig = {
   users: [
     {
       username: 'admin',
-      // Placeholder: UI does not store password hashes; authentication is handled by backend
-      passwordHash: '',
       roles: ['admin'],
       lastLogin: null, // Explicitly set lastLogin to null
       lastModified: new Date().toISOString() // Set lastModified to current time
@@ -136,26 +132,64 @@ const fetchConfigData = async (): Promise<void> => {
     }
 
     // Attempt to load protected resources; relies on HttpOnly cookies sent with credentials
-    const usersResponse = await axios.get('/api/users');
-    if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
-      cachedUsers = usersResponse.data.users;
-    } else {
-      console.error('Invalid users data format received from API');
-      cachedUsers = [];
+    try {
+      const usersResponse = await axios.get('/api/users');
+      if (usersResponse.data && Array.isArray(usersResponse.data.users)) {
+        cachedUsers = usersResponse.data.users;
+      } else {
+        console.error('Invalid users data format received from API');
+        cachedUsers = [];
+      }
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        cachedUsers = [];
+      } else {
+        throw error;
+      }
     }
 
-    const jwtConfigResponse = await axios.get('/api/jwtconfig');
-    if (jwtConfigResponse.data && jwtConfigResponse.data.jwtConfig) {
-      cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
-    } else {
-      console.error('Invalid JWT config data format received from API');
-      cachedJwtConfig = null;
+    try {
+      const jwtConfigResponse = await axios.get('/api/jwtconfig');
+      if (jwtConfigResponse.data && jwtConfigResponse.data.jwtConfig) {
+        cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
+      } else {
+        console.error('Invalid JWT config data format received from API');
+        cachedJwtConfig = null;
+      }
+    } catch (error: any) {
+      if (error?.response?.status === 403) {
+        cachedJwtConfig = null;
+      } else {
+        throw error;
+      }
     }
   } catch (error) {
     console.error('Error fetching configuration data:', error);
     // Don't throw the error, just set empty values
     cachedUsers = [];
     cachedJwtConfig = null;
+  }
+};
+
+export const getUser = async (username: string): Promise<User | null> => {
+  if (!username) {
+    throw new Error('Username is required and must be a string');
+  }
+
+  try {
+    const response = await axios.get(`/api/users/${username}`);
+    if (response.data && response.data.user) {
+      return response.data.user;
+    }
+
+    return null;
+  } catch (error: any) {
+    if (error?.response?.status === 404 || error?.response?.status === 403) {
+      return null;
+    }
+
+    console.error(`Failed to load user ${username}:`, error);
+    throw error;
   }
 };
 
@@ -200,7 +234,7 @@ export const addUser = async (
   username: string, 
   password: string, 
   roles: string[] = ['user'], 
-  profileData: Partial<Omit<User, 'username' | 'roles' | 'passwordHash'>> = {}
+  profileData: Partial<Omit<User, 'username' | 'roles'>> = {}
 ): Promise<void> => {
   // Validate input parameters
   if (!username) {
@@ -265,7 +299,6 @@ export const addUser = async (
         cachedUsers[existingUserIndex] = {
           ...cachedUsers[existingUserIndex],
           username,
-          passwordHash: '', // We don't have access to the hash
           roles,
           lastModified: profileData.lastModified || now,
           ...profileData
@@ -279,7 +312,6 @@ export const addUser = async (
         // Add new user to cache
         cachedUsers.push({
           username,
-          passwordHash: '', // We don't have access to the hash
           roles,
           lastModified: profileData.lastModified || now,
           ...profileData
@@ -327,7 +359,7 @@ export const removeUser = async (username: string): Promise<void> => {
 };
 
 // Get all users (without password hashes)
-export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
+export const getUsers = async (): Promise<User[]> => {
   try {
     // Get users
     const response = await axios.get('/api/users');
@@ -358,7 +390,7 @@ export const getUsers = async (): Promise<Omit<User, 'passwordHash'>[]> => {
 // Update user profile
 export const updateUserProfile = async (
   username: string, 
-  profileData: Partial<Omit<User, 'username' | 'passwordHash'>>
+  profileData: Partial<Omit<User, 'username'>> & { password?: string }
 ): Promise<void> => {
   // Validate input parameters
   if (!username) {
@@ -486,16 +518,16 @@ export const completeMfaLogin = async (username: string, _rememberMe: boolean = 
   }
 
   try {
-    // At this point, TOTP/WebAuthn verification should have set cookies server-side.
-    // We optionally rotate tokens to return a fresh set.
-    const response = await axios.post('/api/auth/refresh');
-    if (response.data && response.data.token) {
-      console.log('MFA completion successful via refresh, returning tokens');
+    // TOTP/WebAuthn verification already issued the authenticated cookies.
+    // Only confirm that the authenticated session is now usable.
+    const response = await axios.get('/api/auth/me');
+    if (response.data && response.data.user) {
+      console.log('MFA completion confirmed via current session');
       // Update lastLogin timestamp
       await updateUserLastLogin(username);
-      return { token: response.data.token, refreshToken: response.data.refreshToken || response.data.token };
+      return { token: 'cookie-session', refreshToken: 'cookie-session' };
     }
-    console.error('Invalid response from refresh during MFA completion:', response.data);
+    console.error('Invalid response while confirming MFA completion:', response.data);
     return null;
   } catch (error) {
     console.error('Error during MFA completion:', error);
@@ -536,7 +568,7 @@ export const isAuthenticated = async (): Promise<boolean> => {
 };
 
 // Get current user
-export const getCurrentUser = async (): Promise<Omit<User, 'passwordHash'> | null> => {
+export const getCurrentUser = async (): Promise<User | null> => {
   try {
     const response = await axios.get('/api/auth/me');
     if (response.data && response.data.user) {

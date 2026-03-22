@@ -257,69 +257,14 @@ func (m *MongoDB) initializeDefaultUser(ctx context.Context) error {
 	return nil
 }
 
-// initializeDefaultProfile creates the default profile if it doesn't exist
+// initializeDefaultProfile ensures the profile collection is reachable.
 func (m *MongoDB) initializeDefaultProfile(ctx context.Context) error {
-	// Check if Profile collection has any documents
 	profileCount, err := m.ProfileColl.CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	if profileCount == 0 {
-		slog.Info("Creating default profile...")
-
-		// Default empty configuration
-		defaultConfig := map[string]interface{}{
-			"server": map[string]interface{}{
-				"address":                      "127.0.0.1:8080",
-				"instance_name":                "nauthilus",
-				"max_concurrent_requests":      100,
-				"max_password_history_entries": 10,
-				"redis": map[string]interface{}{
-					"database_number": 0,
-					"prefix":          "nt:",
-					"master": map[string]interface{}{
-						"address": "127.0.0.1:6379",
-					},
-				},
-			},
-			"connection": map[string]interface{}{
-				"backend_url": "http://127.0.0.1:8080",
-				"basic_auth": map[string]interface{}{
-					"enabled":  false,
-					"username": "",
-					"password": "",
-				},
-				"oidc_auth": map[string]interface{}{
-					"enabled":       false,
-					"client_id":     "",
-					"client_secret": "",
-					"scope":         "nauthilus:authenticate nauthilus:security",
-					"token":         "",
-					"expires_at":    0,
-				},
-			},
-		}
-
-		// Create default profile
-		defaultProfile := models.Profile{
-			UserID: "default-user",
-			Profiles: []models.ProfileData{
-				{
-					Name:   "Default",
-					Config: defaultConfig,
-				},
-			},
-			CurrentProfileName: "Default",
-		}
-
-		_, err = m.ProfileColl.InsertOne(ctx, defaultProfile)
-		if err != nil {
-			return err
-		}
-
-		slog.Info("Default profile created successfully")
-	}
+	slog.Info("Profile collection initialized", "documents", profileCount)
 
 	return nil
 }

@@ -39,7 +39,7 @@ import ErrorIcon from '@mui/icons-material/Error';
 import { useConfig } from '../contexts/ConfigContext';
 import InfoTooltip from './common/InfoTooltip';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { extractErrorMessage, prepareAuthParams, loadSettings as loadSettingsUtil, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
+import { buildBackendAuthHeaders, extractErrorMessage, loadSettings as loadSettingsUtil, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 import { startAsyncJob, awaitJob, AsyncJobStatusResponse } from '../utils/asyncJobs';
 
 // Helper function to format nanosecond durations into human-readable strings
@@ -145,20 +145,13 @@ const BruteForceConfig: React.FC = () => {
     setIsLoadingBruteForceList(true);
 
     try {
-      // Prepare authentication parameters for the proxy
-      const { authType, authValue } = prepareAuthParams(connectionConfig);
-
       // Use the proxy endpoint to make the request server-side
       const proxyUrl = new URL('/proxy/bruteforce/list', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
+        headers: buildBackendAuthHeaders(connectionConfig),
       });
 
       if (!response.ok) {
@@ -283,6 +276,7 @@ const BruteForceConfig: React.FC = () => {
 
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
+        headers: buildBackendAuthHeaders(connectionConfig),
       });
 
       if (response.ok) {

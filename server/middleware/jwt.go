@@ -11,6 +11,7 @@ import (
 	"github.com/golang-jwt/jwt/v5"
 
 	"nauthilus-ui/server/db"
+	"nauthilus-ui/server/utils"
 )
 
 // JWTAuthMiddleware creates a middleware for JWT authentication
@@ -24,9 +25,8 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Log the request path for debugging
 		slog.Info("JWT Middleware: Processing request", "path", path, "method", method)
 
-		// Always allow access to authentication endpoints
-		if strings.HasPrefix(path, "/api/auth/") {
-			slog.Info("JWT Middleware: Skipping auth for auth endpoint", "path", path)
+		if IsPublicPath(path) {
+			slog.Info("JWT Middleware: Skipping auth for public endpoint", "path", path)
 			ctx.Next()
 
 			return
@@ -35,14 +35,6 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		// Skip authentication for static files
 		if strings.HasPrefix(path, "/static/") || path == "/" || strings.HasPrefix(path, "/env-config.js") {
 			slog.Info("JWT Middleware: Skipping auth for static file", "path", path)
-			ctx.Next()
-
-			return
-		}
-
-		// Skip authentication for health endpoint
-		if strings.HasPrefix(path, "/api/health") {
-			slog.Info("JWT Middleware: Skipping auth for health endpoint", "path", path)
 			ctx.Next()
 
 			return
@@ -60,12 +52,11 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		slog.Info("JWT Middleware: Enforcing authentication for protected endpoint", "path", path)
 
 		// For debugging: log all headers
-		headers := ctx.Request.Header
-		slog.Info("JWT Middleware: Request headers", "headers", headers)
+		slog.Info("JWT Middleware: Request headers", "headers", utils.RedactHeaders(ctx.Request.Header))
 
 		// Try to get token from Authorization header first
 		authHeader := ctx.GetHeader("Authorization")
-		slog.Info("JWT Middleware: Authorization header", "header", authHeader)
+		slog.Info("JWT Middleware: Authorization header", "header", utils.RedactHeaderValue("Authorization", authHeader))
 
 		var tokenString string
 		if authHeader != "" {
@@ -73,7 +64,7 @@ func JWTAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 			if len(parts) == 2 && parts[0] == "Bearer" {
 				tokenString = parts[1]
 			} else {
-				slog.Warn("JWT Middleware: Invalid Authorization header format", "header", authHeader)
+				slog.Warn("JWT Middleware: Invalid Authorization header format", "header", utils.RedactHeaderValue("Authorization", authHeader))
 			}
 		}
 

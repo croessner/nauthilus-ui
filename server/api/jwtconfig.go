@@ -27,8 +27,8 @@ func NewJWTConfigHandler(mongoDB *db.MongoDB) *JWTConfigHandler {
 
 // RegisterRoutes registers the JWT configuration routes
 func (h *JWTConfigHandler) RegisterRoutes(router *gin.Engine) {
-	router.GET("/api/jwtconfig", h.GetJWTConfig)
-	router.PUT("/api/jwtconfig", h.UpdateJWTConfig)
+	router.GET("/api/jwtconfig", RequireAdmin(), h.GetJWTConfig)
+	router.PUT("/api/jwtconfig", RequireAdmin(), h.UpdateJWTConfig)
 }
 
 // GetJWTConfig handles the GET /api/jwtconfig endpoint
@@ -36,12 +36,12 @@ func (h *JWTConfigHandler) GetJWTConfig(ctx *gin.Context) {
 	// If MongoDB is not connected, return default JWT config
 	if !h.MongoDB.IsConnected {
 		ctx.JSON(http.StatusOK, models.JWTConfigResponse{
-			JWTConfig: models.JWTConfig{
+			JWTConfig: models.ToJWTConfigView(models.JWTConfig{
 				JWTSecret:          h.MongoDB.Config.JWTSecret,
 				TokenExpiry:        h.MongoDB.Config.TokenExpiry,
 				RefreshTokenExpiry: h.MongoDB.Config.RefreshTokenExpiry,
 				RememberMeExpiry:   h.MongoDB.Config.RememberMeExpiry,
-			},
+			}),
 		})
 
 		return
@@ -60,7 +60,7 @@ func (h *JWTConfigHandler) GetJWTConfig(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: jwtConfig})
+	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: models.ToJWTConfigView(jwtConfig)})
 }
 
 // UpdateJWTConfig handles the PUT /api/jwtconfig endpoint
@@ -72,7 +72,7 @@ func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 		return
 	}
 
-	var jwtConfigRequest models.JWTConfig
+	var jwtConfigRequest models.JWTConfigUpdateRequest
 	if err := ctx.ShouldBindJSON(&jwtConfigRequest); err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
 
@@ -92,24 +92,23 @@ func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 	// Create new JWT config if none exists
 	if errors.Is(err, mongo.ErrNoDocuments) {
 		newJWTConfig := models.JWTConfig{
-			JWTSecret:          jwtConfigRequest.JWTSecret,
-			TokenExpiry:        jwtConfigRequest.TokenExpiry,
-			RefreshTokenExpiry: jwtConfigRequest.RefreshTokenExpiry,
-			RememberMeExpiry:   jwtConfigRequest.RememberMeExpiry,
+			JWTSecret:          h.MongoDB.Config.JWTSecret,
+			TokenExpiry:        h.MongoDB.Config.TokenExpiry,
+			RefreshTokenExpiry: h.MongoDB.Config.RefreshTokenExpiry,
+			RememberMeExpiry:   h.MongoDB.Config.RememberMeExpiry,
 		}
 
-		// Use default values if not provided
-		if newJWTConfig.JWTSecret == "" {
-			newJWTConfig.JWTSecret = h.MongoDB.Config.JWTSecret
+		if jwtConfigRequest.JWTSecret != nil && *jwtConfigRequest.JWTSecret != "" {
+			newJWTConfig.JWTSecret = *jwtConfigRequest.JWTSecret
 		}
-		if newJWTConfig.TokenExpiry == 0 {
-			newJWTConfig.TokenExpiry = h.MongoDB.Config.TokenExpiry
+		if jwtConfigRequest.TokenExpiry != nil && *jwtConfigRequest.TokenExpiry > 0 {
+			newJWTConfig.TokenExpiry = *jwtConfigRequest.TokenExpiry
 		}
-		if newJWTConfig.RefreshTokenExpiry == 0 {
-			newJWTConfig.RefreshTokenExpiry = h.MongoDB.Config.RefreshTokenExpiry
+		if jwtConfigRequest.RefreshTokenExpiry != nil && *jwtConfigRequest.RefreshTokenExpiry > 0 {
+			newJWTConfig.RefreshTokenExpiry = *jwtConfigRequest.RefreshTokenExpiry
 		}
-		if newJWTConfig.RememberMeExpiry == 0 {
-			newJWTConfig.RememberMeExpiry = h.MongoDB.Config.RememberMeExpiry
+		if jwtConfigRequest.RememberMeExpiry != nil && *jwtConfigRequest.RememberMeExpiry > 0 {
+			newJWTConfig.RememberMeExpiry = *jwtConfigRequest.RememberMeExpiry
 		}
 
 		_, err = h.MongoDB.JWTConfigColl.InsertOne(context.Background(), newJWTConfig)
@@ -129,24 +128,29 @@ func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 			},
 		})
 
-		ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: newJWTConfig})
+		ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: models.ToJWTConfigView(newJWTConfig)})
 
 		return
 	}
 
 	// Update existing JWT config
 	update := bson.M{}
-	if jwtConfigRequest.JWTSecret != "" {
-		update["jwtSecret"] = jwtConfigRequest.JWTSecret
+	if jwtConfigRequest.JWTSecret != nil && *jwtConfigRequest.JWTSecret != "" {
+		update["jwtSecret"] = *jwtConfigRequest.JWTSecret
 	}
-	if jwtConfigRequest.TokenExpiry != 0 {
-		update["tokenExpiry"] = jwtConfigRequest.TokenExpiry
+	if jwtConfigRequest.TokenExpiry != nil && *jwtConfigRequest.TokenExpiry > 0 {
+		update["tokenExpiry"] = *jwtConfigRequest.TokenExpiry
 	}
-	if jwtConfigRequest.RefreshTokenExpiry != 0 {
-		update["refreshTokenExpiry"] = jwtConfigRequest.RefreshTokenExpiry
+	if jwtConfigRequest.RefreshTokenExpiry != nil && *jwtConfigRequest.RefreshTokenExpiry > 0 {
+		update["refreshTokenExpiry"] = *jwtConfigRequest.RefreshTokenExpiry
 	}
-	if jwtConfigRequest.RememberMeExpiry != 0 {
-		update["rememberMeExpiry"] = jwtConfigRequest.RememberMeExpiry
+	if jwtConfigRequest.RememberMeExpiry != nil && *jwtConfigRequest.RememberMeExpiry > 0 {
+		update["rememberMeExpiry"] = *jwtConfigRequest.RememberMeExpiry
+	}
+
+	if len(update) == 0 {
+		ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: models.ToJWTConfigView(jwtConfig)})
+		return
 	}
 
 	// Update JWT config
@@ -183,5 +187,5 @@ func (h *JWTConfigHandler) UpdateJWTConfig(ctx *gin.Context) {
 		Details: map[string]interface{}{"changed": changed},
 	})
 
-	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: updatedJWTConfig})
+	ctx.JSON(http.StatusOK, models.JWTConfigResponse{JWTConfig: models.ToJWTConfigView(updatedJWTConfig)})
 }

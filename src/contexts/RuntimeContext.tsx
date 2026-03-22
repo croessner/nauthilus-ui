@@ -2,7 +2,7 @@ import React, { createContext, useContext, useState, useCallback, ReactNode } fr
 import axios from '../utils/axiosConfig';
 import { ConnectionConfig, LuaHooksConfig } from '../types/config';
 import { withErrorHandling as apiWithErrorHandling } from '../utils/apiUtils';
-
+export { getCurrentUserId } from '../utils/currentUser';
 const DEFAULT_CONFIG: ConnectionConfig = {
   backend_url: '',
   basic_auth: {
@@ -25,19 +25,13 @@ interface RuntimeContextType {
   hooks: LuaHooksConfig | null;
   loading: boolean;
   error: string | null;
-  loadRuntimeSettings: (userId: string, profileName: string) => Promise<void>;
+  loadRuntimeSettings: (userId: string, profileName: string) => Promise<ConnectionConfig>;
   saveRuntimeSettings: (userId: string, profileName: string, connection: any, hooks: LuaHooksConfig) => Promise<void>;
   clearError: () => void;
 }
 
 // Create the context with a default value
 const RuntimeContext = createContext<RuntimeContextType | undefined>(undefined);
-
-// Helper function to get the current user ID
-export const getCurrentUserId = async (): Promise<string> => {
-  // Always return default-user since we're storing userId-Session-Infos only in browser
-  return 'default-user';
-};
 
 // Provider component
 interface RuntimeProviderProps {
@@ -60,14 +54,18 @@ export const RuntimeProvider = ({ children }: RuntimeProviderProps): React.JSX.E
 
   // Function to load runtime settings
   const loadRuntimeSettings = useCallback(async (userId: string, profileName: string) => {
-    await withErrorHandling(async () => {
+    const loadedConnection = await withErrorHandling(async () => {
       // Call the Runtime API to load the settings
       const response = await axios.get(`/api/runtime/${userId}/${profileName}`);
 
       if (response.data) {
+        const nextConnection = response.data.connection && Object.keys(response.data.connection).length > 0
+          ? response.data.connection
+          : DEFAULT_CONFIG;
+
         // Update connection settings if they exist
         if (response.data.connection && Object.keys(response.data.connection).length > 0) {
-          setConnection(response.data.connection);
+          setConnection(nextConnection);
           console.log('Connection settings loaded from runtime collection');
         } else {
           setConnection(DEFAULT_CONFIG);
@@ -84,11 +82,13 @@ export const RuntimeProvider = ({ children }: RuntimeProviderProps): React.JSX.E
         }
 
         console.log('Runtime settings loaded successfully');
-        return true;
+        return nextConnection;
       }
 
-      return false;
+      return DEFAULT_CONFIG;
     }, 'Failed to load runtime settings. Please try again.');
+
+    return loadedConnection || DEFAULT_CONFIG;
   }, [withErrorHandling]);
 
   // Function to save runtime settings

@@ -3,6 +3,7 @@ package api
 import (
 	"errors"
 	"net/http"
+	"slices"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -27,12 +28,21 @@ func NewUserHandler(mongoDB db.UserDatabase) *UserHandler {
 	}
 }
 
+// RegisterRoutes registers the user management routes with centralized authorization guards.
+func (h *UserHandler) RegisterRoutes(router *gin.Engine) {
+	router.GET("/api/users", RequireAdmin(), h.GetUsers)
+	router.GET("/api/users/:username", RequireSelfOrAdmin("username"), h.GetUser)
+	router.POST("/api/users", RequireAdmin(), h.CreateUser)
+	router.PUT("/api/users/:username", RequireSelfOrAdmin("username"), h.UpdateUser)
+	router.DELETE("/api/users/:username", RequireSelfOrAdmin("username"), h.DeleteUser)
+}
+
 // GetUsers handles the GET /api/users endpoint
 func (h *UserHandler) GetUsers(ctx *gin.Context) {
 	// If MongoDB is not connected, return default users
 	if !h.MongoDB.IsConnectedToMongoDB() {
 		ctx.JSON(http.StatusOK, models.UsersResponse{
-			Users: []models.User{
+			Users: []models.UserView{
 				{
 					Username:     "admin",
 					Roles:        []string{"admin"},
@@ -46,8 +56,12 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 		return
 	}
 
-	// Get all users without passwordHash
-	cursor, err := h.MongoDB.GetUserCollection().Find(ctx.Request.Context(), bson.M{}, options.Find().SetProjection(bson.M{"passwordHash": 0}))
+	// Get all users without secret fields.
+	cursor, err := h.MongoDB.GetUserCollection().Find(
+		ctx.Request.Context(),
+		bson.M{},
+		options.Find().SetProjection(bson.M{"passwordHash": 0, "totpSecret": 0}),
+	)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch users"})
 
@@ -67,7 +81,6 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 		LastLogin       *string                     `bson:"lastLogin" json:"lastLogin"`
 		LastModified    string                      `bson:"lastModified" json:"lastModified"`
 		TOTPEnabled     bool                        `bson:"totpEnabled" json:"totpEnabled"`
-		TOTPSecret      string                      `bson:"totpSecret,omitempty" json:"totpSecret,omitempty"`
 		WebAuthnEnabled bool                        `bson:"webAuthnEnabled" json:"webAuthnEnabled"`
 		WebAuthnDevices []models.WebAuthnCredential `bson:"webAuthnDevices,omitempty" json:"webAuthnDevices,omitempty"`
 	}
@@ -80,14 +93,14 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 	}
 
 	// Map to public model with backward-compatible default: missing enabled -> true
-	users := make([]models.User, 0, len(dbUsers))
+	users := make([]models.UserView, 0, len(dbUsers))
 	for _, u := range dbUsers {
 		enabled := true
 		if u.Enabled != nil {
 			enabled = *u.Enabled
 		}
 
-		users = append(users, models.User{
+		users = append(users, models.ToUserView(models.User{
 			Username:        u.Username,
 			Roles:           u.Roles,
 			DisplayName:     u.DisplayName,
@@ -97,10 +110,9 @@ func (h *UserHandler) GetUsers(ctx *gin.Context) {
 			LastLogin:       u.LastLogin,
 			LastModified:    u.LastModified,
 			TOTPEnabled:     u.TOTPEnabled,
-			TOTPSecret:      u.TOTPSecret,
 			WebAuthnEnabled: u.WebAuthnEnabled,
 			WebAuthnDevices: u.WebAuthnDevices,
-		})
+		}))
 	}
 
 	ctx.JSON(http.StatusOK, models.UsersResponse{Users: users})
@@ -127,7 +139,6 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 		LastLogin       *string                     `bson:"lastLogin" json:"lastLogin"`
 		LastModified    string                      `bson:"lastModified" json:"lastModified"`
 		TOTPEnabled     bool                        `bson:"totpEnabled" json:"totpEnabled"`
-		TOTPSecret      string                      `bson:"totpSecret,omitempty" json:"totpSecret,omitempty"`
 		WebAuthnEnabled bool                        `bson:"webAuthnEnabled" json:"webAuthnEnabled"`
 		WebAuthnDevices []models.WebAuthnCredential `bson:"webAuthnDevices,omitempty" json:"webAuthnDevices,omitempty"`
 	}
@@ -137,7 +148,7 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 	err := h.MongoDB.GetUserCollection().FindOne(
 		ctx.Request.Context(),
 		bson.M{"username": username},
-		options.FindOne().SetProjection(bson.M{"passwordHash": 0}),
+		options.FindOne().SetProjection(bson.M{"passwordHash": 0, "totpSecret": 0}),
 	).Decode(&du)
 
 	if err != nil {
@@ -154,7 +165,7 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 	if du.Enabled != nil {
 		enabled = *du.Enabled
 	}
-	user := models.User{
+	user := models.ToUserView(models.User{
 		Username:        du.Username,
 		Roles:           du.Roles,
 		DisplayName:     du.DisplayName,
@@ -164,10 +175,9 @@ func (h *UserHandler) GetUser(ctx *gin.Context) {
 		LastLogin:       du.LastLogin,
 		LastModified:    du.LastModified,
 		TOTPEnabled:     du.TOTPEnabled,
-		TOTPSecret:      du.TOTPSecret,
 		WebAuthnEnabled: du.WebAuthnEnabled,
 		WebAuthnDevices: du.WebAuthnDevices,
-	}
+	})
 
 	ctx.JSON(http.StatusOK, models.UserResponse{User: user})
 }
@@ -255,8 +265,7 @@ func (h *UserHandler) CreateUser(ctx *gin.Context) {
 	})
 
 	// Return user without passwordHash
-	user.PasswordHash = ""
-	ctx.JSON(http.StatusCreated, models.UserResponse{User: user})
+	ctx.JSON(http.StatusCreated, models.UserResponse{User: models.ToUserView(user)})
 }
 
 // UpdateUser handles the PUT /api/users/:username endpoint
@@ -283,7 +292,12 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	}
 
 	// Find user
-	var user models.User
+	var user struct {
+		Username string   `bson:"username"`
+		Roles    []string `bson:"roles"`
+		Enabled  *bool    `bson:"enabled"`
+	}
+
 	err := h.MongoDB.GetUserCollection().FindOne(ctx.Request.Context(), bson.M{"username": username}).Decode(&user)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
@@ -293,6 +307,11 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 		}
 
 		return
+	}
+
+	currentlyEnabled := true
+	if user.Enabled != nil {
+		currentlyEnabled = *user.Enabled
 	}
 
 	// Update user fields
@@ -310,7 +329,23 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	}
 
 	if len(userRequest.Roles) > 0 {
-		update["roles"] = userRequest.Roles
+		if !IsAdminContext(ctx) {
+			if !sameRoles(userRequest.Roles, user.Roles) {
+				ctx.JSON(http.StatusForbidden, models.ErrorResponse{Error: "Only admins can change roles"})
+
+				return
+			}
+		} else {
+			if currentlyEnabled && HasRole(user.Roles, "admin") && !HasRole(userRequest.Roles, "admin") {
+				if err := h.ensureAnotherEnabledAdminExists(ctx, username); err != nil {
+					ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+
+					return
+				}
+			}
+
+			update["roles"] = userRequest.Roles
+		}
 	}
 
 	if userRequest.DisplayName != "" {
@@ -327,20 +362,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 
 	// Handle enabled status update with admin check
 	if userRequest.Enabled != nil {
-		// Only admins can toggle enabled
-		rolesIfc, _ := ctx.Get("roles")
-		roles, _ := rolesIfc.([]string)
-		isAdmin := false
-
-		for _, r := range roles {
-			if r == "admin" {
-				isAdmin = true
-
-				break
-			}
-		}
-
-		if !isAdmin {
+		if !IsAdminContext(ctx) {
 			ctx.JSON(http.StatusForbidden, models.ErrorResponse{Error: "Only admins can change user enabled status"})
 
 			return
@@ -350,10 +372,18 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 		currentUserIfc, _ := ctx.Get("username")
 
 		currentUsername, _ := currentUserIfc.(string)
-		if currentUsername == username && hasRole(user.Roles, "admin") && !*userRequest.Enabled {
+		if currentUsername == username && HasRole(user.Roles, "admin") && !*userRequest.Enabled {
 			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Cannot disable the current admin user"})
 
 			return
+		}
+
+		if currentlyEnabled && HasRole(user.Roles, "admin") && !*userRequest.Enabled {
+			if err := h.ensureAnotherEnabledAdminExists(ctx, username); err != nil {
+				ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+
+				return
+			}
 		}
 
 		update["enabled"] = *userRequest.Enabled
@@ -388,7 +418,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 	err = h.MongoDB.GetUserCollection().FindOne(
 		ctx.Request.Context(),
 		bson.M{"username": username},
-		options.FindOne().SetProjection(bson.M{"passwordHash": 0}),
+		options.FindOne().SetProjection(bson.M{"passwordHash": 0, "totpSecret": 0}),
 	).Decode(&updatedUser)
 
 	if err != nil {
@@ -412,7 +442,7 @@ func (h *UserHandler) UpdateUser(ctx *gin.Context) {
 		Details: map[string]interface{}{"fields": updatedFields},
 	})
 
-	ctx.JSON(http.StatusOK, models.UserResponse{User: updatedUser})
+	ctx.JSON(http.StatusOK, models.UserResponse{User: models.ToUserView(updatedUser)})
 }
 
 // hasRole checks if a role exists in the slice
@@ -425,16 +455,6 @@ func nilToMongo(d db.UserDatabase) *db.MongoDB {
 	return nil
 }
 
-func hasRole(roles []string, role string) bool {
-	for _, r := range roles {
-		if r == role {
-			return true
-		}
-	}
-
-	return false
-}
-
 // DeleteUser handles the DELETE /api/users/:username endpoint
 func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 	// If MongoDB is not connected, return error
@@ -445,6 +465,43 @@ func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 	}
 
 	username := ctx.Param("username")
+	currentUsername := CurrentUsername(ctx)
+
+	var user struct {
+		Username string   `bson:"username"`
+		Roles    []string `bson:"roles"`
+		Enabled  *bool    `bson:"enabled"`
+	}
+
+	err := h.MongoDB.GetUserCollection().FindOne(ctx.Request.Context(), bson.M{"username": username}).Decode(&user)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
+		} else {
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to fetch user"})
+		}
+
+		return
+	}
+
+	if currentUsername == username && HasRole(user.Roles, "admin") {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Cannot delete the current admin user"})
+
+		return
+	}
+
+	currentlyEnabled := true
+	if user.Enabled != nil {
+		currentlyEnabled = *user.Enabled
+	}
+
+	if currentlyEnabled && HasRole(user.Roles, "admin") {
+		if err := h.ensureAnotherEnabledAdminExists(ctx, username); err != nil {
+			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+
+			return
+		}
+	}
 
 	// Delete user
 	result, err := h.MongoDB.GetUserCollection().DeleteOne(ctx.Request.Context(), bson.M{"username": username})
@@ -467,4 +524,45 @@ func (h *UserHandler) DeleteUser(ctx *gin.Context) {
 	})
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "User deleted successfully"})
+}
+
+func sameRoles(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+
+	aCopy := append([]string(nil), a...)
+	bCopy := append([]string(nil), b...)
+	slices.Sort(aCopy)
+	slices.Sort(bCopy)
+
+	for idx := range aCopy {
+		if aCopy[idx] != bCopy[idx] {
+			return false
+		}
+	}
+
+	return true
+}
+
+func (h *UserHandler) ensureAnotherEnabledAdminExists(ctx *gin.Context, excludedUsername string) error {
+	filter := bson.M{
+		"username": bson.M{"$ne": excludedUsername},
+		"roles":    "admin",
+		"$or": []bson.M{
+			{"enabled": true},
+			{"enabled": bson.M{"$exists": false}},
+		},
+	}
+
+	adminCount, err := h.MongoDB.GetUserCollection().CountDocuments(ctx.Request.Context(), filter)
+	if err != nil {
+		return errors.New("failed to validate remaining admin users")
+	}
+
+	if adminCount == 0 {
+		return errors.New("at least one enabled admin user must remain")
+	}
+
+	return nil
 }

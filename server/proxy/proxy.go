@@ -108,16 +108,7 @@ func getOperation(ctx *gin.Context) string {
 
 // getAuthParams extracts authentication parameters from the request
 func getAuthParams(ctx *gin.Context) (string, string) {
-	// Get auth parameters from headers or query parameters
-	authType := ctx.GetHeader("x-auth-type")
-	authValue := ctx.GetHeader("x-auth-value")
-
-	// If not in headers, try query parameters
-	if authType == "" || authValue == "" {
-		authType, authValue = utils.GetAuthorizationFromQuery(ctx.Request)
-	}
-
-	return authType, authValue
+	return strings.ToLower(ctx.GetHeader("x-auth-type")), ctx.GetHeader("x-auth-value")
 }
 
 // copyHeaders copies headers from source to destination
@@ -126,6 +117,32 @@ func copyHeaders(dst http.Header, src http.Header) {
 		for _, value := range values {
 			dst.Add(key, value)
 		}
+	}
+}
+
+func copyResponseHeaders(dst http.Header, src http.Header) {
+	for key, values := range src {
+		if isFilteredResponseHeader(key) {
+			continue
+		}
+
+		for _, value := range values {
+			dst.Add(key, value)
+		}
+	}
+}
+
+func isFilteredResponseHeader(key string) bool {
+	switch strings.ToLower(strings.TrimSpace(key)) {
+	case "access-control-allow-origin",
+		"access-control-allow-credentials",
+		"access-control-allow-headers",
+		"access-control-allow-methods",
+		"access-control-expose-headers",
+		"access-control-max-age":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -160,27 +177,6 @@ func readAllDecoded(resp *http.Response) ([]byte, error) {
 
 // handleProxyRequest handles the common proxy flow
 func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) {
-	// Set CORS headers for non-OPTIONS requests
-	origin := ctx.Request.Header.Get("Origin")
-	if origin == "" {
-		// Default to localhost:3000 for development
-		origin = "http://localhost:3000"
-	}
-
-	ctx.Header("Access-Control-Allow-Origin", origin)
-	ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
-	// Allow standard headers plus any requested by the browser in preflight
-	allowReq := ctx.GetHeader("Access-Control-Request-Headers")
-	baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
-	if allowReq != "" {
-		ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
-	} else {
-		ctx.Header("Access-Control-Allow-Headers", baseAllow)
-	}
-	ctx.Header("Access-Control-Allow-Credentials", "true")
-	// Expose important headers so browsers can access them on HEAD/GET responses
-	ctx.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location")
-
 	// Get and validate target URL if not provided
 	if config.TargetURL == "" {
 		var statusCode int
@@ -201,7 +197,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 					"endpoint":      config.LogEndpoint,
 					"endpoint_path": config.EndpointPath,
 					"error":         errMsg,
-					"query":         ctx.Request.URL.RawQuery,
+					"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 				},
 			})
 
@@ -214,10 +210,10 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Log the request (initial)
 	if config.EndpointPath == "" {
 		// Simple endpoint with a fixed path
-		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", config.TargetURL)
+		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", utils.RedactURLString(config.TargetURL))
 	} else {
 		// For endpoints with dynamic path
-		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", config.TargetURL, "endpoint_path", config.EndpointPath)
+		slog.Info("Handling proxy request", "endpoint", config.LogEndpoint, "method", ctx.Request.Method, "target", utils.RedactURLString(config.TargetURL), "endpoint_path", config.EndpointPath)
 	}
 
 	// Parse the target URL
@@ -228,14 +224,14 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 		h.writeAudit(ctx, config, models.AuditLogEntry{
 			Action: action,
-			Target: config.TargetURL,
+			Target: utils.RedactURLString(config.TargetURL),
 			Details: map[string]any{
 				"status":        http.StatusBadRequest,
 				"http_method":   ctx.Request.Method,
 				"endpoint":      config.LogEndpoint,
 				"endpoint_path": config.EndpointPath,
 				"error":         "Invalid target URL",
-				"query":         ctx.Request.URL.RawQuery,
+				"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 			},
 		})
 
@@ -302,8 +298,8 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		"method", ctx.Request.Method,
 		"target_host", target.Scheme+"://"+target.Host,
 		"endpoint_path", config.EndpointPath,
-		"out_query", target.RawQuery,
-		"in_query", ctx.Request.URL.RawQuery,
+		"out_query", utils.RedactQueryString(target.RawQuery),
+		"in_query", utils.RedactQueryString(ctx.Request.URL.RawQuery),
 	)
 
 	// Use reverse proxy if specified
@@ -316,11 +312,11 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 			originalDirector(req)
 			req.URL.Path = config.EndpointPath
 
-			// Never forward incoming client Authorization header to the Nauthilus server
-			// We only allow Proxy-generated Authorization built from query params
+			// Never forward incoming client Authorization header to the Nauthilus server.
+			// Backend auth is rebuilt exclusively from dedicated x-auth-* headers.
 			req.Header.Del("Authorization")
 
-			// Add authentication headers if required (from query params or headers x-auth-*)
+			// Add backend authentication headers if required.
 			if config.RequiresAuth {
 				authType, authValue := getAuthParams(ctx)
 				utils.AddAuthorizationHeader(req, authType, authValue)
@@ -342,7 +338,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 					"endpoint":      config.LogEndpoint,
 					"endpoint_path": config.EndpointPath,
 					"error":         err.Error(),
-					"query":         ctx.Request.URL.RawQuery,
+					"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 				},
 			})
 
@@ -368,7 +364,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 					"http_method":   ctx.Request.Method,
 					"endpoint":      config.LogEndpoint,
 					"endpoint_path": config.EndpointPath,
-					"query":         ctx.Request.URL.RawQuery,
+					"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 				},
 			})
 		}
@@ -392,7 +388,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 				"endpoint":      config.LogEndpoint,
 				"endpoint_path": config.EndpointPath,
 				"error":         "Failed to create proxy request",
-				"query":         ctx.Request.URL.RawQuery,
+				"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 			},
 		})
 
@@ -404,8 +400,8 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	// Copy headers from the original request
 	copyHeaders(req.Header, ctx.Request.Header)
 
-	// Never forward incoming client Authorization header to the Nauthilus server
-	// Only allow Proxy-generated Authorization built from query params
+	// Never forward incoming client Authorization header to the Nauthilus server.
+	// Backend auth is rebuilt exclusively from dedicated x-auth-* headers.
 	req.Header.Del("Authorization")
 
 	// Add authentication headers if required
@@ -445,7 +441,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 				"endpoint":      config.LogEndpoint,
 				"endpoint_path": config.EndpointPath,
 				"error":         "Failed to connect to backend server: " + err.Error(),
-				"query":         ctx.Request.URL.RawQuery,
+				"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 			},
 		})
 
@@ -459,7 +455,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	}(resp.Body)
 
 	// Copy the response headers
-	copyHeaders(ctx.Writer.Header(), resp.Header)
+	copyResponseHeaders(ctx.Writer.Header(), resp.Header)
 
 	// Ensure all backend headers are accessible to browser JS (CORS)
 	{
@@ -537,7 +533,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 				"http_method":   ctx.Request.Method,
 				"endpoint":      config.LogEndpoint,
 				"endpoint_path": config.EndpointPath,
-				"query":         ctx.Request.URL.RawQuery,
+				"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 			},
 		})
 	}
@@ -545,39 +541,6 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 
 // RegisterRoutes registers the proxy routes
 func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
-	// Add a middleware to handle CORS for all proxy routes
-	router.Use(func(ctx *gin.Context) {
-		// Set CORS headers for all requests
-		origin := ctx.Request.Header.Get("Origin")
-		if origin == "" {
-			// Default to localhost:3000 for development
-			origin = "http://localhost:3000"
-		}
-
-		ctx.Header("Access-Control-Allow-Origin", origin)
-		ctx.Header("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD")
-		// Allow standard headers plus any requested by the browser in preflight
-		allowReq := ctx.GetHeader("Access-Control-Request-Headers")
-		baseAllow := "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
-		if allowReq != "" {
-			ctx.Header("Access-Control-Allow-Headers", baseAllow+", "+allowReq)
-		} else {
-			ctx.Header("Access-Control-Allow-Headers", baseAllow)
-		}
-		ctx.Header("Access-Control-Allow-Credentials", "true")
-		// Expose important headers so browsers can access them on HEAD/GET responses
-		ctx.Header("Access-Control-Expose-Headers", "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location")
-		ctx.Header("Access-Control-Max-Age", "86400") // 24 hours
-
-		// Handle preflight OPTIONS requests
-		if ctx.Request.Method == "OPTIONS" {
-			ctx.AbortWithStatus(204)
-			return
-		}
-
-		ctx.Next()
-	})
-
 	// Register the actual route handlers
 	router.GET("/proxy/ping", h.PingProxy)
 	router.POST("/proxy/ping", h.PingProxy)
@@ -630,7 +593,7 @@ func (h *ProxyHandler) PingProxy(ctx *gin.Context) {
 	config := ProxyConfig{
 		EndpointPath: "/ping",
 		LogEndpoint:  "/proxy/ping",
-		RequiresAuth: false,
+		RequiresAuth: true,
 		SkipAudit:    true,
 	}
 
@@ -1069,7 +1032,7 @@ func (h *ProxyHandler) SystemMetricsProxy(ctx *gin.Context) {
 			"http_method":   ctx.Request.Method,
 			"endpoint":      "/proxy/system/metrics",
 			"endpoint_path": "/metrics",
-			"query":         ctx.Request.URL.RawQuery,
+			"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 		},
 	})
 
@@ -1308,7 +1271,7 @@ func (h *ProxyHandler) SecurityMetricsProxy(ctx *gin.Context) {
 			"http_method":   ctx.Request.Method,
 			"endpoint":      "/proxy/security/metrics",
 			"endpoint_path": "/metrics",
-			"query":         ctx.Request.URL.RawQuery,
+			"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
 		},
 	})
 
@@ -1703,6 +1666,33 @@ func (h *ProxyHandler) IpapiLookupProxy(ctx *gin.Context) {
 func (h *ProxyHandler) writeAudit(ctx *gin.Context, config ProxyConfig, entry models.AuditLogEntry) {
 	if config.SkipAudit {
 		return
+	}
+
+	if entry.Details != nil {
+		safeDetails := make(map[string]any, len(entry.Details))
+		for key, value := range entry.Details {
+			switch strings.ToLower(key) {
+			case "query", "in_query", "out_query":
+				if raw, ok := value.(string); ok {
+					safeDetails[key] = utils.RedactQueryString(raw)
+					continue
+				}
+			case "authorization", "cookie", "set-cookie", "x-auth-value":
+				if raw, ok := value.(string); ok {
+					safeDetails[key] = utils.RedactHeaderValue(key, raw)
+					continue
+				}
+			case "headers":
+				if headers, ok := value.(http.Header); ok {
+					safeDetails[key] = utils.RedactHeaders(headers)
+					continue
+				}
+			}
+
+			safeDetails[key] = value
+		}
+
+		entry.Details = safeDetails
 	}
 
 	api.WriteAudit(ctx, h.Mongo, entry)

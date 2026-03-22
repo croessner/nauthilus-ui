@@ -5,6 +5,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"nauthilus-ui/server/utils"
 )
 
 // Logger returns a Gin middleware that logs requests using slog in a consistent format
@@ -22,13 +24,10 @@ func Logger() gin.HandlerFunc {
 		method := c.Request.Method
 		path := c.Request.URL.Path
 
-		query := c.Request.URL.RawQuery
-		if query != "" {
-			path = path + "?" + query
-		}
+		path = utils.RedactPathWithQuery(path, c.Request.URL.RawQuery)
 
 		userAgent := c.Request.UserAgent()
-		referer := c.Request.Referer()
+		referer := utils.RedactURLString(c.Request.Referer())
 		errs := c.Errors.ByType(gin.ErrorTypeAny).String()
 
 		attrs := []any{

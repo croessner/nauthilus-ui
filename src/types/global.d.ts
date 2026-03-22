@@ -5,4 +5,5 @@ interface Window {
   _env_?: {
     [key: string]: string;
   };
+  __envConfigReady?: Promise<Record<string, string> | undefined>;
 }

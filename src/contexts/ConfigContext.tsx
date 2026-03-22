@@ -3,7 +3,8 @@ import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
 import { formatConfigAsYaml } from '../utils/yamlUtils';
 import axios from '../utils/axiosConfig';
-import { withErrorHandling as apiWithErrorHandling, prepareAuthParams, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
+import { withErrorHandling as apiWithErrorHandling, buildBackendAuthHeaders, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
+import { getCurrentUserId } from '../utils/currentUser';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -40,12 +41,6 @@ const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 
 // Storage keys for the configuration (kept for backward compatibility)
 const DEFAULT_PROFILE_NAME = 'Default';
-
-// Helper function to get the current user ID
-const getCurrentUserId = async (): Promise<string> => {
-  // Always return default-user since we're storing userId-Session-Infos only in browser
-  return 'default-user';
-};
 
 // Default empty configuration
 const DEFAULT_CONFIG: NauthilusConfig = {
@@ -935,20 +930,13 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         throw new Error('No backend URL configured');
       }
 
-      // Prepare authentication parameters for the proxy
-      const { authType, authValue } = prepareAuthParams(connectionConfig);
-
       // Use the proxy endpoint to make the request server-side
       const proxyUrl = new URL('/proxy/config/load', getProxyOrigin());
       proxyUrl.searchParams.append('url', connectionConfig.backend_url);
 
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
+        headers: buildBackendAuthHeaders(connectionConfig),
       });
 
       if (!response.ok) {

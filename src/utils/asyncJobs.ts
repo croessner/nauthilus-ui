@@ -1,4 +1,4 @@
-import { authenticatedFetch, getProxyOrigin, prepareAuthParams } from "./apiUtils";
+import { authenticatedFetch, buildBackendAuthHeaders, getProxyOrigin } from "./apiUtils";
 
 export type AsyncJobStatus = "QUEUED" | "INPROGRESS" | "DONE" | "ERROR";
 
@@ -32,12 +32,6 @@ function buildProxyUrl(path: string, connectionConfig: any): URL {
   const url = new URL(path, getProxyOrigin());
   url.searchParams.append("url", connectionConfig.backend_url);
 
-  const { authType, authValue } = prepareAuthParams(connectionConfig);
-  if (authType && authValue) {
-    url.searchParams.append("authType", authType);
-    url.searchParams.append("authValue", authValue);
-  }
-
   return url;
 }
 
@@ -51,6 +45,7 @@ export async function startAsyncJob(
 
   const resp = await authenticatedFetch(proxyUrl.toString(), {
     method,
+    headers: buildBackendAuthHeaders(connectionConfig),
     body: body != null ? JSON.stringify(body) : undefined,
   });
 
@@ -76,7 +71,11 @@ export async function fetchJobStatus(
   signal?: AbortSignal
 ): Promise<AsyncJobStatusResponse> {
   const proxyUrl = buildProxyUrl(`/proxy/async/${encodeURIComponent(jobId)}/status`, connectionConfig);
-  const resp = await authenticatedFetch(proxyUrl.toString(), { method: "GET", signal });
+  const resp = await authenticatedFetch(proxyUrl.toString(), {
+    method: "GET",
+    headers: buildBackendAuthHeaders(connectionConfig),
+    signal,
+  });
   if (resp.status === 404) {
     throw new Error("Job not found (404)");
   }

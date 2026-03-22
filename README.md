@@ -92,8 +92,10 @@ ui/
    c. Development Mode Architecture:
    - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
    - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
-   - The Go backend has CORS enabled in development mode to allow cross-origin requests
-   - In production, the Go server serves the built static files from the `build/` directory and injects `/env-config.js` automatically
+   - The Go backend only allows cross-origin requests from an explicit allowlist
+   - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+   - `Forwarded` / `X-Forwarded-*` headers are ignored unless the reverse proxy IP/CIDR is listed in `TRUSTED_PROXIES`
+   - In production, the Go server serves the built static files from the `build/` directory and provides runtime configuration via `/env-config.js`
 
 6. For production deployment, use Docker Compose:
    ```
@@ -267,10 +269,10 @@ The UI provides buttons in the top bar for:
   - User authentication and JWT token management
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
-  - CORS is automatically enabled in development mode
-  - You can control this behavior by setting the `GO_ENV` environment variable:
-    - When `GO_ENV` is not set or is not "production", CORS is enabled
-    - When `GO_ENV=production`, CORS is disabled
+  - Cross-origin requests are allowed only for the configured CORS allowlist
+  - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+  - In non-local deployments, set `CORS_ALLOWED_ORIGINS` explicitly to the UI origin(s)
+  - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_csrf_token`)
 - In production, the Docker setup includes:
   - A Go API server container that serves both the static React files and handles API requests
   - A MongoDB container for data storage
@@ -414,10 +416,10 @@ Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localh
 ```
 
 **Solution**:
-1. Make sure you're running the Go server in development mode (GO_ENV not set to "production")
+1. Check that the browser origin is included in `CORS_ALLOWED_ORIGINS`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
 2. Check that the CORS middleware is properly registered in the Go server
 3. Verify that the React development server is correctly proxying requests to the Go server
-4. If you're running in production mode, you shouldn't need CORS as the Go server serves the static files directly
+4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `CORS_ALLOWED_ORIGINS`
 
 ### MongoDB Connection Issues
 
@@ -600,8 +602,9 @@ ui/
    c. Development Mode Architecture:
    - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
    - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
-   - The Go backend has CORS enabled in development mode to allow cross-origin requests
-   - In production, the Go server serves the built static files from the `build/` directory and injects `/env-config.js` automatically
+   - The Go backend only allows cross-origin requests from an explicit allowlist
+   - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+   - In production, the Go server serves the built static files from the `build/` directory and provides runtime configuration via `/env-config.js`
 
 6. For production deployment, use Docker Compose:
    ```
@@ -775,10 +778,10 @@ The UI provides buttons in the top bar for:
   - User authentication and JWT token management
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
-  - CORS is automatically enabled in development mode
-  - You can control this behavior by setting the `GO_ENV` environment variable:
-    - When `GO_ENV` is not set or is not "production", CORS is enabled
-    - When `GO_ENV=production`, CORS is disabled
+  - Cross-origin requests are allowed only for the configured CORS allowlist
+  - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+  - In non-local deployments, set `CORS_ALLOWED_ORIGINS` explicitly to the UI origin(s)
+  - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_csrf_token`)
 - In production, the Docker setup includes:
   - A Go API server container that serves both the static React files and handles API requests
   - A MongoDB container for data storage
@@ -922,10 +925,10 @@ Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localh
 ```
 
 **Solution**:
-1. Make sure you're running the Go server in development mode (GO_ENV not set to "production")
+1. Check that the browser origin is included in `CORS_ALLOWED_ORIGINS`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
 2. Check that the CORS middleware is properly registered in the Go server
 3. Verify that the React development server is correctly proxying requests to the Go server
-4. If you're running in production mode, you shouldn't need CORS as the Go server serves the static files directly
+4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `CORS_ALLOWED_ORIGINS`
 
 ### MongoDB Connection Issues
 

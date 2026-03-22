@@ -4,7 +4,6 @@ import (
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"sort"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"nauthilus-ui/server/audit"
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
+	"nauthilus-ui/server/requestmeta"
 )
 
 // AuditHandler provides endpoints for reading audit logs (admin-only)
@@ -266,66 +266,9 @@ func parseInt64(s string) (int64, error) {
 	return strconv.ParseInt(s, 10, 64)
 }
 
-// Helper: get client IP from headers/request
+// Helper: get client IP using trusted-proxy-aware request metadata.
 func getClientIP(r *http.Request) string {
-	// 0) RFC 7239 Forwarded header: e.g. "Forwarded: for=203.0.113.5;proto=https;host=example.com"
-	if fwd := r.Header.Get("Forwarded"); fwd != "" {
-		// Consider only the first forwarded pair (left-most)
-		first := strings.Split(fwd, ",")[0]
-		for _, kv := range strings.Split(first, ";") {
-			p := strings.TrimSpace(kv)
-			if strings.HasPrefix(strings.ToLower(p), "for=") {
-				v := strings.TrimSpace(p[4:]) // value after for=
-				v = strings.Trim(v, "\"")     // strip optional quotes
-
-				if strings.HasPrefix(v, "[") { // IPv6 possibly with port: [2001:db8::1]:1234
-					end := strings.Index(v, "]")
-					if end != -1 {
-						host := v[1:end]
-						if host != "" {
-							return host
-						}
-					}
-				} else { // IPv4 or token possibly with :port
-					host := v
-					if i := strings.Index(host, ":"); i != -1 {
-						host = host[:i]
-					}
-
-					host = strings.TrimSpace(host)
-					if host != "" && strings.ToLower(host) != "unknown" {
-						return host
-					}
-				}
-			}
-		}
-	}
-
-	// 1) X-Forwarded-For: take the first (left-most) IP
-	if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
-		parts := strings.Split(xff, ",")
-		if len(parts) > 0 {
-			ip := strings.TrimSpace(parts[0])
-			if ip != "" {
-				return ip
-			}
-		}
-	}
-
-	// 2) X-Real-IP fallback
-	if xrip := r.Header.Get("X-Real-IP"); xrip != "" {
-		ip := strings.TrimSpace(xrip)
-		if ip != "" {
-			return ip
-		}
-	}
-
-	// 3) RemoteAddr
-	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil && host != "" {
-		return host
-	}
-
-	return r.RemoteAddr
+	return requestmeta.ClientIP(r)
 }
 
 // WriteAudit inserts an immutable audit log record

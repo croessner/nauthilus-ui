@@ -1,20 +1,27 @@
 import axios from 'axios';
 import { getAuthToken, getProxyOrigin } from './apiUtils';
+import { attachCSRFHeader, isMutatingMethod } from './csrf';
 
 // Configure axios defaults
 axios.defaults.withCredentials = true;
 
 // Add a request interceptor to include JWT token in all requests
 axios.interceptors.request.use(
-  (config) => {
+  async (config) => {
+    if (config.url && !config.url.includes('/api/auth/csrf') && isMutatingMethod(config.method)) {
+      config.headers = await attachCSRFHeader(config.headers as any);
+    }
+
     // Skip adding token for unauthenticated auth endpoints
     if (
       config.url && (
         config.url.includes('/api/auth/login') ||
         config.url.includes('/api/auth/refresh') ||
         config.url.includes('/api/auth/logout') ||
-        config.url.includes('/api/auth/webauthn/') ||
-        config.url.includes('/api/auth/totp/')
+        config.url.includes('/api/auth/totp/verify') ||
+        config.url.includes('/api/auth/webauthn/begin-login') ||
+        config.url.includes('/api/auth/webauthn/finish-login') ||
+        config.url.includes('/api/auth/oidc/')
       )
     ) {
       return config;

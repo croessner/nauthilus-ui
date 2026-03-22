@@ -3,7 +3,7 @@ import { Box, Button, CircularProgress, Container, Stack, TextField, Typography,
 import { useUser } from '../contexts/UserContext';
 import { authenticatedFetch, extractErrorMessage } from '../utils/apiUtils';
 import { useParams } from 'react-router-dom';
-import { marked } from 'marked';
+import { renderSafeMarkdown } from '../utils/safeMarkdown';
 
 interface LegalPageData {
   key: 'imprint' | 'privacy';
@@ -151,7 +151,7 @@ const LegalPage: React.FC = () => {
 
   const html = useMemo(() => {
     try {
-      return marked.parse(data.contentMd || '');
+      return renderSafeMarkdown(data.contentMd || '');
     } catch {
       return '';
     }
@@ -200,7 +200,10 @@ const LegalPage: React.FC = () => {
         {!editMode ? (
           <Box sx={{ p: { xs: 1, sm: 2, md: 3 }, backgroundColor: 'transparent' }}>
             {data.contentMd ? (
-              <div dangerouslySetInnerHTML={{ __html: html }} />
+              <>
+                {/* Safe because renderSafeMarkdown sanitizes the generated HTML before rendering. */}
+                <div dangerouslySetInnerHTML={{ __html: html }} />
+              </>
             ) : (
               <Typography variant="body1" color="text.secondary">No content yet.</Typography>
             )}

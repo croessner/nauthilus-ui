@@ -58,6 +58,7 @@ function ensureLightHtml(html: string): string {
 const HookTester = (): React.JSX.Element => {
   const { currentProfileName } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings } = useRuntime();
+  const [storageUsername, setStorageUsername] = useState('anonymous');
 
   const [method, setMethod] = useState<Method>('POST');
   const [endpointPath, setEndpointPath] = useState<string>('');
@@ -121,8 +122,14 @@ const HookTester = (): React.JSX.Element => {
     })().catch(() => { /* ignore */ });
   }, [currentProfileName, loadRuntimeSettings, getConnection, checkConnection]);
 
+  useEffect(() => {
+    getCurrentUserId()
+      .then((username) => setStorageUsername(username))
+      .catch(() => setStorageUsername('anonymous'));
+  }, []);
+
   // Load last session from localStorage
-  const username = 'default-user'; // aligned with getCurrentUserId()
+  const username = storageUsername;
   useEffect(() => {
     try {
       const raw = window.localStorage.getItem(storageKey(username));

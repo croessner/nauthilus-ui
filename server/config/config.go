@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"strconv"
+	"strings"
 )
 
 // Config holds all configuration values for the application.
@@ -75,6 +76,14 @@ type Config struct {
 	OIDCScopes        string // space-separated scopes, default: "openid profile email"
 	OIDCRoleClaim     string // claim to extract roles from, e.g., "roles" or "realm_access.roles"
 	OIDCUsernameClaim string // preferred_username, email, or sub
+
+	// CORS configuration
+	// CORSAllowedOrigins is the explicit allowlist of browser origins permitted for cross-origin requests.
+	CORSAllowedOrigins []string
+
+	// Trusted proxy configuration
+	// TrustedProxies contains the IPs/CIDRs whose forwarded headers may be trusted.
+	TrustedProxies []string
 }
 
 // LoadConfig loads configuration from environment variables.
@@ -128,6 +137,12 @@ func LoadConfig() *Config {
 		OIDCScopes:        getEnv("REACT_APP_OIDC_SCOPES", "openid profile email"),
 		OIDCRoleClaim:     getEnv("REACT_APP_OIDC_ROLE_CLAIM", "roles"),
 		OIDCUsernameClaim: getEnv("REACT_APP_OIDC_USERNAME_CLAIM", "preferred_username"),
+
+		// CORS configuration
+		CORSAllowedOrigins: getEnvAsCSV("CORS_ALLOWED_ORIGINS"),
+
+		// Trusted proxy configuration
+		TrustedProxies: getEnvAsCSV("TRUSTED_PROXIES"),
 	}
 
 	return config
@@ -159,4 +174,24 @@ func getEnvAsInt(key string, defaultValue int) int {
 	}
 
 	return value
+}
+
+func getEnvAsCSV(key string) []string {
+	raw := strings.TrimSpace(getEnv(key, ""))
+	if raw == "" {
+		return nil
+	}
+
+	parts := strings.Split(raw, ",")
+	values := make([]string, 0, len(parts))
+	for _, part := range parts {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+
+		values = append(values, trimmed)
+	}
+
+	return values
 }

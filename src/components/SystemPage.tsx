@@ -6,7 +6,7 @@ import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ConnectionStatus from './common/ConnectionStatus';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import { useConfig } from '../contexts/ConfigContext';
-import { getProxyOrigin, prepareAuthParams, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
+import { getProxyOrigin, buildBackendAuthHeaders, authenticatedFetch, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import Grid from '@mui/material/Grid';
 
 interface MetricsResponse {
@@ -235,13 +235,9 @@ const SystemPage = (): React.JSX.Element => {
       const proxyUrl = new URL('/proxy/system/metrics', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
 
-      const { authType, authValue } = prepareAuthParams(getConnection());
-      if (authType && authValue) {
-        proxyUrl.searchParams.append('authType', authType);
-        proxyUrl.searchParams.append('authValue', authValue);
-      }
-
-      const res = await authenticatedFetch(proxyUrl.toString());
+      const res = await authenticatedFetch(proxyUrl.toString(), {
+        headers: buildBackendAuthHeaders(getConnection()),
+      });
       if (!res.ok) {
         setStatusMessage(`Failed to fetch metrics: ${res.status} ${res.statusText}`);
         return;

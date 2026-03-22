@@ -276,8 +276,8 @@ func NewProfileHandler(mongoDB *db.MongoDB) *ProfileHandler {
 
 // RegisterRoutes registers the profile routes
 func (h *ProfileHandler) RegisterRoutes(router *gin.Engine) {
-	router.GET("/api/profiles/:userId", h.GetProfiles)
-	router.POST("/api/profiles/:userId", h.SaveProfiles)
+	router.GET("/api/profiles/:userId", RequireSelfOrAdmin("userId"), h.GetProfiles)
+	router.POST("/api/profiles/:userId", RequireSelfOrAdmin("userId"), h.SaveProfiles)
 }
 
 // GetProfiles handles the GET /api/profiles/:userId endpoint
@@ -330,7 +330,7 @@ func (h *ProfileHandler) GetProfiles(ctx *gin.Context) {
 	userID := ctx.Param("userId")
 	var profile models.Profile
 
-	err := h.MongoDB.ProfileColl.FindOne(context.Background(), bson.M{"userId": userID}).Decode(&profile)
+	err := h.MongoDB.ProfileColl.FindOne(ctx.Request.Context(), bson.M{"userId": userID}).Decode(&profile)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "Profiles not found"})
 

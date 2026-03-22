@@ -15,6 +15,7 @@
     "bcryptjs": "^3.0.2",
     "crypto-js": "^4.2.0",
     "d3-geo": "^3.1.1",
+    "dompurify": "^3.3.3",
     "dotenv": "^17.2.2",
     "formik": "^2.4.6",
     "js-cookie": "^3.0.5",
@@ -41,7 +42,6 @@
     "preview": "vite preview",
     "test": "echo \"No test runner configured with Vite yet\" && exit 0",
     "smoke:auth": "node scripts/smoke.auth-endpoints.test.mjs",
-
     "deps:outdated": "npm outdated || true",
     "deps:deprecated": "npx npm-check-updates --deprecated",
     "deps:audit": "npm audit || true",
@@ -54,7 +54,6 @@
     "deps:safe-upgrade": "npm run deps:upgrade:minor && npm run postdeps:verify",
     "deps:update": "bash scripts/update-deps.sh"
   },
-  
   "browserslist": {
     "production": [
       ">0.2%",

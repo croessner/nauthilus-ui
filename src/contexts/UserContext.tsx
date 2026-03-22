@@ -13,7 +13,6 @@ interface User {
   lastModified?: string;
   // TOTP fields
   totpEnabled?: boolean;
-  totpSecret?: string;
   // WebAuthn fields
   webAuthnEnabled?: boolean;
   webAuthnDevices?: userManager.WebAuthnCredential[];
@@ -219,21 +218,16 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     setError(null);
 
     try {
-      // Get current user to preserve all user data
-      const users = await userManager.getUsers();
-      const userToUpdate = users.find(u => u.username === username);
-
-      if (userToUpdate) {
-        // Extract profile data to preserve
-        const { displayName, email, avatar, lastLogin, lastModified } = userToUpdate;
-        const profileData = { displayName, email, avatar, lastLogin, lastModified };
-
-        // Update user with preserved profile data
-        await userManager.addUser(username, password, userToUpdate.roles, profileData);
-      } else {
+      const userToUpdate = user?.username === username ? user : await userManager.getUser(username);
+      if (!userToUpdate) {
         console.error('User not found');
         return;
       }
+
+      await userManager.updateUserProfile(username, {
+        password,
+        lastModified: userToUpdate.lastModified || new Date().toISOString(),
+      });
     } catch (err) {
       console.error('Update password error:', err);
       setError('An error occurred while updating the password');
@@ -249,61 +243,58 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     setError(null);
 
     try {
-      // Get the current user to preserve roles and other data
-      const users = await userManager.getUsers();
-      const userToUpdate = users.find(u => u.username === username);
-
-      if (userToUpdate) {
-        // Create a copy of the profile data
-        const updatedProfileData = {
-          ...profileData
-        };
-
-        // Check if we're only updating lastLogin
-        const isOnlyLastLoginUpdate = Object.keys(profileData).length === 1 && 'lastLogin' in profileData;
-
-        // If we're not just updating lastLogin, check if there are actual changes
-        if (!isOnlyLastLoginUpdate) {
-          // Check if there are actual changes to the profile
-          let hasChanges = false;
-
-          // Compare each field in profileData with the current user data
-          for (const key in profileData) {
-            if (key !== 'lastLogin' && key !== 'lastModified') {
-              // Handle undefined values correctly
-              const newValue = profileData[key as keyof typeof profileData];
-              const currentValue = userToUpdate[key as keyof typeof userToUpdate];
-
-              // Check if the values are different
-              if ((newValue || '') !== (currentValue || '')) {
-                hasChanges = true;
-                break;
-              }
-            }
-          }
-
-          // Only update lastModified if there are actual changes
-          if (hasChanges) {
-            updatedProfileData.lastModified = new Date().toISOString();
-          } else {
-            // No changes, preserve the existing lastModified value
-            updatedProfileData.lastModified = userToUpdate.lastModified;
-          }
-        } else {
-          // For lastLogin updates, preserve the existing lastModified value
-          updatedProfileData.lastModified = userToUpdate.lastModified;
-        }
-
-        await userManager.updateUserProfile(username, updatedProfileData);
-
-        // If the current user is being updated, refresh the user state
-        if (user && user.username === username) {
-          const currentUser = await userManager.getCurrentUser();
-          setUser(currentUser);
-        }
-      } else {
+      const userToUpdate = user?.username === username ? user : await userManager.getUser(username);
+      if (!userToUpdate) {
         console.error('User not found');
         return;
+      }
+
+      // Create a copy of the profile data
+      const updatedProfileData = {
+        ...profileData
+      };
+
+      // Check if we're only updating lastLogin
+      const isOnlyLastLoginUpdate = Object.keys(profileData).length === 1 && 'lastLogin' in profileData;
+
+      // If we're not just updating lastLogin, check if there are actual changes
+      if (!isOnlyLastLoginUpdate) {
+        // Check if there are actual changes to the profile
+        let hasChanges = false;
+
+        // Compare each field in profileData with the current user data
+        for (const key in profileData) {
+          if (key !== 'lastLogin' && key !== 'lastModified') {
+            // Handle undefined values correctly
+            const newValue = profileData[key as keyof typeof profileData];
+            const currentValue = userToUpdate[key as keyof typeof userToUpdate];
+
+            // Check if the values are different
+            if ((newValue || '') !== (currentValue || '')) {
+              hasChanges = true;
+              break;
+            }
+          }
+        }
+
+        // Only update lastModified if there are actual changes
+        if (hasChanges) {
+          updatedProfileData.lastModified = new Date().toISOString();
+        } else {
+          // No changes, preserve the existing lastModified value
+          updatedProfileData.lastModified = userToUpdate.lastModified;
+        }
+      } else {
+        // For lastLogin updates, preserve the existing lastModified value
+        updatedProfileData.lastModified = userToUpdate.lastModified;
+      }
+
+      await userManager.updateUserProfile(username, updatedProfileData);
+
+      // If the current user is being updated, refresh the user state
+      if (user && user.username === username) {
+        const currentUser = await userManager.getCurrentUser();
+        setUser(currentUser);
       }
     } catch (err) {
       console.error('Update user profile error:', err);

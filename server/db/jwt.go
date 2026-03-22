@@ -16,7 +16,7 @@ const defaultTimeout = 10 * time.Second
 
 // JWTConfig represents the JWT configuration stored in the database
 type JWTConfig struct {
-	Secret             string `bson:"jwtSecret" json:"jwtSecret"`
+	Secret             string `bson:"jwtSecret" json:"-"`
 	TokenExpiry        int    `bson:"tokenExpiry" json:"tokenExpiry"`
 	RefreshTokenExpiry int    `bson:"refreshTokenExpiry" json:"refreshTokenExpiry"`
 	RememberMeExpiry   int    `bson:"rememberMeExpiry" json:"rememberMeExpiry"`

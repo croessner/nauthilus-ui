@@ -18,13 +18,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/go-webauthn/webauthn/protocol"
 	"github.com/go-webauthn/webauthn/webauthn"
-	"github.com/golang-jwt/jwt/v5"
 	"github.com/pquerna/otp/totp"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
+	"nauthilus-ui/server/requestmeta"
 )
 
 // MFAHandler handles multi-factor authentication requests
@@ -237,7 +237,7 @@ func (h *MFAHandler) GetWebAuthnUser(ctx context.Context, username string) (*Web
 
 // SetupTOTPRequest represents a request to set up TOTP
 type SetupTOTPRequest struct {
-	Username string `json:"username" binding:"required"`
+	Username string `json:"username"`
 }
 
 // SetupTOTPResponse represents a response to set up TOTP
@@ -262,11 +262,16 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 		return
 	}
 
+	actor, targetUsername, ok := h.requireAuthenticatedMFAUser(ctx, req.Username)
+	if !ok {
+		return
+	}
+
 	// Find user by username
 	var user models.User
 	err := h.MongoDB.GetUserCollection().FindOne(
 		ctx.Request.Context(),
-		bson.M{"username": req.Username},
+		bson.M{"username": targetUsername},
 	).Decode(&user)
 
 	if err != nil {
@@ -278,7 +283,7 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	// Generate TOTP key
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      "Nauthilus UI",
-		AccountName: req.Username,
+		AccountName: targetUsername,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate TOTP key"})
@@ -289,7 +294,7 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	// Update user with TOTP secret (but don't enable it yet until verified)
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
 		ctx.Request.Context(),
-		bson.M{"username": req.Username},
+		bson.M{"username": targetUsername},
 		bson.M{"$set": bson.M{"totpSecret": key.Secret()}},
 	)
 
@@ -302,9 +307,9 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 	// Return TOTP secret and QR code URL
 	// Audit TOTP setup initiation (secret not logged)
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
-		Actor:  req.Username,
+		Actor:  actor,
 		Action: "mfa.totp.setup",
-		Target: req.Username,
+		Target: targetUsername,
 	})
 
 	ctx.JSON(http.StatusOK, SetupTOTPResponse{
@@ -315,7 +320,7 @@ func (h *MFAHandler) SetupTOTP(ctx *gin.Context) {
 
 // VerifyTOTPRequest represents a request to verify TOTP
 type VerifyTOTPRequest struct {
-	Username   string `json:"username" binding:"required"`
+	Username   string `json:"username"`
 	Token      string `json:"token" binding:"required"`
 	RememberMe bool   `json:"rememberMe"`
 }
@@ -336,11 +341,45 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 		return
 	}
 
+	actor, targetUsername, authenticated, status, errMsg := h.optionalAuthenticatedMFAUser(ctx, req.Username)
+	loginSessionID := ""
+	pendingLogin := pendingMFASession{}
+	loginMode := false
+
+	if !authenticated {
+		if status != 0 {
+			ctx.JSON(status, models.ErrorResponse{Error: errMsg})
+			return
+		}
+
+		sessionID, session, err := readPendingMFASession(ctx)
+		if err != nil {
+			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "MFA challenge required"})
+			return
+		}
+
+		if req.Username != "" && req.Username != session.Username {
+			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "MFA challenge does not match requested user"})
+			return
+		}
+
+		loginSessionID = sessionID
+		pendingLogin = session
+		loginMode = true
+		actor = session.Username
+		targetUsername = session.Username
+	}
+
+	rememberMeUsed := req.RememberMe
+	if loginMode {
+		rememberMeUsed = pendingLogin.RememberMe
+	}
+
 	// Find user by username
 	var user models.User
 	err := h.MongoDB.GetUserCollection().FindOne(
 		ctx.Request.Context(),
-		bson.M{"username": req.Username},
+		bson.M{"username": targetUsername},
 	).Decode(&user)
 
 	if err != nil {
@@ -362,7 +401,7 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 	if !user.TOTPEnabled {
 		_, err = h.MongoDB.GetUserCollection().UpdateOne(
 			ctx.Request.Context(),
-			bson.M{"username": req.Username},
+			bson.M{"username": targetUsername},
 			bson.M{"$set": bson.M{"totpEnabled": true}},
 		)
 
@@ -377,63 +416,31 @@ func (h *MFAHandler) VerifyTOTP(ctx *gin.Context) {
 
 	// Audit TOTP verification (and enable on first time)
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
-		Actor:   req.Username,
+		Actor:   actor,
 		Action:  "mfa.totp.verify",
-		Target:  req.Username,
-		Details: map[string]interface{}{"enabledNow": enabledNow, "rememberMe": req.RememberMe},
+		Target:  targetUsername,
+		Details: map[string]interface{}{"enabledNow": enabledNow, "rememberMe": rememberMeUsed},
 	})
 
-	// On successful verification, issue access and refresh tokens and set cookies
-	jwtConfig, err := h.MongoDB.GetJWTConfig()
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to load JWT config"})
+	if loginMode {
+		response, err := issueLoginResponse(ctx, h.MongoDB, &user, pendingLogin.RememberMe)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to complete MFA login"})
+			return
+		}
+
+		globalPendingMFASessions.delete(loginSessionID)
+		clearPendingMFACookie(ctx)
+		ctx.JSON(http.StatusOK, response)
 		return
 	}
-
-	// Determine access token expiry (respect rememberMe if configured)
-	accessExpiry := jwtConfig.TokenExpiry
-	if req.RememberMe && jwtConfig.RememberMeExpiry > 0 {
-		accessExpiry = jwtConfig.RememberMeExpiry
-	}
-
-	// Build claims from current user snapshot
-	expiresAt := time.Now().Add(time.Duration(accessExpiry) * time.Second).Unix()
-	claims := jwt.MapClaims{
-		"sub":   user.Username,
-		"roles": user.Roles,
-		"exp":   expiresAt,
-		"iat":   time.Now().Unix(),
-	}
-	accessToken := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	accessStr, err := accessToken.SignedString([]byte(jwtConfig.Secret))
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate access token"})
-		return
-	}
-
-	refreshExp := time.Now().Add(time.Duration(jwtConfig.RefreshTokenExpiry) * time.Second).Unix()
-	rClaims := jwt.MapClaims{
-		"sub":   user.Username,
-		"roles": user.Roles,
-		"exp":   refreshExp,
-		"iat":   time.Now().Unix(),
-	}
-	refreshToken := jwt.NewWithClaims(jwt.SigningMethodHS256, rClaims)
-	refreshStr, err := refreshToken.SignedString([]byte(jwtConfig.Secret))
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate refresh token"})
-		return
-	}
-
-	// Set cookies using helper
-	SetAuthCookies(ctx, accessStr, expiresAt, refreshStr, refreshExp)
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP verified successfully"})
 }
 
 // DisableTOTPRequest represents a request to disable TOTP
 type DisableTOTPRequest struct {
-	Username string `json:"username" binding:"required"`
+	Username string `json:"username"`
 }
 
 // DisableTOTP handles the POST /api/auth/totp/disable endpoint
@@ -452,10 +459,15 @@ func (h *MFAHandler) DisableTOTP(ctx *gin.Context) {
 		return
 	}
 
+	actor, targetUsername, ok := h.requireAuthenticatedMFAUser(ctx, req.Username)
+	if !ok {
+		return
+	}
+
 	// Update user to disable TOTP
 	_, err := h.MongoDB.GetUserCollection().UpdateOne(
 		ctx.Request.Context(),
-		bson.M{"username": req.Username},
+		bson.M{"username": targetUsername},
 		bson.M{"$set": bson.M{
 			"totpEnabled": false,
 			"totpSecret":  "",
@@ -474,9 +486,9 @@ func (h *MFAHandler) DisableTOTP(ctx *gin.Context) {
 
 	// Audit TOTP disable
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
-		Actor:  req.Username,
+		Actor:  actor,
 		Action: "mfa.totp.disable",
-		Target: req.Username,
+		Target: targetUsername,
 	})
 
 	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "TOTP disabled successfully"})
@@ -487,25 +499,58 @@ type BeginRegistrationRequest struct {
 	Username string `json:"username" binding:"required"`
 }
 
-// helper to derive scheme and host (optionally using X-Forwarded headers)
-func deriveSchemeAndHost(r *http.Request) (string, string) {
-	// Scheme
-	scheme := r.Header.Get("X-Forwarded-Proto")
-	if scheme == "" {
-		if r.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
+func (h *MFAHandler) optionalAuthenticatedMFAUser(ctx *gin.Context, requestedUsername string) (string, string, bool, int, string) {
+	actor := CurrentUsername(ctx)
+	roles := CurrentRoles(ctx)
+
+	if actor == "" {
+		optionalActor, optionalRoles, err := OptionalRequestAuth(ctx, h.MongoDB)
+		if err != nil {
+			if errors.Is(err, errNoRequestAuth) {
+				return "", "", false, 0, ""
+			}
+
+			return "", "", false, http.StatusInternalServerError, "Failed to validate authentication"
 		}
+
+		actor = optionalActor
+		roles = optionalRoles
 	}
 
-	// Host
-	host := r.Header.Get("X-Forwarded-Host")
-	if host == "" {
-		host = r.Host
+	if actor == "" {
+		return "", "", false, 0, ""
 	}
 
-	return scheme, host
+	target := requestedUsername
+	if target == "" {
+		target = actor
+	}
+
+	if target != actor && !HasRole(roles, "admin") {
+		return actor, "", false, http.StatusForbidden, "Access denied"
+	}
+
+	return actor, target, true, 0, ""
+}
+
+func (h *MFAHandler) requireAuthenticatedMFAUser(ctx *gin.Context, requestedUsername string) (string, string, bool) {
+	actor, target, authenticated, status, errMsg := h.optionalAuthenticatedMFAUser(ctx, requestedUsername)
+	if authenticated {
+		return actor, target, true
+	}
+
+	if status == 0 {
+		status = http.StatusUnauthorized
+		errMsg = "Authentication required"
+	}
+
+	ctx.JSON(status, models.ErrorResponse{Error: errMsg})
+	return "", "", false
+}
+
+// helper to derive scheme and host using trusted-proxy-aware request metadata
+func deriveSchemeAndHost(r *http.Request) (string, string) {
+	return requestmeta.EffectiveScheme(r), requestmeta.EffectiveHost(r)
 }
 
 // stripPort removes the port from a host:port string and returns only the host. If no port is present, returns input as-is.
@@ -540,7 +585,7 @@ func logWebAuthnContext(r *http.Request, phase, rpID, origin string) {
 
 	// Compute effective scheme/host similar to how we derive rpID/origin
 	scheme, _ := deriveSchemeAndHost(r)
-	effectiveTLS := (scheme == "https") || (r.TLS != nil)
+	effectiveTLS := requestmeta.IsSecureRequest(r)
 
 	slog.Info("WebAuthn context",
 		"phase", phase,
@@ -562,11 +607,6 @@ func logWebAuthnContext(r *http.Request, phase, rpID, origin string) {
 // BeginWebAuthnRegistration handles the GET /api/auth/webauthn/begin-registration endpoint
 func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 	username := ctx.Query("username")
-	if username == "" {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
-
-		return
-	}
 
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
@@ -575,8 +615,13 @@ func (h *MFAHandler) BeginWebAuthnRegistration(ctx *gin.Context) {
 		return
 	}
 
+	_, targetUsername, ok := h.requireAuthenticatedMFAUser(ctx, username)
+	if !ok {
+		return
+	}
+
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(ctx.Request.Context(), username)
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), targetUsername)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
@@ -678,8 +723,13 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 	// Extract username from session data
 	usernameStr := string(sessionData.UserID)
 
+	actor, targetUsername, ok := h.requireAuthenticatedMFAUser(ctx, usernameStr)
+	if !ok {
+		return
+	}
+
 	// Get user for WebAuthn
-	user, err := h.GetWebAuthnUser(ctx.Request.Context(), usernameStr)
+	user, err := h.GetWebAuthnUser(ctx.Request.Context(), targetUsername)
 	if err != nil {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "User not found"})
 
@@ -708,7 +758,7 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 	// Update user with new credential
 	_, err = h.MongoDB.GetUserCollection().UpdateOne(
 		ctx.Request.Context(),
-		bson.M{"username": usernameStr},
+		bson.M{"username": targetUsername},
 		bson.M{
 			"$push": bson.M{"webAuthnDevices": modelCredential},
 			"$set":  bson.M{"webAuthnEnabled": true},
@@ -723,9 +773,9 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 
 	// Audit WebAuthn credential registration
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
-		Actor:  usernameStr,
+		Actor:  actor,
 		Action: "mfa.webauthn.add",
-		Target: usernameStr,
+		Target: targetUsername,
 		Details: map[string]interface{}{
 			"name":           modelCredential.Name,
 			"aaguidPresent":  modelCredential.AAGUID != "",
@@ -739,17 +789,22 @@ func (h *MFAHandler) FinishWebAuthnRegistration(ctx *gin.Context) {
 
 // BeginWebAuthnLogin handles the GET /api/auth/webauthn/begin-login endpoint
 func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
-	username := ctx.Query("username")
-	if username == "" {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
-
-		return
-	}
-
 	// If MongoDB is not connected, return error
 	if !h.MongoDB.IsConnectedToMongoDB() {
 		ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{Error: "Database not connected"})
 
+		return
+	}
+
+	sessionID, pendingLogin, err := readPendingMFASession(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "MFA challenge required"})
+		return
+	}
+
+	username := pendingLogin.Username
+	if requestedUsername := ctx.Query("username"); requestedUsername != "" && requestedUsername != username {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "MFA challenge does not match requested user"})
 		return
 	}
 
@@ -791,6 +846,7 @@ func (h *MFAHandler) BeginWebAuthnLogin(ctx *gin.Context) {
 	// Store session data in context (for completeness)
 	ctx.Set("webauthnSessionData", sessionData)
 	ctx.Set("webauthnUsername", username)
+	ctx.Set("pendingMFASessionID", sessionID)
 
 	// Encode session data to base64 to send to client (align with registration)
 	sessionDataBytes, err := json.Marshal(sessionData)
@@ -884,6 +940,11 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 
 	var sessionData webauthn.SessionData
 	var usernameStr string
+	sessionID, pendingLogin, err := readPendingMFASession(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "MFA challenge required"})
+		return
+	}
 
 	if req.SessionData != "" {
 		// Decode session data from base64
@@ -919,6 +980,11 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		} else {
 			usernameStr = string(sessionData.UserID)
 		}
+	}
+
+	if usernameStr == "" || usernameStr != pendingLogin.Username {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "MFA challenge does not match login session"})
+		return
 	}
 
 	// Get user for WebAuthn
@@ -999,36 +1065,20 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		fmt.Printf("Failed to update credential last used: %v\n", err)
 	}
 
-	// Issue access and refresh tokens and set cookies
-	jwtConfig, err := h.MongoDB.GetJWTConfig()
-	if err == nil { // best-effort; on error, skip issuing tokens here
-		fullUser, uErr := h.MongoDB.GetUserByUsername(usernameStr)
-		if uErr == nil && fullUser != nil {
-			accessExp := time.Now().Add(time.Duration(jwtConfig.TokenExpiry) * time.Second).Unix()
-			claims := jwt.MapClaims{
-				"sub":   fullUser.Username,
-				"roles": fullUser.Roles,
-				"exp":   accessExp,
-				"iat":   time.Now().Unix(),
-			}
-			at := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-			accessStr, sigErr := at.SignedString([]byte(jwtConfig.Secret))
-			if sigErr == nil {
-				refreshExp := time.Now().Add(time.Duration(jwtConfig.RefreshTokenExpiry) * time.Second).Unix()
-				rClaims := jwt.MapClaims{
-					"sub":   fullUser.Username,
-					"roles": fullUser.Roles,
-					"exp":   refreshExp,
-					"iat":   time.Now().Unix(),
-				}
-				rt := jwt.NewWithClaims(jwt.SigningMethodHS256, rClaims)
-				refreshStr, rSigErr := rt.SignedString([]byte(jwtConfig.Secret))
-				if rSigErr == nil {
-					SetAuthCookies(ctx, accessStr, accessExp, refreshStr, refreshExp)
-				}
-			}
-		}
+	fullUser, err := h.MongoDB.GetUserByUsername(usernameStr)
+	if err != nil || fullUser == nil {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "User not found"})
+		return
 	}
+
+	responsePayload, err := issueLoginResponse(ctx, h.MongoDB, fullUser, pendingLogin.RememberMe)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to complete MFA login"})
+		return
+	}
+
+	globalPendingMFASessions.delete(sessionID)
+	clearPendingMFACookie(ctx)
 
 	// Audit successful WebAuthn login (actor is the usernameStr)
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
@@ -1039,18 +1089,12 @@ func (h *MFAHandler) FinishWebAuthnLogin(ctx *gin.Context) {
 		IP:        getClientIP(ctx.Request),
 	})
 
-	ctx.JSON(http.StatusOK, models.MessageResponse{Message: "WebAuthn login successful"})
+	ctx.JSON(http.StatusOK, responsePayload)
 }
 
 // RemoveWebAuthnCredential handles the DELETE /api/auth/webauthn/credential/:id endpoint
 func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 	username := ctx.Query("username")
-	if username == "" {
-		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Username is required"})
-
-		return
-	}
-
 	credentialID := ctx.Param("id")
 	if credentialID == "" {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Credential ID is required"})
@@ -1065,10 +1109,15 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 		return
 	}
 
+	actor, targetUsername, ok := h.requireAuthenticatedMFAUser(ctx, username)
+	if !ok {
+		return
+	}
+
 	// Remove credential from user
 	result, err := h.MongoDB.GetUserCollection().UpdateOne(
 		ctx.Request.Context(),
-		bson.M{"username": username},
+		bson.M{"username": targetUsername},
 		bson.M{"$pull": bson.M{"webAuthnDevices": bson.M{"id": credentialID}}},
 	)
 
@@ -1088,7 +1137,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 	var user models.User
 	err = h.MongoDB.GetUserCollection().FindOne(
 		ctx.Request.Context(),
-		bson.M{"username": username},
+		bson.M{"username": targetUsername},
 	).Decode(&user)
 
 	if err != nil {
@@ -1102,7 +1151,7 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 	if len(user.WebAuthnDevices) == 0 {
 		_, err = h.MongoDB.GetUserCollection().UpdateOne(
 			ctx.Request.Context(),
-			bson.M{"username": username},
+			bson.M{"username": targetUsername},
 			bson.M{"$set": bson.M{"webAuthnEnabled": false}},
 		)
 
@@ -1116,9 +1165,9 @@ func (h *MFAHandler) RemoveWebAuthnCredential(ctx *gin.Context) {
 
 	// Audit WebAuthn credential removal
 	WriteAudit(ctx, h.MongoDB, models.AuditLogEntry{
-		Actor:   username,
+		Actor:   actor,
 		Action:  "mfa.webauthn.remove",
-		Target:  username,
+		Target:  targetUsername,
 		Details: map[string]interface{}{"credentialId": credentialID, "disabled": disabled},
 	})
 

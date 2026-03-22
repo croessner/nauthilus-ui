@@ -2,6 +2,7 @@
  * Utility functions for API operations
  */
 import Cookies from 'js-cookie';
+import { attachCSRFHeader, isMutatingMethod } from './csrf';
 
 /**
  * Retrieves the proxy origin URL based on the current environment configuration.
@@ -81,6 +82,22 @@ export const prepareAuthParams = (connectionConfig: any): { authType: string, au
 };
 
 /**
+ * Builds backend authentication headers for proxy requests.
+ * These headers are consumed by the Go proxy and must never be sent via query params.
+ */
+export const buildBackendAuthHeaders = (connectionConfig: any, init?: HeadersInit): Headers => {
+  const headers = new Headers(init || {});
+  const { authType, authValue } = prepareAuthParams(connectionConfig);
+
+  if (authType && authValue) {
+    headers.set('x-auth-type', authType);
+    headers.set('x-auth-value', authValue);
+  }
+
+  return headers;
+};
+
+/**
  * Extracts a detailed error message from an API response
  * @param response - The Response object from a fetch request
  * @returns A formatted error message string
@@ -144,6 +161,7 @@ export const checkConnection = async (
     // Use the authenticatedFetch helper
     const response = await authenticatedFetch(proxyUrl.toString(), {
       method: 'GET',
+      headers: buildBackendAuthHeaders(connectionConfig),
     });
 
     if (response.ok) {
@@ -211,8 +229,10 @@ let waitersFetch: Array<(ok: boolean) => void> = [];
 
 async function refreshSessionFetch(): Promise<boolean> {
   try {
+    const headers = await attachCSRFHeader();
     const resp = await fetch(`${getProxyOrigin()}/api/auth/refresh`, {
       method: 'POST',
+      headers,
       credentials: 'include'
     });
     return resp.ok;
@@ -244,7 +264,7 @@ export const authenticatedFetch = async (
   const token = getAuthToken();
 
   // Prepare headers
-  const headers = new Headers(options.headers || {});
+  let headers = new Headers(options.headers || {});
 
   // Decide whether to set a default Content-Type
   const method = (options.method || 'GET').toUpperCase();
@@ -253,6 +273,10 @@ export const authenticatedFetch = async (
 
   if (hasBody && !isFormData && !headers.has('Content-Type') && method !== 'GET' && method !== 'HEAD') {
     headers.set('Content-Type', 'application/json');
+  }
+
+  if (!url.includes('/api/auth/csrf') && isMutatingMethod(method)) {
+    headers = await attachCSRFHeader(headers);
   }
 
   // Add Authorization header if token exists
@@ -352,7 +376,7 @@ export const generatePDFServerSide = async (html: string, filename?: string): Pr
  */
 export const loadSettings = async (
   getCurrentUserId: () => Promise<string>,
-  loadRuntimeSettings: (userId: string, profileName: string) => Promise<void>,
+  loadRuntimeSettings: (userId: string, profileName: string) => Promise<any>,
   currentProfileName: string,
   checkConnection: (connectionConfig: any) => Promise<void>,
   getConnection: () => any
@@ -424,13 +448,10 @@ export const loadSettings = async (
     state.inFlightPromise = (async () => {
       console.log(`Loading settings for profile: ${currentProfileName}, preload connection: ${currentConnectionUrl || '(none)'}`);
       const userId = await getCurrentUserId();
-      await loadRuntimeSettings(userId, currentProfileName);
+      const loadedConnection = await loadRuntimeSettings(userId, currentProfileName);
 
-      // Give React state a tick to propagate (RuntimeContext updates connection asynchronously)
-      await new Promise(resolve => setTimeout(resolve, 0));
-
-      // After load, re-read connection and ping (debounced)
-      const connectionToCheck = getConnection();
+      // Prefer the freshly loaded runtime data over the asynchronously updated React state.
+      const connectionToCheck = loadedConnection || getConnection();
       const urlToCheck = connectionToCheck?.backend_url || '';
       console.log(`Runtime settings loaded for profile: ${currentProfileName}, effective connection: ${urlToCheck || '(none)'}`);
       if (shouldCheckNow(urlToCheck)) {
