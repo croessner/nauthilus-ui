@@ -15,6 +15,13 @@ import CollapsibleFormSection from './common/CollapsibleFormSection';
 import PasswordField from './common/PasswordField';
 import InfoTooltip from './common/InfoTooltip';
 import Grid from '@mui/material/Grid';
+import {
+  createServerFeatureEntry,
+  defaultFeatureExecutionFlags,
+  FeatureExecutionFlags,
+  getFeatureExecutionFlags,
+  getServerFeatureName,
+} from '../utils/featureFlags';
 
 // Interface for tab panel props
 interface TabPanelProps {
@@ -62,18 +69,40 @@ const builtInFeatureTypes = [
   { value: 'lua', label: 'Lua' }
 ];
 
+const featureExecutionModeOptions: Array<{
+  key: keyof FeatureExecutionFlags;
+  label: string;
+  description: string;
+}> = [
+  {
+    key: 'when_authenticated',
+    label: 'Authenticated',
+    description: 'Active after a successful authentication.',
+  },
+  {
+    key: 'when_unauthenticated',
+    label: 'Unauthenticated',
+    description: 'Active when a request has not been authenticated.',
+  },
+  {
+    key: 'when_no_auth',
+    label: 'No Auth',
+    description: 'Active when the server runs in no-auth mode.',
+  },
+];
+
 // Validation schema
 const FeaturesConfigSchema = Yup.object().shape({
   selectedFeatures: Yup.array().of(
     Yup.string().required('Feature is required')
   ),
-  featureWhenNoAuth: Yup.object(),
+  featureExecutionModes: Yup.object(),
   cleartext_networks: Yup.array().when('selectedFeatures', (selectedFeatures: string[], schema) => {
     return selectedFeatures && selectedFeatures.includes('tls_encryption')
       ? schema.of(Yup.string())
       : schema;
   }),
-  rbl: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
+  realtime_blackhole_lists: Yup.object().when('selectedFeatures', (selectedFeatures: string[], schema) => {
     return selectedFeatures && selectedFeatures.includes('rbl')
       ? schema.shape({
           lists: Yup.array().of(
@@ -178,22 +207,18 @@ const FeaturesConfig: React.FC = () => {
   const { config, updateConfig, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
   const [tabValue, setTabValue] = useState(0);
 
-  // Determine selected feature names and their when_no_auth status
+  // Determine selected feature names and their execution mode flags
   const featuresData = useMemo(() => {
     const names: string[] = [];
-    const whenNoAuthMap: Record<string, boolean> = {};
+    const executionModesMap: Record<string, FeatureExecutionFlags> = {};
 
     config?.server?.features?.forEach(f => {
-      if (typeof f === 'string') {
-        names.push(f);
-        whenNoAuthMap[f] = false;
-      } else {
-        names.push(f.name);
-        whenNoAuthMap[f.name] = !!f.when_no_auth;
-      }
+      const name = getServerFeatureName(f);
+      names.push(name);
+      executionModesMap[name] = getFeatureExecutionFlags(f);
     });
 
-    return { names, whenNoAuthMap };
+    return { names, executionModesMap };
   }, [config?.server?.features]);
 
   // Filter feature types based on Lua configuration
@@ -218,7 +243,7 @@ const FeaturesConfig: React.FC = () => {
   // Initial values
   const initialValues = {
     selectedFeatures: featuresData.names,
-    featureWhenNoAuth: featuresData.whenNoAuthMap,
+    featureExecutionModes: featuresData.executionModesMap,
     cleartext_networks: config?.cleartext_networks || [],
     realtime_blackhole_lists: {
       soft_whitelist: config?.realtime_blackhole_lists?.soft_whitelist || {},
@@ -285,11 +310,9 @@ const FeaturesConfig: React.FC = () => {
     try {
       // Map features back to (string | FeatureConfig)[]
       const features: (string | any)[] = values.selectedFeatures.map((name: string) => {
-        const when_no_auth = values.featureWhenNoAuth[name];
-        if (when_no_auth && name !== 'brute_force' && name !== 'backend_server_monitoring') {
-          return { name, when_no_auth };
-        }
-        return name;
+        const executionModes = values.featureExecutionModes[name] || defaultFeatureExecutionFlags;
+        const ignoreExecutionFlags = name === 'brute_force' || name === 'backend_server_monitoring';
+        return createServerFeatureEntry(name, executionModes, ignoreExecutionFlags);
       });
 
       // Create a properly typed copy of the config
@@ -422,8 +445,18 @@ const FeaturesConfig: React.FC = () => {
                           multiple
                           value={values.selectedFeatures}
                           onChange={(e) => {
-                            setFieldValue('selectedFeatures', e.target.value)
-                                .then(() => setHasUnsavedChanges(true));
+                            const selectedFeatures = e.target.value as string[];
+                            const nextExecutionModes = { ...values.featureExecutionModes };
+
+                            selectedFeatures.forEach((featureName: string) => {
+                              if (!nextExecutionModes[featureName]) {
+                                nextExecutionModes[featureName] = { ...defaultFeatureExecutionFlags };
+                              }
+                            });
+
+                            setFieldValue('selectedFeatures', selectedFeatures)
+                              .then(() => setFieldValue('featureExecutionModes', nextExecutionModes))
+                              .then(() => setHasUnsavedChanges(true));
                           }}
                           renderValue={(selected) => {
                             // Convert feature values to labels for display
@@ -456,35 +489,85 @@ const FeaturesConfig: React.FC = () => {
 
                     {values.selectedFeatures.length > 0 && (
                       <Box sx={{ mt: 3 }}>
-                        <Typography variant="subtitle2" gutterBottom>Feature Specific Options</Typography>
+                        <Typography variant="subtitle2" gutterBottom>Execution Modes</Typography>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                          Decide in which request states each feature should be active.
+                        </Typography>
                         <Grid container spacing={2}>
                           {values.selectedFeatures.map((name: string) => {
                             const featureType = builtInFeatureTypes.find(t => t.value === name);
                             const label = featureType ? featureType.label : name;
                             const isIgnored = name === 'brute_force' || name === 'backend_server_monitoring';
+                            const executionModes = values.featureExecutionModes[name] || defaultFeatureExecutionFlags;
+                            const enabledModeCount = featureExecutionModeOptions.filter(
+                              mode => executionModes[mode.key]
+                            ).length;
                             
                             return (
                               <Grid size={{ xs: 12, sm: 6, md: 4 }} key={name}>
-                                <Paper variant="outlined" sx={{ p: 2 }}>
-                                  <Typography variant="body2" sx={{ fontWeight: 'bold', mb: 1 }}>{label}</Typography>
-                                  <FormControlLabel
-                                    control={
-                                      <Switch
-                                        checked={values.featureWhenNoAuth[name] || false}
-                                        onChange={(e) => {
-                                          setFieldValue(`featureWhenNoAuth.${name}`, e.target.checked)
-                                            .then(() => setHasUnsavedChanges(true));
-                                        }}
-                                        disabled={isIgnored}
-                                      />
-                                    }
-                                    label={
-                                      <Box sx={{ display: 'flex', alignItems: 'center' }}>
-                                        <Typography variant="body2">When No Auth</Typography>
-                                        <InfoTooltip title={isIgnored ? "This option is ignored for this feature." : "If enabled, this feature will be active even when the server is in no-auth mode."} />
-                                      </Box>
-                                    }
-                                  />
+                                <Paper
+                                  variant="outlined"
+                                  sx={{
+                                    p: 2,
+                                    height: '100%',
+                                    borderRadius: 2,
+                                    background: isIgnored
+                                      ? 'linear-gradient(180deg, rgba(120,120,120,0.06) 0%, rgba(120,120,120,0.02) 100%)'
+                                      : 'linear-gradient(180deg, rgba(25,118,210,0.08) 0%, rgba(25,118,210,0.02) 100%)',
+                                  }}
+                                >
+                                  <Box sx={{ mb: 2 }}>
+                                    <Typography variant="body2" sx={{ fontWeight: 'bold' }}>{label}</Typography>
+                                    <Typography variant="caption" color="text.secondary">
+                                      {isIgnored
+                                        ? 'Execution mode flags are currently ignored for this feature.'
+                                        : `Enabled in ${enabledModeCount} of ${featureExecutionModeOptions.length} contexts.`}
+                                    </Typography>
+                                  </Box>
+
+                                  <Box sx={{ display: 'grid', gap: 1.25 }}>
+                                    {featureExecutionModeOptions.map((mode) => {
+                                      const isEnabled = executionModes[mode.key];
+
+                                      return (
+                                        <Box
+                                          key={mode.key}
+                                          sx={{
+                                            px: 1.25,
+                                            py: 1,
+                                            borderRadius: 2,
+                                            border: '1px solid',
+                                            borderColor: isEnabled ? 'primary.main' : 'divider',
+                                            bgcolor: isEnabled ? 'action.selected' : 'background.paper',
+                                            opacity: isIgnored ? 0.7 : 1,
+                                          }}
+                                        >
+                                          <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 1 }}>
+                                            <Box>
+                                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                                <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                                                  {mode.label}
+                                                </Typography>
+                                                <InfoTooltip title={isIgnored ? 'This option is ignored for this feature.' : mode.description} />
+                                              </Box>
+                                              <Typography variant="caption" color="text.secondary">
+                                                {mode.description}
+                                              </Typography>
+                                            </Box>
+                                            <Switch
+                                              size="small"
+                                              checked={isEnabled}
+                                              onChange={(e) => {
+                                                setFieldValue(`featureExecutionModes.${name}.${mode.key}`, e.target.checked)
+                                                  .then(() => setHasUnsavedChanges(true));
+                                              }}
+                                              disabled={isIgnored}
+                                            />
+                                          </Box>
+                                        </Box>
+                                      );
+                                    })}
+                                  </Box>
                                 </Paper>
                               </Grid>
                             );

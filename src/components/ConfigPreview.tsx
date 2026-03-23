@@ -6,6 +6,7 @@ import { useConfig } from '../contexts/ConfigContext';
 import { BackendConfig } from '../types/config';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import { hasServerFeature } from '../utils/featureFlags';
 
 const ConfigPreview = (): React.JSX.Element => {
   const { config, validateConfigSection } = useConfig();
@@ -107,16 +108,16 @@ const ConfigPreview = (): React.JSX.Element => {
     // Check if features are properly configured
     if (configCopy.server?.features && Array.isArray(configCopy.server.features)) {
       // Check RBL feature
-      if (configCopy.server.features.includes('realtime_blackhole_lists')) {
-        if (!configCopy.rbl) {
+      if (hasServerFeature(configCopy.server.features, 'rbl')) {
+        if (!configCopy.realtime_blackhole_lists) {
           essentialErrors.push('RBL feature is enabled but RBL configuration is missing.');
-        } else if (!configCopy.rbl.lists || !Array.isArray(configCopy.rbl.lists) || configCopy.rbl.lists.length === 0) {
+        } else if (!configCopy.realtime_blackhole_lists.lists || !Array.isArray(configCopy.realtime_blackhole_lists.lists) || configCopy.realtime_blackhole_lists.lists.length === 0) {
           essentialErrors.push('RBL feature is enabled but RBL lists configuration is missing or empty.');
         }
       }
 
       // Check the relay_domains feature
-      if (configCopy.server.features.includes('relay_domains')) {
+      if (hasServerFeature(configCopy.server.features, 'relay_domains')) {
         if (!configCopy.relay_domains) {
           essentialErrors.push('Relay Domains feature is enabled but Relay Domains configuration is missing.');
         } else if (!configCopy.relay_domains.static || !Array.isArray(configCopy.relay_domains.static)) {
@@ -125,7 +126,7 @@ const ConfigPreview = (): React.JSX.Element => {
       }
 
       // Check brute_force feature
-      if (configCopy.server.features.includes('brute_force')) {
+      if (hasServerFeature(configCopy.server.features, 'brute_force')) {
         if (!configCopy.brute_force) {
           essentialErrors.push('Brute Force feature is enabled but Brute Force configuration is missing.');
         } else if (!configCopy.brute_force.buckets || !Array.isArray(configCopy.brute_force.buckets) || configCopy.brute_force.buckets.length === 0) {
@@ -134,7 +135,7 @@ const ConfigPreview = (): React.JSX.Element => {
       }
 
       // Check tls_encryption feature
-      if (configCopy.server.features.includes('tls_encryption')) {
+      if (hasServerFeature(configCopy.server.features, 'tls_encryption')) {
         if (!configCopy.cleartext_networks && (!configCopy.server.tls || !configCopy.server.tls.enabled)) {
           essentialErrors.push('TLS Encryption feature is enabled but neither TLS configuration nor cleartext networks are configured.');
         }

@@ -5,6 +5,7 @@ import { formatConfigAsYaml } from '../utils/yamlUtils';
 import axios from '../utils/axiosConfig';
 import { withErrorHandling as apiWithErrorHandling, buildBackendAuthHeaders, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 import { getCurrentUserId } from '../utils/currentUser';
+import { hasServerFeature } from '../utils/featureFlags';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -491,7 +492,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
     if (newConfig.server?.features) {
       // Handle RBL configuration
-      if (newConfig.server.features.includes('rbl')) {
+      if (hasServerFeature(newConfig.server.features, 'rbl')) {
         // Initialize RBL configuration if it doesn't exist
         if (!newConfig.realtime_blackhole_lists) {
           newConfig.realtime_blackhole_lists = {
@@ -519,7 +520,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       }
 
       // Handle Relay Domains configuration
-      if (newConfig.server.features.includes('relay_domains')) {
+      if (hasServerFeature(newConfig.server.features, 'relay_domains')) {
         // Initialize Relay Domains configuration if it doesn't exist
         if (!newConfig.relay_domains) {
           newConfig.relay_domains = {
@@ -540,7 +541,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       }
 
       // Handle Backend Server Monitoring configuration
-      if (newConfig.server.features.includes('backend_server_monitoring')) {
+      if (hasServerFeature(newConfig.server.features, 'backend_server_monitoring')) {
         // Initialize Backend Server Monitoring configuration if it doesn't exist
         if (!newConfig.backend_server_monitoring) {
           newConfig.backend_server_monitoring = {
@@ -555,7 +556,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       }
 
       // Handle Brute Force configuration
-      if (newConfig.server.features.includes('brute_force')) {
+      if (hasServerFeature(newConfig.server.features, 'brute_force')) {
         // Initialize Brute Force configuration if it doesn't exist
         if (!newConfig.brute_force) {
           newConfig.brute_force = {
@@ -588,7 +589,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       }
 
       // Handle TLS Encryption configuration
-      if (newConfig.server.features.includes('tls_encryption')) {
+      if (hasServerFeature(newConfig.server.features, 'tls_encryption')) {
         // Ensure the cleartext_networks array is properly initialized
         if (!newConfig.cleartext_networks) {
           newConfig.cleartext_networks = [];
@@ -623,7 +624,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
           if (!newConfig.server.features) {
             newConfig.server.features = [];
           }
-          if (!newConfig.server.features.includes('rbl')) {
+          if (!hasServerFeature(newConfig.server.features, 'rbl')) {
             newConfig.server.features.push('rbl');
           }
         }

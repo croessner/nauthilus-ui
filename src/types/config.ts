@@ -2,6 +2,8 @@
 
 export interface FeatureConfig {
   name: string;
+  when_authenticated?: boolean;
+  when_unauthenticated?: boolean;
   when_no_auth?: boolean;
 }
 
