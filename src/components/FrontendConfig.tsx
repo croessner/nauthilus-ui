@@ -21,6 +21,9 @@ import {
   Select,
   FormControl,
   InputLabel,
+  FormHelperText,
+  ListItemText,
+  SelectChangeEvent,
 } from '@mui/material';
 import Grid from '@mui/material/Grid';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
@@ -123,6 +126,7 @@ const defaultValues: FrontendPageValues = {
       custom_scopes: [],
       scopes_supported: [],
       response_types_supported: [],
+      grant_types_supported: [],
       subject_types_supported: [],
       id_token_signing_alg_values_supported: [],
       token_endpoint_auth_methods_supported: [],
@@ -170,6 +174,11 @@ interface DirtyStateBridgeProps {
   setHasUnsavedChanges: (value: boolean) => void;
 }
 
+type SelectOption = {
+  value: string;
+  label: string;
+};
+
 const DirtyStateBridge = ({ dirty, setHasUnsavedChanges }: DirtyStateBridgeProps): null => {
   useEffect(() => {
     setHasUnsavedChanges(dirty);
@@ -177,6 +186,130 @@ const DirtyStateBridge = ({ dirty, setHasUnsavedChanges }: DirtyStateBridgeProps
 
   return null;
 };
+
+const webAuthnAuthenticatorAttachmentOptions: SelectOption[] = [
+  { value: 'platform', label: 'Platform' },
+  { value: 'cross-platform', label: 'Cross-platform' },
+];
+
+const webAuthnResidentKeyOptions: SelectOption[] = [
+  { value: 'discouraged', label: 'Discouraged' },
+  { value: 'preferred', label: 'Preferred' },
+  { value: 'required', label: 'Required' },
+];
+
+const webAuthnUserVerificationOptions = webAuthnResidentKeyOptions;
+
+const oidcAccessTokenTypeOptions: SelectOption[] = [
+  { value: 'jwt', label: 'JWT' },
+  { value: 'opaque', label: 'Opaque' },
+];
+
+const oidcConsentModeOptions: SelectOption[] = [
+  { value: 'all_or_nothing', label: 'All or nothing' },
+  { value: 'granular_optional', label: 'Granular optional' },
+];
+
+const oidcResponseTypeOptions: SelectOption[] = [
+  { value: 'code', label: 'Authorization code' },
+];
+
+const oidcSubjectTypeOptions: SelectOption[] = [
+  { value: 'public', label: 'Public' },
+];
+
+const oidcSigningAlgorithmOptions: SelectOption[] = [
+  { value: 'RS256', label: 'RS256' },
+  { value: 'EdDSA', label: 'EdDSA' },
+];
+
+const oidcTokenEndpointAuthMethodOptions: SelectOption[] = [
+  { value: 'client_secret_basic', label: 'Client secret basic' },
+  { value: 'client_secret_post', label: 'Client secret post' },
+  { value: 'private_key_jwt', label: 'Private key JWT' },
+  { value: 'none', label: 'None (public client)' },
+];
+
+const oidcCodeChallengeMethodOptions: SelectOption[] = [
+  { value: 'S256', label: 'S256' },
+];
+
+const oidcGrantTypeOptions: SelectOption[] = [
+  { value: 'authorization_code', label: 'Authorization code' },
+  { value: 'refresh_token', label: 'Refresh token' },
+  { value: 'client_credentials', label: 'Client credentials' },
+  { value: 'urn:ietf:params:oauth:grant-type:device_code', label: 'Device code' },
+];
+
+const mfaMethodOptions: SelectOption[] = [
+  { value: 'totp', label: 'TOTP' },
+  { value: 'webauthn', label: 'WebAuthn' },
+  { value: 'recovery_codes', label: 'Recovery codes' },
+];
+
+const oidcClaimTypeOptions: SelectOption[] = [
+  { value: 'string', label: 'String' },
+  { value: 'boolean', label: 'Boolean' },
+  { value: 'float', label: 'Float' },
+  { value: 'integer', label: 'Integer' },
+  { value: 'string_array', label: 'String array' },
+  { value: 'boolean_array', label: 'Boolean array' },
+  { value: 'float_array', label: 'Float array' },
+  { value: 'integer_array', label: 'Integer array' },
+  { value: 'object', label: 'Object' },
+  { value: 'address', label: 'Address' },
+];
+
+const samlSignatureMethodOptions: SelectOption[] = [
+  { value: 'http://www.w3.org/2001/04/xmldsig-more#rsa-sha256', label: 'RSA-SHA256' },
+];
+
+const samlNameIdFormatOptions: SelectOption[] = [
+  { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:persistent', label: 'Persistent' },
+  { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:transient', label: 'Transient' },
+  { value: 'urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress', label: 'Email address' },
+  { value: 'urn:oasis:names:tc:SAML:1.1:nameid-format:unspecified', label: 'Unspecified' },
+  { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:entity', label: 'Entity' },
+];
+
+const mergeSelectOptions = (
+  baseOptions: SelectOption[],
+  currentValues?: string | string[] | null
+): SelectOption[] => {
+  const normalizedValues = Array.isArray(currentValues)
+    ? currentValues
+    : currentValues
+      ? [currentValues]
+      : [];
+
+  const existingValues = new Set(baseOptions.map((option) => option.value));
+  const extraOptions = normalizedValues
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => !existingValues.has(value))
+    .map((value) => ({ value, label: `${value} (current)` }));
+
+  return [...baseOptions, ...extraOptions];
+};
+
+const configCardSx = {
+  mb: 3,
+  borderRadius: 2,
+};
+
+const configCardContentSx = {
+  p: 3,
+  '&:last-child': {
+    pb: 3,
+  },
+};
+
+const configCardActionsSx = {
+  px: 3,
+  pb: 3,
+  pt: 0,
+};
+
+const localizedDescriptionPrefix = 'description_';
 
 const FrontendConfig = (): React.JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
@@ -205,6 +338,7 @@ const FrontendConfig = (): React.JSX.Element => {
         custom_scopes: config?.idp?.oidc?.custom_scopes || [],
         scopes_supported: config?.idp?.oidc?.scopes_supported || [],
         response_types_supported: config?.idp?.oidc?.response_types_supported || [],
+        grant_types_supported: config?.idp?.oidc?.grant_types_supported || [],
         subject_types_supported: config?.idp?.oidc?.subject_types_supported || [],
         id_token_signing_alg_values_supported: config?.idp?.oidc?.id_token_signing_alg_values_supported || [],
         token_endpoint_auth_methods_supported: config?.idp?.oidc?.token_endpoint_auth_methods_supported || [],
@@ -280,6 +414,10 @@ const FrontendConfig = (): React.JSX.Element => {
         enableReinitialize
       >
         {({ values, errors, touched, handleChange, isSubmitting, setFieldValue, dirty }: any) => {
+          const updateField = (name: string, value: unknown) => {
+            setFieldValue(name, value).then(() => setHasUnsavedChanges(true));
+          };
+
           const renderStringArrayEditor = (name: string, label: string, helperText?: string) => {
             const list: string[] = getIn(values, name) || [];
 
@@ -296,7 +434,7 @@ const FrontendConfig = (): React.JSX.Element => {
                               label={`${label} ${index + 1}`}
                               value={item || ''}
                               onChange={(e) => {
-                                setFieldValue(`${name}.${index}`, e.target.value).then(() => setHasUnsavedChanges(true));
+                                updateField(`${name}.${index}`, e.target.value);
                               }}
                               helperText={index === 0 ? helperText : undefined}
                             />
@@ -331,6 +469,109 @@ const FrontendConfig = (): React.JSX.Element => {
             );
           };
 
+          const renderSingleSelectField = (
+            name: string,
+            label: string,
+            options: SelectOption[],
+            helperText?: string,
+            emptyLabel?: string
+          ) => {
+            const currentValue = (getIn(values, name) as string) || '';
+            const resolvedOptions = mergeSelectOptions(options, currentValue);
+            const fieldId = name.replace(/[^a-zA-Z0-9_-]/g, '-');
+            const labelId = `${fieldId}-label`;
+
+            return (
+              <FormControl fullWidth>
+                <InputLabel id={labelId} shrink>
+                  {label}
+                </InputLabel>
+                <Select
+                  id={fieldId}
+                  labelId={labelId}
+                  label={label}
+                  value={currentValue}
+                  notched
+                  onChange={(e) => updateField(name, e.target.value)}
+                >
+                  {emptyLabel !== undefined && (
+                    <MenuItem value="">{emptyLabel}</MenuItem>
+                  )}
+                  {resolvedOptions.map((option) => (
+                    <MenuItem key={`${name}-${option.value}`} value={option.value}>
+                      <ListItemText
+                        primary={option.label}
+                        secondary={option.label === option.value ? undefined : option.value}
+                      />
+                    </MenuItem>
+                  ))}
+                </Select>
+                {helperText && <FormHelperText>{helperText}</FormHelperText>}
+              </FormControl>
+            );
+          };
+
+          const renderMultiSelectField = (
+            name: string,
+            label: string,
+            options: SelectOption[],
+            helperText?: string
+          ) => {
+            const selectedValues = (getIn(values, name) as string[]) || [];
+            const resolvedOptions = mergeSelectOptions(options, selectedValues);
+            const optionMap = new Map(resolvedOptions.map((option) => [option.value, option]));
+            const fieldId = name.replace(/[^a-zA-Z0-9_-]/g, '-');
+            const labelId = `${fieldId}-label`;
+
+            const handleMultiSelectChange = (event: SelectChangeEvent<string[]>) => {
+              const nextValue = event.target.value;
+              updateField(name, typeof nextValue === 'string' ? nextValue.split(',') : nextValue);
+            };
+
+            return (
+              <FormControl fullWidth>
+                <InputLabel id={labelId} shrink>
+                  {label}
+                </InputLabel>
+                <Select
+                  id={fieldId}
+                  labelId={labelId}
+                  multiple
+                  displayEmpty
+                  label={label}
+                  value={selectedValues}
+                  notched
+                  onChange={handleMultiSelectChange}
+                  renderValue={(selected) => {
+                    const currentSelection = Array.isArray(selected)
+                      ? selected
+                      : typeof selected === 'string'
+                        ? selected.split(',')
+                        : [];
+
+                    if (currentSelection.length === 0) {
+                      return `No ${label.toLowerCase()} selected`;
+                    }
+
+                    return currentSelection
+                      .map((value) => optionMap.get(value)?.label || value)
+                      .join(', ');
+                  }}
+                >
+                  {resolvedOptions.map((option) => (
+                    <MenuItem key={`${name}-${option.value}`} value={option.value}>
+                      <ListItemText
+                        primary={option.label}
+                        secondary={option.label === option.value ? undefined : option.value}
+                      />
+                    </MenuItem>
+                  ))}
+                </Select>
+                {helperText && <FormHelperText>{helperText}</FormHelperText>}
+              </FormControl>
+            );
+          };
+
           const renderClaimMappingsEditor = (name: string) => {
             const mappings: Array<{ claim?: string; attribute?: string; type?: string }> = getIn(values, name) || [];
 
@@ -346,7 +587,7 @@ const FrontendConfig = (): React.JSX.Element => {
                             label="Claim"
                             value={getIn(values, `${name}.${index}.claim`) || ''}
                             onChange={(e) => {
-                              setFieldValue(`${name}.${index}.claim`, e.target.value).then(() => setHasUnsavedChanges(true));
+                              updateField(`${name}.${index}.claim`, e.target.value);
                             }}
                           />
                         </Grid>
@@ -356,19 +597,18 @@ const FrontendConfig = (): React.JSX.Element => {
                             label="Attribute"
                             value={getIn(values, `${name}.${index}.attribute`) || ''}
                             onChange={(e) => {
-                              setFieldValue(`${name}.${index}.attribute`, e.target.value).then(() => setHasUnsavedChanges(true));
+                              updateField(`${name}.${index}.attribute`, e.target.value);
                             }}
                           />
                         </Grid>
                         <Grid size={{ xs: 12, md: 3 }}>
-                          <TextField
-                            fullWidth
-                            label="Type"
-                            value={getIn(values, `${name}.${index}.type`) || ''}
-                            onChange={(e) => {
-                              setFieldValue(`${name}.${index}.type`, e.target.value).then(() => setHasUnsavedChanges(true));
-                            }}
-                          />
+                          {renderSingleSelectField(
+                            `${name}.${index}.type`,
+                            'Type',
+                            oidcClaimTypeOptions,
+                            'Optional. Leave empty to use the claim default.',
+                            'Use claim default'
+                          )}
                         </Grid>
                         <Grid size={{ xs: 12, md: 1 }}>
                           <IconButton color="error" onClick={() => {
@@ -394,6 +634,122 @@ const FrontendConfig = (): React.JSX.Element => {
                   </Box>
                 )}
               </FieldArray>
+            );
+          };
+
+          const renderLocalizedScopeDescriptionsEditor = (scopePath: string) => {
+            const scope = (getIn(values, scopePath) as Record<string, unknown>) || {};
+            const localizedEntries = Object.keys(scope)
+              .filter((key) => key.startsWith(localizedDescriptionPrefix))
+              .sort()
+              .map((key) => ({
+                key,
+                locale: key.slice(localizedDescriptionPrefix.length),
+                value: typeof scope[key] === 'string' ? String(scope[key]) : '',
+              }));
+
+            const configuredLanguages = Array.from(
+              new Set(
+                [values.frontend?.default_language, ...(values.frontend?.languages || [])]
+                  .filter((language): language is string => Boolean(language))
+              )
+            );
+
+            const applyLocalizedEntries = (entries: Array<{ locale: string; value: string }>) => {
+              const nextScope: Record<string, unknown> = { ...scope };
+
+              Object.keys(nextScope)
+                .filter((key) => key.startsWith(localizedDescriptionPrefix))
+                .forEach((key) => {
+                  delete nextScope[key];
+                });
+
+              entries.forEach(({ locale, value }) => {
+                const trimmedLocale = locale.trim();
+                if (!trimmedLocale) {
+                  return;
+                }
+
+                nextScope[`${localizedDescriptionPrefix}${trimmedLocale}`] = value;
+              });
+
+              updateField(scopePath, nextScope);
+            };
+
+            return (
+              <Box>
+                {localizedEntries.length > 0 ? (
+                  localizedEntries.map((entry, index) => (
+                    <Grid container spacing={2} key={`${scopePath}-${entry.key}`} sx={{ mb: 1.5 }}>
+                      <Grid size={{ xs: 12, md: 3 }}>
+                        <TextField
+                          fullWidth
+                          label="Language"
+                          value={entry.locale}
+                          onChange={(e) => {
+                            const nextEntries = localizedEntries.map((currentEntry) => (
+                              currentEntry.key === entry.key
+                                ? { locale: e.target.value, value: currentEntry.value }
+                                : { locale: currentEntry.locale, value: currentEntry.value }
+                            ));
+                            applyLocalizedEntries(nextEntries);
+                          }}
+                          helperText={index === 0
+                            ? (configuredLanguages.length > 0
+                              ? `Configured UI languages: ${configuredLanguages.join(', ')}`
+                              : 'Examples: de, en-US')
+                            : undefined}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 8 }}>
+                        <TextField
+                          fullWidth
+                          label="Localized Description"
+                          value={entry.value}
+                          onChange={(e) => {
+                            const nextEntries = localizedEntries.map((currentEntry) => (
+                              currentEntry.key === entry.key
+                                ? { locale: currentEntry.locale, value: e.target.value }
+                                : { locale: currentEntry.locale, value: currentEntry.value }
+                            ));
+                            applyLocalizedEntries(nextEntries);
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 1 }}>
+                        <IconButton
+                          color="error"
+                          onClick={() => {
+                            applyLocalizedEntries(localizedEntries.filter((currentEntry) => currentEntry.key !== entry.key));
+                          }}
+                        >
+                          <DeleteIcon />
+                        </IconButton>
+                      </Grid>
+                    </Grid>
+                  ))
+                ) : (
+                  <Typography color="text.secondary" sx={{ mb: 1 }}>
+                    No localized descriptions configured.
+                  </Typography>
+                )}
+                <Button
+                  startIcon={<AddIcon />}
+                  variant="outlined"
+                  size="small"
+                  onClick={() => {
+                    applyLocalizedEntries([
+                      ...localizedEntries.map((entry) => ({ locale: entry.locale, value: entry.value })),
+                      {
+                        locale: values.frontend?.default_language || values.frontend?.languages?.[0] || 'en',
+                        value: '',
+                      },
+                    ]);
+                  }}
+                >
+                  Add Localized Description
+                </Button>
+              </Box>
             );
           };
 
@@ -548,7 +904,7 @@ const FrontendConfig = (): React.JSX.Element => {
 
                   <Grid size={12}>
                     <CollapsibleFormSection title="WebAuthn" description="idp.webauthn" defaultExpanded={false}>
-                      <Grid container spacing={2}>
+                      <Grid container spacing={3}>
                         <Grid size={{ xs: 12, md: 4 }}>
                           <Field as={TextField} fullWidth name="idp.webauthn.rp_display_name" label="RP Display Name" onChange={handleChange} />
                         </Grid>
@@ -556,48 +912,13 @@ const FrontendConfig = (): React.JSX.Element => {
                           <Field as={TextField} fullWidth name="idp.webauthn.rp_id" label="RP ID" onChange={handleChange} />
                         </Grid>
                         <Grid size={{ xs: 12, md: 4 }}>
-                          <FormControl fullWidth>
-                            <InputLabel>Authenticator Attachment</InputLabel>
-                            <Select
-                              label="Authenticator Attachment"
-                              value={values.idp?.webauthn?.authenticator_attachment || ''}
-                              onChange={(e) => setFieldValue('idp.webauthn.authenticator_attachment', e.target.value).then(() => setHasUnsavedChanges(true))}
-                            >
-                              <MenuItem value="">(default)</MenuItem>
-                              <MenuItem value="platform">platform</MenuItem>
-                              <MenuItem value="cross-platform">cross-platform</MenuItem>
-                            </Select>
-                          </FormControl>
+                          {renderSingleSelectField('idp.webauthn.authenticator_attachment', 'Authenticator Attachment', webAuthnAuthenticatorAttachmentOptions, 'Leave empty to use the backend default.', '(default)')}
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
-                          <FormControl fullWidth>
-                            <InputLabel>Resident Key</InputLabel>
-                            <Select
-                              label="Resident Key"
-                              value={values.idp?.webauthn?.resident_key || ''}
-                              onChange={(e) => setFieldValue('idp.webauthn.resident_key', e.target.value).then(() => setHasUnsavedChanges(true))}
-                            >
-                              <MenuItem value="">(default)</MenuItem>
-                              <MenuItem value="discouraged">discouraged</MenuItem>
-                              <MenuItem value="preferred">preferred</MenuItem>
-                              <MenuItem value="required">required</MenuItem>
-                            </Select>
-                          </FormControl>
+                          {renderSingleSelectField('idp.webauthn.resident_key', 'Resident Key', webAuthnResidentKeyOptions, 'Leave empty to use the backend default.', '(default)')}
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}>
-                          <FormControl fullWidth>
-                            <InputLabel>User Verification</InputLabel>
-                            <Select
-                              label="User Verification"
-                              value={values.idp?.webauthn?.user_verification || ''}
-                              onChange={(e) => setFieldValue('idp.webauthn.user_verification', e.target.value).then(() => setHasUnsavedChanges(true))}
-                            >
-                              <MenuItem value="">(default)</MenuItem>
-                              <MenuItem value="discouraged">discouraged</MenuItem>
-                              <MenuItem value="preferred">preferred</MenuItem>
-                              <MenuItem value="required">required</MenuItem>
-                            </Select>
-                          </FormControl>
+                          {renderSingleSelectField('idp.webauthn.user_verification', 'User Verification', webAuthnUserVerificationOptions, 'Leave empty to use the backend default.', '(default)')}
                         </Grid>
                         <Grid size={12}>
                           {renderStringArrayEditor('idp.webauthn.rp_origins', 'RP Origin', 'Example: https://idp.example.com')}
@@ -608,7 +929,7 @@ const FrontendConfig = (): React.JSX.Element => {
 
                   <Grid size={12}>
                     <CollapsibleFormSection title="OIDC" description="idp.oidc" defaultExpanded={false}>
-                      <Grid container spacing={2}>
+                      <Grid container spacing={3}>
                         <Grid size={12}>
                           <FormControlLabel
                             control={<Switch checked={values.idp?.oidc?.enabled || false} onChange={(e) => setFieldValue('idp.oidc.enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />}
@@ -619,17 +940,7 @@ const FrontendConfig = (): React.JSX.Element => {
                           <Field as={TextField} fullWidth name="idp.oidc.issuer" label="Issuer" onChange={handleChange} />
                         </Grid>
                         <Grid size={{ xs: 12, md: 4 }}>
-                          <FormControl fullWidth>
-                            <InputLabel>Access Token Type</InputLabel>
-                            <Select
-                              label="Access Token Type"
-                              value={values.idp?.oidc?.access_token_type || 'jwt'}
-                              onChange={(e) => setFieldValue('idp.oidc.access_token_type', e.target.value).then(() => setHasUnsavedChanges(true))}
-                            >
-                              <MenuItem value="jwt">jwt</MenuItem>
-                              <MenuItem value="opaque">opaque</MenuItem>
-                            </Select>
-                          </FormControl>
+                          {renderSingleSelectField('idp.oidc.access_token_type', 'Access Token Type', oidcAccessTokenTypeOptions)}
                         </Grid>
 
                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.oidc.default_access_token_lifetime" label="Default Access Token Lifetime" onChange={handleChange} /></Grid>
@@ -637,17 +948,7 @@ const FrontendConfig = (): React.JSX.Element => {
                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.oidc.consent_ttl" label="Consent TTL" onChange={handleChange} /></Grid>
 
                         <Grid size={{ xs: 12, md: 4 }}>
-                          <FormControl fullWidth>
-                            <InputLabel>Consent Mode</InputLabel>
-                            <Select
-                              label="Consent Mode"
-                              value={values.idp?.oidc?.consent_mode || 'all_or_nothing'}
-                              onChange={(e) => setFieldValue('idp.oidc.consent_mode', e.target.value).then(() => setHasUnsavedChanges(true))}
-                            >
-                              <MenuItem value="all_or_nothing">all_or_nothing</MenuItem>
-                              <MenuItem value="granular_optional">granular_optional</MenuItem>
-                            </Select>
-                          </FormControl>
+                          {renderSingleSelectField('idp.oidc.consent_mode', 'Consent Mode', oidcConsentModeOptions)}
                         </Grid>
                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.oidc.key_rotation_interval" label="Key Rotation Interval" onChange={handleChange} /></Grid>
                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.oidc.key_max_age" label="Key Max Age" onChange={handleChange} /></Grid>
@@ -663,13 +964,14 @@ const FrontendConfig = (): React.JSX.Element => {
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.back_channel_logout_supported ?? true} onChange={(e) => setFieldValue('idp.oidc.back_channel_logout_supported', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Back Channel Logout Supported" /></Grid>
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.back_channel_logout_session_supported || false} onChange={(e) => setFieldValue('idp.oidc.back_channel_logout_session_supported', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Back Channel Logout Session Supported" /></Grid>
 
-                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">OIDC Discovery/Support Arrays</Typography></Grid>
+                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">OIDC Discovery Metadata</Typography></Grid>
                         <Grid size={12}>{renderStringArrayEditor('idp.oidc.scopes_supported', 'Scope')}</Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.response_types_supported', 'Response Type')}</Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.subject_types_supported', 'Subject Type')}</Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.id_token_signing_alg_values_supported', 'ID Token Signing Algorithm')}</Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.token_endpoint_auth_methods_supported', 'Token Endpoint Auth Method')}</Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.code_challenge_methods_supported', 'Code Challenge Method')}</Grid>
+                        <Grid size={12}>{renderMultiSelectField('idp.oidc.response_types_supported', 'Response Types', oidcResponseTypeOptions, 'These are authorization-endpoint response types. With the current backend implementation this is only `code`.')}</Grid>
+                        <Grid size={12}>{renderMultiSelectField('idp.oidc.grant_types_supported', 'Grant Types', oidcGrantTypeOptions, 'These are token-endpoint grant types such as client credentials and device code.')}</Grid>
+                        <Grid size={12}>{renderMultiSelectField('idp.oidc.subject_types_supported', 'Subject Types', oidcSubjectTypeOptions, 'The current IdP implementation supports the public subject type.')}</Grid>
+                        <Grid size={12}>{renderMultiSelectField('idp.oidc.id_token_signing_alg_values_supported', 'ID Token Signing Algorithms', oidcSigningAlgorithmOptions)}</Grid>
+                        <Grid size={12}>{renderMultiSelectField('idp.oidc.token_endpoint_auth_methods_supported', 'Token Endpoint Auth Methods', oidcTokenEndpointAuthMethodOptions)}</Grid>
+                        <Grid size={12}>{renderMultiSelectField('idp.oidc.code_challenge_methods_supported', 'Code Challenge Methods', oidcCodeChallengeMethodOptions, 'Only S256 is accepted by the backend.')}</Grid>
                         <Grid size={12}>{renderStringArrayEditor('idp.oidc.claims_supported', 'Claim')}</Grid>
 
                         <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">Signing Keys</Typography></Grid>
@@ -678,17 +980,17 @@ const FrontendConfig = (): React.JSX.Element => {
                             {({ push, remove }: any) => (
                               <Box>
                                 {(values.idp?.oidc?.signing_keys || []).map((_: any, idx: number) => (
-                                  <Card key={`signing-key-${idx}`} sx={{ mb: 2 }}>
-                                    <CardContent>
-                                      <Grid container spacing={2}>
+                                  <Card key={`signing-key-${idx}`} sx={configCardSx}>
+                                    <CardContent sx={configCardContentSx}>
+                                      <Grid container spacing={3}>
                                         <Grid size={{ xs: 12, md: 3 }}><Field as={TextField} fullWidth name={`idp.oidc.signing_keys.${idx}.id`} label="Key ID" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 3 }}><Field as={TextField} fullWidth name={`idp.oidc.signing_keys.${idx}.algorithm`} label="Algorithm" onChange={handleChange} /></Grid>
+                                        <Grid size={{ xs: 12, md: 3 }}>{renderSingleSelectField(`idp.oidc.signing_keys.${idx}.algorithm`, 'Algorithm', oidcSigningAlgorithmOptions, 'RS256 is the default when left empty.', 'Use default (RS256)')}</Grid>
                                         <Grid size={{ xs: 12, md: 3 }}><Field as={TextField} fullWidth name={`idp.oidc.signing_keys.${idx}.key_file`} label="Key File" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 3 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.signing_keys.${idx}.active`))} onChange={(e) => setFieldValue(`idp.oidc.signing_keys.${idx}.active`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Active" /></Grid>
                                         <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.oidc.signing_keys.${idx}.key`} label="Inline Key" onChange={handleChange} /></Grid>
                                       </Grid>
                                     </CardContent>
-                                    <CardActions>
+                                    <CardActions sx={configCardActionsSx}>
                                       <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(idx); setHasUnsavedChanges(true); }}>Remove Key</Button>
                                     </CardActions>
                                   </Card>
@@ -707,19 +1009,25 @@ const FrontendConfig = (): React.JSX.Element => {
                             {({ push, remove }: any) => (
                               <Box>
                                 {(values.idp?.oidc?.custom_scopes || []).map((_: any, sIdx: number) => (
-                                  <Card key={`scope-${sIdx}`} sx={{ mb: 2 }}>
-                                    <CardContent>
-                                      <Grid container spacing={2}>
+                                  <Card key={`scope-${sIdx}`} sx={configCardSx}>
+                                    <CardContent sx={configCardContentSx}>
+                                      <Grid container spacing={3}>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.name`} label="Scope Name" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 8 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.description`} label="Description" onChange={handleChange} /></Grid>
+                                        <Grid size={12}>
+                                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                            Localized Descriptions
+                                          </Typography>
+                                          {renderLocalizedScopeDescriptionsEditor(`idp.oidc.custom_scopes.${sIdx}`)}
+                                        </Grid>
                                         <Grid size={12}>
                                           <FieldArray name={`idp.oidc.custom_scopes.${sIdx}.claims`}>
                                             {({ push: pushClaim, remove: removeClaim }: any) => (
                                               <Box>
                                                 {((getIn(values, `idp.oidc.custom_scopes.${sIdx}.claims`) as any[]) || []).map((__: any, cIdx: number) => (
-                                                  <Grid container spacing={1} key={`scope-${sIdx}-claim-${cIdx}`} sx={{ mb: 1 }}>
+                                                  <Grid container spacing={2} key={`scope-${sIdx}-claim-${cIdx}`} sx={{ mb: 1.5 }}>
                                                     <Grid size={{ xs: 12, md: 5 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.name`} label="Claim Name" onChange={handleChange} /></Grid>
-                                                    <Grid size={{ xs: 12, md: 5 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.type`} label="Claim Type" onChange={handleChange} /></Grid>
+                                                    <Grid size={{ xs: 12, md: 5 }}>{renderSingleSelectField(`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.type`, 'Claim Type', oidcClaimTypeOptions)}</Grid>
                                                     <Grid size={{ xs: 12, md: 2 }}><IconButton color="error" onClick={() => { removeClaim(cIdx); setHasUnsavedChanges(true); }}><DeleteIcon /></IconButton></Grid>
                                                   </Grid>
                                                 ))}
@@ -732,7 +1040,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                         </Grid>
                                       </Grid>
                                     </CardContent>
-                                    <CardActions>
+                                    <CardActions sx={configCardActionsSx}>
                                       <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(sIdx); setHasUnsavedChanges(true); }}>Remove Scope</Button>
                                     </CardActions>
                                   </Card>
@@ -751,22 +1059,22 @@ const FrontendConfig = (): React.JSX.Element => {
                             {({ push, remove }: any) => (
                               <Box>
                                 {(values.idp?.oidc?.clients || []).map((_: any, cIdx: number) => (
-                                  <Card key={`oidc-client-${cIdx}`} sx={{ mb: 2 }}>
-                                    <CardContent>
-                                      <Grid container spacing={2}>
+                                  <Card key={`oidc-client-${cIdx}`} sx={configCardSx}>
+                                    <CardContent sx={configCardContentSx}>
+                                      <Grid container spacing={3}>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.name`} label="Name" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_id`} label="Client ID" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={PasswordField} fullWidth name={`idp.oidc.clients.${cIdx}.client_secret`} label="Client Secret" onChange={handleChange} /></Grid>
 
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.token_endpoint_auth_method`} label="Token Endpoint Auth Method" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.access_token_type`} label="Access Token Type" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.consent_mode`} label="Consent Mode" onChange={handleChange} /></Grid>
+                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.token_endpoint_auth_method`, 'Token Endpoint Auth Method', oidcTokenEndpointAuthMethodOptions, 'Leave empty to accept the default client-secret based behavior.', 'Use default')}</Grid>
+                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.access_token_type`, 'Access Token Type', oidcAccessTokenTypeOptions, 'Leave empty to inherit the global access token type.', 'Inherit global setting')}</Grid>
+                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.consent_mode`, 'Consent Mode', oidcConsentModeOptions, 'Leave empty to inherit the global consent mode.', 'Inherit global setting')}</Grid>
 
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.access_token_lifetime`} label="Access Token Lifetime" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.refresh_token_lifetime`} label="Refresh Token Lifetime" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.consent_ttl`} label="Consent TTL" onChange={handleChange} /></Grid>
 
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_public_key_algorithm`} label="Client Public Key Algorithm" onChange={handleChange} /></Grid>
+                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.client_public_key_algorithm`, 'Client Public Key Algorithm', oidcSigningAlgorithmOptions, 'Required for private_key_jwt clients. Leave empty to default to RS256.', 'Use default (RS256)')}</Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_public_key_file`} label="Client Public Key File" onChange={handleChange} /></Grid>
                                         <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.oidc.clients.${cIdx}.client_public_key`} label="Client Public Key" onChange={handleChange} /></Grid>
 
@@ -781,9 +1089,9 @@ const FrontendConfig = (): React.JSX.Element => {
                                         <Grid size={12}><Typography variant="subtitle2">Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.redirect_uris`, 'Redirect URI')}</Grid>
                                         <Grid size={12}><Typography variant="subtitle2">Post Logout Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.post_logout_redirect_uris`, 'Post Logout Redirect URI')}</Grid>
                                         <Grid size={12}><Typography variant="subtitle2">Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.scopes`, 'Scope')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Grant Types</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.grant_types`, 'Grant Type')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Required MFA</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.require_mfa`, 'Required MFA')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Supported MFA</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.supported_mfa`, 'Supported MFA')}</Grid>
+                                        <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.grant_types`, 'Grant Types', oidcGrantTypeOptions, 'Choose the flows this client may use at the token and device endpoints.')}</Grid>
+                                        <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.require_mfa`, 'Required MFA', mfaMethodOptions, 'Must stay a subset of the supported MFA methods when both are configured.')}</Grid>
+                                        <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.supported_mfa`, 'Supported MFA', mfaMethodOptions)}</Grid>
                                         <Grid size={12}><Typography variant="subtitle2">Required Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.required_scopes`, 'Required Scope')}</Grid>
                                         <Grid size={12}><Typography variant="subtitle2">Optional Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.optional_scopes`, 'Optional Scope')}</Grid>
 
@@ -791,7 +1099,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                         <Grid size={12}><Typography variant="subtitle2">Access Token Claim Mappings</Typography>{renderClaimMappingsEditor(`idp.oidc.clients.${cIdx}.access_token_claims.mappings`)}</Grid>
                                       </Grid>
                                     </CardContent>
-                                    <CardActions>
+                                    <CardActions sx={configCardActionsSx}>
                                       <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(cIdx); setHasUnsavedChanges(true); }}>
                                         Remove Client
                                       </Button>
@@ -847,14 +1155,14 @@ const FrontendConfig = (): React.JSX.Element => {
 
                   <Grid size={12}>
                     <CollapsibleFormSection title="SAML2" description="idp.saml2" defaultExpanded={false}>
-                      <Grid container spacing={2}>
+                      <Grid container spacing={3}>
                         <Grid size={12}>
                           <FormControlLabel control={<Switch checked={values.idp?.saml2?.enabled || false} onChange={(e) => setFieldValue('idp.saml2.enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Enable SAML2" />
                         </Grid>
                         <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name="idp.saml2.entity_id" label="Entity ID" onChange={handleChange} /></Grid>
-                        <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name="idp.saml2.signature_method" label="Signature Method" onChange={handleChange} /></Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>{renderSingleSelectField('idp.saml2.signature_method', 'Signature Method', samlSignatureMethodOptions, 'Only RSA-SHA256 is currently supported.', 'Use default (RSA-SHA256)')}</Grid>
                         <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name="idp.saml2.default_expire_time" label="Default Expire Time" onChange={handleChange} /></Grid>
-                        <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name="idp.saml2.name_id_format" label="NameID Format" onChange={handleChange} /></Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>{renderSingleSelectField('idp.saml2.name_id_format', 'NameID Format', samlNameIdFormatOptions, 'Leave empty to use the backend default persistent NameID format.', 'Use default (persistent)')}</Grid>
                         <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name="idp.saml2.cert_file" label="Certificate File" onChange={handleChange} /></Grid>
                         <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name="idp.saml2.key_file" label="Key File" onChange={handleChange} /></Grid>
                         <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name="idp.saml2.cert" label="Inline Certificate" onChange={handleChange} /></Grid>
@@ -874,9 +1182,9 @@ const FrontendConfig = (): React.JSX.Element => {
                             {({ push, remove }: any) => (
                               <Box>
                                 {(values.idp?.saml2?.service_providers || []).map((_: any, spIdx: number) => (
-                                  <Card key={`saml-sp-${spIdx}`} sx={{ mb: 2 }}>
-                                    <CardContent>
-                                      <Grid container spacing={2}>
+                                  <Card key={`saml-sp-${spIdx}`} sx={configCardSx}>
+                                    <CardContent sx={configCardContentSx}>
+                                      <Grid container spacing={3}>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.name`} label="Name" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.entity_id`} label="Entity ID" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.acs_url`} label="ACS URL" onChange={handleChange} /></Grid>
@@ -889,11 +1197,11 @@ const FrontendConfig = (): React.JSX.Element => {
                                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
 
                                         <Grid size={12}><Typography variant="subtitle2">Allowed Attributes</Typography>{renderStringArrayEditor(`idp.saml2.service_providers.${spIdx}.allowed_attributes`, 'Allowed Attribute')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Required MFA</Typography>{renderStringArrayEditor(`idp.saml2.service_providers.${spIdx}.require_mfa`, 'Required MFA')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Supported MFA</Typography>{renderStringArrayEditor(`idp.saml2.service_providers.${spIdx}.supported_mfa`, 'Supported MFA')}</Grid>
+                                        <Grid size={12}>{renderMultiSelectField(`idp.saml2.service_providers.${spIdx}.require_mfa`, 'Required MFA', mfaMethodOptions, 'Must stay a subset of the supported MFA methods when both are configured.')}</Grid>
+                                        <Grid size={12}>{renderMultiSelectField(`idp.saml2.service_providers.${spIdx}.supported_mfa`, 'Supported MFA', mfaMethodOptions)}</Grid>
                                       </Grid>
                                     </CardContent>
-                                    <CardActions>
+                                    <CardActions sx={configCardActionsSx}>
                                       <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(spIdx); setHasUnsavedChanges(true); }}>
                                         Remove Service Provider
                                       </Button>
