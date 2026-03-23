@@ -140,6 +140,7 @@ const MainContent = (): React.JSX.Element => {
   const [profileToDelete, setProfileToDelete] = useState('');
   const [uploadProfileDialogOpen, setUploadProfileDialogOpen] = useState(false);
   const [uploadProfileName, setUploadProfileName] = useState('');
+  const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   // Profile state variables removed as we now use a dedicated page
 
   // Global session-expired dialog state
@@ -427,8 +428,16 @@ const MainContent = (): React.JSX.Element => {
   };
 
   const handleDownload = () => {
-    // downloadConfig is synchronous and handles its own errors
-    downloadConfig();
+    setDownloadDialogOpen(true);
+  };
+
+  const handleDownloadConfirm = async (format: 'yaml' | 'zip') => {
+    try {
+      await downloadConfig(format);
+    } catch {
+      // ignore download errors for now
+    }
+    setDownloadDialogOpen(false);
   };
 
   const handleResetClick = () => {
@@ -1015,14 +1024,14 @@ const MainContent = (): React.JSX.Element => {
               type="file"
               ref={fileInputRef}
               style={{ display: 'none' }}
-              accept=".json,.yml,.yaml"
+              accept=".json,.yml,.yaml,.zip"
               onChange={handleFileUpload}
             />
             <input
               type="file"
               ref={uploadWithProfileRef}
               style={{ display: 'none' }}
-              accept=".json,.yml,.yaml"
+              accept=".json,.yml,.yaml,.zip"
             />
             <Tooltip title="Upload Configuration">
               <Button 
@@ -1421,7 +1430,7 @@ const MainContent = (): React.JSX.Element => {
         <DialogTitle>Upload to New Profile</DialogTitle>
         <DialogContent>
           <DialogContentText>
-            Select a configuration file to upload and enter a name for the new profile. If you leave the profile name empty, the configuration will be uploaded to the current profile.
+            Select a monolithic YAML/JSON file or a ZIP bundle with relative includes and enter a name for the new profile. If you leave the profile name empty, the configuration will be uploaded to the current profile.
           </DialogContentText>
           <TextField
             margin="dense"
@@ -1444,13 +1453,30 @@ const MainContent = (): React.JSX.Element => {
               type="file"
               hidden
               ref={uploadWithProfileRef}
-              accept=".json,.yml,.yaml"
+              accept=".json,.yml,.yaml,.zip"
             />
           </Button>
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setUploadProfileDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleUploadWithProfileConfirm} color="primary">Upload</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={downloadDialogOpen}
+        onClose={() => setDownloadDialogOpen(false)}
+      >
+        <DialogTitle>Download Configuration</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Choose whether to export the current configuration as a single YAML file or as a ZIP bundle with a generated include structure.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setDownloadDialogOpen(false)}>Cancel</Button>
+          <Button onClick={() => void handleDownloadConfirm('yaml')}>Monolithic YAML</Button>
+          <Button onClick={() => void handleDownloadConfirm('zip')} color="primary" variant="contained">ZIP with Includes</Button>
         </DialogActions>
       </Dialog>
 

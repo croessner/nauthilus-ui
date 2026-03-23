@@ -1,6 +1,26 @@
 import yaml from 'js-yaml';
 import { NauthilusConfig } from '../types/config';
 
+export const orderTopLevelConfigKeys = (config: Record<string, any>): string[] => {
+  const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
+  const featureKeys = Object.keys(config)
+    .filter(key => !fixedKeys.includes(key))
+    .sort();
+
+  const remainingKeys = ['backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap']
+    .filter(key => config[key] !== undefined);
+
+  const orderedKeys: string[] = [];
+  if (config.server !== undefined) {
+    orderedKeys.push('server');
+  }
+
+  orderedKeys.push(...featureKeys);
+  orderedKeys.push(...remainingKeys);
+
+  return orderedKeys;
+};
+
 /**
  * Formats the Nauthilus configuration as a YAML string with specific sorting and layout.
  * 
@@ -62,24 +82,7 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   // --- Sort the object keys ---
   const sortedConfig: any = {};
   
-  // 1. Server section always comes first
-  if (configCopy.server) {
-    sortedConfig.server = configCopy.server;
-  }
-  
-  // 2. Features/sections that are not in the fixed list follow alphabetically
-  const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
-  const featureKeys = Object.keys(configCopy)
-    .filter(key => !fixedKeys.includes(key))
-    .sort();
-  
-  featureKeys.forEach(key => {
-    sortedConfig[key] = configCopy[key];
-  });
-  
-  // 3-7. Remaining sections in fixed order
-  const remainingKeys = ['backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
-  remainingKeys.forEach(key => {
+  orderTopLevelConfigKeys(configCopy).forEach(key => {
     if (configCopy[key] !== undefined) {
       // Special sorting for lua and ldap: put "config" at the top of the section
       if ((key === 'lua' || key === 'ldap') && configCopy[key].config) {

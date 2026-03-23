@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, Rea
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
 import { formatConfigAsYaml } from '../utils/yamlUtils';
+import { buildConfigBundleZip, ConfigDownloadFormat, parseUploadedConfigFile } from '../utils/configArchive';
 import axios from '../utils/axiosConfig';
 import { withErrorHandling as apiWithErrorHandling, buildBackendAuthHeaders, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 import { getCurrentUserId } from '../utils/currentUser';
@@ -31,7 +32,7 @@ interface ConfigContextType {
   updateConfig: (config: NauthilusConfig) => Promise<void>;
   updateConfigSection: (section: string, data: any) => Promise<void>;
   uploadConfig: (file: File, profileName?: string) => Promise<void>;
-  downloadConfig: () => void;
+  downloadConfig: (format?: ConfigDownloadFormat) => Promise<void>;
   resetConfig: () => Promise<void>;
   loadConfigFromBackend: (connectionConfig: any) => Promise<void>;
   setHasUnsavedChanges: (value: boolean) => void;
@@ -603,50 +604,38 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   // Function to upload a configuration file
   const uploadConfig = useCallback(async (file: File, profileName?: string) => {
     await withErrorHandling(async () => {
-      const fileContent = await file.text();
-      let newConfig: NauthilusConfig;
+      let newConfig = await parseUploadedConfigFile(file) as NauthilusConfig;
 
-      // Parse the file content based on the file extension
-      if (file.name.endsWith('.json')) {
-        newConfig = JSON.parse(fileContent);
-      } else if (file.name.endsWith('.yml') || file.name.endsWith('.yaml')) {
-        newConfig = yaml.load(fileContent) as NauthilusConfig;
+      // Handle realtime_blackhole_lists (map to rbl)
+      if ((newConfig as any).realtime_blackhole_lists) {
+        newConfig.realtime_blackhole_lists = (newConfig as any).realtime_blackhole_lists;
+        delete (newConfig as any).realtime_blackhole_lists;
 
-        // Handle realtime_blackhole_lists (map to rbl)
-        if ((newConfig as any).realtime_blackhole_lists) {
-          newConfig.realtime_blackhole_lists = (newConfig as any).realtime_blackhole_lists;
-          delete (newConfig as any).realtime_blackhole_lists;
-
-          // Ensure server.features includes 'rbl'
-          if (!newConfig.server) {
-            newConfig.server = { redis: { database_number: 0, prefix: 'nt_', master: { address: '127.0.0.1:6379' } } };
-          }
-          if (!newConfig.server.features) {
-            newConfig.server.features = [];
-          }
-          if (!hasServerFeature(newConfig.server.features, 'rbl')) {
-            newConfig.server.features.push('rbl');
-          }
+        // Ensure server.features includes 'rbl'
+        if (!newConfig.server) {
+          newConfig.server = { redis: { database_number: 0, prefix: 'nt_', master: { address: '127.0.0.1:6379' } } };
         }
-
-        // Fix the backend configuration format if it's an array of objects with the 'backend' property
-        if (newConfig.server?.backends && Array.isArray(newConfig.server.backends)) {
-          // Check if the backends are objects with 'backend' property instead of strings
-          const firstBackend = newConfig.server.backends[0];
-          if (firstBackend && typeof firstBackend === 'object' && 'backend' in firstBackend) {
-            // Convert objects with 'backend' property to strings
-            newConfig.server.backends = newConfig.server.backends.map((backend: any) => backend.backend);
-          }
+        if (!newConfig.server.features) {
+          newConfig.server.features = [];
         }
-
-        // Filter out unknown settings
-        newConfig = filterUnknownSettings(newConfig);
-
-        // Initialize feature configurations
-        newConfig = initializeFeatureConfigurations(newConfig);
-      } else {
-        throw new Error('Unsupported file format. Please upload a JSON or YAML file.');
+        if (!hasServerFeature(newConfig.server.features, 'rbl')) {
+          newConfig.server.features.push('rbl');
+        }
       }
+
+      // Fix the backend configuration format if it's an array of objects with the 'backend' property
+      if (newConfig.server?.backends && Array.isArray(newConfig.server.backends)) {
+        const firstBackend = newConfig.server.backends[0];
+        if (firstBackend && typeof firstBackend === 'object' && 'backend' in firstBackend) {
+          newConfig.server.backends = newConfig.server.backends.map((backend: any) => backend.backend);
+        }
+      }
+
+      // Filter out unknown settings
+      newConfig = filterUnknownSettings(newConfig);
+
+      // Initialize feature configurations
+      newConfig = initializeFeatureConfigurations(newConfig);
 
       // Determine which profile to update
       const targetProfileName = profileName || currentProfileName;
@@ -696,12 +685,11 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       setHasUnsavedChanges(false);
 
       return updatedProfiles;
-    }, 'Failed to upload configuration. Please check the file format.');
+    }, 'Failed to upload configuration. Please check the file or archive format.');
   }, [withErrorHandling, profiles, currentProfileName, setProfiles, setCurrentProfileName, setConfig, setHasUnsavedChanges]);
 
   // Function to download the current configuration
-  const downloadConfig = useCallback(() => {
-    // This function doesn't use async/await, so we'll handle errors manually
+  const downloadConfig = useCallback(async (format: ConfigDownloadFormat = 'yaml') => {
     try {
       if (!config) {
         setError('No configuration to download');
@@ -723,18 +711,26 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
       // Add a profile name as a comment in the YAML
       const profileComment = `# Profile: ${currentProfileName}`;
+      const normalizedProfileName = currentProfileName.toLowerCase().replace(/\s+/g, '-');
 
-      // Convert the configuration to YAML using the utility function
-      const yamlContent = formatConfigAsYaml(config);
+      let blob: Blob;
+      let filename: string;
 
-      // Create a blob and download the link with the profile comment at the top
-      const contentWithComment = `${profileComment}\n\n${yamlContent}`;
-      const blob = new Blob([contentWithComment], { type: 'text/yaml' });
+      if (format === 'zip') {
+        blob = await buildConfigBundleZip(config, currentProfileName);
+        filename = `nauthilus-${normalizedProfileName}.zip`;
+      } else {
+        const yamlContent = formatConfigAsYaml(config);
+        const contentWithComment = `${profileComment}\n\n${yamlContent}`;
+        blob = new Blob([contentWithComment], { type: 'text/yaml' });
+        filename = `nauthilus-${normalizedProfileName}.yml`;
+      }
+
       const url = URL.createObjectURL(blob);
 
       const a = document.createElement('a');
       a.href = url;
-      a.download = `nauthilus-${currentProfileName.toLowerCase().replace(/\s+/g, '-')}.yml`;
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
 
