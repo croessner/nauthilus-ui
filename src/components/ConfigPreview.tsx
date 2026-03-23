@@ -21,12 +21,9 @@ const ConfigPreview = (): React.JSX.Element => {
     // Create a deep copy of the config object with the same modifications as for YAML generation
     const configCopy = JSON.parse(JSON.stringify(config));
 
-    // Ensure refresh_token_expiry is set if refresh_token is enabled
-    if (configCopy.server?.jwt_auth?.refresh_token && !configCopy.server.jwt_auth.refresh_token_expiry) {
-      if (!configCopy.server.jwt_auth) {
-        configCopy.server.jwt_auth = {};
-      }
-      configCopy.server.jwt_auth.refresh_token_expiry = '24h'; // Default value
+    // Drop legacy auth config after migration to server.oidc_auth
+    if (configCopy.server?.jwt_auth) {
+      delete configCopy.server.jwt_auth;
     }
 
     // Collect validation errors from different sections using the modified config

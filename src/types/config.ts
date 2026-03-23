@@ -16,7 +16,7 @@ export interface ServerConfig {
   disabled_endpoints?: EndpointConfig;
   tls?: TLSConfig;
   basic_auth?: BasicAuthConfig;
-  jwt_auth?: JWTAuthConfig;
+  oidc_auth?: OIDCAuthConfig;
   instance_name?: string;
   log?: LogConfig;
   backends?: BackendConfig[];
@@ -65,20 +65,8 @@ export interface BasicAuthConfig {
   password?: string;
 }
 
-export interface JWTAuthConfig {
+export interface OIDCAuthConfig {
   enabled?: boolean;
-  secret_key?: string;
-  token_expiry?: string;
-  refresh_token?: boolean;
-  refresh_token_expiry?: string;
-  users?: JWTUserConfig[];
-  store_in_redis?: boolean;
-}
-
-export interface JWTUserConfig {
-  username: string;
-  password: string;
-  roles?: string[];
 }
 
 export interface LogConfig {

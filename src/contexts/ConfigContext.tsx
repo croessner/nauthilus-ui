@@ -177,6 +177,10 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   };
 
   const validateAuthConfigurations = (config: NauthilusConfig, errors: string[]): void => {
+    if (config.server.basic_auth?.enabled && config.server.oidc_auth?.enabled) {
+      errors.push('Basic Auth and OIDC Auth cannot be enabled at the same time');
+    }
+
     // Validate basic auth configuration if enabled
     if (config.server.basic_auth?.enabled) {
       if (!config.server.basic_auth.username) {
@@ -186,21 +190,6 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         errors.push('Basic Auth password is required when Basic Auth is enabled');
       } else if (config.server.basic_auth.password.length < 16) {
         errors.push('Basic Auth password must be at least 16 characters');
-      }
-    }
-
-    // Validate JWT auth configuration if enabled
-    if (config.server.jwt_auth?.enabled) {
-      if (!config.server.jwt_auth.secret_key) {
-        errors.push('JWT secret key is required when JWT Auth is enabled');
-      } else if (config.server.jwt_auth.secret_key.length < 32) {
-        errors.push('JWT secret key must be at least 32 characters');
-      }
-      if (!config.server.jwt_auth.token_expiry) {
-        errors.push('JWT token expiry is required when JWT Auth is enabled');
-      }
-      if (config.server.jwt_auth.refresh_token && !config.server.jwt_auth.refresh_token_expiry) {
-        errors.push('JWT refresh token expiry is required when refresh tokens are enabled');
       }
     }
   };
@@ -340,6 +329,11 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
       }
 
+      profilesArray = profilesArray.map(profile => ({
+        ...profile,
+        config: normalizeServerAuthConfiguration(profile.config),
+      }));
+
       const profileConfig = profilesArray.find(profile => profile.name === currentProfile)?.config;
       return {
         profilesArray,
@@ -418,8 +412,34 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
     }, `Failed to update ${section} configuration. Please try again.`);
   }, [withErrorHandling, config, updateProfilesWithConfig, validateConfigSection]);
 
+  const normalizeServerAuthConfiguration = (config: NauthilusConfig): NauthilusConfig => {
+    if (!config.server) {
+      return config;
+    }
+
+    const normalizedConfig: NauthilusConfig = {
+      ...config,
+      server: {
+        ...config.server
+      }
+    };
+
+    const legacyJwtAuth = (config.server as any).jwt_auth;
+    if (normalizedConfig.server.oidc_auth === undefined && legacyJwtAuth !== undefined) {
+      normalizedConfig.server.oidc_auth = {
+        enabled: Boolean(legacyJwtAuth?.enabled)
+      };
+    }
+
+    delete (normalizedConfig.server as any).jwt_auth;
+
+    return normalizedConfig;
+  };
+
   // Helper function to filter out unknown settings
   const filterUnknownSettings = (config: NauthilusConfig): NauthilusConfig => {
+    const normalizedConfig = normalizeServerAuthConfiguration(config);
+
     // Create a new config object with only the known properties
     const filteredConfig: NauthilusConfig = {
       server: {
@@ -428,11 +448,11 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
     };
 
     // Copy known server properties
-    if (config.server) {
+    if (normalizedConfig.server) {
       const serverProps = [
         'address', 'max_concurrent_requests', 'max_password_history_entries',
         'http3', 'haproxy_v2', 'disabled_endpoints', 'tls', 'basic_auth',
-        'jwt_auth', 'instance_name', 'log', 'backends', 'features',
+        'oidc_auth', 'instance_name', 'log', 'backends', 'features',
         'brute_force_protocols', 'dns', 'insights',
         'redis', 'master_user', 'frontend', 'prometheus_timer',
         'default_http_request_header', 'http_client', 'compression', 'keep_alive',
@@ -440,10 +460,10 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       ];
 
       serverProps.forEach(prop => {
-        const key = prop as keyof typeof config.server;
-        if (config.server[key] !== undefined) {
+        const key = prop as keyof typeof normalizedConfig.server;
+        if (normalizedConfig.server[key] !== undefined) {
           // Use type assertion to help TypeScript understand the assignment
-          (filteredConfig.server as any)[key] = config.server[key];
+          (filteredConfig.server as any)[key] = normalizedConfig.server[key];
         }
       });
     }
@@ -456,9 +476,9 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
     knownProps.forEach(prop => {
       const key = prop as keyof NauthilusConfig;
-      if (config[key] !== undefined) {
+      if (normalizedConfig[key] !== undefined) {
         // Use type assertion to help TypeScript understand the assignment
-        (filteredConfig as any)[key] = config[key];
+        (filteredConfig as any)[key] = normalizedConfig[key];
       }
     });
 

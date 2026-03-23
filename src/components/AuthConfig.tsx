@@ -1,16 +1,14 @@
 import React from 'react';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
-import { TextField, FormControlLabel, Button, Box, FormHelperText, Typography, Switch, InputAdornment } from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, Typography, Switch, InputAdornment } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import { useConfig } from '../contexts/ConfigContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
 import Grid from '@mui/material/Grid';
 
-// Validation schema
 const AuthConfigSchema = Yup.object().shape({
-  // Basic Auth validation
   basic_auth: Yup.object().shape({
     enabled: Yup.boolean(),
     username: Yup.string().when(['enabled'], {
@@ -27,47 +25,14 @@ const AuthConfigSchema = Yup.object().shape({
       otherwise: (schema) => schema,
     }),
   }),
-
-  // JWT Auth validation
-  jwt_auth: Yup.object().shape({
+  oidc_auth: Yup.object().shape({
     enabled: Yup.boolean(),
-    secret_key: Yup.string().when(['enabled'], {
-      is: (enabled: any) => Boolean(enabled),
-      then: (schema) => schema
-        .required('Secret key is required when JWT Auth is enabled')
-        .min(32, 'Secret key must be at least 32 characters')
-        .matches(/^\S+$/, 'Secret key cannot contain spaces'),
-      otherwise: (schema) => schema,
-    }),
-    token_expiry: Yup.string().when(['enabled'], {
-      is: (enabled: any) => Boolean(enabled),
-      then: (schema) => schema.required('Token expiry is required when JWT Auth is enabled'),
-      otherwise: (schema) => schema,
-    }),
-    refresh_token: Yup.boolean(),
-    refresh_token_expiry: Yup.string().when(['enabled', 'refresh_token'], {
-      is: (enabled: any, refresh_token: any) => Boolean(enabled) && Boolean(refresh_token),
-      then: (schema) => schema.required('Refresh token expiry is required when refresh tokens are enabled'),
-      otherwise: (schema) => schema,
-    }),
-    store_in_redis: Yup.boolean(),
-    users: Yup.array().of(
-      Yup.object().shape({
-        username: Yup.string().required('Username is required').matches(/^\S+$/, 'Username cannot contain spaces'),
-        password: Yup.string()
-          .required('Password is required')
-          .min(8, 'Password must be at least 8 characters')
-          .matches(/^\S+$/, 'Password cannot contain spaces'),
-        roles: Yup.array().of(Yup.string()),
-      })
-    ),
   }),
 });
 
 const AuthConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
 
-  // Reset unsaved changes flag when the component mounts
   React.useEffect(() => {
     setHasUnsavedChanges(false);
   }, [setHasUnsavedChanges]);
@@ -76,32 +41,25 @@ const AuthConfig = (): React.JSX.Element | null => {
     return null;
   }
 
+  const legacyJwtEnabled = Boolean((config.server as any).jwt_auth?.enabled);
+
   const initialValues = {
-    // Initialize basic auth configuration
     basic_auth: {
       enabled: config.server.basic_auth?.enabled || false,
       username: config.server.basic_auth?.username || '',
       password: config.server.basic_auth?.password || '',
     },
-
-    // Initialize JWT auth configuration
-    jwt_auth: {
-      enabled: config.server.jwt_auth?.enabled || false,
-      secret_key: config.server.jwt_auth?.secret_key || '',
-      token_expiry: config.server.jwt_auth?.token_expiry || '1h',
-      refresh_token: config.server.jwt_auth?.refresh_token || false,
-      refresh_token_expiry: config.server.jwt_auth?.refresh_token_expiry || '24h',
-      store_in_redis: config.server.jwt_auth?.store_in_redis || false,
-      users: config.server.jwt_auth?.users || [],
+    oidc_auth: {
+      enabled: config.server.oidc_auth?.enabled || legacyJwtEnabled || false,
     },
   };
 
   const handleSubmit = async (values: any) => {
     try {
-      // Update only the authentication-related parts of the server configuration
       await updateConfigSection('server', {
         basic_auth: values.basic_auth,
-        jwt_auth: values.jwt_auth,
+        oidc_auth: values.oidc_auth,
+        jwt_auth: undefined,
       });
     } catch (error) {
       console.error('Error updating authentication configuration:', error);
@@ -122,7 +80,6 @@ const AuthConfig = (): React.JSX.Element | null => {
             description="Configure authentication methods for accessing the API."
           >
             <Grid container spacing={3}>
-              {/* Basic Authentication */}
               <Grid size={12}>
                 <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>Basic Authentication</Typography>
               </Grid>
@@ -133,17 +90,16 @@ const AuthConfig = (): React.JSX.Element | null => {
                       checked={values.basic_auth?.enabled || false}
                       onChange={(e) => {
                         setFieldValue('basic_auth.enabled', e.target.checked)
+                          .then(() => setHasUnsavedChanges(true));
+                        if (e.target.checked && values.oidc_auth?.enabled) {
+                          setFieldValue('oidc_auth.enabled', false)
                             .then(() => setHasUnsavedChanges(true));
-                        // If enabling Basic Auth, disable JWT Auth
-                        if (e.target.checked && values.jwt_auth?.enabled) {
-                          setFieldValue('jwt_auth.enabled', false)
-                              .then(() => setHasUnsavedChanges(true));
                         }
                       }}
                       name="basic_auth.enabled"
                     />
                   }
-                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Basic Authentication<InfoTooltip title="Enables simple HTTP authentication for API access. Do not use alongside JWT." /></Box>}
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Basic Authentication<InfoTooltip title="Enables simple HTTP authentication for API access. Do not use alongside OIDC." /></Box>}
                 />
               </Grid>
               {values.basic_auth?.enabled && (
@@ -177,7 +133,7 @@ const AuthConfig = (): React.JSX.Element | null => {
                       error={getIn(touched, 'basic_auth.password') && Boolean(getIn(errors, 'basic_auth.password'))}
                       helperText={
                         (getIn(touched, 'basic_auth.password') && getIn(errors, 'basic_auth.password')) ||
-                        "Password must be at least 16 characters and without spaces"
+                        'Password must be at least 16 characters and without spaces'
                       }
                       onChange={(e: React.ChangeEvent<any>) => {
                         handleChange(e);
@@ -188,240 +144,34 @@ const AuthConfig = (): React.JSX.Element | null => {
                 </>
               )}
 
-              {/* JWT Authentication */}
               <Grid size={12}>
-                <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>JWT Authentication</Typography>
+                <Typography variant="subtitle1" sx={{ mt: 4, mb: 1 }}>OIDC Authentication</Typography>
               </Grid>
               <Grid size={12}>
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={values.jwt_auth?.enabled || false}
+                      checked={values.oidc_auth?.enabled || false}
                       onChange={(e) => {
-                        setFieldValue('jwt_auth.enabled', e.target.checked)
-                            .then(() => setHasUnsavedChanges(true));
-                        // If enabling JWT Auth, disable Basic Auth
+                        setFieldValue('oidc_auth.enabled', e.target.checked)
+                          .then(() => setHasUnsavedChanges(true));
                         if (e.target.checked && values.basic_auth?.enabled) {
                           setFieldValue('basic_auth.enabled', false)
-                              .then(() => setHasUnsavedChanges(true));
+                            .then(() => setHasUnsavedChanges(true));
                         }
                       }}
-                      name="jwt_auth.enabled"
+                      name="oidc_auth.enabled"
                     />
                   }
-                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable JWT Authentication<InfoTooltip title="Enables JSON Web Tokens for API authentication. Do not use alongside Basic Auth." /></Box>}
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable OIDC Authentication<InfoTooltip title="Enables OIDC authentication for API access. Do not use alongside Basic Auth." /></Box>}
                 />
               </Grid>
-              {values.jwt_auth?.enabled && (
-                <>
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <Field
-                      as={PasswordField}
-                      fullWidth
-                      name="jwt_auth.secret_key"
-                      label="Secret Key"
-                      infoTitle="Secret key for signing JWTs. At least 32 characters; store securely."
-                      variant="outlined"
-                      error={getIn(touched, 'jwt_auth.secret_key') && Boolean(getIn(errors, 'jwt_auth.secret_key'))}
-                      helperText={
-                        (getIn(touched, 'jwt_auth.secret_key') && getIn(errors, 'jwt_auth.secret_key')) ||
-                        "Secret key must be at least 32 characters and without spaces"
-                      }
-                      onChange={(e: React.ChangeEvent<any>) => {
-                        handleChange(e);
-                        setHasUnsavedChanges(true);
-                      }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <Field
-                        as={TextField}
-                        fullWidth
-                        name="jwt_auth.token_expiry"
-                        label="Token Expiry"
-                        InputProps={{ endAdornment: (
-                          <InputAdornment position="end"><InfoTooltip title="Expiration duration for access tokens (e.g., 1h, 30m). Shorter is safer." /></InputAdornment>
-                        ) }}
-                      variant="outlined"
-                      placeholder="e.g., 1h, 30m, 24h"
-                      error={getIn(touched, 'jwt_auth.token_expiry') && Boolean(getIn(errors, 'jwt_auth.token_expiry'))}
-                      helperText={
-                        (getIn(touched, 'jwt_auth.token_expiry') && getIn(errors, 'jwt_auth.token_expiry')) ||
-                        "Duration format: e.g., 1h, 30m, 24h"
-                      }
-                      onChange={(e: React.ChangeEvent<any>) => {
-                        handleChange(e);
-                        setHasUnsavedChanges(true);
-                      }}
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={values.jwt_auth?.refresh_token || false}
-                          onChange={(e) => {
-                            setFieldValue('jwt_auth.refresh_token', e.target.checked)
-                                .then(() => setHasUnsavedChanges(true));
-                          }}
-                          name="jwt_auth.refresh_token"
-                        />
-                      }
-                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Refresh Tokens<InfoTooltip title="Issues refresh tokens to extend sessions. Requires additional safeguards." /></Box>}
-                    />
-                  </Grid>
-                  {values.jwt_auth?.refresh_token && (
-                    <Grid size={{ xs: 12, md: 6 }}>
-                      <Field
-                        as={TextField}
-                        fullWidth
-                        name="jwt_auth.refresh_token_expiry"
-                        label="Refresh Token Expiry"
-                        variant="outlined"
-                        placeholder="e.g., 24h, 7d"
-                        error={getIn(touched, 'jwt_auth.refresh_token_expiry') && Boolean(getIn(errors, 'jwt_auth.refresh_token_expiry'))}
-                        helperText={
-                          (getIn(touched, 'jwt_auth.refresh_token_expiry') && getIn(errors, 'jwt_auth.refresh_token_expiry')) ||
-                          "Duration format: e.g., 24h, 7d"
-                        }
-                        onChange={(e: React.ChangeEvent<any>) => {
-                          handleChange(e);
-                          setHasUnsavedChanges(true);
-                        }}
-                      />
-                    </Grid>
-                  )}
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <FormControlLabel
-                      control={
-                        <Switch
-                          checked={values.jwt_auth?.store_in_redis || false}
-                          onChange={(e) => {
-                            setFieldValue('jwt_auth.store_in_redis', e.target.checked)
-                                .then(() => setHasUnsavedChanges(true));
-                          }}
-                          name="jwt_auth.store_in_redis"
-                        />
-                      }
-                      label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Store Tokens in Redis (for multi-instance compatibility)<InfoTooltip title="Stores tokens in Redis to support multiple server instances. Improves availability." /></Box>}
-                    />
-                  </Grid>
-
-                  {/* JWT Users */}
-                  <Grid size={12}>
-                    <Typography variant="subtitle2" sx={{ mt: 2, mb: 1 }}>JWT Users</Typography>
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="body2" color="textSecondary">
-                        Define users that can authenticate using JWT tokens.
-                      </Typography>
-                    </Box>
-                    {values.jwt_auth?.users && values.jwt_auth.users.length > 0 ? (
-                      values.jwt_auth.users.map((_user, index) => (
-                        <Box key={index} sx={{ mb: 3, p: 2, border: '1px solid #e0e0e0', borderRadius: 1 }}>
-                          <Grid container spacing={2}>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <Field
-                                as={TextField}
-                                fullWidth
-                                name={`jwt_auth.users[${index}].username`}
-                                label="Username"
-                                variant="outlined"
-                                error={
-                                  getIn(touched, `jwt_auth.users[${index}].username`) && 
-                                  Boolean(getIn(errors, `jwt_auth.users[${index}].username`))
-                                }
-                                helperText={
-                                  getIn(touched, `jwt_auth.users[${index}].username`) && 
-                                  getIn(errors, `jwt_auth.users[${index}].username`)
-                                }
-                                onChange={(e: React.ChangeEvent<any>) => {
-                                  handleChange(e);
-                                  setHasUnsavedChanges(true);
-                                }}
-                              />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <Field
-                                as={PasswordField}
-                                fullWidth
-                                name={`jwt_auth.users[${index}].password`}
-                                label="Password"
-                                variant="outlined"
-                                error={
-                                  getIn(touched, `jwt_auth.users[${index}].password`) && 
-                                  Boolean(getIn(errors, `jwt_auth.users[${index}].password`))
-                                }
-                                helperText={
-                                  (getIn(touched, `jwt_auth.users[${index}].password`) && 
-                                  getIn(errors, `jwt_auth.users[${index}].password`)) ||
-                                  "Password must be at least 8 characters and without spaces"
-                                }
-                                onChange={(e: React.ChangeEvent<any>) => {
-                                  handleChange(e);
-                                  setHasUnsavedChanges(true);
-                                }}
-                              />
-                            </Grid>
-                            <Grid size={12}>
-                              {/* Use a regular TextField for roles to allow typing commas */}
-                              <TextField
-                                fullWidth
-                                name={`jwt_auth.users[${index}].roles`}
-                                label="Roles (comma-separated)"
-                                variant="outlined"
-                                // Initialize with the current roles joined by commas
-                                defaultValue={(values.jwt_auth?.users?.[index]?.roles || []).join(', ')}
-                                // Set hasUnsavedChanges to true when the field changes
-                                onChange={() => {
-                                  setHasUnsavedChanges(true);
-                                }}
-                                // Process the roles when the field loses focus
-                                onBlur={(e: React.FocusEvent<HTMLInputElement>) => {
-                                  const rolesArray = e.target.value.split(',').map((role: string) => role.trim()).filter(Boolean);
-                                  setFieldValue(`jwt_auth.users[${index}].roles`, rolesArray)
-                                      .then(() => setHasUnsavedChanges(true));
-                                }}
-                              />
-                              <FormHelperText>
-                                Default roles: authenticate, user_info, list_accounts, security, admin
-                              </FormHelperText>
-                            </Grid>
-                            <Grid size={12}>
-                              <Button
-                                variant="outlined"
-                                color="error"
-                                onClick={() => {
-                                  const newUsers = [...(values.jwt_auth?.users || [])];
-                                  newUsers.splice(index, 1);
-                                  setFieldValue('jwt_auth.users', newUsers)
-                                      .then(() => setHasUnsavedChanges(true));
-                                }}
-                              >
-                                Remove User
-                              </Button>
-                            </Grid>
-                          </Grid>
-                        </Box>
-                      ))
-                    ) : (
-                      <Typography variant="body2" color="textSecondary" sx={{ mb: 2 }}>
-                        No users defined. Add a user to enable JWT authentication.
-                      </Typography>
-                    )}
-                    <Button
-                      variant="outlined"
-                      onClick={() => {
-                        const newUser = { username: '', password: '', roles: ['authenticate'] };
-                        const newUsers = [...(values.jwt_auth?.users || []), newUser];
-                        setFieldValue('jwt_auth.users', newUsers)
-                            .then(() => setHasUnsavedChanges(true));
-                      }}
-                      sx={{ mt: 1 }}
-                    >
-                      Add User
-                    </Button>
-                  </Grid>
-                </>
+              {values.oidc_auth?.enabled && (
+                <Grid size={12}>
+                  <Typography variant="body2" color="textSecondary">
+                    OIDC authentication is enabled through <code>server.oidc_auth.enabled</code>.
+                  </Typography>
+                </Grid>
               )}
             </Grid>
           </FormSection>
