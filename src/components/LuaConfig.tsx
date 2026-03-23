@@ -617,8 +617,8 @@ const LuaConfig = (): React.JSX.Element => {
                 <List>
                   {values.custom_hooks.map((hook: LuaCustomHookConfig, index: number) => (
                     <ListItem key={index} divider={index < values.custom_hooks.length - 1} sx={{ py: 2 }}>
-                      <Grid container spacing={2} alignItems="center">
-                        <Grid size={2}>
+                      <Grid container spacing={2} alignItems="center" columns={{ xs: 12, lg: 18 }}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
                           <TextField
                             fullWidth
                             label="HTTP Location"
@@ -638,7 +638,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid size={2}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
                           <FormControl fullWidth>
                             <InputLabel id={`custom-hooks-method-label-${index}`}>HTTP Method</InputLabel>
                             <Select
@@ -661,7 +661,7 @@ const LuaConfig = (): React.JSX.Element => {
                             </Select>
                           </FormControl>
                         </Grid>
-                        <Grid size={2}>
+                        <Grid size={{ xs: 12, sm: 6, md: 4, lg: 2 }}>
                           <TextField
                             fullWidth
                             label="Content-Type"
@@ -673,7 +673,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid size={3}>
+                        <Grid size={{ xs: 12, sm: 6, md: 5, lg: 4 }}>
                           <TextField
                             fullWidth
                             label="Script Path"
@@ -693,7 +693,7 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid size={2}>
+                        <Grid size={{ xs: 12, sm: 12, md: 6, lg: 6 }}>
                           <TextField
                             fullWidth
                             label="Scopes (comma-separated)"
@@ -709,7 +709,10 @@ const LuaConfig = (): React.JSX.Element => {
                             ) }}
                           />
                         </Grid>
-                        <Grid size={1}>
+                        <Grid
+                          size={{ xs: 12, sm: 12, md: 1, lg: 1 }}
+                          sx={{ display: 'flex', justifyContent: { xs: 'flex-end', md: 'center' } }}
+                        >
                           <IconButton
                             color="error"
                             onClick={() => {
@@ -937,21 +940,20 @@ const LuaConfig = (): React.JSX.Element => {
                             </Typography>
                             <List>
                               {(backendConfig.init_script_paths || []).map((path: string, pathIndex: number) => (
-                                <ListItem key={pathIndex} divider={pathIndex < (backendConfig.init_script_paths || []).length - 1} sx={{ py: 2 }}>
-                                  <Grid container spacing={2} alignItems="center">
-                                    <Grid size={10}>
-                                      <TextField
-                                        fullWidth
-                                        label={`Script Path ${pathIndex + 1}`}
-                                        name={`optional_lua_backends.${backendName}.init_script_paths[${pathIndex}]`}
-                                        value={path}
-                                        onChange={handleChange}
-                                        InputProps={{ endAdornment: (
-                                          <InputAdornment position="end"><InfoTooltip title="Additional init scripts executed on backend startup (in order)." /></InputAdornment>
-                                        ) }}
-                                      />
-                                    </Grid>
-                                    <Grid size={2}>
+                                <ListItem key={pathIndex} divider={pathIndex < (backendConfig.init_script_paths || []).length - 1} disableGutters sx={{ py: 2 }}>
+                                  <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, gap: 1, width: '100%' }}>
+                                    <TextField
+                                      fullWidth
+                                      sx={{ flex: 1 }}
+                                      label={`Script Path ${pathIndex + 1}`}
+                                      name={`optional_lua_backends.${backendName}.init_script_paths[${pathIndex}]`}
+                                      value={path}
+                                      onChange={handleChange}
+                                      InputProps={{ endAdornment: (
+                                        <InputAdornment position="end"><InfoTooltip title="Additional init scripts executed on backend startup (in order)." /></InputAdornment>
+                                      ) }}
+                                    />
+                                    <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
                                       <IconButton
                                         color="error"
                                         onClick={() => {
@@ -963,8 +965,8 @@ const LuaConfig = (): React.JSX.Element => {
                                       >
                                         <DeleteIcon />
                                       </IconButton>
-                                    </Grid>
-                                  </Grid>
+                                    </Box>
+                                  </Box>
                                 </ListItem>
                               ))}
                             </List>
@@ -986,42 +988,44 @@ const LuaConfig = (): React.JSX.Element => {
                           </Grid>
                         </Grid>
 
-                        <CollapsibleFormSection title={`Tuning (Lua) - ${backendName}`} description="Advanced tuning parameters for this optional backend.">
-                          <Grid container spacing={2}>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <TextField fullWidth type="number" label="Backend Workers" name={`optional_lua_backends.${backendName}.backend_number_of_workers`} value={backendConfig.backend_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Replaces deprecated number_of_workers (v1.10.0)." /></InputAdornment>) }} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <TextField fullWidth type="number" label="Action Workers" name={`optional_lua_backends.${backendName}.action_number_of_workers`} value={backendConfig.action_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Determines Action VM pool size 1:1." /></InputAdornment>) }} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <TextField fullWidth type="number" label="Queue Length" name={`optional_lua_backends.${backendName}.queue_length`} value={backendConfig.queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited" /></InputAdornment>) }} />
-                            </Grid>
+                        <Grid size={12}>
+                          <CollapsibleFormSection title={`Tuning - ${backendName}`} description="Advanced tuning parameters for this optional backend.">
+                            <Grid container spacing={2}>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Backend Workers" name={`optional_lua_backends.${backendName}.backend_number_of_workers`} value={backendConfig.backend_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Replaces deprecated number_of_workers (v1.10.0)." /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Action Workers" name={`optional_lua_backends.${backendName}.action_number_of_workers`} value={backendConfig.action_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Determines Action VM pool size 1:1." /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="Queue Length" name={`optional_lua_backends.${backendName}.queue_length`} value={backendConfig.queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited" /></InputAdornment>) }} />
+                              </Grid>
 
-                            <Grid size={12}>
-                              <Typography variant="subtitle2">VM Pools</Typography>
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
-                              <TextField fullWidth type="number" label="Feature VM Pool Size" name={`optional_lua_backends.${backendName}.feature_vm_pool_size`} value={backendConfig.feature_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
-                              <TextField fullWidth type="number" label="Filter VM Pool Size" name={`optional_lua_backends.${backendName}.filter_vm_pool_size`} value={backendConfig.filter_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 4 }}>
-                              <TextField fullWidth type="number" label="Hook VM Pool Size" name={`optional_lua_backends.${backendName}.hook_vm_pool_size`} value={backendConfig.hook_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
-                            </Grid>
+                              <Grid size={12}>
+                                <Typography variant="subtitle2">VM Pools</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth type="number" label="Feature VM Pool Size" name={`optional_lua_backends.${backendName}.feature_vm_pool_size`} value={backendConfig.feature_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth type="number" label="Filter VM Pool Size" name={`optional_lua_backends.${backendName}.filter_vm_pool_size`} value={backendConfig.filter_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 4 }}>
+                                <TextField fullWidth type="number" label="Hook VM Pool Size" name={`optional_lua_backends.${backendName}.hook_vm_pool_size`} value={backendConfig.hook_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
+                              </Grid>
 
-                            <Grid size={12}>
-                              <Typography variant="subtitle2">IP Scoping</Typography>
+                              <Grid size={12}>
+                                <Typography variant="subtitle2">IP Scoping</Typography>
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="IPv6 CIDR" name={`optional_lua_backends.${backendName}.ip_scoping_v6_cidr`} value={backendConfig.ip_scoping_v6_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
+                              </Grid>
+                              <Grid size={{ xs: 12, md: 6 }}>
+                                <TextField fullWidth type="number" label="IPv4 CIDR" name={`optional_lua_backends.${backendName}.ip_scoping_v4_cidr`} value={backendConfig.ip_scoping_v4_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
+                              </Grid>
                             </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <TextField fullWidth type="number" label="IPv6 CIDR" name={`optional_lua_backends.${backendName}.ip_scoping_v6_cidr`} value={backendConfig.ip_scoping_v6_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
-                            </Grid>
-                            <Grid size={{ xs: 12, md: 6 }}>
-                              <TextField fullWidth type="number" label="IPv4 CIDR" name={`optional_lua_backends.${backendName}.ip_scoping_v4_cidr`} value={backendConfig.ip_scoping_v4_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
-                            </Grid>
-                          </Grid>
-                        </CollapsibleFormSection>
+                          </CollapsibleFormSection>
+                        </Grid>
 
                       </Box>
                     ))}
@@ -1140,21 +1144,20 @@ const LuaConfig = (): React.JSX.Element => {
                     </Typography>
                     <List>
                       {(values.config.init_script_paths || []).map((path: string, index: number) => (
-                        <ListItem key={index} divider={index < (values.config.init_script_paths || []).length - 1} sx={{ py: 2 }}>
-                          <Grid container spacing={2} alignItems="center">
-                            <Grid size={10}>
-                              <TextField
-                                fullWidth
-                                label={`Script Path ${index + 1}`}
-                                name={`config.init_script_paths[${index}]`}
-                                value={path}
-                                onChange={handleChange}
-                                InputProps={{ endAdornment: (
-                                  <InputAdornment position="end"><InfoTooltip title="Additional init scripts executed on server startup (in order)." /></InputAdornment>
-                                ) }}
-                              />
-                            </Grid>
-                            <Grid size={2}>
+                        <ListItem key={index} divider={index < (values.config.init_script_paths || []).length - 1} disableGutters sx={{ py: 2 }}>
+                          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: { xs: 'stretch', sm: 'center' }, gap: 1, width: '100%' }}>
+                            <TextField
+                              fullWidth
+                              sx={{ flex: 1 }}
+                              label={`Script Path ${index + 1}`}
+                              name={`config.init_script_paths[${index}]`}
+                              value={path}
+                              onChange={handleChange}
+                              InputProps={{ endAdornment: (
+                                <InputAdornment position="end"><InfoTooltip title="Additional init scripts executed on server startup (in order)." /></InputAdornment>
+                              ) }}
+                            />
+                            <Box sx={{ display: 'flex', justifyContent: 'flex-end', flexShrink: 0 }}>
                               <IconButton
                                 color="error"
                                 onClick={() => {
@@ -1166,8 +1169,8 @@ const LuaConfig = (): React.JSX.Element => {
                               >
                                 <DeleteIcon />
                               </IconButton>
-                            </Grid>
-                          </Grid>
+                            </Box>
+                          </Box>
                         </ListItem>
                       ))}
                     </List>
@@ -1188,42 +1191,44 @@ const LuaConfig = (): React.JSX.Element => {
                     </Box>
                   </Grid>
 
-                  <CollapsibleFormSection title="Tuning (Lua)" description="Advanced tuning parameters. Neutral hints; defaults documented.">
-                    <Grid container spacing={2}>
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Backend Workers" name="config.backend_number_of_workers" value={values.config.backend_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Replaces deprecated number_of_workers (v1.10.0)." /></InputAdornment>) }} />
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Action Workers" name="config.action_number_of_workers" value={values.config.action_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Determines Action VM pool size 1:1 (default 10)." /></InputAdornment>) }} />
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Queue Length" name="config.queue_length" value={values.config.queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited" /></InputAdornment>) }} />
-                      </Grid>
+                  <Grid size={12}>
+                    <CollapsibleFormSection title="Tuning" description="Advanced tuning parameters. Neutral hints; defaults documented.">
+                      <Grid container spacing={2}>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <TextField fullWidth type="number" label="Backend Workers" name="config.backend_number_of_workers" value={values.config.backend_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Replaces deprecated number_of_workers (v1.10.0)." /></InputAdornment>) }} />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <TextField fullWidth type="number" label="Action Workers" name="config.action_number_of_workers" value={values.config.action_number_of_workers ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Determines Action VM pool size 1:1 (default 10)." /></InputAdornment>) }} />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <TextField fullWidth type="number" label="Queue Length" name="config.queue_length" value={values.config.queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited" /></InputAdornment>) }} />
+                        </Grid>
 
-                      <Grid size={12}>
-                        <Typography variant="subtitle2">VM Pools</Typography>
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth type="number" label="Feature VM Pool Size" name="config.feature_vm_pool_size" value={values.config.feature_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth type="number" label="Filter VM Pool Size" name="config.filter_vm_pool_size" value={values.config.filter_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth type="number" label="Hook VM Pool Size" name="config.hook_vm_pool_size" value={values.config.hook_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
-                      </Grid>
+                        <Grid size={12}>
+                          <Typography variant="subtitle2">VM Pools</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 4 }}>
+                          <TextField fullWidth type="number" label="Feature VM Pool Size" name="config.feature_vm_pool_size" value={values.config.feature_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 4 }}>
+                          <TextField fullWidth type="number" label="Filter VM Pool Size" name="config.filter_vm_pool_size" value={values.config.filter_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 4 }}>
+                          <TextField fullWidth type="number" label="Hook VM Pool Size" name="config.hook_vm_pool_size" value={values.config.hook_vm_pool_size ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="Fallbacks to Backend Workers when empty." /></InputAdornment>) }} />
+                        </Grid>
 
-                      <Grid size={12}>
-                        <Typography variant="subtitle2">IP Scoping</Typography>
+                        <Grid size={12}>
+                          <Typography variant="subtitle2">IP Scoping</Typography>
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <TextField fullWidth type="number" label="IPv6 CIDR" name="config.ip_scoping_v6_cidr" value={values.config.ip_scoping_v6_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
+                        </Grid>
+                        <Grid size={{ xs: 12, md: 6 }}>
+                          <TextField fullWidth type="number" label="IPv4 CIDR" name="config.ip_scoping_v4_cidr" value={values.config.ip_scoping_v4_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
+                        </Grid>
                       </Grid>
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="IPv6 CIDR" name="config.ip_scoping_v6_cidr" value={values.config.ip_scoping_v6_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
-                      </Grid>
-                      <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="IPv4 CIDR" name="config.ip_scoping_v4_cidr" value={values.config.ip_scoping_v4_cidr ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = disabled" /></InputAdornment>) }} />
-                      </Grid>
-                    </Grid>
-                  </CollapsibleFormSection>
+                    </CollapsibleFormSection>
+                  </Grid>
 
                 </Grid>
               </Paper>
