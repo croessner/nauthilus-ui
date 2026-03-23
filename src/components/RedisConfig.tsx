@@ -347,6 +347,8 @@ const RedisConfig = (): React.JSX.Element | null => {
         key: config.server.redis.tls?.key || '',
         ca_file: config.server.redis.tls?.ca_file || '',
         skip_verify: config.server.redis.tls?.skip_verify || false,
+        min_tls_version: config.server.redis.tls?.min_tls_version || 'TLS1.2',
+        cipher_suites: config.server.redis.tls?.cipher_suites || [],
       },
 
       // Master configuration

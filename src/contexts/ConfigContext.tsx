@@ -453,12 +453,20 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
     if (normalizedConfig.server) {
       const serverProps = [
         'address', 'max_concurrent_requests', 'max_password_history_entries',
-        'http3', 'haproxy_v2', 'disabled_endpoints', 'tls', 'basic_auth',
+        'http3', 'haproxy_v2',
+        'smtp_backend_address', 'smtp_backend_port',
+        'imap_backend_address', 'imap_backend_port',
+        'pop3_backend_address', 'pop3_backend_port',
+        'nginx_wait_delay', 'max_login_attempts',
+        'lua_script_timeout', 'local_cache_auth_ttl',
+        'disabled_endpoints', 'tls', 'basic_auth',
         'oidc_auth', 'instance_name', 'log', 'backends', 'features',
         'brute_force_protocols', 'dns', 'insights',
         'redis', 'master_user', 'frontend', 'prometheus_timer',
         'default_http_request_header', 'http_client', 'compression', 'keep_alive',
-        'timeouts'
+        'middlewares', 'timeouts', 'trusted_proxies',
+        'run_as_user', 'run_as_group', 'chroot',
+        'dedup'
       ];
 
       serverProps.forEach(prop => {

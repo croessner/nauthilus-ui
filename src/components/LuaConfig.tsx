@@ -888,19 +888,6 @@ const LuaConfig = (): React.JSX.Element => {
                           <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
-                              label="Number of Workers"
-                              name={`optional_lua_backends.${backendName}.number_of_workers`}
-                              type="number"
-                              value={backendConfig.number_of_workers || ''}
-                              onChange={handleChange}
-                              InputProps={{ endAdornment: (
-                                <InputAdornment position="end"><InfoTooltip title="How many worker goroutines execute Lua scripts in this backend." /></InputAdornment>
-                              ) }}
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <TextField
-                              fullWidth
                               label="Package Path"
                               name={`optional_lua_backends.${backendName}.package_path`}
                               value={backendConfig.package_path || ''}
@@ -1057,27 +1044,6 @@ const LuaConfig = (): React.JSX.Element => {
 
               <Paper sx={{ p: 2, mb: 2 }}>
                 <Grid container spacing={3}>
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <TextField
-                      fullWidth
-                      label="Number of Workers"
-                      name="config.number_of_workers"
-                      type="number"
-                      value={values.config.number_of_workers || ''}
-                      onChange={handleChange}
-                      error={Boolean(
-                        getIn(touched, 'config.number_of_workers') &&
-                        getIn(errors, 'config.number_of_workers')
-                      )}
-                      helperText={
-                        getIn(touched, 'config.number_of_workers') &&
-                        getIn(errors, 'config.number_of_workers')
-                      }
-                      InputProps={{ endAdornment: (
-                        <InputAdornment position="end"><InfoTooltip title="Global number of worker goroutines for Lua execution." /></InputAdornment>
-                      ) }}
-                    />
-                  </Grid>
                   <Grid size={{ xs: 12, md: 6 }}>
                     <TextField
                       fullWidth

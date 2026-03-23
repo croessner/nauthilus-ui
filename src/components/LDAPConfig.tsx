@@ -276,8 +276,8 @@ const LDAPConfig = (): React.JSX.Element => {
                         getIn(errors, 'config.number_of_workers')
                       )}
                       helperText={
-                        getIn(touched, 'config.number_of_workers') &&
-                        getIn(errors, 'config.number_of_workers')
+                        (getIn(touched, 'config.number_of_workers') &&
+                        getIn(errors, 'config.number_of_workers')) || 'LDAP worker count'
                       }
                     />
                   </Grid>

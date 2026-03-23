@@ -74,6 +74,8 @@ const MonitoringConfig = (): React.JSX.Element | null => {
           cert: config.server.insights?.tracing?.tls?.cert || '',
           key: config.server.insights?.tracing?.tls?.key || '',
           ca_file: config.server.insights?.tracing?.tls?.ca_file || '',
+          min_tls_version: config.server.insights?.tracing?.tls?.min_tls_version || 'TLS1.2',
+          cipher_suites: config.server.insights?.tracing?.tls?.cipher_suites || [],
         },
       },
     },

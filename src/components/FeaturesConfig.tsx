@@ -155,6 +155,7 @@ const FeaturesConfigSchema = Yup.object().shape({
             Yup.object().shape({
               name: Yup.string().required('Name is required'),
               period: Yup.string().required('Period is required'),
+              ban_time: Yup.string(),
               cidr: Yup.number().required('CIDR is required').min(1).max(128),
               ipv4: Yup.boolean()
                 .test('ipv4-xor-ipv6', 'Either IPv4 or IPv6 must be selected, but not both', function(value) {
@@ -275,6 +276,7 @@ const FeaturesConfig: React.FC = () => {
       buckets: config?.brute_force?.buckets || [{
         name: '',
         period: '1h',
+        ban_time: '',
         cidr: 32,
         ipv4: true,
         ipv6: false,
@@ -301,6 +303,7 @@ const FeaturesConfig: React.FC = () => {
       rwp_window: config?.brute_force?.rwp_window || '5m',
     },
     newSoftWhitelistUsername: '',
+    newRelayDomainWhitelistUsername: '',
     newBruteForceWhitelistUsername: '',
   };
 
@@ -1112,6 +1115,146 @@ const FeaturesConfig: React.FC = () => {
                         </div>
                       )}
                     </FieldArray>
+                  </Grid>
+                  <Grid size={12}>
+                    <CollapsibleFormSection title="Soft Whitelist">
+                      <Typography variant="body2" sx={{ mb: 2 }}>
+                        The soft whitelist allows specific usernames to relay from selected source networks without being rejected by relay-domain checks.
+                      </Typography>
+                      <FieldArray name="relay_domains.soft_whitelist">
+                        {() => (
+                          <div>
+                            {Object.keys(values.relay_domains?.soft_whitelist || {}).length > 0 ? (
+                              Object.entries(values.relay_domains?.soft_whitelist || {}).map(([username, networks], index) => (
+                                <Paper key={index} sx={{ p: 2, mb: 2, bgcolor: 'background.default' }}>
+                                  <Grid container spacing={2}>
+                                    <Grid size={12}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
+                                        name={`relay_domains.soft_whitelist.${username}.username`}
+                                        label="Username"
+                                        variant="outlined"
+                                        value={username}
+                                        disabled
+                                      />
+                                    </Grid>
+                                    <Grid size={12}>
+                                      <Typography variant="subtitle2">Networks</Typography>
+                                      {Array.isArray(networks) && networks.map((network: string, netIndex: number) => (
+                                        <Box key={netIndex} sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
+                                          <Field
+                                            as={TextField}
+                                            fullWidth
+                                            name={`relay_domains.soft_whitelist.${username}[${netIndex}]`}
+                                            label={`Network ${netIndex + 1}`}
+                                            variant="outlined"
+                                            value={network}
+                                            onChange={(e: React.ChangeEvent<any>) => {
+                                              const updatedNetworks = [...networks];
+                                              updatedNetworks[netIndex] = e.target.value;
+
+                                              const updatedSoftWhitelist = { ...values.relay_domains?.soft_whitelist };
+                                              updatedSoftWhitelist[username] = updatedNetworks;
+
+                                              setFieldValue('relay_domains.soft_whitelist', updatedSoftWhitelist)
+                                                .then(() => setHasUnsavedChanges(true));
+                                            }}
+                                          />
+                                          <IconButton
+                                            onClick={() => {
+                                              const updatedNetworks = networks.filter((_, i) => i !== netIndex);
+                                              const updatedSoftWhitelist = { ...values.relay_domains?.soft_whitelist };
+
+                                              if (updatedNetworks.length === 0) {
+                                                delete updatedSoftWhitelist[username];
+                                              } else {
+                                                updatedSoftWhitelist[username] = updatedNetworks;
+                                              }
+
+                                              setFieldValue('relay_domains.soft_whitelist', updatedSoftWhitelist)
+                                                .then(() => setHasUnsavedChanges(true));
+                                            }}
+                                            sx={{ ml: 1 }}
+                                            color="error"
+                                          >
+                                            <DeleteIcon />
+                                          </IconButton>
+                                        </Box>
+                                      ))}
+                                      <Button
+                                        startIcon={<AddIcon />}
+                                        variant="outlined"
+                                        size="small"
+                                        onClick={() => {
+                                          const updatedSoftWhitelist = { ...values.relay_domains?.soft_whitelist };
+                                          updatedSoftWhitelist[username] = [...(networks as string[]), ''];
+
+                                          setFieldValue('relay_domains.soft_whitelist', updatedSoftWhitelist)
+                                            .then(() => setHasUnsavedChanges(true));
+                                        }}
+                                      >
+                                        Add Network
+                                      </Button>
+                                    </Grid>
+                                    <Grid display="flex" justifyContent="flex-end" size={12}>
+                                      <Button
+                                        variant="outlined"
+                                        color="error"
+                                        startIcon={<DeleteIcon />}
+                                        onClick={() => {
+                                          const updatedSoftWhitelist = { ...values.relay_domains?.soft_whitelist };
+                                          delete updatedSoftWhitelist[username];
+
+                                          setFieldValue('relay_domains.soft_whitelist', updatedSoftWhitelist)
+                                            .then(() => setHasUnsavedChanges(true));
+                                        }}
+                                      >
+                                        Remove User
+                                      </Button>
+                                    </Grid>
+                                  </Grid>
+                                </Paper>
+                              ))
+                            ) : (
+                              <Typography color="textSecondary" sx={{ mb: 2 }}>No soft whitelist entries added yet.</Typography>
+                            )}
+                            <Box sx={{ display: 'flex', alignItems: 'center', mt: 2 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                name="newRelayDomainWhitelistUsername"
+                                label="New Username"
+                                variant="outlined"
+                                value={values.newRelayDomainWhitelistUsername || ''}
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  setFieldValue('newRelayDomainWhitelistUsername', e.target.value)
+                                    .then(() => setHasUnsavedChanges(true));
+                                }}
+                              />
+                              <Button
+                                variant="contained"
+                                color="primary"
+                                sx={{ ml: 1, height: 56 }}
+                                onClick={() => {
+                                  if (values.newRelayDomainWhitelistUsername) {
+                                    const updatedSoftWhitelist = { ...values.relay_domains?.soft_whitelist };
+                                    updatedSoftWhitelist[values.newRelayDomainWhitelistUsername] = [''];
+
+                                    setFieldValue('relay_domains.soft_whitelist', updatedSoftWhitelist)
+                                      .then(() => setHasUnsavedChanges(true));
+                                    setFieldValue('newRelayDomainWhitelistUsername', '')
+                                      .then(() => setHasUnsavedChanges(true));
+                                  }
+                                }}
+                              >
+                                Add User
+                              </Button>
+                            </Box>
+                          </div>
+                        )}
+                      </FieldArray>
+                    </CollapsibleFormSection>
                   </Grid>
                 </Grid>
               </FormSection>
@@ -1985,6 +2128,21 @@ const FeaturesConfig: React.FC = () => {
                                       <Field
                                         as={TextField}
                                         fullWidth
+                                        name={`brute_force.buckets[${index}].ban_time`}
+                                        label="Ban Time"
+                                        variant="outlined"
+                                        error={getIn(touched, `brute_force.buckets[${index}].ban_time`) && Boolean(getIn(errors, `brute_force.buckets[${index}].ban_time`))}
+                                        helperText={(getIn(touched, `brute_force.buckets[${index}].ban_time`) && getIn(errors, `brute_force.buckets[${index}].ban_time`)) || "Optional duration (e.g., 30m, 24h)"}
+                                        onChange={(e: React.ChangeEvent<any>) => {
+                                          handleChange(e);
+                                          setHasUnsavedChanges(true);
+                                        }}
+                                      />
+                                    </Grid>
+                                    <Grid size={{ xs: 12, md: 6 }}>
+                                      <Field
+                                        as={TextField}
+                                        fullWidth
                                         name={`brute_force.buckets[${index}].cidr`}
                                         label="CIDR"
                                         variant="outlined"
@@ -2163,7 +2321,10 @@ const FeaturesConfig: React.FC = () => {
                                 push({
                                   name: '',
                                   period: '1h',
+                                  ban_time: '',
                                   cidr: 32,
+                                  ipv4: true,
+                                  ipv6: false,
                                   failed_requests: 5,
                                   filter_by_protocol: [],
                                   filter_by_oidc_cid: [],

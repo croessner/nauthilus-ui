@@ -967,7 +967,6 @@ const FrontendConfig = (): React.JSX.Element => {
                         <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">OIDC Discovery Metadata</Typography></Grid>
                         <Grid size={12}>{renderStringArrayEditor('idp.oidc.scopes_supported', 'Scope')}</Grid>
                         <Grid size={12}>{renderMultiSelectField('idp.oidc.response_types_supported', 'Response Types', oidcResponseTypeOptions, 'These are authorization-endpoint response types. With the current backend implementation this is only `code`.')}</Grid>
-                        <Grid size={12}>{renderMultiSelectField('idp.oidc.grant_types_supported', 'Grant Types', oidcGrantTypeOptions, 'These are token-endpoint grant types such as client credentials and device code.')}</Grid>
                         <Grid size={12}>{renderMultiSelectField('idp.oidc.subject_types_supported', 'Subject Types', oidcSubjectTypeOptions, 'The current IdP implementation supports the public subject type.')}</Grid>
                         <Grid size={12}>{renderMultiSelectField('idp.oidc.id_token_signing_alg_values_supported', 'ID Token Signing Algorithms', oidcSigningAlgorithmOptions)}</Grid>
                         <Grid size={12}>{renderMultiSelectField('idp.oidc.token_endpoint_auth_methods_supported', 'Token Endpoint Auth Methods', oidcTokenEndpointAuthMethodOptions)}</Grid>

@@ -15,6 +15,16 @@ export interface ServerConfig {
   rate_limit_burst?: number;
   http3?: boolean;
   haproxy_v2?: boolean;
+  smtp_backend_address?: string;
+  smtp_backend_port?: number;
+  imap_backend_address?: string;
+  imap_backend_port?: number;
+  pop3_backend_address?: string;
+  pop3_backend_port?: number;
+  nginx_wait_delay?: number;
+  max_login_attempts?: number;
+  lua_script_timeout?: string;
+  local_cache_auth_ttl?: string;
   disabled_endpoints?: EndpointConfig;
   tls?: TLSConfig;
   basic_auth?: BasicAuthConfig;
@@ -29,6 +39,7 @@ export interface ServerConfig {
   redis: RedisConfig;
   master_user?: MasterUserConfig;
   frontend?: FrontendConfig;
+  dedup?: DedupConfig; // Deprecated backend compatibility only
   prometheus_timer?: PrometheusTimerConfig;
   default_http_request_header?: DefaultHTTPRequestHeaderConfig;
   http_client?: HTTPClientConfig;
@@ -38,6 +49,9 @@ export interface ServerConfig {
   middlewares?: MiddlewaresConfig;
   timeouts?: TimeoutsConfig;
   trusted_proxies?: string[];
+  run_as_user?: string;
+  run_as_group?: string;
+  chroot?: string;
 }
 
 export interface EndpointConfig {
@@ -188,6 +202,11 @@ export interface MiddlewaresConfig {
 export interface MasterUserConfig {
   enabled?: boolean;
   delimiter?: string;
+}
+
+export interface DedupConfig {
+  distributed_enabled?: boolean; // Deprecated backend compatibility only
+  in_process_enabled?: boolean; // Deprecated backend compatibility only
 }
 
 export interface FrontendConfig {
@@ -542,6 +561,7 @@ export interface IPScoping {
 export interface BruteForceRuleConfig {
   name: string;
   period: string;
+  ban_time?: string;
   cidr: number;
   ipv4?: boolean;
   ipv6?: boolean;

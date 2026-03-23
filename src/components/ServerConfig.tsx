@@ -44,6 +44,16 @@ const ServerConfigSchema = Yup.object().shape({
     .nullable(),
   http3: Yup.boolean(),
   haproxy_v2: Yup.boolean(),
+  smtp_backend_address: Yup.string(),
+  smtp_backend_port: Yup.number().min(1, 'Must be at least 1').max(65535, 'Must be at most 65535').nullable(),
+  imap_backend_address: Yup.string(),
+  imap_backend_port: Yup.number().min(1, 'Must be at least 1').max(65535, 'Must be at most 65535').nullable(),
+  pop3_backend_address: Yup.string(),
+  pop3_backend_port: Yup.number().min(1, 'Must be at least 1').max(65535, 'Must be at most 65535').nullable(),
+  nginx_wait_delay: Yup.number().min(0, 'Must be at least 0').max(255, 'Must be at most 255').nullable(),
+  max_login_attempts: Yup.number().min(0, 'Must be at least 0').max(255, 'Must be at most 255').nullable(),
+  lua_script_timeout: Yup.string(),
+  local_cache_auth_ttl: Yup.string(),
   instance_name: Yup.string()
     .min(1, 'Must be at least 1 character')
     .max(255, 'Must be at most 255 characters')
@@ -161,8 +171,8 @@ const ServerConfigSchema = Yup.object().shape({
     ldap_search: Yup.string(),
     ldap_bind: Yup.string(),
     ldap_modify: Yup.string(),
-    singleflight_work: Yup.string(),
     lua_backend: Yup.string(),
+    lua_script: Yup.string(),
   }),
 
   // Middlewares validation
@@ -176,6 +186,9 @@ const ServerConfigSchema = Yup.object().shape({
     metrics: Yup.boolean(),
     rate: Yup.boolean(),
   }),
+  run_as_user: Yup.string(),
+  run_as_group: Yup.string(),
+  chroot: Yup.string(),
 });
 
 const ServerConfig = (): React.JSX.Element | null => {
@@ -199,6 +212,16 @@ const ServerConfig = (): React.JSX.Element | null => {
     rate_limit_burst: config.server.rate_limit_burst || 200,
     http3: config.server.http3 || false,
     haproxy_v2: config.server.haproxy_v2 || false,
+    smtp_backend_address: config.server.smtp_backend_address || '',
+    smtp_backend_port: config.server.smtp_backend_port ?? undefined,
+    imap_backend_address: config.server.imap_backend_address || '',
+    imap_backend_port: config.server.imap_backend_port ?? undefined,
+    pop3_backend_address: config.server.pop3_backend_address || '',
+    pop3_backend_port: config.server.pop3_backend_port ?? undefined,
+    nginx_wait_delay: config.server.nginx_wait_delay ?? undefined,
+    max_login_attempts: config.server.max_login_attempts ?? undefined,
+    lua_script_timeout: config.server.lua_script_timeout || '',
+    local_cache_auth_ttl: config.server.local_cache_auth_ttl || '',
     instance_name: config.server.instance_name || 'nauthilus',
     trusted_proxies: config.server.trusted_proxies || [],
     redis: config.server.redis,
@@ -313,7 +336,13 @@ const ServerConfig = (): React.JSX.Element | null => {
       idle_connection_timeout: config.server.http_client?.idle_connection_timeout || '90s',
       proxy: config.server.http_client?.proxy || '',
       tls: {
+        enabled: config.server.http_client?.tls?.enabled || false,
+        cert: config.server.http_client?.tls?.cert || '',
+        key: config.server.http_client?.tls?.key || '',
+        ca_file: config.server.http_client?.tls?.ca_file || '',
         skip_verify: config.server.http_client?.tls?.skip_verify || false,
+        min_tls_version: config.server.http_client?.tls?.min_tls_version || 'TLS1.2',
+        cipher_suites: config.server.http_client?.tls?.cipher_suites || [],
       },
     },
 
@@ -343,6 +372,9 @@ const ServerConfig = (): React.JSX.Element | null => {
     },
 
     // Prometheus timer configuration is now in MonitoringConfig
+    run_as_user: config.server.run_as_user || '',
+    run_as_group: config.server.run_as_group || '',
+    chroot: config.server.chroot || '',
   };
 
   const handleSubmit = async (values: ServerConfigType) => {
@@ -553,6 +585,191 @@ const ServerConfig = (): React.JSX.Element | null => {
                     />
                   }
                   label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable HAProxy Protocol v2<InfoTooltip title="Accepts the HAProxy PROXY v2 header to get client IPs behind load balancers." /></Box>}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="smtp_backend_address"
+                  label="SMTP Backend Address"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Optional SMTP backend host used by protocol-specific flows." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  error={touched.smtp_backend_address && Boolean(errors.smtp_backend_address)}
+                  helperText={touched.smtp_backend_address && errors.smtp_backend_address}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="smtp_backend_port"
+                  label="SMTP Backend Port"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Port for the optional SMTP backend host." /></InputAdornment>
+                  ) }}
+                  error={touched.smtp_backend_port && Boolean(errors.smtp_backend_port)}
+                  helperText={touched.smtp_backend_port && errors.smtp_backend_port}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="imap_backend_address"
+                  label="IMAP Backend Address"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Optional IMAP backend host used by protocol-specific flows." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  error={touched.imap_backend_address && Boolean(errors.imap_backend_address)}
+                  helperText={touched.imap_backend_address && errors.imap_backend_address}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="imap_backend_port"
+                  label="IMAP Backend Port"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Port for the optional IMAP backend host." /></InputAdornment>
+                  ) }}
+                  error={touched.imap_backend_port && Boolean(errors.imap_backend_port)}
+                  helperText={touched.imap_backend_port && errors.imap_backend_port}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="pop3_backend_address"
+                  label="POP3 Backend Address"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Optional POP3 backend host used by protocol-specific flows." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  error={touched.pop3_backend_address && Boolean(errors.pop3_backend_address)}
+                  helperText={touched.pop3_backend_address && errors.pop3_backend_address}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="pop3_backend_port"
+                  label="POP3 Backend Port"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Port for the optional POP3 backend host." /></InputAdornment>
+                  ) }}
+                  error={touched.pop3_backend_port && Boolean(errors.pop3_backend_port)}
+                  helperText={touched.pop3_backend_port && errors.pop3_backend_port}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="nginx_wait_delay"
+                  label="Nginx Wait Delay"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 0, max: 255 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Delay factor used in the Nginx auth flow before responding on failures." /></InputAdornment>
+                  ) }}
+                  error={touched.nginx_wait_delay && Boolean(errors.nginx_wait_delay)}
+                  helperText={(touched.nginx_wait_delay && errors.nginx_wait_delay) || 'Optional integer value from 0 to 255'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="max_login_attempts"
+                  label="Max Login Attempts"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 0, max: 255 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Optional protocol-level login-attempt limit exposed by the backend." /></InputAdornment>
+                  ) }}
+                  error={touched.max_login_attempts && Boolean(errors.max_login_attempts)}
+                  helperText={(touched.max_login_attempts && errors.max_login_attempts) || 'Optional integer value from 0 to 255'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="lua_script_timeout"
+                  label="Lua Script Timeout"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Legacy server-level timeout used by backend Lua execution paths." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  error={touched.lua_script_timeout && Boolean(errors.lua_script_timeout)}
+                  helperText={(touched.lua_script_timeout && errors.lua_script_timeout) || 'Go duration, e.g. 3s'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="local_cache_auth_ttl"
+                  label="Local Cache Auth TTL"
+                  InputProps={{ endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="TTL for the server-local auth cache, using a Go duration string." /></InputAdornment>
+                  ) }}
+                  variant="outlined"
+                  error={touched.local_cache_auth_ttl && Boolean(errors.local_cache_auth_ttl)}
+                  helperText={(touched.local_cache_auth_ttl && errors.local_cache_auth_ttl) || 'Go duration, e.g. 5m'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
                 />
               </Grid>
             </Grid>
@@ -1412,27 +1629,6 @@ const ServerConfig = (): React.JSX.Element | null => {
                       }}
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, md: 6 }}>
-                    <Field
-                      as={TextField}
-                      fullWidth
-                      name="compression.content_types"
-                      label="Content Types (comma-separated)"
-                      InputProps={{ endAdornment: (
-                        <InputAdornment position="end"><InfoTooltip title="Only compress responses with these Content-Types. Leave empty to compress all configured by the server." /></InputAdornment>
-                      ) }}
-                      variant="outlined"
-                      value={Array.isArray(values.compression?.content_types) ? values.compression.content_types.join(', ') : values.compression?.content_types}
-                      onChange={(e: React.ChangeEvent<any>) => {
-                        const val = e.target.value;
-                        const types = val.split(',').map((s: string) => s.trim()).filter((s: string) => s !== '');
-                        setFieldValue('compression.content_types', types);
-                        setHasUnsavedChanges(true);
-                      }}
-                      error={getIn(touched, 'compression.content_types') && Boolean(getIn(errors, 'compression.content_types'))}
-                      helperText={getIn(touched, 'compression.content_types') && getIn(errors, 'compression.content_types')}
-                    />
-                  </Grid>
                   <Grid size={12} />
                   <Grid size={{ xs: 12, md: 6 }}>
                     <FormControl fullWidth error={getIn(touched, 'compression.algorithms') && Boolean(getIn(errors, 'compression.algorithms'))}>
@@ -1685,26 +1881,6 @@ const ServerConfig = (): React.JSX.Element | null => {
                   }}
                 />
               </Grid>
-              {/*
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="timeouts.singleflight_work"
-                  label="Singleflight Work Timeout"
-                  variant="outlined"
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Timeout for leader work in singleflight. Default 3s if unset." /></InputAdornment>
-                  ) }}
-                  error={getIn(touched, 'timeouts.singleflight_work') && Boolean(getIn(errors, 'timeouts.singleflight_work'))}
-                  helperText={(getIn(touched, 'timeouts.singleflight_work') && getIn(errors, 'timeouts.singleflight_work')) || 'e.g., 3s'}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              */}
               <Grid size={{ xs: 12, md: 6 }}>
                 <Field
                   as={TextField}
@@ -2112,6 +2288,60 @@ const ServerConfig = (): React.JSX.Element | null => {
                   />
                 </Grid>
               )}
+            </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
+            title="Privilege Drop"
+            description="Configure optional user, group, and chroot settings used after startup."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="run_as_user"
+                  label="Run As User"
+                  variant="outlined"
+                  error={touched.run_as_user && Boolean(errors.run_as_user)}
+                  helperText={(touched.run_as_user && errors.run_as_user) || 'Unprivileged user to switch to after startup'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="run_as_group"
+                  label="Run As Group"
+                  variant="outlined"
+                  error={touched.run_as_group && Boolean(errors.run_as_group)}
+                  helperText={(touched.run_as_group && errors.run_as_group) || 'Unprivileged group to switch to after startup'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="chroot"
+                  label="Chroot Directory"
+                  variant="outlined"
+                  error={touched.chroot && Boolean(errors.chroot)}
+                  helperText={(touched.chroot && errors.chroot) || 'Directory to chroot into before dropping privileges'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
             </Grid>
           </CollapsibleFormSection>
 
