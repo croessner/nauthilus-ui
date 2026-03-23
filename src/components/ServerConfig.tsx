@@ -191,6 +191,39 @@ const ServerConfigSchema = Yup.object().shape({
   chroot: Yup.string(),
 });
 
+const backendProtocolFields = [
+  {
+    key: 'smtp',
+    title: 'SMTP Backend',
+    addressName: 'smtp_backend_address',
+    addressLabel: 'Address',
+    addressTooltip: 'Optional SMTP backend host used by protocol-specific flows.',
+    portName: 'smtp_backend_port',
+    portLabel: 'Port',
+    portTooltip: 'Port for the optional SMTP backend host.',
+  },
+  {
+    key: 'imap',
+    title: 'IMAP Backend',
+    addressName: 'imap_backend_address',
+    addressLabel: 'Address',
+    addressTooltip: 'Optional IMAP backend host used by protocol-specific flows.',
+    portName: 'imap_backend_port',
+    portLabel: 'Port',
+    portTooltip: 'Port for the optional IMAP backend host.',
+  },
+  {
+    key: 'pop3',
+    title: 'POP3 Backend',
+    addressName: 'pop3_backend_address',
+    addressLabel: 'Address',
+    addressTooltip: 'Optional POP3 backend host used by protocol-specific flows.',
+    portName: 'pop3_backend_port',
+    portLabel: 'Port',
+    portTooltip: 'Port for the optional POP3 backend host.',
+  },
+] as const;
+
 const ServerConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
   const [customProtocol, setCustomProtocol] = React.useState<string>('');
@@ -591,173 +624,6 @@ const ServerConfig = (): React.JSX.Element | null => {
                 <Field
                   as={TextField}
                   fullWidth
-                  name="smtp_backend_address"
-                  label="SMTP Backend Address"
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Optional SMTP backend host used by protocol-specific flows." /></InputAdornment>
-                  ) }}
-                  variant="outlined"
-                  error={touched.smtp_backend_address && Boolean(errors.smtp_backend_address)}
-                  helperText={touched.smtp_backend_address && errors.smtp_backend_address}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="smtp_backend_port"
-                  label="SMTP Backend Port"
-                  variant="outlined"
-                  type="number"
-                  InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Port for the optional SMTP backend host." /></InputAdornment>
-                  ) }}
-                  error={touched.smtp_backend_port && Boolean(errors.smtp_backend_port)}
-                  helperText={touched.smtp_backend_port && errors.smtp_backend_port}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="imap_backend_address"
-                  label="IMAP Backend Address"
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Optional IMAP backend host used by protocol-specific flows." /></InputAdornment>
-                  ) }}
-                  variant="outlined"
-                  error={touched.imap_backend_address && Boolean(errors.imap_backend_address)}
-                  helperText={touched.imap_backend_address && errors.imap_backend_address}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="imap_backend_port"
-                  label="IMAP Backend Port"
-                  variant="outlined"
-                  type="number"
-                  InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Port for the optional IMAP backend host." /></InputAdornment>
-                  ) }}
-                  error={touched.imap_backend_port && Boolean(errors.imap_backend_port)}
-                  helperText={touched.imap_backend_port && errors.imap_backend_port}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="pop3_backend_address"
-                  label="POP3 Backend Address"
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Optional POP3 backend host used by protocol-specific flows." /></InputAdornment>
-                  ) }}
-                  variant="outlined"
-                  error={touched.pop3_backend_address && Boolean(errors.pop3_backend_address)}
-                  helperText={touched.pop3_backend_address && errors.pop3_backend_address}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="pop3_backend_port"
-                  label="POP3 Backend Port"
-                  variant="outlined"
-                  type="number"
-                  InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Port for the optional POP3 backend host." /></InputAdornment>
-                  ) }}
-                  error={touched.pop3_backend_port && Boolean(errors.pop3_backend_port)}
-                  helperText={touched.pop3_backend_port && errors.pop3_backend_port}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="nginx_wait_delay"
-                  label="Nginx Wait Delay"
-                  variant="outlined"
-                  type="number"
-                  InputProps={{ inputProps: { min: 0, max: 255 }, endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Delay factor used in the Nginx auth flow before responding on failures." /></InputAdornment>
-                  ) }}
-                  error={touched.nginx_wait_delay && Boolean(errors.nginx_wait_delay)}
-                  helperText={(touched.nginx_wait_delay && errors.nginx_wait_delay) || 'Optional integer value from 0 to 255'}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="max_login_attempts"
-                  label="Max Login Attempts"
-                  variant="outlined"
-                  type="number"
-                  InputProps={{ inputProps: { min: 0, max: 255 }, endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Optional protocol-level login-attempt limit exposed by the backend." /></InputAdornment>
-                  ) }}
-                  error={touched.max_login_attempts && Boolean(errors.max_login_attempts)}
-                  helperText={(touched.max_login_attempts && errors.max_login_attempts) || 'Optional integer value from 0 to 255'}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
-                  name="lua_script_timeout"
-                  label="Lua Script Timeout"
-                  InputProps={{ endAdornment: (
-                    <InputAdornment position="end"><InfoTooltip title="Legacy server-level timeout used by backend Lua execution paths." /></InputAdornment>
-                  ) }}
-                  variant="outlined"
-                  error={touched.lua_script_timeout && Boolean(errors.lua_script_timeout)}
-                  helperText={(touched.lua_script_timeout && errors.lua_script_timeout) || 'Go duration, e.g. 3s'}
-                  onChange={(e: React.ChangeEvent<any>) => {
-                    handleChange(e);
-                    setHasUnsavedChanges(true);
-                  }}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <Field
-                  as={TextField}
-                  fullWidth
                   name="local_cache_auth_ttl"
                   label="Local Cache Auth TTL"
                   InputProps={{ endAdornment: (
@@ -1054,6 +920,110 @@ const ServerConfig = (): React.JSX.Element | null => {
                   </Grid>
                 </>
               )}
+            </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
+            title="Nginx"
+            description="Protocol-specific backend settings for the Nginx auth flow, including optional wait delay and login-attempt limits."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              {backendProtocolFields.map((protocol) => (
+                <Grid key={protocol.key} size={{ xs: 12, md: 6 }}>
+                  <Box
+                    sx={{
+                      p: 2,
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      height: '100%',
+                      backgroundColor: 'background.paper',
+                    }}
+                  >
+                    <Typography variant="subtitle2" sx={{ mb: 1.5 }}>
+                      {protocol.title}
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12, sm: 8 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={protocol.addressName}
+                          label={protocol.addressLabel}
+                          InputProps={{ endAdornment: (
+                            <InputAdornment position="end"><InfoTooltip title={protocol.addressTooltip} /></InputAdornment>
+                          ) }}
+                          variant="outlined"
+                          error={Boolean(getIn(touched, protocol.addressName) && getIn(errors, protocol.addressName))}
+                          helperText={getIn(touched, protocol.addressName) && getIn(errors, protocol.addressName)}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            handleChange(e);
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, sm: 4 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={protocol.portName}
+                          label={protocol.portLabel}
+                          variant="outlined"
+                          type="number"
+                          InputProps={{ inputProps: { min: 1, max: 65535 }, endAdornment: (
+                            <InputAdornment position="end"><InfoTooltip title={protocol.portTooltip} /></InputAdornment>
+                          ) }}
+                          error={Boolean(getIn(touched, protocol.portName) && getIn(errors, protocol.portName))}
+                          helperText={getIn(touched, protocol.portName) && getIn(errors, protocol.portName)}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            handleChange(e);
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                </Grid>
+              ))}
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="nginx_wait_delay"
+                  label="Nginx Wait Delay"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 0, max: 255 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Delay factor used in the Nginx auth flow before responding on failures." /></InputAdornment>
+                  ) }}
+                  error={touched.nginx_wait_delay && Boolean(errors.nginx_wait_delay)}
+                  helperText={(touched.nginx_wait_delay && errors.nginx_wait_delay) || 'Optional integer value from 0 to 255'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, md: 6 }}>
+                <Field
+                  as={TextField}
+                  fullWidth
+                  name="max_login_attempts"
+                  label="Max Login Attempts"
+                  variant="outlined"
+                  type="number"
+                  InputProps={{ inputProps: { min: 0, max: 255 }, endAdornment: (
+                    <InputAdornment position="end"><InfoTooltip title="Optional protocol-level login-attempt limit exposed by the backend." /></InputAdornment>
+                  ) }}
+                  error={touched.max_login_attempts && Boolean(errors.max_login_attempts)}
+                  helperText={(touched.max_login_attempts && errors.max_login_attempts) || 'Optional integer value from 0 to 255'}
+                  onChange={(e: React.ChangeEvent<any>) => {
+                    handleChange(e);
+                    setHasUnsavedChanges(true);
+                  }}
+                />
+              </Grid>
             </Grid>
           </CollapsibleFormSection>
 
