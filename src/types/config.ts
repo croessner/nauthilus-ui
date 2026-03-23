@@ -331,6 +331,7 @@ export interface LDAPConfig {
 
 export interface LDAPConfConfig {
   // Core toggles
+  pool_only?: boolean; // Deprecated backend fallback, kept for import compatibility
   lookup_pool_only?: boolean;
   start_tls?: boolean;
   tls_skip_verify?: boolean;
@@ -418,13 +419,12 @@ export interface LDAPAttributeMappingConfig {
   account_field: string;
   totp_secret_field?: string;
   totp_recovery_field?: string;
+  totp_object_class?: string;
+  totp_recovery_object_class?: string;
   display_name_field?: string;
-  credential_object?: string;
-  credential_id_field?: string;
-  public_key_field?: string;
+  webauthn_credential_field?: string;
+  webauthn_object_class?: string;
   unique_user_id_field?: string;
-  aaguid_field?: string;
-  sign_count_field?: string;
 }
 
 // Lua Configuration

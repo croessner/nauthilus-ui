@@ -50,6 +50,47 @@ const scopeOptions = [
   'sub'
 ];
 
+const ldapTuningInfo = {
+  lookupQueueLength: '0 = unlimited. Prefer bounded queues to avoid latency balloons.',
+  authQueueLength: '0 = unlimited. Prefer bounded queues to avoid latency balloons.',
+  searchTimeout: 'Maximum time allowed for LDAP search operations before the request is aborted.',
+  bindTimeout: 'Maximum time allowed for bind operations, including user authentication binds.',
+  modifyTimeout: 'Maximum time allowed for LDAP modify operations before they are aborted.',
+  searchSizeLimit: '0 = server default (unlimited). Caps how many entries a single search may return.',
+  searchTimeLimit: 'Server-side limit for a search request. Use a duration such as 3s to bound long-running queries.',
+  retryMax: 'Maximum number of retry attempts after a transient LDAP failure. 0 disables retries.',
+  retryBase: 'Initial backoff delay before the first retry. Later retries grow from this base value.',
+  retryMaxBackoff: 'Upper bound for retry backoff growth so reconnect attempts do not wait indefinitely.',
+  cbFailureThreshold: 'Number of consecutive failures before the circuit breaker opens and stops new attempts temporarily.',
+  cbCooldown: 'How long the circuit breaker stays open before allowing a trial request again.',
+  cbHalfOpenMax: 'Maximum number of requests allowed while the circuit breaker is half-open and testing recovery.',
+  healthCheckInterval: 'How often idle or pooled connections are checked to detect unhealthy LDAP servers.',
+  healthCheckTimeout: 'Maximum time a health check may take before the target is considered unhealthy.',
+  dnCacheTtl: 'How long distinguished-name lookup results stay cached before being refreshed.',
+  membershipCacheTtl: 'How long group or membership results stay cached before reloading from LDAP.',
+  negativeCacheTtl: 'How long failed lookups or misses stay cached to reduce repeated expensive misses.',
+  cacheMaxEntries: 'Maximum number of cache entries kept in memory. Use together with the selected cache implementation.',
+  cacheImpl: 'ttl: sharded TTL cache (simple, time-based). lru: Least-Recently-Used with max_entries limit. Choose based on access patterns.',
+  includeRawResult: 'Stores the raw LDAP response alongside mapped values. Useful for debugging, but increases payload size and memory usage.',
+  authRateLimitPerSecond: 'Allowed authentication tokens per second. 0 disables rate limiting.',
+  authRateLimitBurst: 'Maximum short-term burst above the steady authentication rate. 0 disables rate limiting.'
+};
+
+const infoAdornment = (title: string) => ({
+  endAdornment: (
+    <InputAdornment position="end">
+      <InfoTooltip title={title} />
+    </InputAdornment>
+  )
+});
+
+const infoLabel = (label: string, title: string) => (
+  <Box sx={{ display: 'inline-flex', alignItems: 'center' }}>
+    {label}
+    <InfoTooltip title={title} />
+  </Box>
+);
+
 interface TabPanelProps {
   children?: React.ReactNode;
   index: number;
@@ -436,91 +477,92 @@ const LDAPConfig = (): React.JSX.Element => {
                       }
                     />
                   </Grid>
-                  <CollapsibleFormSection title="Tuning (LDAP)" description="Advanced tuning parameters. Neutral stance with hints; 0 often means unlimited/disabled.">
-                    <Grid container spacing={2}>
+                  <Grid size={12}>
+                    <CollapsibleFormSection title="Tuning" description="Advanced tuning parameters. Neutral stance with hints; 0 often means unlimited/disabled.">
+                      <Grid container spacing={2}>
                       <Grid size={12}>
                         <Typography variant="subtitle2">Queues / Backpressure</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth label="Lookup Queue Length" name="config.lookup_queue_length" type="number" value={values.config.lookup_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                        <TextField fullWidth label="Lookup Queue Length" name="config.lookup_queue_length" type="number" value={values.config.lookup_queue_length ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.lookupQueueLength)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth label="Auth Queue Length" name="config.auth_queue_length" type="number" value={values.config.auth_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                        <TextField fullWidth label="Auth Queue Length" name="config.auth_queue_length" type="number" value={values.config.auth_queue_length ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.authQueueLength)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Operation Timeouts</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Search Timeout" name="config.search_timeout" value={values.config.search_timeout || ''} onChange={handleChange} placeholder="2s" />
+                        <TextField fullWidth label="Search Timeout" name="config.search_timeout" value={values.config.search_timeout || ''} onChange={handleChange} placeholder="2s" InputProps={infoAdornment(ldapTuningInfo.searchTimeout)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Bind Timeout" name="config.bind_timeout" value={values.config.bind_timeout || ''} onChange={handleChange} placeholder="1s" />
+                        <TextField fullWidth label="Bind Timeout" name="config.bind_timeout" value={values.config.bind_timeout || ''} onChange={handleChange} placeholder="1s" InputProps={infoAdornment(ldapTuningInfo.bindTimeout)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Modify Timeout" name="config.modify_timeout" value={values.config.modify_timeout || ''} onChange={handleChange} placeholder="2s" />
+                        <TextField fullWidth label="Modify Timeout" name="config.modify_timeout" value={values.config.modify_timeout || ''} onChange={handleChange} placeholder="2s" InputProps={infoAdornment(ldapTuningInfo.modifyTimeout)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Server-side Limits</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Search Size Limit" name="config.search_size_limit" value={values.config.search_size_limit ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = server default (unlimited)" /></InputAdornment>) }} />
+                        <TextField fullWidth type="number" label="Search Size Limit" name="config.search_size_limit" value={values.config.search_size_limit ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.searchSizeLimit)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth label="Search Time Limit" name="config.search_time_limit" value={values.config.search_time_limit || ''} onChange={handleChange} placeholder="3s" />
+                        <TextField fullWidth label="Search Time Limit" name="config.search_time_limit" value={values.config.search_time_limit || ''} onChange={handleChange} placeholder="3s" InputProps={infoAdornment(ldapTuningInfo.searchTimeLimit)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Retry / Backoff</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth type="number" label="Retry Max" name="config.retry_max" value={values.config.retry_max ?? ''} onChange={handleChange} />
+                        <TextField fullWidth type="number" label="Retry Max" name="config.retry_max" value={values.config.retry_max ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.retryMax)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Retry Base" name="config.retry_base" value={values.config.retry_base || ''} onChange={handleChange} placeholder="200ms" />
+                        <TextField fullWidth label="Retry Base" name="config.retry_base" value={values.config.retry_base || ''} onChange={handleChange} placeholder="200ms" InputProps={infoAdornment(ldapTuningInfo.retryBase)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Retry Max Backoff" name="config.retry_max_backoff" value={values.config.retry_max_backoff || ''} onChange={handleChange} placeholder="2s" />
+                        <TextField fullWidth label="Retry Max Backoff" name="config.retry_max_backoff" value={values.config.retry_max_backoff || ''} onChange={handleChange} placeholder="2s" InputProps={infoAdornment(ldapTuningInfo.retryMaxBackoff)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Circuit Breaker</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth type="number" label="Failure Threshold" name="config.cb_failure_threshold" value={values.config.cb_failure_threshold ?? ''} onChange={handleChange} placeholder="5" />
+                        <TextField fullWidth type="number" label="Failure Threshold" name="config.cb_failure_threshold" value={values.config.cb_failure_threshold ?? ''} onChange={handleChange} placeholder="5" InputProps={infoAdornment(ldapTuningInfo.cbFailureThreshold)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Cooldown" name="config.cb_cooldown" value={values.config.cb_cooldown || ''} onChange={handleChange} placeholder="30s" />
+                        <TextField fullWidth label="Cooldown" name="config.cb_cooldown" value={values.config.cb_cooldown || ''} onChange={handleChange} placeholder="30s" InputProps={infoAdornment(ldapTuningInfo.cbCooldown)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth type="number" label="Half-open Max" name="config.cb_half_open_max" value={values.config.cb_half_open_max ?? ''} onChange={handleChange} placeholder="1" />
+                        <TextField fullWidth type="number" label="Half-open Max" name="config.cb_half_open_max" value={values.config.cb_half_open_max ?? ''} onChange={handleChange} placeholder="1" InputProps={infoAdornment(ldapTuningInfo.cbHalfOpenMax)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Health Checks</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth label="Health Check Interval" name="config.health_check_interval" value={values.config.health_check_interval || ''} onChange={handleChange} placeholder="10s" />
+                        <TextField fullWidth label="Health Check Interval" name="config.health_check_interval" value={values.config.health_check_interval || ''} onChange={handleChange} placeholder="10s" InputProps={infoAdornment(ldapTuningInfo.healthCheckInterval)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth label="Health Check Timeout" name="config.health_check_timeout" value={values.config.health_check_timeout || ''} onChange={handleChange} placeholder="1.5s" />
+                        <TextField fullWidth label="Health Check Timeout" name="config.health_check_timeout" value={values.config.health_check_timeout || ''} onChange={handleChange} placeholder="1.5s" InputProps={infoAdornment(ldapTuningInfo.healthCheckTimeout)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Caching</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="DN Cache TTL" name="config.dn_cache_ttl" value={values.config.dn_cache_ttl || ''} onChange={handleChange} placeholder="60s" />
+                        <TextField fullWidth label="DN Cache TTL" name="config.dn_cache_ttl" value={values.config.dn_cache_ttl || ''} onChange={handleChange} placeholder="60s" InputProps={infoAdornment(ldapTuningInfo.dnCacheTtl)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Membership Cache TTL" name="config.membership_cache_ttl" value={values.config.membership_cache_ttl || ''} onChange={handleChange} placeholder="120s" />
+                        <TextField fullWidth label="Membership Cache TTL" name="config.membership_cache_ttl" value={values.config.membership_cache_ttl || ''} onChange={handleChange} placeholder="120s" InputProps={infoAdornment(ldapTuningInfo.membershipCacheTtl)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 4 }}>
-                        <TextField fullWidth label="Negative Cache TTL" name="config.negative_cache_ttl" value={values.config.negative_cache_ttl || ''} onChange={handleChange} placeholder="20s" />
+                        <TextField fullWidth label="Negative Cache TTL" name="config.negative_cache_ttl" value={values.config.negative_cache_ttl || ''} onChange={handleChange} placeholder="20s" InputProps={infoAdornment(ldapTuningInfo.negativeCacheTtl)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Cache Max Entries" name="config.cache_max_entries" value={values.config.cache_max_entries ?? ''} onChange={handleChange} />
+                        <TextField fullWidth type="number" label="Cache Max Entries" name="config.cache_max_entries" value={values.config.cache_max_entries ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.cacheMaxEntries)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
                         <FormControl fullWidth>
@@ -530,25 +572,26 @@ const LDAPConfig = (): React.JSX.Element => {
                             <MenuItem value="lru">lru</MenuItem>
                           </Select>
                           <Box sx={{ mt: 0.5 }}>
-                            <InfoTooltip title="ttl: sharded TTL cache (simple, time-based). lru: Least-Recently-Used with max_entries limit. Choose based on access patterns." />
+                            <InfoTooltip title={ldapTuningInfo.cacheImpl} />
                           </Box>
                         </FormControl>
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <FormControlLabel control={<Switch name="config.include_raw_result" checked={values.config.include_raw_result || false} onChange={handleChange} />} label="Include Raw Result" />
+                        <FormControlLabel control={<Switch name="config.include_raw_result" checked={values.config.include_raw_result || false} onChange={handleChange} />} label={infoLabel('Include Raw Result', ldapTuningInfo.includeRawResult)} />
                       </Grid>
 
                       <Grid size={12}>
                         <Typography variant="subtitle2" sx={{ mt: 2 }}>Rate Limiting (Auth)</Typography>
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Tokens per Second" name="config.auth_rate_limit_per_second" value={values.config.auth_rate_limit_per_second ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                        <TextField fullWidth type="number" label="Tokens per Second" name="config.auth_rate_limit_per_second" value={values.config.auth_rate_limit_per_second ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.authRateLimitPerSecond)} />
                       </Grid>
                       <Grid size={{ xs: 12, md: 6 }}>
-                        <TextField fullWidth type="number" label="Burst" name="config.auth_rate_limit_burst" value={values.config.auth_rate_limit_burst ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                        <TextField fullWidth type="number" label="Burst" name="config.auth_rate_limit_burst" value={values.config.auth_rate_limit_burst ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.authRateLimitBurst)} />
                       </Grid>
-                    </Grid>
-                  </CollapsibleFormSection>
+                      </Grid>
+                    </CollapsibleFormSection>
+                  </Grid>
 
                   <Grid size={12}>
                     <Typography variant="subtitle1" gutterBottom sx={{ mb: 2 }}>
@@ -823,91 +866,92 @@ const LDAPConfig = (): React.JSX.Element => {
                               onChange={handleChange}
                             />
                           </Grid>
-                          <CollapsibleFormSection title={`Tuning (LDAP) - ${poolName}`} description="Advanced tuning parameters for this pool.">
-                            <Grid container spacing={2}>
+                          <Grid size={12}>
+                            <CollapsibleFormSection title={`Tuning - ${poolName}`} description="Advanced tuning parameters for this pool.">
+                              <Grid container spacing={2}>
                               <Grid size={12}>
                                 <Typography variant="subtitle2">Queues / Backpressure</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Lookup Queue Length" name={`optional_ldap_pools.${poolName}.lookup_queue_length`} type="number" value={poolConfig.lookup_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                                <TextField fullWidth label="Lookup Queue Length" name={`optional_ldap_pools.${poolName}.lookup_queue_length`} type="number" value={poolConfig.lookup_queue_length ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.lookupQueueLength)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Auth Queue Length" name={`optional_ldap_pools.${poolName}.auth_queue_length`} type="number" value={poolConfig.auth_queue_length ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = unlimited. Prefer bounded queues to avoid latency balloons." /></InputAdornment>) }} />
+                                <TextField fullWidth label="Auth Queue Length" name={`optional_ldap_pools.${poolName}.auth_queue_length`} type="number" value={poolConfig.auth_queue_length ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.authQueueLength)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Operation Timeouts</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Search Timeout" name={`optional_ldap_pools.${poolName}.search_timeout`} value={poolConfig.search_timeout || ''} onChange={handleChange} placeholder="2s" />
+                                <TextField fullWidth label="Search Timeout" name={`optional_ldap_pools.${poolName}.search_timeout`} value={poolConfig.search_timeout || ''} onChange={handleChange} placeholder="2s" InputProps={infoAdornment(ldapTuningInfo.searchTimeout)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Bind Timeout" name={`optional_ldap_pools.${poolName}.bind_timeout`} value={poolConfig.bind_timeout || ''} onChange={handleChange} placeholder="1s" />
+                                <TextField fullWidth label="Bind Timeout" name={`optional_ldap_pools.${poolName}.bind_timeout`} value={poolConfig.bind_timeout || ''} onChange={handleChange} placeholder="1s" InputProps={infoAdornment(ldapTuningInfo.bindTimeout)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Modify Timeout" name={`optional_ldap_pools.${poolName}.modify_timeout`} value={poolConfig.modify_timeout || ''} onChange={handleChange} placeholder="2s" />
+                                <TextField fullWidth label="Modify Timeout" name={`optional_ldap_pools.${poolName}.modify_timeout`} value={poolConfig.modify_timeout || ''} onChange={handleChange} placeholder="2s" InputProps={infoAdornment(ldapTuningInfo.modifyTimeout)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Server-side Limits</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth type="number" label="Search Size Limit" name={`optional_ldap_pools.${poolName}.search_size_limit`} value={poolConfig.search_size_limit ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 = server default (unlimited)" /></InputAdornment>) }} />
+                                <TextField fullWidth type="number" label="Search Size Limit" name={`optional_ldap_pools.${poolName}.search_size_limit`} value={poolConfig.search_size_limit ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.searchSizeLimit)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Search Time Limit" name={`optional_ldap_pools.${poolName}.search_time_limit`} value={poolConfig.search_time_limit || ''} onChange={handleChange} placeholder="3s" />
+                                <TextField fullWidth label="Search Time Limit" name={`optional_ldap_pools.${poolName}.search_time_limit`} value={poolConfig.search_time_limit || ''} onChange={handleChange} placeholder="3s" InputProps={infoAdornment(ldapTuningInfo.searchTimeLimit)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Retry / Backoff</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth type="number" label="Retry Max" name={`optional_ldap_pools.${poolName}.retry_max`} value={poolConfig.retry_max ?? ''} onChange={handleChange} />
+                                <TextField fullWidth type="number" label="Retry Max" name={`optional_ldap_pools.${poolName}.retry_max`} value={poolConfig.retry_max ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.retryMax)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Retry Base" name={`optional_ldap_pools.${poolName}.retry_base`} value={poolConfig.retry_base || ''} onChange={handleChange} placeholder="200ms" />
+                                <TextField fullWidth label="Retry Base" name={`optional_ldap_pools.${poolName}.retry_base`} value={poolConfig.retry_base || ''} onChange={handleChange} placeholder="200ms" InputProps={infoAdornment(ldapTuningInfo.retryBase)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Retry Max Backoff" name={`optional_ldap_pools.${poolName}.retry_max_backoff`} value={poolConfig.retry_max_backoff || ''} onChange={handleChange} placeholder="2s" />
+                                <TextField fullWidth label="Retry Max Backoff" name={`optional_ldap_pools.${poolName}.retry_max_backoff`} value={poolConfig.retry_max_backoff || ''} onChange={handleChange} placeholder="2s" InputProps={infoAdornment(ldapTuningInfo.retryMaxBackoff)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Circuit Breaker</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth type="number" label="Failure Threshold" name={`optional_ldap_pools.${poolName}.cb_failure_threshold`} value={poolConfig.cb_failure_threshold ?? ''} onChange={handleChange} placeholder="5" />
+                                <TextField fullWidth type="number" label="Failure Threshold" name={`optional_ldap_pools.${poolName}.cb_failure_threshold`} value={poolConfig.cb_failure_threshold ?? ''} onChange={handleChange} placeholder="5" InputProps={infoAdornment(ldapTuningInfo.cbFailureThreshold)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Cooldown" name={`optional_ldap_pools.${poolName}.cb_cooldown`} value={poolConfig.cb_cooldown || ''} onChange={handleChange} placeholder="30s" />
+                                <TextField fullWidth label="Cooldown" name={`optional_ldap_pools.${poolName}.cb_cooldown`} value={poolConfig.cb_cooldown || ''} onChange={handleChange} placeholder="30s" InputProps={infoAdornment(ldapTuningInfo.cbCooldown)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth type="number" label="Half-open Max" name={`optional_ldap_pools.${poolName}.cb_half_open_max`} value={poolConfig.cb_half_open_max ?? ''} onChange={handleChange} placeholder="1" />
+                                <TextField fullWidth type="number" label="Half-open Max" name={`optional_ldap_pools.${poolName}.cb_half_open_max`} value={poolConfig.cb_half_open_max ?? ''} onChange={handleChange} placeholder="1" InputProps={infoAdornment(ldapTuningInfo.cbHalfOpenMax)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Health Checks</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Health Check Interval" name={`optional_ldap_pools.${poolName}.health_check_interval`} value={poolConfig.health_check_interval || ''} onChange={handleChange} placeholder="10s" />
+                                <TextField fullWidth label="Health Check Interval" name={`optional_ldap_pools.${poolName}.health_check_interval`} value={poolConfig.health_check_interval || ''} onChange={handleChange} placeholder="10s" InputProps={infoAdornment(ldapTuningInfo.healthCheckInterval)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth label="Health Check Timeout" name={`optional_ldap_pools.${poolName}.health_check_timeout`} value={poolConfig.health_check_timeout || ''} onChange={handleChange} placeholder="1.5s" />
+                                <TextField fullWidth label="Health Check Timeout" name={`optional_ldap_pools.${poolName}.health_check_timeout`} value={poolConfig.health_check_timeout || ''} onChange={handleChange} placeholder="1.5s" InputProps={infoAdornment(ldapTuningInfo.healthCheckTimeout)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Caching</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="DN Cache TTL" name={`optional_ldap_pools.${poolName}.dn_cache_ttl`} value={poolConfig.dn_cache_ttl || ''} onChange={handleChange} placeholder="60s" />
+                                <TextField fullWidth label="DN Cache TTL" name={`optional_ldap_pools.${poolName}.dn_cache_ttl`} value={poolConfig.dn_cache_ttl || ''} onChange={handleChange} placeholder="60s" InputProps={infoAdornment(ldapTuningInfo.dnCacheTtl)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Membership Cache TTL" name={`optional_ldap_pools.${poolName}.membership_cache_ttl`} value={poolConfig.membership_cache_ttl || ''} onChange={handleChange} placeholder="120s" />
+                                <TextField fullWidth label="Membership Cache TTL" name={`optional_ldap_pools.${poolName}.membership_cache_ttl`} value={poolConfig.membership_cache_ttl || ''} onChange={handleChange} placeholder="120s" InputProps={infoAdornment(ldapTuningInfo.membershipCacheTtl)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 4 }}>
-                                <TextField fullWidth label="Negative Cache TTL" name={`optional_ldap_pools.${poolName}.negative_cache_ttl`} value={poolConfig.negative_cache_ttl || ''} onChange={handleChange} placeholder="20s" />
+                                <TextField fullWidth label="Negative Cache TTL" name={`optional_ldap_pools.${poolName}.negative_cache_ttl`} value={poolConfig.negative_cache_ttl || ''} onChange={handleChange} placeholder="20s" InputProps={infoAdornment(ldapTuningInfo.negativeCacheTtl)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth type="number" label="Cache Max Entries" name={`optional_ldap_pools.${poolName}.cache_max_entries`} value={poolConfig.cache_max_entries ?? ''} onChange={handleChange} />
+                                <TextField fullWidth type="number" label="Cache Max Entries" name={`optional_ldap_pools.${poolName}.cache_max_entries`} value={poolConfig.cache_max_entries ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.cacheMaxEntries)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
                                 <FormControl fullWidth>
@@ -917,25 +961,26 @@ const LDAPConfig = (): React.JSX.Element => {
                                     <MenuItem value="lru">lru</MenuItem>
                                   </Select>
                                   <Box sx={{ mt: 0.5 }}>
-                                    <InfoTooltip title="ttl: sharded TTL cache (simple, time-based). lru: Least-Recently-Used with max_entries limit. Choose based on access patterns." />
+                                    <InfoTooltip title={ldapTuningInfo.cacheImpl} />
                                   </Box>
                                 </FormControl>
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <FormControlLabel control={<Switch name={`optional_ldap_pools.${poolName}.include_raw_result`} checked={poolConfig.include_raw_result || false} onChange={handleChange} />} label="Include Raw Result" />
+                                <FormControlLabel control={<Switch name={`optional_ldap_pools.${poolName}.include_raw_result`} checked={poolConfig.include_raw_result || false} onChange={handleChange} />} label={infoLabel('Include Raw Result', ldapTuningInfo.includeRawResult)} />
                               </Grid>
 
                               <Grid size={12}>
                                 <Typography variant="subtitle2" sx={{ mt: 2 }}>Rate Limiting (Auth)</Typography>
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth type="number" label="Tokens per Second" name={`optional_ldap_pools.${poolName}.auth_rate_limit_per_second`} value={poolConfig.auth_rate_limit_per_second ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                                <TextField fullWidth type="number" label="Tokens per Second" name={`optional_ldap_pools.${poolName}.auth_rate_limit_per_second`} value={poolConfig.auth_rate_limit_per_second ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.authRateLimitPerSecond)} />
                               </Grid>
                               <Grid size={{ xs: 12, md: 6 }}>
-                                <TextField fullWidth type="number" label="Burst" name={`optional_ldap_pools.${poolName}.auth_rate_limit_burst`} value={poolConfig.auth_rate_limit_burst ?? ''} onChange={handleChange} InputProps={{ endAdornment: (<InputAdornment position="end"><InfoTooltip title="0 disables" /></InputAdornment>) }} />
+                                <TextField fullWidth type="number" label="Burst" name={`optional_ldap_pools.${poolName}.auth_rate_limit_burst`} value={poolConfig.auth_rate_limit_burst ?? ''} onChange={handleChange} InputProps={infoAdornment(ldapTuningInfo.authRateLimitBurst)} />
                               </Grid>
-                            </Grid>
-                          </CollapsibleFormSection>
+                              </Grid>
+                            </CollapsibleFormSection>
+                          </Grid>
 
                           <Grid size={12}>
                             <Typography variant="subtitle2" gutterBottom sx={{ mb: 2 }}>
@@ -1200,12 +1245,15 @@ const LDAPConfig = (): React.JSX.Element => {
                               name={`search[${index}].filter.webauthn_credentials`}
                               value={searchProtocol.filter?.webauthn_credentials || ''}
                               onChange={handleChange}
-                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].filter.webauthn_credentials`) &&
                                 getIn(errors, `search[${index}].filter.webauthn_credentials`)
                               )}
-                              helperText="This feature is not implemented yet."
+                              helperText={
+                                (getIn(touched, `search[${index}].filter.webauthn_credentials`) &&
+                                getIn(errors, `search[${index}].filter.webauthn_credentials`)) ||
+                                "Filter used to resolve stored WebAuthn credentials. Supports the same macros as the other LDAP filters."
+                              }
                               multiline
                               rows={3}
                             />
@@ -1255,12 +1303,51 @@ const LDAPConfig = (): React.JSX.Element => {
                               name={`search[${index}].mapping.totp_recovery_field`}
                               value={searchProtocol.mapping?.totp_recovery_field || ''}
                               onChange={handleChange}
-                              disabled
                               error={Boolean(
                                 getIn(touched, `search[${index}].mapping.totp_recovery_field`) &&
                                 getIn(errors, `search[${index}].mapping.totp_recovery_field`)
                               )}
-                              helperText="This feature is not implemented yet."
+                              helperText={
+                                (getIn(touched, `search[${index}].mapping.totp_recovery_field`) &&
+                                getIn(errors, `search[${index}].mapping.totp_recovery_field`)) ||
+                                "LDAP attribute that stores one-time TOTP recovery codes."
+                              }
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                              fullWidth
+                              label="TOTP Object Class"
+                              name={`search[${index}].mapping.totp_object_class`}
+                              value={searchProtocol.mapping?.totp_object_class || ''}
+                              onChange={handleChange}
+                              error={Boolean(
+                                getIn(touched, `search[${index}].mapping.totp_object_class`) &&
+                                getIn(errors, `search[${index}].mapping.totp_object_class`)
+                              )}
+                              helperText={
+                                (getIn(touched, `search[${index}].mapping.totp_object_class`) &&
+                                getIn(errors, `search[${index}].mapping.totp_object_class`)) ||
+                                "Optional objectClass that Nauthilus adds automatically before writing TOTP secrets."
+                              }
+                            />
+                          </Grid>
+                          <Grid size={{ xs: 12, md: 6 }}>
+                            <TextField
+                              fullWidth
+                              label="TOTP Recovery Object Class"
+                              name={`search[${index}].mapping.totp_recovery_object_class`}
+                              value={searchProtocol.mapping?.totp_recovery_object_class || ''}
+                              onChange={handleChange}
+                              error={Boolean(
+                                getIn(touched, `search[${index}].mapping.totp_recovery_object_class`) &&
+                                getIn(errors, `search[${index}].mapping.totp_recovery_object_class`)
+                              )}
+                              helperText={
+                                (getIn(touched, `search[${index}].mapping.totp_recovery_object_class`) &&
+                                getIn(errors, `search[${index}].mapping.totp_recovery_object_class`)) ||
+                                "Optional objectClass that Nauthilus adds automatically before writing recovery codes."
+                              }
                             />
                           </Grid>
                           <Grid size={{ xs: 12, md: 6 }}>
@@ -1283,46 +1370,37 @@ const LDAPConfig = (): React.JSX.Element => {
                           <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
-                              label="Credential Object"
-                              name={`search[${index}].mapping.credential_object`}
-                              value={searchProtocol.mapping?.credential_object || ''}
+                              label="WebAuthn Credential Field"
+                              name={`search[${index}].mapping.webauthn_credential_field`}
+                              value={searchProtocol.mapping?.webauthn_credential_field || ''}
                               onChange={handleChange}
-                              disabled
                               error={Boolean(
-                                getIn(touched, `search[${index}].mapping.credential_object`) &&
-                                getIn(errors, `search[${index}].mapping.credential_object`)
+                                getIn(touched, `search[${index}].mapping.webauthn_credential_field`) &&
+                                getIn(errors, `search[${index}].mapping.webauthn_credential_field`)
                               )}
-                              helperText="This feature is not implemented yet."
+                              helperText={
+                                (getIn(touched, `search[${index}].mapping.webauthn_credential_field`) &&
+                                getIn(errors, `search[${index}].mapping.webauthn_credential_field`)) ||
+                                "LDAP attribute that stores serialized WebAuthn credentials, typically one JSON value per device."
+                              }
                             />
                           </Grid>
                           <Grid size={{ xs: 12, md: 6 }}>
                             <TextField
                               fullWidth
-                              label="Credential ID Field"
-                              name={`search[${index}].mapping.credential_id_field`}
-                              value={searchProtocol.mapping?.credential_id_field || ''}
+                              label="WebAuthn Object Class"
+                              name={`search[${index}].mapping.webauthn_object_class`}
+                              value={searchProtocol.mapping?.webauthn_object_class || ''}
                               onChange={handleChange}
-                              disabled
                               error={Boolean(
-                                getIn(touched, `search[${index}].mapping.credential_id_field`) &&
-                                getIn(errors, `search[${index}].mapping.credential_id_field`)
+                                getIn(touched, `search[${index}].mapping.webauthn_object_class`) &&
+                                getIn(errors, `search[${index}].mapping.webauthn_object_class`)
                               )}
-                              helperText="This feature is not implemented yet."
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <TextField
-                              fullWidth
-                              label="Public Key Field"
-                              name={`search[${index}].mapping.public_key_field`}
-                              value={searchProtocol.mapping?.public_key_field || ''}
-                              onChange={handleChange}
-                              disabled
-                              error={Boolean(
-                                getIn(touched, `search[${index}].mapping.public_key_field`) &&
-                                getIn(errors, `search[${index}].mapping.public_key_field`)
-                              )}
-                              helperText="This feature is not implemented yet."
+                              helperText={
+                                (getIn(touched, `search[${index}].mapping.webauthn_object_class`) &&
+                                getIn(errors, `search[${index}].mapping.webauthn_object_class`)) ||
+                                "Optional objectClass that Nauthilus adds automatically before writing WebAuthn credentials."
+                              }
                             />
                           </Grid>
                           <Grid size={{ xs: 12, md: 6 }}>
@@ -1340,36 +1418,6 @@ const LDAPConfig = (): React.JSX.Element => {
                                 getIn(touched, `search[${index}].mapping.unique_user_id_field`) &&
                                 getIn(errors, `search[${index}].mapping.unique_user_id_field`)
                               }
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <TextField
-                              fullWidth
-                              label="AAGUID Field"
-                              name={`search[${index}].mapping.aaguid_field`}
-                              value={searchProtocol.mapping?.aaguid_field || ''}
-                              onChange={handleChange}
-                              disabled
-                              error={Boolean(
-                                getIn(touched, `search[${index}].mapping.aaguid_field`) &&
-                                getIn(errors, `search[${index}].mapping.aaguid_field`)
-                              )}
-                              helperText="This feature is not implemented yet."
-                            />
-                          </Grid>
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <TextField
-                              fullWidth
-                              label="Sign Count Field"
-                              name={`search[${index}].mapping.sign_count_field`}
-                              value={searchProtocol.mapping?.sign_count_field || ''}
-                              onChange={handleChange}
-                              disabled
-                              error={Boolean(
-                                getIn(touched, `search[${index}].mapping.sign_count_field`) &&
-                                getIn(errors, `search[${index}].mapping.sign_count_field`)
-                              )}
-                              helperText="This feature is not implemented yet."
                             />
                           </Grid>
                         </Grid>
@@ -1400,13 +1448,12 @@ const LDAPConfig = (): React.JSX.Element => {
                             account_field: '',
                             totp_secret_field: '',
                             totp_recovery_field: '',
+                            totp_object_class: '',
+                            totp_recovery_object_class: '',
                             display_name_field: '',
-                            credential_object: '',
-                            credential_id_field: '',
-                            public_key_field: '',
+                            webauthn_credential_field: '',
+                            webauthn_object_class: '',
                             unique_user_id_field: '',
-                            aaguid_field: '',
-                            sign_count_field: '',
                           },
                           attribute: [],
                         },
