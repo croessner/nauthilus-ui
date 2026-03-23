@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -165,11 +165,23 @@ const defaultValues: FrontendPageValues = {
   },
 };
 
+interface DirtyStateBridgeProps {
+  dirty: boolean;
+  setHasUnsavedChanges: (value: boolean) => void;
+}
+
+const DirtyStateBridge = ({ dirty, setHasUnsavedChanges }: DirtyStateBridgeProps): null => {
+  useEffect(() => {
+    setHasUnsavedChanges(dirty);
+  }, [dirty, setHasUnsavedChanges]);
+
+  return null;
+};
+
 const FrontendConfig = (): React.JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
-  const [isFormChanged, setIsFormChanged] = useState(false);
 
-  const initialValues: FrontendPageValues = {
+  const initialValues = useMemo<FrontendPageValues>(() => ({
     frontend: {
       ...defaultValues.frontend,
       ...(config?.server?.frontend || {}),
@@ -209,7 +221,7 @@ const FrontendConfig = (): React.JSX.Element => {
         service_providers: config?.idp?.saml2?.service_providers || [],
       },
     },
-  };
+  }), [config]);
 
   const handleSubmit = (values: FrontendPageValues) => {
     if (!config) return;
@@ -254,12 +266,7 @@ const FrontendConfig = (): React.JSX.Element => {
 
     updateConfig(nextConfig).then(() => {
       setHasUnsavedChanges(false);
-      setIsFormChanged(false);
     });
-  };
-
-  const checkFormChanged = (currentValues: FrontendPageValues, initialVals: FrontendPageValues): boolean => {
-    return JSON.stringify(currentValues) !== JSON.stringify(initialVals);
   };
 
   return (
@@ -271,12 +278,8 @@ const FrontendConfig = (): React.JSX.Element => {
         validationSchema={FrontendConfigSchema}
         onSubmit={handleSubmit}
         enableReinitialize
-        validate={(values: FrontendPageValues) => {
-          setIsFormChanged(checkFormChanged(values, initialValues));
-          return {};
-        }}
       >
-        {({ values, errors, touched, handleChange, isSubmitting, setFieldValue }: any) => {
+        {({ values, errors, touched, handleChange, isSubmitting, setFieldValue, dirty }: any) => {
           const renderStringArrayEditor = (name: string, label: string, helperText?: string) => {
             const list: string[] = getIn(values, name) || [];
 
@@ -396,6 +399,7 @@ const FrontendConfig = (): React.JSX.Element => {
 
           return (
             <Form>
+              <DirtyStateBridge dirty={dirty} setHasUnsavedChanges={setHasUnsavedChanges} />
               <FormSection title="Frontend & IdP Configuration">
                 <Grid container spacing={3}>
                   <Grid size={12}>
@@ -931,7 +935,7 @@ const FrontendConfig = (): React.JSX.Element => {
               </FormSection>
 
               <Box mt={3} display="flex" justifyContent="flex-end">
-                <Button type="submit" variant="contained" color="primary" disabled={isSubmitting || !isFormChanged}>
+                <Button type="submit" variant="contained" color="primary" disabled={isSubmitting || !dirty}>
                   Save Changes
                 </Button>
               </Box>

@@ -7,19 +7,11 @@ import axios from './axiosConfig';
 const updateUserLastLogin = async (username: string): Promise<void> => {
   const now = new Date().toISOString();
   try {
-    const users = await getUsers();
-    const currentUser = users.find(u => u.username === username);
-
-    if (currentUser) {
-      await updateUserProfile(username, {
-        lastLogin: now,
-        lastModified: currentUser.lastModified,
-      });
-    } else {
-      await updateUserProfile(username, {
-        lastLogin: now,
-      });
-    }
+    const currentUser = await getUser(username);
+    await updateUserProfile(username, {
+      lastLogin: now,
+      ...(currentUser?.lastModified ? { lastModified: currentUser.lastModified } : {}),
+    });
     console.log('LastLogin timestamp updated successfully');
   } catch (updateError) {
     console.error('Failed to update lastLogin timestamp:', updateError);
@@ -115,6 +107,80 @@ const DEFAULT_CONFIG: UserManagerConfig = {
 let cachedConfig: UserManagerConfig | null = null;
 let cachedUsers: User[] | null = null;
 let cachedJwtConfig: { tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
+let cachedCurrentUser: User | null = null;
+let cachedCurrentUsernameHint: string | null = null;
+
+const CURRENT_USERNAME_STORAGE_KEY = 'nauthilus:current-username';
+
+const readStoredCurrentUsername = (): string | null => {
+  try {
+    if (typeof window === 'undefined') {
+      return null;
+    }
+
+    const value = window.localStorage.getItem(CURRENT_USERNAME_STORAGE_KEY);
+    return value && value.trim() ? value.trim() : null;
+  } catch {
+    return null;
+  }
+};
+
+const persistCurrentUsername = (username: string | null): void => {
+  try {
+    if (typeof window === 'undefined') {
+      return;
+    }
+
+    if (username && username.trim()) {
+      window.localStorage.setItem(CURRENT_USERNAME_STORAGE_KEY, username.trim());
+    } else {
+      window.localStorage.removeItem(CURRENT_USERNAME_STORAGE_KEY);
+    }
+  } catch {
+    // ignore storage failures
+  }
+};
+
+const rememberCurrentUsername = (username?: string | null): void => {
+  const normalized = username?.trim() || null;
+  cachedCurrentUsernameHint = normalized;
+  persistCurrentUsername(normalized);
+};
+
+const rememberCurrentUser = (user?: User | null): void => {
+  if (user?.username) {
+    cachedCurrentUser = user;
+    rememberCurrentUsername(user.username);
+    return;
+  }
+
+  cachedCurrentUser = null;
+};
+
+const clearCurrentUserState = (): void => {
+  cachedCurrentUser = null;
+  cachedCurrentUsernameHint = null;
+  persistCurrentUsername(null);
+};
+
+export const getCurrentUsernameHint = (): string | null => {
+  if (cachedCurrentUsernameHint) {
+    return cachedCurrentUsernameHint;
+  }
+
+  const stored = readStoredCurrentUsername();
+  if (stored) {
+    cachedCurrentUsernameHint = stored;
+    return stored;
+  }
+
+  if (cachedCurrentUser?.username) {
+    cachedCurrentUsernameHint = cachedCurrentUser.username;
+    return cachedCurrentUser.username;
+  }
+
+  return null;
+};
 
 // Helper function to fetch data from API endpoints
 const fetchConfigData = async (): Promise<void> => {
@@ -483,9 +549,9 @@ export const authenticate = async (username: string, password: string, rememberM
         // Server already set HttpOnly cookies. Return tokens for compatibility, but do not store client-side.
         const token = response.data.token;
         const refreshToken = response.data.refreshToken || token;
+        rememberCurrentUser(response.data.user);
 
-        // Update lastLogin timestamp
-        await updateUserLastLogin(username);
+        void updateUserLastLogin(username);
 
         return { token, refreshToken };
       } else {
@@ -522,9 +588,9 @@ export const completeMfaLogin = async (username: string, _rememberMe: boolean = 
     // Only confirm that the authenticated session is now usable.
     const response = await axios.get('/api/auth/me');
     if (response.data && response.data.user) {
+      rememberCurrentUser(response.data.user);
       console.log('MFA completion confirmed via current session');
-      // Update lastLogin timestamp
-      await updateUserLastLogin(username);
+      void updateUserLastLogin(username);
       return { token: 'cookie-session', refreshToken: 'cookie-session' };
     }
     console.error('Invalid response while confirming MFA completion:', response.data);
@@ -552,6 +618,8 @@ export const logout = async (): Promise<void> => {
     console.error('Error during logout:', error);
     // Don't throw the error to improve resilience
     // Just log it and continue
+  } finally {
+    clearCurrentUserState();
   }
 };
 
@@ -572,6 +640,7 @@ export const getCurrentUser = async (): Promise<User | null> => {
   try {
     const response = await axios.get('/api/auth/me');
     if (response.data && response.data.user) {
+      rememberCurrentUser(response.data.user);
       return response.data.user;
     }
     return null;

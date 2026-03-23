@@ -1,5 +1,5 @@
-import React, { ReactNode, useEffect, useMemo, useState } from 'react';
-import { Paper, Typography, Box, Divider, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import React, { ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { Paper, Typography, Box, Divider, Accordion, AccordionSummary, AccordionDetails, CircularProgress } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import Cookies from 'js-cookie';
 import { jwtDecode } from 'jwt-decode';
@@ -11,6 +11,8 @@ interface CollapsibleFormSectionProps {
   defaultExpanded?: boolean;
   required?: boolean;
 }
+
+const contentRevealDelayMs = 220;
 
 const CollapsibleFormSection = ({ 
   title, 
@@ -47,6 +49,15 @@ const CollapsibleFormSection = ({
     }
     return defaultExpanded;
   });
+  const [contentReady, setContentReady] = useState<boolean>(defaultExpanded);
+  const timeoutRef = useRef<number | null>(null);
+
+  const clearPendingContentMount = () => {
+    if (timeoutRef.current !== null && typeof window !== 'undefined') {
+      window.clearTimeout(timeoutRef.current);
+      timeoutRef.current = null;
+    }
+  };
 
   useEffect(() => {
     try {
@@ -58,13 +69,39 @@ const CollapsibleFormSection = ({
     }
   }, [expanded, storageKey]);
 
-  const handleChange = () => {
-    setExpanded(prev => !prev);
+  useEffect(() => {
+    if (!expanded || contentReady) {
+      return;
+    }
+
+    if (typeof window === 'undefined') {
+      setContentReady(true);
+      return;
+    }
+
+    timeoutRef.current = window.setTimeout(() => {
+      setContentReady(true);
+      timeoutRef.current = null;
+    }, contentRevealDelayMs);
+
+    return clearPendingContentMount;
+  }, [expanded, contentReady]);
+
+  useEffect(() => clearPendingContentMount, []);
+
+  const handleChange = (_event: React.SyntheticEvent, nextExpanded: boolean) => {
+    clearPendingContentMount();
+    setExpanded(nextExpanded);
+    setContentReady(false);
   };
 
   return (
     <Paper sx={{ p: 0, mb: 3 }}>
-      <Accordion expanded={expanded} onChange={handleChange}>
+      <Accordion
+        expanded={expanded}
+        onChange={handleChange}
+        slotProps={{ transition: { mountOnEnter: true, unmountOnExit: true } }}
+      >
         <AccordionSummary
           expandIcon={<ExpandMoreIcon />}
           aria-controls={`${sectionId}-content`}
@@ -106,9 +143,15 @@ const CollapsibleFormSection = ({
             </Typography>
           )}
           <Divider sx={{ my: 2 }} />
-          <Box sx={{ mt: 2 }}>
-            {children}
-          </Box>
+          {contentReady ? (
+            <Box sx={{ mt: 2 }}>
+              {children}
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: 120, py: 4 }}>
+              <CircularProgress />
+            </Box>
+          )}
         </AccordionDetails>
       </Accordion>
     </Paper>

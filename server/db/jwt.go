@@ -87,8 +87,24 @@ func (m *MongoDB) GetUserByUsername(username string) (*models.User, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var user models.User
-	err := m.UserColl.FindOne(ctx, bson.M{"username": username}).Decode(&user)
+	type storedUser struct {
+		Username        string                      `bson:"username"`
+		PasswordHash    string                      `bson:"passwordHash"`
+		Roles           []string                    `bson:"roles"`
+		DisplayName     string                      `bson:"displayName,omitempty"`
+		Email           string                      `bson:"email,omitempty"`
+		Avatar          string                      `bson:"avatar,omitempty"`
+		Enabled         *bool                       `bson:"enabled"`
+		LastLogin       *string                     `bson:"lastLogin"`
+		LastModified    string                      `bson:"lastModified"`
+		TOTPEnabled     bool                        `bson:"totpEnabled"`
+		TOTPSecret      string                      `bson:"totpSecret,omitempty"`
+		WebAuthnEnabled bool                        `bson:"webAuthnEnabled"`
+		WebAuthnDevices []models.WebAuthnCredential `bson:"webAuthnDevices,omitempty"`
+	}
+
+	var stored storedUser
+	err := m.UserColl.FindOne(ctx, bson.M{"username": username}).Decode(&stored)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			return nil, nil // User not found
@@ -97,5 +113,24 @@ func (m *MongoDB) GetUserByUsername(username string) (*models.User, error) {
 		return nil, err
 	}
 
-	return &user, nil
+	enabled := true
+	if stored.Enabled != nil {
+		enabled = *stored.Enabled
+	}
+
+	return &models.User{
+		Username:        stored.Username,
+		PasswordHash:    stored.PasswordHash,
+		Roles:           stored.Roles,
+		DisplayName:     stored.DisplayName,
+		Email:           stored.Email,
+		Avatar:          stored.Avatar,
+		Enabled:         enabled,
+		LastLogin:       stored.LastLogin,
+		LastModified:    stored.LastModified,
+		TOTPEnabled:     stored.TOTPEnabled,
+		TOTPSecret:      stored.TOTPSecret,
+		WebAuthnEnabled: stored.WebAuthnEnabled,
+		WebAuthnDevices: stored.WebAuthnDevices,
+	}, nil
 }

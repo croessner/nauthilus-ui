@@ -34,6 +34,14 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element => {
+  const initializeProtectedState = async (): Promise<void> => {
+    try {
+      await userManager.initialize();
+    } catch (error) {
+      console.error('Error initializing protected state:', error);
+    }
+  };
+
   // Dynamically load the reCAPTCHA script when needed
   const loadRecaptchaScript = (siteKey: string): Promise<void> => {
     return new Promise((resolve, reject) => {
@@ -117,8 +125,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             loading: false,
             error: null,
           });
-          // Post-auth: initialize protected config/user caches
-          try { await userManager.initialize(); } catch { /* ignore init errors */ }
+          void initializeProtectedState();
         } else {
           setAuth({
             isAuthenticated: false,
@@ -185,8 +192,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
                   loading: false,
                   error: null,
                 });
-                // Initialize protected data after authentication
-                try { await userManager.initialize(); } catch { /* ignore */ }
+                void initializeProtectedState();
                 return;
               }
             }
@@ -227,8 +233,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             loading: false,
             error: null,
           });
-          // Initialize protected data after authentication
-          try { await userManager.initialize(); } catch { /* ignore */ }
+          void initializeProtectedState();
         }
       } else {
         console.error('Invalid username or password');

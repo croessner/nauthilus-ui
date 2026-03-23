@@ -2,8 +2,11 @@ package api
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"net/url"
 	"reflect"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"go.mongodb.org/mongo-driver/bson"
@@ -45,6 +48,47 @@ func canonicalizeBSONRuntime(v interface{}) interface{} {
 // RuntimeHandler handles runtime settings requests
 type RuntimeHandler struct {
 	MongoDB *db.MongoDB
+}
+
+func validateBackendURL(rawURL string) error {
+	trimmed := strings.TrimSpace(rawURL)
+	if trimmed == "" {
+		return nil
+	}
+
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return fmt.Errorf("connection.backend_url is invalid: %w", err)
+	}
+
+	scheme := strings.ToLower(parsed.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("connection.backend_url must use http or https")
+	}
+
+	if parsed.Host == "" {
+		return fmt.Errorf("connection.backend_url must include a host")
+	}
+
+	return nil
+}
+
+func validateRuntimeConnection(connection map[string]interface{}) error {
+	if connection == nil {
+		return nil
+	}
+
+	rawBackendURL, hasBackendURL := connection["backend_url"]
+	if !hasBackendURL {
+		return nil
+	}
+
+	backendURL, ok := rawBackendURL.(string)
+	if !ok {
+		return fmt.Errorf("connection.backend_url must be a string")
+	}
+
+	return validateBackendURL(backendURL)
 }
 
 // deepEqualNormalizedRuntime mirrors the normalized equality used for profile diffs.
@@ -298,6 +342,12 @@ func (h *RuntimeHandler) SaveRuntimeSettings(ctx *gin.Context) {
 	var runtimeResponse models.RuntimeSettingsResponse
 	if err := ctx.ShouldBindJSON(&runtimeResponse); err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+
+		return
+	}
+
+	if err := validateRuntimeConnection(runtimeResponse.Connection); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 
 		return
 	}

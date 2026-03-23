@@ -13,11 +13,25 @@ import PasswordField from './common/PasswordField';
 import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 import Grid from '@mui/material/Grid';
 
+function isValidBackendURL(value?: string): boolean {
+  const trimmed = value?.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  try {
+    const parsed = new URL(trimmed);
+    return (parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.host !== '';
+  } catch {
+    return false;
+  }
+}
+
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
   backend_url: Yup.string()
     .required('Backend URL is required')
-    .url('Must be a valid URL'),
+    .test('backend-url', 'Must be a valid HTTP or HTTPS URL', (value) => isValidBackendURL(value)),
 
   // Basic Auth validation
   basic_auth: Yup.object().shape({
@@ -63,6 +77,7 @@ const ConnectionConfig: React.FC = () => {
   const { saveRuntimeSettings, connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings } = useRuntime();
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
+  const [isRefreshingToken, setIsRefreshingToken] = useState(false);
   const [, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
@@ -272,27 +287,41 @@ const ConnectionConfig: React.FC = () => {
       });
     }
   };
+  // Fetch and persist a replacement token without ever clearing the current one first.
+  const refreshOIDCToken = async (values: any) => {
+    const oidcAuth = values.oidc_auth;
 
+    if (!values.backend_url || !oidcAuth?.client_id || !oidcAuth?.client_secret) {
+      setNotification({
+        open: true,
+        message: 'OIDC token could not be refreshed because backend URL, client ID or client secret is missing.',
+        severity: 'error'
+      });
+      return;
+    }
 
-
-
-  // Function to reset OIDC token
-  const resetOIDCToken = async () => {
     try {
-      // Get the current connection data
-      const connectionData = runtimeConnection || {};
+      setIsRefreshingToken(true);
+      const tokenData = await fetchOIDCToken(
+        values.backend_url,
+        oidcAuth.client_id,
+        oidcAuth.client_secret,
+        oidcAuth.scope
+      );
 
-      // Create updated connection data with a reset OIDC token
+      if (!tokenData) {
+        return;
+      }
+
       const updatedConnection = {
-        ...connectionData,
+        ...values,
         oidc_auth: {
-          ...connectionData.oidc_auth,
-          token: '',
-          expires_at: 0
+          ...oidcAuth,
+          token: tokenData.token,
+          expires_at: tokenData.expires_at
         }
       };
 
-      // Save the full updated connection data to the runtime collection
       const userId = await getCurrentUserId();
       await saveRuntimeSettings(
         userId,
@@ -301,24 +330,28 @@ const ConnectionConfig: React.FC = () => {
         runtimeHooks || {}
       );
 
+      await checkConnection(updatedConnection);
+
       // Reset settings state to force a reload on next component mount
       // This is necessary because the connection settings have changed
       resetSettingsState();
 
       setNotification({
         open: true,
-        message: 'OIDC token has been reset. A new token will be fetched on the next save.',
+        message: 'OIDC token has been refreshed successfully.',
         severity: 'success'
       });
 
       setHasUnsavedChanges(false);
     } catch (error) {
-      console.error('Error resetting OIDC token:', error);
+      console.error('Error refreshing OIDC token:', error);
       setNotification({
         open: true,
-        message: `Failed to reset OIDC token: ${error instanceof Error ? error.message : String(error)}`,
+        message: `Failed to refresh OIDC token: ${error instanceof Error ? error.message : String(error)}`,
         severity: 'error'
       });
+    } finally {
+      setIsRefreshingToken(false);
     }
   };
 
@@ -380,10 +413,10 @@ const ConnectionConfig: React.FC = () => {
                     name="backend_url"
                     label="Nauthilus Backend URL"
                     InputProps={{ endAdornment: (
-                      <InputAdornment position="end"><InfoTooltip title="Base URL of your Nauthilus backend API (e.g., https://nauthilus.example.com)." /></InputAdornment>
+                      <InputAdornment position="end"><InfoTooltip title="Base URL of your Nauthilus backend API (e.g., https://nauthilus.example.com or https://localhost:9443/)." /></InputAdornment>
                     ) }}
                     variant="outlined"
-                    placeholder="https://nauthilus.example.com"
+                    placeholder="https://localhost:9443/"
                     error={getIn(touched, 'backend_url') && Boolean(getIn(errors, 'backend_url'))}
                     helperText={
                       (getIn(touched, 'backend_url') && getIn(errors, 'backend_url')) ||
@@ -554,8 +587,8 @@ const ConnectionConfig: React.FC = () => {
                       </Grid>
                     </Grid>
 
-                    {/* Token Status and Reset-Button */}
-                    {values.oidc_auth?.token && (
+                    {/* Token Status and Refresh Button */}
+                    {(values.oidc_auth?.client_id && values.oidc_auth?.client_secret) && (
                       <Grid sx={{ mt: 2 }} size={12}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                           <Box>
@@ -563,18 +596,23 @@ const ConnectionConfig: React.FC = () => {
                               OIDC Access Token Status
                             </Typography>
                             <Typography variant="body2" color="text.secondary">
-                              {values.oidc_auth.expires_at > Date.now() / 1000
+                              {!values.backend_url
+                                ? 'Backend URL is missing. Configure it before fetching a token.'
+                                : values.oidc_auth.token
+                                ? values.oidc_auth.expires_at > Date.now() / 1000
                                 ? `Valid until: ${new Date(values.oidc_auth.expires_at * 1000).toLocaleString()}`
-                                : 'Token has expired'}
+                                : 'Token has expired'
+                                : 'No token is currently stored. Fetch a new token now.'}
                             </Typography>
                           </Box>
                           <Button
                             variant="outlined"
                             color="secondary"
-                            onClick={resetOIDCToken}
+                            onClick={() => refreshOIDCToken(values)}
                             startIcon={<RefreshIcon />}
+                            disabled={isRefreshingToken || !values.backend_url}
                           >
-                            Reset Token
+                            {isRefreshingToken ? 'Refreshing...' : values.oidc_auth.token ? 'Refresh Token' : 'Fetch Token'}
                           </Button>
                         </Box>
                       </Grid>

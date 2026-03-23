@@ -1,5 +1,5 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Routes, Route, useNavigate } from 'react-router-dom';
+import React, { lazy, Suspense, useState, useRef, useEffect, useMemo } from 'react';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { 
   AppBar, 
   Box, 
@@ -68,34 +68,6 @@ import ValidationErrors from './components/common/ValidationErrors';
 import LoginPage from './components/LoginPage';
 import MFAPage from './components/MFAPage';
 import OIDCCallback from './components/OIDCCallback';
-
-// Import configuration components
-import ServerConfig from './components/ServerConfig';
-import AuthConfig from './components/AuthConfig';
-
-// Import pages
-import BackendsConfig from './components/BackendsConfig';
-import FeaturesConfig from './components/FeaturesConfig';
-import RedisConfig from './components/RedisConfig';
-import MonitoringConfig from './components/MonitoringConfig';
-import SystemPage from './components/SystemPage';
-import SecurityPage from './components/SecurityPage';
-import LuaConfig from './components/LuaConfig';
-import LDAPConfig from './components/LDAPConfig';
-import FrontendConfig from './components/FrontendConfig';
-import ConnectionConfig from './components/ConnectionConfig';
-import ConfigPreview from './components/ConfigPreview';
-import LicensesPage from './components/LicensesPage';
-import AuditLog from './components/AuditLog';
-import ConfigWizard from './components/ConfigWizard';
-import UserManagement from './components/UserManagement';
-import UserProfile from './components/UserProfile';
-import BruteForceConfig from './components/BruteForceConfig';
-import DistributedBruteForceTools from './components/DistributedBruteForceTools';
-import HookTester from './components/HookTester';
-import ClickhouseRuntime from './components/ClickhouseRuntime';
-import MFASettings from './components/MFASettings';
-import LegalPage from './components/LegalPage';
 import { authenticatedFetch, resetSettingsState, loadSettings as loadSettingsUtil } from './utils/apiUtils';
 import CookieBanner from './components/CookieBanner';
 import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
@@ -120,6 +92,37 @@ interface NavigationMenuItem {
   icon: React.ReactNode;
   path: string;
 }
+
+const ServerConfig = lazy(() => import('./components/ServerConfig'));
+const AuthConfig = lazy(() => import('./components/AuthConfig'));
+const BackendsConfig = lazy(() => import('./components/BackendsConfig'));
+const FeaturesConfig = lazy(() => import('./components/FeaturesConfig'));
+const RedisConfig = lazy(() => import('./components/RedisConfig'));
+const MonitoringConfig = lazy(() => import('./components/MonitoringConfig'));
+const SystemPage = lazy(() => import('./components/SystemPage'));
+const SecurityPage = lazy(() => import('./components/SecurityPage'));
+const LuaConfig = lazy(() => import('./components/LuaConfig'));
+const LDAPConfig = lazy(() => import('./components/LDAPConfig'));
+const FrontendConfig = lazy(() => import('./components/FrontendConfig'));
+const ConnectionConfig = lazy(() => import('./components/ConnectionConfig'));
+const ConfigPreview = lazy(() => import('./components/ConfigPreview'));
+const LicensesPage = lazy(() => import('./components/LicensesPage'));
+const AuditLog = lazy(() => import('./components/AuditLog'));
+const ConfigWizard = lazy(() => import('./components/ConfigWizard'));
+const UserManagement = lazy(() => import('./components/UserManagement'));
+const UserProfile = lazy(() => import('./components/UserProfile'));
+const BruteForceConfig = lazy(() => import('./components/BruteForceConfig'));
+const DistributedBruteForceTools = lazy(() => import('./components/DistributedBruteForceTools'));
+const HookTester = lazy(() => import('./components/HookTester'));
+const ClickhouseRuntime = lazy(() => import('./components/ClickhouseRuntime'));
+const MFASettings = lazy(() => import('./components/MFASettings'));
+const LegalPage = lazy(() => import('./components/LegalPage'));
+
+const RouteLoading = (): React.JSX.Element => (
+  <Box sx={{ display: 'flex', justifyContent: 'center', mt: 4 }}>
+    <CircularProgress />
+  </Box>
+);
 
 // Main content component
 const MainContent = (): React.JSX.Element => {
@@ -1256,9 +1259,11 @@ const MainContent = (): React.JSX.Element => {
             <CircularProgress />
           </Box>
         ) : (
-          <>
+          <Suspense fallback={<RouteLoading />}>
             <Routes>
               <Route path="/" element={<ServerConfig />} />
+              <Route path="/login" element={<Navigate to="/" replace />} />
+              <Route path="/mfa" element={<Navigate to="/" replace />} />
               <Route path="/auth" element={<AuthConfig />} />
               <Route path="/connection" element={<ConnectionConfig />} />
               <Route path="/bruteforce" element={<BruteForceConfig />} />
@@ -1282,8 +1287,9 @@ const MainContent = (): React.JSX.Element => {
               <Route path="/profile" element={<UserProfile />} />
               <Route path="/mfa-settings" element={<MFASettings />} />
               <Route path="/legal/:key" element={<LegalPage />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
-          </>
+          </Suspense>
         )}
       </Box>
     </Box>
@@ -1455,8 +1461,17 @@ const MainContent = (): React.JSX.Element => {
 
 // AppContent component to handle conditional rendering based on authentication
 const AppContent = (): React.JSX.Element => {
-  const { isAuthenticated } = useUser();
+  const { isAuthenticated, loading: userLoading } = useUser();
   const { auth } = useAuth();
+  const waitingForUserSession = auth.isAuthenticated && !isAuthenticated && userLoading;
+
+  if (auth.loading || waitingForUserSession) {
+    return (
+      <Box sx={{ height: '100vh', bgcolor: 'background.default', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
 
   // If the user is authenticated, show the main content
   // If MFA is required, show the MFA page

@@ -12,6 +12,7 @@ import {
 } from '@mui/material';
 import { keyframes } from '@mui/system';
 import { useAuth } from '../contexts/AuthContext';
+import { ensureCSRFToken } from '../utils/csrf';
 
 const isOIDCEnabled = (): boolean => {
   try {
@@ -42,13 +43,18 @@ const glowAnim = keyframes`
 
 const LoginPage = (): React.JSX.Element => {
   const { auth, login: authLogin, loginWithOIDC } = useAuth();
-  const { login: userLogin } = useUser();
+  const { syncSession } = useUser();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [usernameError, setUsernameError] = useState('');
   const [passwordError, setPasswordError] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    // Warm the CSRF cookie on the login screen so the submit path stays synchronous.
+    void ensureCSRFToken();
+  }, []);
 
   // Redirect to home if already authenticated
   useEffect(() => {
@@ -100,14 +106,11 @@ const LoginPage = (): React.JSX.Element => {
 
     if (isValid) {
       try {
-        // Update AuthContext - this will trigger the useEffect hook if MFA is required
+        // Establish the authenticated session first.
         await authLogin(username, password, rememberMe);
 
-        // Also update UserContext to ensure both contexts are in sync
-        await userLogin(username, password);
-
-        // If no MFA is required and authentication is successful, navigation will happen via the useEffect hook
-        // We don't need to do anything else here
+        // Then hydrate the current user from the session cookie without re-authenticating.
+        await syncSession();
       } catch (error) {
         console.error('Login error:', error);
       }

@@ -10,7 +10,7 @@ dotenv.config();
 // Determine API target similar to src/setupProxy.js
 const API_ADDRESS = process.env.FRONTEND_ADDRESS || '0.0.0.0';
 const API_PORT = process.env.FRONTEND_PORT || '3001';
-const API_HOST = API_ADDRESS === '0.0.0.0' ? 'localhost' : API_ADDRESS;
+const API_HOST = API_ADDRESS === '0.0.0.0' || API_ADDRESS === 'localhost' ? '127.0.0.1' : API_ADDRESS;
 const API_TARGET = `http://${API_HOST}:${API_PORT}`;
 
 // Absolute aliases to force a single instance of Emotion at build time

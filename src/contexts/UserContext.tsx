@@ -25,6 +25,7 @@ interface UserContextType {
   loading: boolean;
   error: string | null;
   login: (username: string, password: string) => Promise<User | null>;
+  syncSession: () => Promise<User | null>;
   loginAfterMfa: (username: string) => Promise<User | null>;
   logout: () => Promise<void>;
   addUser: (username: string, password: string, roles: string[]) => Promise<void>;
@@ -48,6 +49,26 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
   const [user, setUser] = useState<{ username: string; roles: string[] } | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+
+  const syncSession = useCallback(async (): Promise<User | null> => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const currentUser = await userManager.getCurrentUser();
+      setIsAuthenticated(!!currentUser);
+      setUser(currentUser);
+      return currentUser;
+    } catch (err) {
+      console.error('Error syncing authenticated user session:', err);
+      setIsAuthenticated(false);
+      setUser(null);
+      setError('Failed to load current user session');
+      return null;
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   // Initialize the user state
   useEffect(() => {
@@ -73,13 +94,9 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
           return;
         }
 
-        const authenticated = await userManager.isAuthenticated();
-        setIsAuthenticated(authenticated);
-
-        if (authenticated) {
-          const currentUser = await userManager.getCurrentUser();
-          setUser(currentUser);
-        }
+        const currentUser = await userManager.getCurrentUser();
+        setIsAuthenticated(!!currentUser);
+        setUser(currentUser);
       } catch (err) {
         console.error('Error checking authentication:', err);
         setError('Failed to check authentication status');
@@ -101,15 +118,21 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     try {
       const result = await userManager.authenticate(username, password);
 
-      if (result) {
-        setIsAuthenticated(true);
+      if (result && 'token' in result) {
         const currentUser = await userManager.getCurrentUser();
+        setIsAuthenticated(!!currentUser);
         setUser(currentUser);
         return currentUser;
-      } else {
-        setError('Invalid username or password');
+      }
+
+      if (result && 'mfaRequired' in result) {
+        setIsAuthenticated(false);
+        setUser(null);
         return null;
       }
+
+      setError('Invalid username or password');
+      return null;
     } catch (err) {
       console.error('Login error:', err);
       setError('An error occurred during login');
@@ -121,32 +144,22 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
 
   // Login after MFA completion function (stable)
   const loginAfterMfa = useCallback(async (username: string): Promise<User | null> => {
-    setLoading(true);
-    setError(null);
-
     try {
-      // Skip authentication since it's already done in AuthContext
-      // Just update the user state with the current user
-      setIsAuthenticated(true);
-      const currentUser = await userManager.getCurrentUser();
-
+      const currentUser = await syncSession();
       if (currentUser) {
         console.log('UserContext: Setting user after MFA completion:', currentUser);
-        setUser(currentUser);
         return currentUser;
-      } else {
-        console.error('UserContext: Failed to get current user after MFA completion');
-        setError('Failed to get user information after MFA');
-        return null;
       }
+
+      console.error('UserContext: Failed to get current user after MFA completion');
+      setError('Failed to get user information after MFA');
+      return null;
     } catch (err) {
-      console.error('UserContext: Error in loginAfterMfa:', err);
+      console.error(`UserContext: Error in loginAfterMfa for ${username}:`, err);
       setError('An error occurred during login after MFA');
       return null;
-    } finally {
-      setLoading(false);
     }
-  }, []);
+  }, [syncSession]);
 
   // Logout function (stable)
   const logout = useCallback(async (): Promise<void> => {
@@ -317,6 +330,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     loading,
     error,
     login,
+    syncSession,
     loginAfterMfa,
     logout,
     addUser,
@@ -325,7 +339,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     updatePassword,
     updateUserProfile,
     clearError
-  }), [isAuthenticated, user, loading, error, login, loginAfterMfa, logout, addUser, removeUser, getUsers, updatePassword, updateUserProfile, clearError]);
+  }), [isAuthenticated, user, loading, error, login, syncSession, loginAfterMfa, logout, addUser, removeUser, getUsers, updatePassword, updateUserProfile, clearError]);
 
   return (
     <UserContext.Provider value={contextValue}>

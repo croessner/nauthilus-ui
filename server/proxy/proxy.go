@@ -3,7 +3,9 @@ package proxy
 import (
 	"bufio"
 	"compress/gzip"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -25,9 +27,113 @@ import (
 	"nauthilus-ui/server/utils"
 )
 
+// privateRanges is the set of IP networks that must never be used as proxy
+// targets (loopback, RFC1918 private, link-local, CGNAT, IPv6 ULA/link-local).
+var privateRanges = func() []*net.IPNet {
+	cidrs := []string{
+		"127.0.0.0/8",    // IPv4 loopback
+		"10.0.0.0/8",     // RFC 1918
+		"172.16.0.0/12",  // RFC 1918
+		"192.168.0.0/16", // RFC 1918
+		"169.254.0.0/16", // IPv4 link-local (APIPA)
+		"100.64.0.0/10",  // Carrier-grade NAT (RFC 6598)
+		"::1/128",        // IPv6 loopback
+		"fc00::/7",       // IPv6 unique local (ULA)
+		"fe80::/10",      // IPv6 link-local
+	}
+
+	result := make([]*net.IPNet, 0, len(cidrs))
+
+	for _, cidr := range cidrs {
+		_, ipNet, err := net.ParseCIDR(cidr)
+		if err == nil {
+			result = append(result, ipNet)
+		}
+	}
+
+	return result
+}()
+
+// isSSRFRisk reports whether host is a loopback/private address that must not
+// be used as a proxy target.  host may be a bare hostname or a bare IP address
+// (port must be stripped before calling).
+func isSSRFRisk(host string) bool {
+	switch strings.ToLower(strings.TrimSpace(host)) {
+	case "localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback":
+		return true
+	}
+
+	ip := net.ParseIP(host)
+	if ip == nil {
+		// Not a raw IP address — we cannot resolve it here.  Only literal
+		// localhost variants are caught above; hostname-based DNS rebinding
+		// requires a resolving transport (out of scope for this check).
+		return false
+	}
+
+	for _, network := range privateRanges {
+		if network.Contains(ip) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// isOriginAllowed reports whether the origin (scheme://host[:port]) of rawURL
+// matches one of the pre-approved origins returned from the database.
+func isOriginAllowed(rawURL string, allowedOrigins []string) bool {
+	if len(allowedOrigins) == 0 {
+		return false
+	}
+
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return false
+	}
+
+	requestedOrigin := strings.ToLower(parsed.Scheme) + "://" + strings.ToLower(parsed.Host)
+
+	for _, origin := range allowedOrigins {
+		if requestedOrigin == origin {
+			return true
+		}
+	}
+
+	return false
+}
+
+// validateProxyTargetURL rejects URLs that could be exploited for SSRF:
+//   - non-http/https schemes (file://, gopher://, …)
+//   - targets that resolve directly to private / loopback IP addresses
+func validateProxyTargetURL(rawURL string) error {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return errors.New("invalid target URL")
+	}
+
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return errors.New("only http and https URL schemes are permitted for proxy targets")
+	}
+
+	if isSSRFRisk(parsed.Hostname()) {
+		return errors.New("proxy target resolves to a restricted address")
+	}
+
+	return nil
+}
+
 // ProxyHandler handles proxy requests to external services
 type ProxyHandler struct {
 	Mongo *db.MongoDB
+
+	// allowedOriginLookup can be injected in tests to exercise the DB-allowlist
+	// branch without requiring a live MongoDB instance.
+	allowedOriginLookup func(ctx context.Context, username string) ([]string, error)
+
+	// AllowPrivateTargets disables the SSRF protection that normally blocks
+	// requests to loopback / RFC1918 addresses.  Set to true only in tests.
+	AllowPrivateTargets bool
 }
 
 // ProxyConfig holds configuration for a proxy request
@@ -45,6 +151,22 @@ type ProxyConfig struct {
 // NewProxyHandler creates a new ProxyHandler
 func NewProxyHandler(mongo *db.MongoDB) *ProxyHandler {
 	return &ProxyHandler{Mongo: mongo}
+}
+
+func (h *ProxyHandler) hasAllowedOriginLookup() bool {
+	return h.allowedOriginLookup != nil || h.Mongo != nil
+}
+
+func (h *ProxyHandler) getAllowedBackendOrigins(ctx context.Context, username string) ([]string, error) {
+	if h.allowedOriginLookup != nil {
+		return h.allowedOriginLookup(ctx, username)
+	}
+
+	if h.Mongo == nil {
+		return nil, errors.New("backend origin lookup unavailable")
+	}
+
+	return h.Mongo.GetAllowedBackendOrigins(ctx, username)
 }
 
 // getTargetURL extracts and validates the target URL from the request
@@ -204,6 +326,56 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 			ctx.JSON(statusCode, models.ErrorResponse{Error: errMsg})
 
 			return
+		}
+	}
+
+	// SSRF protection.
+	//
+	// When a live database is available (production), compare the requested
+	// target URL against the backend URL the user saved in their active
+	// RuntimeSettings profile.  Only that exact origin is permitted.
+	//
+	// Database lookup failures are fail-closed (request denied).  The old
+	// IP-range/scheme heuristic is only used when no DB/lookup source exists
+	// (tests or offline mode without MongoDB).
+	if !h.AllowPrivateTargets {
+		if h.hasAllowedOriginLookup() {
+			username := ctx.GetString("username")
+			origins, dbErr := h.getAllowedBackendOrigins(ctx.Request.Context(), username)
+
+			if dbErr != nil {
+				slog.Error("DB allowlist lookup failed, blocking proxy request",
+					"endpoint", config.LogEndpoint,
+					"username", username,
+					"error", dbErr,
+				)
+				ctx.JSON(http.StatusServiceUnavailable, models.ErrorResponse{
+					Error: "proxy allowlist lookup failed",
+				})
+
+				return
+			}
+
+			if !isOriginAllowed(config.TargetURL, origins) {
+				slog.Warn("Proxy request blocked: target not in configured allowlist",
+					"endpoint", config.LogEndpoint,
+					"url", utils.RedactURLString(config.TargetURL),
+					"username", username,
+				)
+				ctx.JSON(http.StatusForbidden, models.ErrorResponse{
+					Error: "proxy target is not in the configured backend allowlist",
+				})
+
+				return
+			}
+		} else {
+			// No database (e.g. integration tests without AllowPrivateTargets).
+			if err := validateProxyTargetURL(config.TargetURL); err != nil {
+				slog.Warn("Proxy request blocked by SSRF protection", "endpoint", config.LogEndpoint, "error", err)
+				ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
+
+				return
+			}
 		}
 	}
 

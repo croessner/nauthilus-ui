@@ -12,6 +12,12 @@ interface ConfigProfile {
   config: NauthilusConfig;
 }
 
+interface LoadedProfileState {
+  profilesArray: ConfigProfile[];
+  currentProfile: string;
+  profileConfig: NauthilusConfig | null;
+}
+
 // Define the context type
 interface ConfigContextType {
   config: NauthilusConfig | null;
@@ -60,6 +66,8 @@ const DEFAULT_CONFIG: NauthilusConfig = {
   }
 };
 
+let initialConfigLoadPromise: Promise<LoadedProfileState> | null = null;
+
 // Provider component
 interface ConfigProviderProps {
   children: ReactNode;
@@ -80,6 +88,12 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   ): Promise<T | undefined> => {
     return apiWithErrorHandling(setLoading, setError, operation, errorMessage);
   }, [setLoading, setError]);
+
+  const applyLoadedProfiles = useCallback((loaded: LoadedProfileState): void => {
+    setProfiles(loaded.profilesArray);
+    setCurrentProfileName(loaded.currentProfile);
+    setConfig(loaded.profileConfig);
+  }, []);
 
   // Helper functions for validation
   const validateServerBasics = (config: NauthilusConfig, errors: string[]): void => {
@@ -291,8 +305,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   }, [validateConfig]);
 
   // Function to load the configuration profiles from MongoDB
-  const refreshConfig = useCallback(async () => {
-    await withErrorHandling(async () => {
+  const loadProfiles = useCallback(async (): Promise<LoadedProfileState> => {
       const userId = await getCurrentUserId();
       let profilesArray: ConfigProfile[];
       let currentProfile: string;
@@ -327,16 +340,20 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         currentProfile = profilesArray.length > 0 ? profilesArray[0].name : DEFAULT_PROFILE_NAME;
       }
 
-      setProfiles(profilesArray);
-      setCurrentProfileName(currentProfile);
-
-      // Set the current config
       const profileConfig = profilesArray.find(profile => profile.name === currentProfile)?.config;
-      setConfig(profileConfig || null);
+      return {
+        profilesArray,
+        currentProfile,
+        profileConfig: profileConfig || null,
+      };
+  }, []);
 
-      return profilesArray;
-    }, 'Failed to load configuration profiles. Please try again.');
-  }, [withErrorHandling, setProfiles, setCurrentProfileName, setConfig]);
+  const refreshConfig = useCallback(async () => {
+    const loaded = await withErrorHandling(loadProfiles, 'Failed to load configuration profiles. Please try again.');
+    if (loaded) {
+      applyLoadedProfiles(loaded);
+    }
+  }, [withErrorHandling, loadProfiles, applyLoadedProfiles]);
 
   // Helper function to update profiles with a new config
   const updateProfilesWithConfig = useCallback(async (newConfig: NauthilusConfig) => {
@@ -901,27 +918,35 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
   // Load the configuration when the component mounts
   useEffect(() => {
-    // Create a flag to track if the component is mounted
     let isMounted = true;
+    setLoading(true);
+    setError(null);
 
-    // Call refreshConfig and handle the Promise
-    refreshConfig().then(() => {
-      // Only update state if the component is still mounted
+    if (!initialConfigLoadPromise) {
+      initialConfigLoadPromise = loadProfiles().finally(() => {
+        initialConfigLoadPromise = null;
+      });
+    }
+
+    initialConfigLoadPromise.then((loaded) => {
       if (isMounted) {
-        // No additional action needed as refreshConfig already updates the state
+        applyLoadedProfiles(loaded);
       }
-    }).catch(err => {
-      // Only update state if the component is still mounted
+    }).catch((err) => {
       if (isMounted) {
+        setError('Failed to load configuration profiles. Please try again.');
         console.error('Error in refreshConfig:', err);
+      }
+    }).finally(() => {
+      if (isMounted) {
+        setLoading(false);
       }
     });
 
-    // Cleanup function to handle component unmounting
     return () => {
       isMounted = false;
     };
-  }, [refreshConfig]);
+  }, [loadProfiles, applyLoadedProfiles]);
 
   // Function to load configuration from the backend
   const loadConfigFromBackend = useCallback(async (connectionConfig: any) => {
