@@ -11,8 +11,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"nauthilus-ui/server/audit"
 	"nauthilus-ui/server/db"
@@ -152,9 +152,18 @@ func (h *AuditHandler) Meta(ctx *gin.Context) {
 		return out
 	}
 
-	actorsRaw, _ := coll.Distinct(ctx.Request.Context(), "actor", bson.M{})
-	actionsRaw, _ := coll.Distinct(ctx.Request.Context(), "action", bson.M{})
-	targetsRaw, _ := coll.Distinct(ctx.Request.Context(), "target", bson.M{})
+	distinctValues := func(field string) []interface{} {
+		var vals []interface{}
+		if err := coll.Distinct(ctx.Request.Context(), field, bson.M{}).Decode(&vals); err != nil {
+			return []interface{}{}
+		}
+
+		return vals
+	}
+
+	actorsRaw := distinctValues("actor")
+	actionsRaw := distinctValues("action")
+	targetsRaw := distinctValues("target")
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"actors":  toStrings(actorsRaw),

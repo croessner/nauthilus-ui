@@ -7,9 +7,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
@@ -182,7 +182,7 @@ func (h *LegalHandler) Update(ctx *gin.Context) {
 			ctx.Request.Context(),
 			bson.M{"key": key},
 			update,
-			options.Update().SetUpsert(true),
+			options.UpdateOne().SetUpsert(true),
 		)
 
 		if err2 != nil {

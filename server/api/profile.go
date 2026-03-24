@@ -8,8 +8,8 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
@@ -469,7 +469,7 @@ func (h *ProfileHandler) SaveProfiles(ctx *gin.Context) {
 				"hooks":       newHooks,
 			},
 		}
-		_, _ = h.MongoDB.RuntimeColl.UpdateOne(context.Background(), runtimeFilter, runtimeUpdate, options.Update().SetUpsert(true))
+		_, _ = h.MongoDB.RuntimeColl.UpdateOne(context.Background(), runtimeFilter, runtimeUpdate, options.UpdateOne().SetUpsert(true))
 	}
 
 	// Audit settings save for profiles

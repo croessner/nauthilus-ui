@@ -5,9 +5,9 @@ import (
 	"log/slog"
 	"time"
 
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 	"golang.org/x/crypto/bcrypt"
 
 	"nauthilus-ui/server/config"
@@ -69,9 +69,9 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 		ApplyURI(m.Config.MongoURI).
 		SetServerSelectionTimeout(5 * time.Second).
 		SetConnectTimeout(10 * time.Second).
-		SetSocketTimeout(45 * time.Second)
+		SetTimeout(45 * time.Second)
 
-	client, err := mongo.Connect(ctx, clientOptions)
+	client, err := mongo.Connect(clientOptions)
 	if err != nil {
 		m.IsConnected = false
 
