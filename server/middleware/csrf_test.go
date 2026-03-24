@@ -59,7 +59,11 @@ func TestCSRFMiddlewareRejectsDisallowedOrigin(t *testing.T) {
 
 	router := gin.New()
 	NewCSRFProtection(&config.Config{
-		CORSAllowedOrigins: []string{"https://ui.example.com"},
+		Security: config.SecurityConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://ui.example.com"},
+			},
+		},
 	}).RegisterMiddleware(router)
 	router.DELETE("/proxy/test", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)

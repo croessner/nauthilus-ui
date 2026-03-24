@@ -7,15 +7,14 @@ services:
     container_name: nauthilus-ui
     restart: unless-stopped
     environment:
-      - FRONTEND_PORT=3001
-      - FRONTEND_ADDRESS=0.0.0.0
-      - PROXY_PORT=3002
-      - PROXY_ADDRESS=0.0.0.0
-      - REACT_APP_PROXY_PORT=443
-      - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongo:27017/nauthilus-ui?authSource=admin
+      - NAUTHILUS_UI_CONFIG_FILE=/app/config.yaml
+      - NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT=443
+      - NAUTHILUS_UI_DATABASE_MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongo:27017/nauthilus-ui?authSource=admin
     ports:
       - "3001:3001"
       - "3002:3002"
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro
     depends_on:
       - mongo
     networks:

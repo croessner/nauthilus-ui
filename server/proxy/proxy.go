@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -1513,9 +1512,17 @@ func isPublicRoutableIP(ipStr string) bool {
 	return true
 }
 
-// IpapiStatus returns { enabled: boolean } depending on the presence of IPAPI_API_KEY
+func (h *ProxyHandler) ipapiAPIKey() string {
+	if h == nil || h.Mongo == nil || h.Mongo.Config == nil {
+		return ""
+	}
+
+	return strings.TrimSpace(h.Mongo.Config.Integrations.IPAPI.APIKey)
+}
+
+// IpapiStatus returns { enabled: boolean } depending on whether integrations.ipapi.api_key is configured.
 func (h *ProxyHandler) IpapiStatus(ctx *gin.Context) {
-	enabled := os.Getenv("IPAPI_API_KEY") != ""
+	enabled := h.ipapiAPIKey() != ""
 	ctx.JSON(http.StatusOK, gin.H{"enabled": enabled})
 }
 
@@ -1540,7 +1547,7 @@ func (h *ProxyHandler) IpapiLookupProxy(ctx *gin.Context) {
 		return
 	}
 
-	apiKey := os.Getenv("IPAPI_API_KEY")
+	apiKey := h.ipapiAPIKey()
 	if apiKey == "" {
 		ctx.JSON(http.StatusNotImplemented, models.ErrorResponse{Error: "IP lookup is disabled (no API key configured)"})
 

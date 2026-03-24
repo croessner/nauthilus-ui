@@ -16,7 +16,11 @@ func TestCORSAllowsExplicitOriginAndSetsVary(t *testing.T) {
 
 	router := gin.New()
 	NewCORSHandler(&config.Config{
-		CORSAllowedOrigins: []string{"https://ui.example.com"},
+		Security: config.SecurityConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://ui.example.com"},
+			},
+		},
 	}).RegisterMiddleware(router)
 	router.GET("/api/test", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
@@ -60,7 +64,11 @@ func TestCORSRejectsDisallowedOrigin(t *testing.T) {
 
 	router := gin.New()
 	NewCORSHandler(&config.Config{
-		CORSAllowedOrigins: []string{"https://ui.example.com"},
+		Security: config.SecurityConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://ui.example.com"},
+			},
+		},
 	}).RegisterMiddleware(router)
 	router.OPTIONS("/api/test", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
@@ -84,8 +92,10 @@ func TestCORSAllowsLocalDefaults(t *testing.T) {
 
 	router := gin.New()
 	NewCORSHandler(&config.Config{
-		FrontendPort: "3001",
-		ProxyPort:    "3002",
+		Server: config.ServerConfig{
+			Frontend: config.ListenerConfig{Port: 3001},
+			Proxy:    config.ProxyConfig{Port: 3002},
+		},
 	}).RegisterMiddleware(router)
 	router.OPTIONS("/proxy/test", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
@@ -131,7 +141,11 @@ func TestCORSExplicitAllowlistDisablesImplicitLocalDefaults(t *testing.T) {
 
 	router := gin.New()
 	NewCORSHandler(&config.Config{
-		CORSAllowedOrigins: []string{"https://ui.example.com"},
+		Security: config.SecurityConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://ui.example.com"},
+			},
+		},
 	}).RegisterMiddleware(router)
 	router.OPTIONS("/api/test", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
@@ -152,7 +166,11 @@ func TestCORSInvalidExplicitAllowlistDoesNotFallbackToDefaults(t *testing.T) {
 
 	router := gin.New()
 	NewCORSHandler(&config.Config{
-		CORSAllowedOrigins: []string{"not-a-valid-origin"},
+		Security: config.SecurityConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"not-a-valid-origin"},
+			},
+		},
 	}).RegisterMiddleware(router)
 	router.OPTIONS("/api/test", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)

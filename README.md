@@ -8,6 +8,8 @@ A standalone web-based configuration builder for the Nauthilus authentication se
 
 This UI provides a user-friendly way to create and edit Nauthilus configuration files without having to edit YAML files manually. It's built with React, TypeScript, and Material-UI, and works completely independently from the Nauthilus service.
 
+> Configuration is managed in `config.yaml` with optional `NAUTHILUS_UI_*` overrides. See [`docs/configuration.md`](docs/configuration.md) and [`config.yaml.example`](config.yaml.example).
+
 ## Features
 
 - **Standalone Operation**: Works independently without requiring the Nauthilus service
@@ -69,10 +71,12 @@ ui/
 
    These files are referenced in the manifest.json and index.html files.
 
-4. Configure MongoDB connection in the `.env` file:
+4. Create a runtime configuration file:
    ```
-   MONGODB_URI=mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+   cp config.yaml.example config.yaml
    ```
+
+   Then adjust settings as needed (for example `database.mongodb.uri`).
 
 5. For development:
 
@@ -87,14 +91,14 @@ ui/
    go run .
    ```
 
-   The Vite dev server runs on port 3000 and proxies requests to the Go API server on port 3001 (configurable via FRONTEND_ADDRESS/FRONTEND_PORT in your .env).
+   The Vite dev server runs on port 3000 and proxies requests to the Go API server on port 3001 (configurable via `server.frontend.address` / `server.frontend.port` in `config.yaml`).
 
    c. Development Mode Architecture:
    - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
    - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
    - The Go backend only allows cross-origin requests from an explicit allowlist
-   - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
-   - `Forwarded` / `X-Forwarded-*` headers are ignored unless the reverse proxy IP/CIDR is listed in `TRUSTED_PROXIES`
+   - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+   - `Forwarded` / `X-Forwarded-*` headers are ignored unless the reverse proxy IP/CIDR is listed in `server.trusted_proxies`
    - In production, the Go server serves the built static files from the `build/` directory and provides runtime configuration via `/env-config.js`
 
 6. For production deployment, use Docker Compose:
@@ -201,27 +205,28 @@ After logging in for the first time, it's recommended to change the password usi
 
 #### Session Configuration
 
-You can configure session lifetimes using environment variables:
+You can configure session lifetimes using configuration keys:
 
 ```
-REACT_APP_TOKEN_EXPIRY=3600
-REACT_APP_REFRESH_TOKEN_EXPIRY=86400
-REACT_APP_REMEMBER_ME_EXPIRY=86400
+session.token_expiry_seconds: 3600
+session.refresh_token_expiry_seconds: 86400
+session.remember_me_expiry_seconds: 86400
 ```
 
 #### WebAuthn Configuration
 
-You can configure WebAuthn settings using environment variables:
+You can configure WebAuthn settings using configuration keys:
 
 ```
-WEBAUTHN_RP_ID=your_domain.com
-WEBAUTHN_RP_DISPLAY_NAME=Your Application Name
-WEBAUTHN_RP_ORIGINS=https://your_domain.com
+identity.webauthn.rp_id: your_domain.com
+identity.webauthn.rp_display_name: Your Application Name
+identity.webauthn.rp_origins:
+  - https://your_domain.com
 ```
 
-- `WEBAUTHN_RP_ID`: The Relying Party ID for WebAuthn (usually your domain name). If not set, the application will try to auto-detect it from the `FRONTEND_ADDRESS` environment variable, falling back to "localhost" if it can't determine the domain.
-- `WEBAUTHN_RP_DISPLAY_NAME`: The display name for your application shown during WebAuthn registration. Defaults to "Nauthilus UI" if not set.
-- `WEBAUTHN_RP_ORIGINS`: The allowed origins for WebAuthn operations (comma-separated list). If not set, the application will use default origins based on the RPID: for "localhost", it will use "http://localhost:3000" and "http://localhost:3001"; for other domains, it will use "https://<domain>".
+- `identity.webauthn.rp_id`: The Relying Party ID for WebAuthn (usually your domain name). If not set, the application will try to auto-detect it from the `server.frontend.address` configuration key, falling back to "localhost" if it can't determine the domain.
+- `identity.webauthn.rp_display_name`: The display name for your application shown during WebAuthn registration. Defaults to "Nauthilus UI" if not set.
+- `identity.webauthn.rp_origins`: The allowed origins for WebAuthn operations (comma-separated list). If not set, the application will use default origins based on the RPID: for "localhost", it will use "http://localhost:3000" and "http://localhost:3001"; for other domains, it will use "https://<domain>".
 
 #### User Management
 
@@ -268,8 +273,8 @@ The UI provides buttons in the top bar for:
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
   - Cross-origin requests are allowed only for the configured CORS allowlist
-  - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
-  - In non-local deployments, set `CORS_ALLOWED_ORIGINS` explicitly to the UI origin(s)
+  - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+  - In non-local deployments, set `security.cors.allowed_origins` explicitly to the UI origin(s)
   - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_ui_csrf_token`)
 - In production, the Docker setup includes:
   - A Go API server container that serves both the static React files and handles API requests
@@ -414,10 +419,10 @@ Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localh
 ```
 
 **Solution**:
-1. Check that the browser origin is included in `CORS_ALLOWED_ORIGINS`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
+1. Check that the browser origin is included in `security.cors.allowed_origins`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
 2. Check that the CORS middleware is properly registered in the Go server
 3. Verify that the React development server is correctly proxying requests to the Go server
-4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `CORS_ALLOWED_ORIGINS`
+4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `security.cors.allowed_origins`
 
 ### MongoDB Connection Issues
 
@@ -429,7 +434,7 @@ MongoDB connection error: MongoNetworkError: failed to connect to server
 
 **Solution**: 
 1. Make sure MongoDB is installed and running on your system
-2. Check that the MongoDB connection string in your `.env` file is correct
+2. Check that the MongoDB connection string in `config.yaml` (`database.mongodb.uri`) is correct
 3. Verify that the MongoDB user has the correct permissions
 
 ### No MongoDB Collections Created
@@ -438,7 +443,7 @@ If the application starts but no collections are created in MongoDB:
 
 **Solution**:
 1. Make sure the Go API server is running
-2. Check the MongoDB connection string in your `.env` file
+2. Check the MongoDB connection string in `config.yaml` (`database.mongodb.uri`)
 3. Verify that the MongoDB user has write permissions to create collections
 4. Try accessing the MongoDB health check endpoint at `/api/health/mongodb` to trigger a reconnection
 5. Check the Go server logs for any MongoDB connection errors
@@ -455,14 +460,14 @@ This project is proprietary software.
 
 The backend can optionally require Google reCAPTCHA for sensitive endpoints (login, TOTP verify, WebAuthn finish-login). When enabled, the server enforces reCAPTCHA adaptively: it is only required after several consecutive authentication failures from the same client IP. This helps slow down online brute-force attempts with minimal friction for legitimate users.
 
-Environment variables:
-- RECAPTCHA_SECRET: The reCAPTCHA secret (server-side). If empty, reCAPTCHA is disabled.
-- RECAPTCHA_SITE_KEY: The reCAPTCHA site key (frontend). Required when enabling.
-- RECAPTCHA_MIN_SCORE: Optional, float (e.g., 0.5). If provided and the response contains a score (reCAPTCHA v3), the score must meet or exceed this value.
-- RECAPTCHA_THRESHOLD: Optional, integer. Number of consecutive failures per IP before reCAPTCHA is required (default: 3).
+YAML keys:
+- security.recaptcha.secret: The reCAPTCHA secret (server-side). If empty, reCAPTCHA is disabled.
+- security.recaptcha.site_key: The reCAPTCHA site key (frontend). Required when enabling.
+- security.recaptcha.min_score: Optional, float (e.g., 0.5). If provided and the response contains a score (reCAPTCHA v3), the score must meet or exceed this value.
+- security.recaptcha.threshold: Optional, integer. Number of consecutive failures per IP before reCAPTCHA is required (default: 3).
 
 Behavior:
-- Disabled by default. If RECAPTCHA_SECRET and RECAPTCHA_SITE_KEY are both set, adaptive reCAPTCHA is active.
+- Disabled by default. If security.recaptcha.secret and security.recaptcha.site_key are both set, adaptive reCAPTCHA is active.
 - After the threshold of consecutive failures, the server responds with HTTP 403 and JSON payload including:
   { "error": "Captcha required", "captchaRequired": true, "recaptchaSiteKey": "<site_key>" }
 - Clients should render a reCAPTCHA challenge and include the token in subsequent requests as JSON field recaptchaToken.
@@ -491,19 +496,21 @@ These defaults live in server/api/middleware.go.
 - If auto-resolution fails (e.g., script blocked) or no site key is provided, the auth state exposes captchaRequired and recaptchaSiteKey so the UI can render a challenge.
 - Optional frontend fallback key: VITE_RECAPTCHA_SITE_KEY can be set to pre-provide a site key if the backend does not include one.
 
-## .env example for adaptive reCAPTCHA
+## config.yaml example for adaptive reCAPTCHA
 
-Set these environment variables on the backend to enable adaptive reCAPTCHA:
+Set these keys in `config.yaml` (or via `NAUTHILUS_UI_*` overrides) to enable adaptive reCAPTCHA:
 
-RECAPTCHA_SECRET=your-server-secret
-RECAPTCHA_SITE_KEY=your-site-key
-# Optional — require a minimum score for v3 (0..1)
-RECAPTCHA_MIN_SCORE=0.5
-# Optional — failures before CAPTCHA is required
-RECAPTCHA_THRESHOLD=3
+security:
+  recaptcha:
+    secret: your-server-secret
+    site_key: your-site-key
+    # Optional — require a minimum score for v3 (0..1)
+    min_score: 0.5
+    # Optional — failures before CAPTCHA is required
+    threshold: 3
 
 Notes:
-- If RECAPTCHA_SECRET or RECAPTCHA_SITE_KEY is unset, CAPTCHA is disabled and the endpoints behave normally (rate limiting/backoff still applies).
+- If security.recaptcha.secret or security.recaptcha.site_key is unset, CAPTCHA is disabled and the endpoints behave normally (rate limiting/backoff still applies).
 - Tokens are verified against Google's siteverify API server-side.
 
 # Nauthilus Configuration UI
@@ -577,9 +584,9 @@ ui/
 
    These files are referenced in the manifest.json and index.html files.
 
-4. Configure MongoDB connection in the `.env` file:
+4. Create a runtime configuration file (`config.yaml`):
    ```
-   MONGODB_URI=mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+   database.mongodb.uri=mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
    ```
 
 5. For development:
@@ -595,13 +602,13 @@ ui/
    go run .
    ```
 
-   The Vite dev server runs on port 3000 and proxies requests to the Go API server on port 3001 (configurable via FRONTEND_ADDRESS/FRONTEND_PORT in your .env).
+   The Vite dev server runs on port 3000 and proxies requests to the Go API server on port 3001 (configurable via server.frontend.address/server.frontend.port in `config.yaml`).
 
    c. Development Mode Architecture:
    - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
    - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
    - The Go backend only allows cross-origin requests from an explicit allowlist
-   - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+   - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
    - In production, the Go server serves the built static files from the `build/` directory and provides runtime configuration via `/env-config.js`
 
 6. For production deployment, use Docker Compose:
@@ -708,27 +715,28 @@ After logging in for the first time, it's recommended to change the password usi
 
 #### Session Configuration
 
-You can configure session lifetimes using environment variables:
+You can configure session lifetimes using configuration keys:
 
 ```
-REACT_APP_TOKEN_EXPIRY=3600
-REACT_APP_REFRESH_TOKEN_EXPIRY=86400
-REACT_APP_REMEMBER_ME_EXPIRY=86400
+session.token_expiry_seconds: 3600
+session.refresh_token_expiry_seconds: 86400
+session.remember_me_expiry_seconds: 86400
 ```
 
 #### WebAuthn Configuration
 
-You can configure WebAuthn settings using environment variables:
+You can configure WebAuthn settings using configuration keys:
 
 ```
-WEBAUTHN_RP_ID=your_domain.com
-WEBAUTHN_RP_DISPLAY_NAME=Your Application Name
-WEBAUTHN_RP_ORIGINS=https://your_domain.com
+identity.webauthn.rp_id: your_domain.com
+identity.webauthn.rp_display_name: Your Application Name
+identity.webauthn.rp_origins:
+  - https://your_domain.com
 ```
 
-- `WEBAUTHN_RP_ID`: The Relying Party ID for WebAuthn (usually your domain name). If not set, the application will try to auto-detect it from the `FRONTEND_ADDRESS` environment variable, falling back to "localhost" if it can't determine the domain.
-- `WEBAUTHN_RP_DISPLAY_NAME`: The display name for your application shown during WebAuthn registration. Defaults to "Nauthilus UI" if not set.
-- `WEBAUTHN_RP_ORIGINS`: The allowed origins for WebAuthn operations (comma-separated list). If not set, the application will use default origins based on the RPID: for "localhost", it will use "http://localhost:3000" and "http://localhost:3001"; for other domains, it will use "https://<domain>".
+- `identity.webauthn.rp_id`: The Relying Party ID for WebAuthn (usually your domain name). If not set, the application will try to auto-detect it from the `server.frontend.address` configuration key, falling back to "localhost" if it can't determine the domain.
+- `identity.webauthn.rp_display_name`: The display name for your application shown during WebAuthn registration. Defaults to "Nauthilus UI" if not set.
+- `identity.webauthn.rp_origins`: The allowed origins for WebAuthn operations (comma-separated list). If not set, the application will use default origins based on the RPID: for "localhost", it will use "http://localhost:3000" and "http://localhost:3001"; for other domains, it will use "https://<domain>".
 
 #### User Management
 
@@ -775,8 +783,8 @@ The UI provides buttons in the top bar for:
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
   - Cross-origin requests are allowed only for the configured CORS allowlist
-  - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
-  - In non-local deployments, set `CORS_ALLOWED_ORIGINS` explicitly to the UI origin(s)
+  - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+  - In non-local deployments, set `security.cors.allowed_origins` explicitly to the UI origin(s)
   - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_ui_csrf_token`)
 - In production, the Docker setup includes:
   - A Go API server container that serves both the static React files and handles API requests
@@ -921,10 +929,10 @@ Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localh
 ```
 
 **Solution**:
-1. Check that the browser origin is included in `CORS_ALLOWED_ORIGINS`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
+1. Check that the browser origin is included in `security.cors.allowed_origins`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
 2. Check that the CORS middleware is properly registered in the Go server
 3. Verify that the React development server is correctly proxying requests to the Go server
-4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `CORS_ALLOWED_ORIGINS`
+4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `security.cors.allowed_origins`
 
 ### MongoDB Connection Issues
 
@@ -936,7 +944,7 @@ MongoDB connection error: MongoNetworkError: failed to connect to server
 
 **Solution**: 
 1. Make sure MongoDB is installed and running on your system
-2. Check that the MongoDB connection string in your `.env` file is correct
+2. Check that the MongoDB connection string in `config.yaml` (`database.mongodb.uri`) is correct
 3. Verify that the MongoDB user has the correct permissions
 
 ### No MongoDB Collections Created
@@ -945,7 +953,7 @@ If the application starts but no collections are created in MongoDB:
 
 **Solution**:
 1. Make sure the Go API server is running
-2. Check the MongoDB connection string in your `.env` file
+2. Check the MongoDB connection string in `config.yaml` (`database.mongodb.uri`)
 3. Verify that the MongoDB user has write permissions to create collections
 4. Try accessing the MongoDB health check endpoint at `/api/health/mongodb` to trigger a reconnection
 5. Check the Go server logs for any MongoDB connection errors
@@ -962,14 +970,14 @@ This project is proprietary software.
 
 The backend can optionally require Google reCAPTCHA for sensitive endpoints (login, TOTP verify, WebAuthn finish-login). When enabled, the server enforces reCAPTCHA adaptively: it is only required after several consecutive authentication failures from the same client IP. This helps slow down online brute-force attempts with minimal friction for legitimate users.
 
-Environment variables:
-- RECAPTCHA_SECRET: The reCAPTCHA secret (server-side). If empty, reCAPTCHA is disabled.
-- RECAPTCHA_SITE_KEY: The reCAPTCHA site key (frontend). Required when enabling.
-- RECAPTCHA_MIN_SCORE: Optional, float (e.g., 0.5). If provided and the response contains a score (reCAPTCHA v3), the score must meet or exceed this value.
-- RECAPTCHA_THRESHOLD: Optional, integer. Number of consecutive failures per IP before reCAPTCHA is required (default: 3).
+YAML keys:
+- security.recaptcha.secret: The reCAPTCHA secret (server-side). If empty, reCAPTCHA is disabled.
+- security.recaptcha.site_key: The reCAPTCHA site key (frontend). Required when enabling.
+- security.recaptcha.min_score: Optional, float (e.g., 0.5). If provided and the response contains a score (reCAPTCHA v3), the score must meet or exceed this value.
+- security.recaptcha.threshold: Optional, integer. Number of consecutive failures per IP before reCAPTCHA is required (default: 3).
 
 Behavior:
-- Disabled by default. If RECAPTCHA_SECRET and RECAPTCHA_SITE_KEY are both set, adaptive reCAPTCHA is active.
+- Disabled by default. If security.recaptcha.secret and security.recaptcha.site_key are both set, adaptive reCAPTCHA is active.
 - After the threshold of consecutive failures, the server responds with HTTP 403 and JSON payload including:
   { "error": "Captcha required", "captchaRequired": true, "recaptchaSiteKey": "<site_key>" }
 - Clients should render a reCAPTCHA challenge and include the token in subsequent requests as JSON field recaptchaToken.
@@ -998,38 +1006,41 @@ These defaults live in server/api/middleware.go.
 - If auto-resolution fails (e.g., script blocked) or no site key is provided, the auth state exposes captchaRequired and recaptchaSiteKey so the UI can render a challenge.
 - Optional frontend fallback key: VITE_RECAPTCHA_SITE_KEY can be set to pre-provide a site key if the backend does not include one.
 
-## .env example for adaptive reCAPTCHA
+## config.yaml example for adaptive reCAPTCHA
 
-Set these environment variables on the backend to enable adaptive reCAPTCHA:
+Set these keys in `config.yaml` (or via `NAUTHILUS_UI_*` overrides) to enable adaptive reCAPTCHA:
 
-RECAPTCHA_SECRET=your-server-secret
-RECAPTCHA_SITE_KEY=your-site-key
-# Optional — require a minimum score for v3 (0..1)
-RECAPTCHA_MIN_SCORE=0.5
-# Optional — failures before CAPTCHA is required
-RECAPTCHA_THRESHOLD=3
+security:
+  recaptcha:
+    secret: your-server-secret
+    site_key: your-site-key
+    # Optional — require a minimum score for v3 (0..1)
+    min_score: 0.5
+    # Optional — failures before CAPTCHA is required
+    threshold: 3
 
 Notes:
-- If RECAPTCHA_SECRET or RECAPTCHA_SITE_KEY is unset, CAPTCHA is disabled and the endpoints behave normally (rate limiting/backoff still applies).
+- If security.recaptcha.secret or security.recaptcha.site_key is unset, CAPTCHA is disabled and the endpoints behave normally (rate limiting/backoff still applies).
 - Tokens are verified against Google's siteverify API server-side.
 
 ## Audit log retention and cleanup
 
-The backend can periodically delete old audit log entries based on environment variables. This is useful for data minimization and storage control.
+The backend can periodically delete old audit log entries based on configuration values. This is useful for data minimization and storage control.
 
-Environment variables:
-- AUDIT_RETENTION_DAYS: Number of days to keep audit logs. When set to a value > 0, entries older than this threshold are deleted. When <= 0 (default 0), cleanup is disabled.
-- AUDIT_CLEAN_INTERVAL_HOURS: How often (in hours) the cleanup job runs. Default is 6.
+YAML keys:
+- audit.retention_days: Number of days to keep audit logs. When set to a value > 0, entries older than this threshold are deleted. When <= 0 (default 0), cleanup is disabled.
+- audit.cleanup_interval_hours: How often (in hours) the cleanup job runs. Default is 6.
 
 Behavior:
-- On startup, if AUDIT_RETENTION_DAYS > 0, a background scheduler starts and runs every AUDIT_CLEAN_INTERVAL_HOURS, plus once shortly after startup.
-- The cleanup deletes entries from the auditlog collection where ts (RFC3339) is older than now - AUDIT_RETENTION_DAYS.
-- .env files are supported; variables can be placed in a .env file at the repo root or server/..
+- On startup, if audit.retention_days > 0, a background scheduler starts and runs every audit.cleanup_interval_hours, plus once shortly after startup.
+- The cleanup deletes entries from the auditlog collection where ts (RFC3339) is older than now - audit.retention_days.
+- Use `config.yaml` as the primary source; optional overrides use the `NAUTHILUS_UI_*` prefix.
 
-Example .env:
+Example `config.yaml`:
 ```
-AUDIT_RETENTION_DAYS=90
-AUDIT_CLEAN_INTERVAL_HOURS=6
+audit:
+  retention_days: 90
+  cleanup_interval_hours: 6
 ```
 
 
@@ -1042,10 +1053,10 @@ To avoid noisy audit entries from routine, idempotent requests (e.g., auto-refre
 - Optional deduplication suppresses repeated identical events within a small time window per actor.
 - You can force auditing of specific paths via a regex.
 
-Environment variables:
-- AUDIT_GET_AUDIT: If set to true, GET/HEAD requests will also be audited. Default: false
-- AUDIT_DEDUP_WINDOW_SEC: Deduplication window in seconds for repeated events per actor/method/path/action/target. Default: 30
-- AUDIT_FORCE_REGEX: Optional regular expression to force audit for matching request paths (e.g., ^/api/session$|^/admin/)
+YAML keys:
+- audit.policy.include_get_requests: If set to true, GET/HEAD requests will also be audited. Default: false
+- audit.policy.dedup_window_seconds: Deduplication window in seconds for repeated events per actor/method/path/action/target. Default: 30
+- audit.policy.force_path_regex: Optional regular expression to force audit for matching request paths (e.g., ^/api/session$|^/admin/)
 
 Notes:
 - Suppression is server-side; clients cannot disable auditing.

@@ -17,9 +17,11 @@ func TestGetSessionConfigWhenDisconnectedUsesRuntimeDefaults(t *testing.T) {
 
 	handler := NewSessionConfigHandler(&db.MongoDB{
 		Config: &config.Config{
-			TokenExpiry:        3600,
-			RefreshTokenExpiry: 7200,
-			RememberMeExpiry:   86400,
+			Session: config.SessionConfig{
+				TokenExpirySeconds:        3600,
+				RefreshTokenExpirySeconds: 7200,
+				RememberMeExpirySeconds:   86400,
+			},
 		},
 		IsConnected: false,
 	})

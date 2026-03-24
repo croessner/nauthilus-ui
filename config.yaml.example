@@ -1,0 +1,157 @@
+# Nauthilus UI configuration (Viper + YAML)
+#
+# Config discovery order:
+#   1. --config / -c command line flag
+#   2. NAUTHILUS_UI_CONFIG_FILE environment variable
+#   3. ./config.yaml
+#   4. ../config.yaml
+#   5. /etc/nauthilus-ui/config.yaml
+#   6. /etc/nauthilus/ui/config.yaml
+#
+# Environment overrides:
+#   - Prefix: NAUTHILUS_UI
+#   - Key mapping: dots become underscores
+#   - Example: server.proxy.public_port -> NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT
+#
+# IMPORTANT:
+#   - Keep secrets out of Git.
+#   - Use dedicated secrets management in production.
+
+server:
+  # Frontend/API listener
+  frontend:
+    address: 0.0.0.0
+    port: 3001
+
+  # Dedicated proxy listener
+  proxy:
+    address: 0.0.0.0
+    port: 3002
+
+    # Browser-facing proxy port used in frontend runtime config.
+    # Set this to 443 when the UI is published behind TLS reverse proxies.
+    public_port: 3002
+
+  # Reverse proxies whose Forwarded/X-Forwarded-* headers are trusted.
+  # Empty means "trust none" (secure default).
+  trusted_proxies: []
+  # trusted_proxies:
+  #   - 127.0.0.1
+  #   - ::1
+  #   - 172.18.0.0/16
+
+database:
+  mongodb:
+    # Example local/dev URI.
+    # Docker compose typically overrides host to "mongo".
+    uri: mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+
+session:
+  # Access token/session TTL in seconds.
+  token_expiry_seconds: 3600
+
+  # Refresh session TTL in seconds.
+  refresh_token_expiry_seconds: 86400
+
+  # Remember-me refresh session TTL in seconds.
+  remember_me_expiry_seconds: 86400
+
+  # If true, sync remember_me_expiry_seconds into DB on startup.
+  sync_remember_me_from_config_on_boot: false
+
+ui:
+  # Cookie banner policy:
+  #  -1: never show
+  #   0: always show (dismissable for current session)
+  #   N: show again after N days
+  cookie_banner_reshow_days: -1
+
+  # Max payload size accepted by RAW JSON UI editors.
+  # Allowed range: 1024..1048576
+  raw_json_max_bytes: 8192
+
+identity:
+  oidc:
+    # Optional OIDC login.
+    enabled: false
+
+    # Required when enabled=true.
+    issuer: ""
+    client_id: ""
+
+    # Server-side only; never sent to browser runtime config.
+    client_secret: ""
+
+    # Space-separated scopes for authorization code flow.
+    scopes: "openid profile email"
+
+    # Claim path for role extraction, e.g. "roles" or "realm_access.roles".
+    role_claim: "roles"
+
+    # Claim used as local username.
+    username_claim: "preferred_username"
+
+  webauthn:
+    # Relying Party ID.
+    # Leave empty for automatic fallback:
+    #   - frontend address (if explicit)
+    #   - otherwise localhost
+    rp_id: ""
+
+    # Display name shown by authenticators.
+    rp_display_name: "Nauthilus UI"
+
+    # Allowed origins.
+    # Leave empty for automatic fallback:
+    #   - localhost: [http://localhost:3000, http://localhost:<frontend-port>]
+    #   - non-localhost: [https://<rp_id>]
+    rp_origins: []
+    # rp_origins:
+    #   - https://ui.example.com
+
+security:
+  cors:
+    # Explicit browser origin allowlist.
+    # Empty => local development defaults only.
+    allowed_origins: []
+    # allowed_origins:
+    #   - https://ui.example.com
+    #   - https://admin.example.com
+
+  recaptcha:
+    # Adaptive reCAPTCHA is enabled only if both values are set.
+    secret: ""
+    site_key: ""
+
+    # Optional score gate for reCAPTCHA v3 responses (0..1).
+    min_score: 0.0
+
+    # Number of consecutive failures per IP before CAPTCHA is required.
+    threshold: 3
+
+audit:
+  # <= 0 disables automatic cleanup.
+  retention_days: 0
+
+  # Scheduler interval for cleanup runs.
+  cleanup_interval_hours: 6
+
+  policy:
+    # Include GET/HEAD requests in audit logs.
+    include_get_requests: false
+
+    # Dedup window for repeated identical events (seconds). 0 disables dedup.
+    dedup_window_seconds: 30
+
+    # Optional regex to force-audit matching paths.
+    force_path_regex: ""
+
+integrations:
+  ipapi:
+    # Optional ipapi.com API key for IP geolocation lookup in runtime view.
+    api_key: ""
+
+  report:
+    # Optional absolute path to Chrome/Chromium executable for PDF rendering.
+    # If empty, the server searches common binary paths.
+    chrome_path: ""

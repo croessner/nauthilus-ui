@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"golang.org/x/crypto/bcrypt"
 
+	"nauthilus-ui/server/config"
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
 )
@@ -32,9 +33,14 @@ func NewAuthHandler(mongoDB *db.MongoDB) *AuthHandler {
 
 // RegisterRoutes registers the authentication routes
 func (h *AuthHandler) RegisterRoutes(router *gin.Engine) {
+	var appConfig *config.Config
+	if h.MongoDB != nil {
+		appConfig = h.MongoDB.Config
+	}
+
 	// Apply rate limiting to login endpoint
 	router.GET("/api/auth/csrf", h.CSRF)
-	router.POST("/api/auth/login", LoginRateLimitMiddleware(), AdaptiveCaptchaMiddleware(loginIPLimiter), h.Login)
+	router.POST("/api/auth/login", LoginRateLimitMiddleware(), AdaptiveCaptchaMiddleware(loginIPLimiter, appConfig), h.Login)
 	router.POST("/api/auth/refresh", h.Refresh)
 	router.POST("/api/auth/logout", h.Logout)
 	router.GET("/api/auth/me", h.Me)

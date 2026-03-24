@@ -84,9 +84,14 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 		_ = os.Setenv("XDG_RUNTIME_DIR", "/tmp")
 	}
 
+	configuredChromePath := ""
+	if h.mongo != nil && h.mongo.Config != nil {
+		configuredChromePath = strings.TrimSpace(h.mongo.Config.Integrations.Report.ChromePath)
+	}
+
 	// Resolve Chrome/Chromium executable path
 	findBrowser := func() (string, error) {
-		if raw := strings.TrimSpace(os.Getenv("CHROME_PATH")); raw != "" {
+		if raw := configuredChromePath; raw != "" {
 			p := strings.Trim(raw, "\"'")
 			if info, err := os.Stat(p); err == nil && !info.IsDir() {
 				return p, nil
@@ -115,7 +120,7 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 				}
 			}
 
-			// If CHROME_PATH points to a directory, try common executable names inside
+			// If chrome_path points to a directory, try common executable names inside
 			if fi, err := os.Stat(p); err == nil && fi.IsDir() {
 				tryNames := []string{"chrome", "google-chrome", "chromium", "Chromium", "Google Chrome"}
 				for _, n := range tryNames {
@@ -136,11 +141,12 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 
 		// OS-specific absolute paths
 		if runtime.GOOS == "darwin" {
+			userHomeDir, _ := os.UserHomeDir()
 			macPaths := []string{
 				"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
 				"/Applications/Chromium.app/Contents/MacOS/Chromium",
-				filepath.Join(os.Getenv("HOME"), "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
-				filepath.Join(os.Getenv("HOME"), "Applications/Chromium.app/Contents/MacOS/Chromium"),
+				filepath.Join(userHomeDir, "Applications/Google Chrome.app/Contents/MacOS/Google Chrome"),
+				filepath.Join(userHomeDir, "Applications/Chromium.app/Contents/MacOS/Chromium"),
 			}
 
 			for _, p := range macPaths {
@@ -157,7 +163,7 @@ func (h *ReportHandler) GeneratePDF(ctx *gin.Context) {
 			}
 		}
 
-		return "", errors.New("no Chrome/Chromium executable found; set CHROME_PATH or install Chromium/Google Chrome")
+		return "", errors.New("no Chrome/Chromium executable found; set integrations.report.chrome_path or install Chromium/Google Chrome")
 	}
 
 	exePath, err := findBrowser()

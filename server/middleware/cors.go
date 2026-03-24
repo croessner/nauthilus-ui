@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -44,8 +45,8 @@ func NewOriginPolicy(cfg *config.Config) *OriginPolicy {
 
 	allowed := make(map[string]struct{})
 
-	explicitAllowlistConfigured := len(cfg.CORSAllowedOrigins) > 0
-	for _, origin := range cfg.CORSAllowedOrigins {
+	explicitAllowlistConfigured := len(cfg.Security.CORS.AllowedOrigins) > 0
+	for _, origin := range cfg.Security.CORS.AllowedOrigins {
 		addAllowedOrigin(allowed, origin)
 	}
 
@@ -110,7 +111,7 @@ func originFromParts(scheme, host, port string) string {
 
 func deriveDefaultOrigins(cfg *config.Config) []string {
 	hosts := []string{"localhost", "127.0.0.1", "[::1]"}
-	for _, host := range []string{cfg.FrontendAddress, cfg.ProxyAddress} {
+	for _, host := range []string{cfg.Server.Frontend.Address, cfg.Server.Proxy.Address} {
 		normalized := normalizeHostForOrigin(host)
 		switch normalized {
 		case "", "localhost", "127.0.0.1", "[::1]":
@@ -123,9 +124,9 @@ func deriveDefaultOrigins(cfg *config.Config) []string {
 
 	ports := []string{
 		defaultVitePort,
-		firstNonEmpty(cfg.FrontendPort, defaultAPIPort),
-		firstNonEmpty(cfg.ProxyPort, defaultProxyPort),
-		firstNonEmpty(cfg.ReactProxyPort, firstNonEmpty(cfg.ProxyPort, defaultProxyPort)),
+		portOrDefault(cfg.Server.Frontend.Port, defaultAPIPort),
+		portOrDefault(cfg.Server.Proxy.Port, defaultProxyPort),
+		portOrDefault(cfg.Server.Proxy.PublicPort, portOrDefault(cfg.Server.Proxy.Port, defaultProxyPort)),
 	}
 
 	origins := make([]string, 0, len(hosts)*len(ports))
@@ -140,14 +141,12 @@ func deriveDefaultOrigins(cfg *config.Config) []string {
 	return origins
 }
 
-func firstNonEmpty(values ...string) string {
-	for _, value := range values {
-		if strings.TrimSpace(value) != "" {
-			return value
-		}
+func portOrDefault(port int, fallback string) string {
+	if port <= 0 {
+		return fallback
 	}
 
-	return ""
+	return strconv.Itoa(port)
 }
 
 func appendVary(header http.Header, value string) {

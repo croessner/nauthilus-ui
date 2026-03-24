@@ -11,7 +11,6 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
 	"strings"
 	"time"
 
@@ -22,6 +21,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 
+	"nauthilus-ui/server/config"
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/models"
 	"nauthilus-ui/server/requestmeta"
@@ -35,45 +35,36 @@ type MFAHandler struct {
 
 // NewMFAHandler creates a new MFAHandler
 func NewMFAHandler(mongoDB *db.MongoDB) (*MFAHandler, error) {
-	// Get WebAuthn configuration from environment variables
-	rpID := os.Getenv("WEBAUTHN_RP_ID")
-	rpDisplayName := os.Getenv("WEBAUTHN_RP_DISPLAY_NAME")
-	rpOrigins := os.Getenv("WEBAUTHN_RP_ORIGINS")
+	rpID := "localhost"
+	rpDisplayName := "Nauthilus UI"
+	origins := []string{"http://localhost:3000", "http://localhost:3001"}
 
-	// Use default values if environment variables are not set
-	if rpDisplayName == "" {
-		rpDisplayName = "Nauthilus UI"
-	}
+	if mongoDB != nil && mongoDB.Config != nil {
+		cfg := mongoDB.Config.Identity.WebAuthn
 
-	// Auto-detect RPID if not explicitly set
-	if rpID == "" {
-		// Get server address from environment (prefer new var, fallback to deprecated)
-		address := os.Getenv("FRONTEND_ADDRESS")
-
-		// Default to the server's address if it's not a wildcard address
-		if address != "" && address != "0.0.0.0" && address != "::" {
-			rpID = address
-		} else {
-			// Fall back to localhost if we can't determine the domain
-			rpID = "localhost"
+		if strings.TrimSpace(cfg.RPID) != "" {
+			rpID = strings.TrimSpace(cfg.RPID)
 		}
-	}
 
-	// Parse RPOrigins from environment variable
-	var origins []string
-	if rpOrigins != "" {
-		// Split by comma if multiple origins are provided
-		origins = strings.Split(rpOrigins, ",")
-		// Trim spaces from each origin
-		for i, origin := range origins {
-			origins[i] = strings.TrimSpace(origin)
+		if strings.TrimSpace(cfg.RPDisplayName) != "" {
+			rpDisplayName = strings.TrimSpace(cfg.RPDisplayName)
 		}
-	} else {
-		// Default origins based on the RPID
-		if rpID == "localhost" {
-			origins = []string{"http://localhost:3000", "http://localhost:3001"}
-		} else {
-			// For production, assume both http and https
+
+		if len(cfg.RPOrigins) > 0 {
+			normalized := make([]string, 0, len(cfg.RPOrigins))
+			for _, origin := range cfg.RPOrigins {
+				trimmed := strings.TrimSpace(origin)
+				if trimmed == "" {
+					continue
+				}
+
+				normalized = append(normalized, trimmed)
+			}
+
+			if len(normalized) > 0 {
+				origins = normalized
+			}
+		} else if rpID != "localhost" {
 			origins = []string{"https://" + rpID}
 		}
 	}
@@ -108,10 +99,15 @@ func NewMFAHandler(mongoDB *db.MongoDB) (*MFAHandler, error) {
 
 // RegisterRoutes registers the MFA routes
 func (h *MFAHandler) RegisterRoutes(router *gin.Engine) {
+	var appConfig *config.Config
+	if h.MongoDB != nil {
+		appConfig = h.MongoDB.Config
+	}
+
 	// TOTP routes
 	router.POST("/api/auth/totp/setup", h.SetupTOTP)
 	// Apply rate limiting to verification
-	router.POST("/api/auth/totp/verify", MFARateLimitMiddleware(), AdaptiveCaptchaMiddleware(mfaIPLimiter), h.VerifyTOTP)
+	router.POST("/api/auth/totp/verify", MFARateLimitMiddleware(), AdaptiveCaptchaMiddleware(mfaIPLimiter, appConfig), h.VerifyTOTP)
 	router.POST("/api/auth/totp/disable", h.DisableTOTP)
 
 	// WebAuthn routes
@@ -119,7 +115,7 @@ func (h *MFAHandler) RegisterRoutes(router *gin.Engine) {
 	router.POST("/api/auth/webauthn/finish-registration", h.FinishWebAuthnRegistration)
 	// Apply rate limiting to WebAuthn login begin/finish
 	router.GET("/api/auth/webauthn/begin-login", MFARateLimitMiddleware(), h.BeginWebAuthnLogin)
-	router.POST("/api/auth/webauthn/finish-login", MFARateLimitMiddleware(), AdaptiveCaptchaMiddleware(mfaIPLimiter), h.FinishWebAuthnLogin)
+	router.POST("/api/auth/webauthn/finish-login", MFARateLimitMiddleware(), AdaptiveCaptchaMiddleware(mfaIPLimiter, appConfig), h.FinishWebAuthnLogin)
 	router.DELETE("/api/auth/webauthn/credential/:id", h.RemoveWebAuthnCredential)
 }
 

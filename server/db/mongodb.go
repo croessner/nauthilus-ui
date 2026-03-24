@@ -66,7 +66,7 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	slog.Info("Attempting to connect to MongoDB", "attempt", m.RetryCount+1, "maxAttempts", maxRetryCount+1)
 
 	clientOptions := options.Client().
-		ApplyURI(m.Config.MongoURI).
+		ApplyURI(m.Config.Database.MongoDB.URI).
 		SetServerSelectionTimeout(5 * time.Second).
 		SetConnectTimeout(10 * time.Second).
 		SetTimeout(45 * time.Second)
@@ -182,11 +182,11 @@ func (m *MongoDB) initializeSessionConfig(ctx context.Context) error {
 		return err
 	}
 
-	// Optional startup sync: update RememberMeExpiry from env if flag enabled and value differs.
-	if m.Config.SyncRememberMeFromEnvOnBoot {
-		if current.RememberMeExpiry != m.Config.RememberMeExpiry && m.Config.RememberMeExpiry > 0 {
+	// Optional startup sync: update RememberMeExpiry from config if flag enabled and value differs.
+	if m.Config.Session.SyncRememberMeFromConfigOnBoot {
+		if current.RememberMeExpiry != m.Config.Session.RememberMeExpirySeconds && m.Config.Session.RememberMeExpirySeconds > 0 {
 			filter := bson.M{"rememberMeExpiry": current.RememberMeExpiry}
-			update := bson.M{"$set": bson.M{"rememberMeExpiry": m.Config.RememberMeExpiry}}
+			update := bson.M{"$set": bson.M{"rememberMeExpiry": m.Config.Session.RememberMeExpirySeconds}}
 
 			res, err := m.SessionConfigColl.UpdateOne(ctx, filter, update)
 			if err != nil {
@@ -194,15 +194,19 @@ func (m *MongoDB) initializeSessionConfig(ctx context.Context) error {
 			}
 
 			if res.MatchedCount > 0 {
-				slog.Info("Synchronized session rememberMeExpiry from env on boot", "old", current.RememberMeExpiry, "new", m.Config.RememberMeExpiry)
+				slog.Info("Synchronized session rememberMeExpiry from config on boot", "old", current.RememberMeExpiry, "new", m.Config.Session.RememberMeExpirySeconds)
 			} else {
 				slog.Info("rememberMeExpiry sync skipped; configuration changed concurrently")
 			}
 		} else {
-			slog.Debug("rememberMeExpiry already matches env or env value not positive; no sync performed")
+			slog.Debug("rememberMeExpiry already matches config or configured value not positive; no sync performed")
 		}
-	} else if current.RememberMeExpiry != m.Config.RememberMeExpiry {
-		slog.Info("Session rememberMeExpiry differs from env; set SESSION_SYNC_FROM_ENV_ON_BOOT=true to sync on boot", "db", current.RememberMeExpiry, "env", m.Config.RememberMeExpiry)
+	} else if current.RememberMeExpiry != m.Config.Session.RememberMeExpirySeconds {
+		slog.Info(
+			"Session rememberMeExpiry differs from config; set session.sync_remember_me_from_config_on_boot=true to sync on boot",
+			"db", current.RememberMeExpiry,
+			"config", m.Config.Session.RememberMeExpirySeconds,
+		)
 	}
 
 	return nil

@@ -30,9 +30,9 @@ func (h *SessionConfigHandler) GetSessionConfig(ctx *gin.Context) {
 	if !h.MongoDB.IsConnected {
 		ctx.JSON(http.StatusOK, models.SessionConfigResponse{
 			SessionConfig: models.ToSessionConfigView(models.SessionConfig{
-				TokenExpiry:        h.MongoDB.Config.TokenExpiry,
-				RefreshTokenExpiry: h.MongoDB.Config.RefreshTokenExpiry,
-				RememberMeExpiry:   h.MongoDB.Config.RememberMeExpiry,
+				TokenExpiry:        h.MongoDB.Config.Session.TokenExpirySeconds,
+				RefreshTokenExpiry: h.MongoDB.Config.Session.RefreshTokenExpirySeconds,
+				RememberMeExpiry:   h.MongoDB.Config.Session.RememberMeExpirySeconds,
 			}),
 		})
 

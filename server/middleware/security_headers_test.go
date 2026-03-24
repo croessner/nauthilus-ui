@@ -60,7 +60,11 @@ func TestSecurityHeadersIgnoreUntrustedForwardedProto(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewRequestContextHandler(&config.Config{TrustedProxies: []string{"127.0.0.1"}}).RegisterMiddleware(router)
+	NewRequestContextHandler(&config.Config{
+		Server: config.ServerConfig{
+			TrustedProxies: []string{"127.0.0.1"},
+		},
+	}).RegisterMiddleware(router)
 	NewSecurityHeadersHandler().RegisterMiddleware(router)
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
@@ -81,7 +85,11 @@ func TestSecurityHeadersSetHSTSForTrustedSecureRequests(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewRequestContextHandler(&config.Config{TrustedProxies: []string{"127.0.0.1"}}).RegisterMiddleware(router)
+	NewRequestContextHandler(&config.Config{
+		Server: config.ServerConfig{
+			TrustedProxies: []string{"127.0.0.1"},
+		},
+	}).RegisterMiddleware(router)
 	NewSecurityHeadersHandler().RegisterMiddleware(router)
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)

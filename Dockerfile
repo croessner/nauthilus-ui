@@ -74,8 +74,8 @@ RUN apk --no-cache add \
     ttf-freefont \
     tzdata
 
-# Provide common envs and a convenient symlink for tools that expect "chromium"
-ENV CHROME_PATH=/usr/bin/chromium-browser \
+# Provide runtime defaults and a convenient symlink for tools that expect "chromium"
+ENV NAUTHILUS_UI_INTEGRATIONS_REPORT_CHROME_PATH=/usr/bin/chromium-browser \
     CHROME_BIN=/usr/bin/chromium-browser \
     TMPDIR=/tmp \
     XDG_RUNTIME_DIR=/tmp

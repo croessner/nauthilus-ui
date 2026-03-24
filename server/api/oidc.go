@@ -55,19 +55,19 @@ func computeOIDCCallbackURL(ctx *gin.Context) string {
 func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 	cfg := h.MongoDB.Config
 
-	if !cfg.OIDCEnabled {
+	if !cfg.Identity.OIDC.Enabled {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "OIDC is disabled"})
 
 		return
 	}
 
-	if cfg.OIDCIssuer == "" || cfg.OIDCClientID == "" {
+	if cfg.Identity.OIDC.Issuer == "" || cfg.Identity.OIDC.ClientID == "" {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "OIDC not configured: issuer and clientID are required"})
 
 		return
 	}
 
-	provider, err := oidc.NewProvider(ctx.Request.Context(), cfg.OIDCIssuer)
+	provider, err := oidc.NewProvider(ctx.Request.Context(), cfg.Identity.OIDC.Issuer)
 	if err != nil {
 		slog.Error("OIDC: failed to create provider", "error", err)
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "OIDC provider discovery failed"})
@@ -76,14 +76,14 @@ func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 	}
 
 	scopes := []string{"openid", "profile", "email"}
-	if cfg.OIDCScopes != "" {
-		scopes = strings.Fields(cfg.OIDCScopes)
+	if cfg.Identity.OIDC.Scopes != "" {
+		scopes = strings.Fields(cfg.Identity.OIDC.Scopes)
 	}
 
 	callbackURL := computeOIDCCallbackURL(ctx)
 	oauth2Config := oauth2.Config{
-		ClientID:     cfg.OIDCClientID,
-		ClientSecret: cfg.OIDCClientSecret,
+		ClientID:     cfg.Identity.OIDC.ClientID,
+		ClientSecret: cfg.Identity.OIDC.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  callbackURL,
 		Scopes:       scopes,
@@ -114,7 +114,7 @@ func (h *OIDCHandler) StartLogin(ctx *gin.Context) {
 // maps/creates the user, issues an application session, then redirects without exposing tokens in the URL.
 func (h *OIDCHandler) Callback(ctx *gin.Context) {
 	cfg := h.MongoDB.Config
-	if !cfg.OIDCEnabled {
+	if !cfg.Identity.OIDC.Enabled {
 		ctx.JSON(http.StatusNotFound, models.ErrorResponse{Error: "OIDC is disabled"})
 
 		return
@@ -141,7 +141,7 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 	stateCookie.Expires = time.Now().Add(-1 * time.Hour)
 	http.SetCookie(ctx.Writer, stateCookie)
 
-	provider, err := oidc.NewProvider(ctx.Request.Context(), cfg.OIDCIssuer)
+	provider, err := oidc.NewProvider(ctx.Request.Context(), cfg.Identity.OIDC.Issuer)
 	if err != nil {
 		slog.Error("OIDC: provider discovery failed", "error", err)
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "OIDC provider discovery failed"})
@@ -150,14 +150,14 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 	}
 
 	scopes := []string{"openid", "profile", "email"}
-	if cfg.OIDCScopes != "" {
-		scopes = strings.Fields(cfg.OIDCScopes)
+	if cfg.Identity.OIDC.Scopes != "" {
+		scopes = strings.Fields(cfg.Identity.OIDC.Scopes)
 	}
 
 	callbackURL := computeOIDCCallbackURL(ctx)
 	oauth2Config := oauth2.Config{
-		ClientID:     cfg.OIDCClientID,
-		ClientSecret: cfg.OIDCClientSecret,
+		ClientID:     cfg.Identity.OIDC.ClientID,
+		ClientSecret: cfg.Identity.OIDC.ClientSecret,
 		Endpoint:     provider.Endpoint(),
 		RedirectURL:  callbackURL,
 		Scopes:       scopes,
@@ -179,7 +179,7 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 		return
 	}
 
-	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.OIDCClientID})
+	verifier := provider.Verifier(&oidc.Config{ClientID: cfg.Identity.OIDC.ClientID})
 
 	idToken, err := verifier.Verify(ctx.Request.Context(), rawIDToken)
 	if err != nil {
@@ -200,7 +200,7 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 
 	// Determine username
 	username := ""
-	switch cfg.OIDCUsernameClaim {
+	switch cfg.Identity.OIDC.UsernameClaim {
 	case "email":
 		if v, ok := claims["email"].(string); ok {
 			username = v
@@ -210,7 +210,7 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 			username = v
 		}
 	default: // preferred_username
-		if v, ok := claims[cfg.OIDCUsernameClaim].(string); ok {
+		if v, ok := claims[cfg.Identity.OIDC.UsernameClaim].(string); ok {
 			username = v
 		}
 
@@ -237,7 +237,7 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 	// Extract roles - support simple claim (e.g., roles) or nested realm_access.roles
 	var roles []string
 
-	roleClaim := cfg.OIDCRoleClaim
+	roleClaim := cfg.Identity.OIDC.RoleClaim
 	if roleClaim == "" {
 		roleClaim = "roles"
 	}

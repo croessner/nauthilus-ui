@@ -53,7 +53,11 @@ func TestProxyOIDCTokenOptionsRemainsPublicPreflight(t *testing.T) {
 
 func TestProxyPreflightRejectsDisallowedOrigin(t *testing.T) {
 	router := setupProxyRouter(&config.Config{
-		CORSAllowedOrigins: []string{"https://ui.example.com"},
+		Security: config.SecurityConfig{
+			CORS: config.CORSConfig{
+				AllowedOrigins: []string{"https://ui.example.com"},
+			},
+		},
 	}, &db.MongoDB{})
 
 	req := httptest.NewRequest(http.MethodOptions, "/proxy/oidc-token", nil)

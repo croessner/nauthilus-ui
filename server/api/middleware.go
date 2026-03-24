@@ -7,13 +7,14 @@ import (
 	"math"
 	"net/http"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"nauthilus-ui/server/config"
 )
 
 // tokenBucket is a simple in-memory token bucket limiter.
@@ -183,10 +184,6 @@ var (
 	mfaIPLimiter   = newLimiterStore(15, 15.0/60.0, 20*time.Minute, 500*time.Millisecond, 15*time.Second)
 
 	reaperOnce sync.Once
-
-	// reCAPTCHA config cache
-	recaptchaOnce   sync.Once
-	recaptchaConfig recaptchaCfg
 )
 
 // startReaper starts a background goroutine to prune idle entries.
@@ -266,34 +263,26 @@ type recaptchaCfg struct {
 	Threshold int
 }
 
-func loadRecaptchaConfig() recaptchaCfg {
-	recaptchaOnce.Do(func() {
-		secret := os.Getenv("RECAPTCHA_SECRET")
-		siteKey := os.Getenv("RECAPTCHA_SITE_KEY")
-		minScoreStr := os.Getenv("RECAPTCHA_MIN_SCORE")
-		thresholdStr := os.Getenv("RECAPTCHA_THRESHOLD")
+func loadRecaptchaConfig(appConfig *config.Config) recaptchaCfg {
+	cfg := recaptchaCfg{
+		Enabled:   false,
+		Secret:    "",
+		SiteKey:   "",
+		MinScore:  0.0,
+		Threshold: 3,
+	}
 
-		cfg := recaptchaCfg{Enabled: false, Secret: secret, SiteKey: siteKey, MinScore: 0.0, Threshold: 3}
-		if minScoreStr != "" {
-			if v, err := strconv.ParseFloat(minScoreStr, 64); err == nil {
-				cfg.MinScore = v
-			}
-		}
+	if appConfig == nil {
+		return cfg
+	}
 
-		if thresholdStr != "" {
-			if v, err := strconv.Atoi(thresholdStr); err == nil && v > 0 {
-				cfg.Threshold = v
-			}
-		}
+	cfg.Secret = appConfig.Security.Recaptcha.Secret
+	cfg.SiteKey = appConfig.Security.Recaptcha.SiteKey
+	cfg.MinScore = appConfig.Security.Recaptcha.MinScore
+	cfg.Threshold = appConfig.Security.Recaptcha.Threshold
+	cfg.Enabled = strings.TrimSpace(cfg.Secret) != "" && strings.TrimSpace(cfg.SiteKey) != ""
 
-		if secret != "" && siteKey != "" {
-			cfg.Enabled = true
-		}
-
-		recaptchaConfig = cfg
-	})
-
-	return recaptchaConfig
+	return cfg
 }
 
 // site verify response
@@ -307,8 +296,7 @@ type recaptchaResp struct {
 }
 
 // verifyRecaptcha posts token to Google and returns ok, score, reason
-func verifyRecaptcha(token, remoteIP string) (bool, float64, string) {
-	cfg := loadRecaptchaConfig()
+func verifyRecaptcha(cfg recaptchaCfg, token, remoteIP string) (bool, float64, string) {
 	if !cfg.Enabled || token == "" {
 		return false, 0, "captcha_not_configured_or_empty_token"
 	}
@@ -345,8 +333,8 @@ func (s *limiterStore) getConsecutiveFails(key string) int {
 }
 
 // AdaptiveCaptchaMiddleware enforces reCAPTCHA only after repeated failures from same IP
-func AdaptiveCaptchaMiddleware(store *limiterStore) gin.HandlerFunc {
-	cfg := loadRecaptchaConfig()
+func AdaptiveCaptchaMiddleware(store *limiterStore, appConfig *config.Config) gin.HandlerFunc {
+	cfg := loadRecaptchaConfig(appConfig)
 	if !cfg.Enabled {
 		// no-op middleware
 		return func(c *gin.Context) { c.Next() }
@@ -354,7 +342,7 @@ func AdaptiveCaptchaMiddleware(store *limiterStore) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		ip := c.ClientIP()
 		fails := store.getConsecutiveFails(ip)
-		threshold := loadRecaptchaConfig().Threshold
+		threshold := cfg.Threshold
 		if fails < threshold {
 			c.Next()
 			return
@@ -380,16 +368,16 @@ func AdaptiveCaptchaMiddleware(store *limiterStore) gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":            "Captcha required",
 				"captchaRequired":  true,
-				"recaptchaSiteKey": loadRecaptchaConfig().SiteKey,
+				"recaptchaSiteKey": cfg.SiteKey,
 			})
 			return
 		}
 
-		if ok, _, _ := verifyRecaptcha(tmp.RecaptchaToken, ip); !ok {
+		if ok, _, _ := verifyRecaptcha(cfg, tmp.RecaptchaToken, ip); !ok {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":            "Captcha verification failed",
 				"captchaRequired":  true,
-				"recaptchaSiteKey": loadRecaptchaConfig().SiteKey,
+				"recaptchaSiteKey": cfg.SiteKey,
 			})
 			return
 		}

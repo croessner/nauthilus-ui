@@ -30,17 +30,17 @@ var current *policy
 // Init initializes the audit policy from config.
 func Init(cfg *config.Config) {
 	var re *regexp.Regexp
-	if cfg.AuditForceRegex != "" {
-		if compiled, err := regexp.Compile(cfg.AuditForceRegex); err != nil {
-			slog.Error("Invalid AUDIT_FORCE_REGEX; ignoring", "error", err)
+	if cfg.Audit.Policy.ForcePathRegex != "" {
+		if compiled, err := regexp.Compile(cfg.Audit.Policy.ForcePathRegex); err != nil {
+			slog.Error("Invalid audit.policy.force_path_regex; ignoring", "error", err)
 		} else {
 			re = compiled
 		}
 	}
 
 	current = &policy{
-		allowGet:    cfg.AuditGetAudit,
-		dedupWindow: time.Duration(cfg.AuditDedupWindowSec) * time.Second,
+		allowGet:    cfg.Audit.Policy.IncludeGetRequests,
+		dedupWindow: time.Duration(cfg.Audit.Policy.DedupWindowSeconds) * time.Second,
 		forceRegex:  re,
 	}
 }

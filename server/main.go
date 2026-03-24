@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,7 +12,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 
 	"nauthilus-ui/server/api"
 	"nauthilus-ui/server/audit"
@@ -41,22 +41,6 @@ func setupLogger() {
 	slog.SetDefault(logger)
 }
 
-// loadEnvironment loads environment variables from .env file
-func loadEnvironment() {
-	// Try to load from .env file in the current directory (for Docker)
-	if err := godotenv.Load(".env"); err != nil {
-		// Try to load from .env file in the parent directory (for development)
-		if err := godotenv.Load("../.env"); err != nil {
-			slog.Warn("Warning: .env file not found, using environment variables")
-		}
-	}
-
-	// Log the environment variables for debugging
-	slog.Info("Environment variables loaded",
-		"REACT_APP_PROXY_PORT", os.Getenv("REACT_APP_PROXY_PORT"),
-		"PROXY_PORT", os.Getenv("PROXY_PORT"))
-}
-
 // setupMongoDB initializes and connects to MongoDB
 func setupMongoDB(rootCtx context.Context, cfg *config.Config) *db.MongoDB {
 	mongoDB := db.NewMongoDB(cfg)
@@ -75,18 +59,18 @@ func setupMongoDB(rootCtx context.Context, cfg *config.Config) *db.MongoDB {
 // startAuditCleanupScheduler starts a background task that periodically deletes
 // audit log entries older than the configured retention period.
 func startAuditCleanupScheduler(cfg *config.Config, mongoDB *db.MongoDB) {
-	if cfg.AuditRetentionDays <= 0 {
-		slog.Info("Audit cleanup scheduler disabled (AUDIT_RETENTION_DAYS <= 0)", "AUDIT_RETENTION_DAYS", cfg.AuditRetentionDays)
+	if cfg.Audit.RetentionDays <= 0 {
+		slog.Info("Audit cleanup scheduler disabled (audit.retention_days <= 0)", "audit.retention_days", cfg.Audit.RetentionDays)
 
 		return
 	}
 
-	interval := time.Duration(cfg.AuditCleanupIntervalHours) * time.Hour
+	interval := time.Duration(cfg.Audit.CleanupIntervalHours) * time.Hour
 	if interval <= 0 {
 		interval = 6 * time.Hour
 	}
 
-	slog.Info("Starting audit cleanup scheduler", "retentionDays", cfg.AuditRetentionDays, "interval", interval.String())
+	slog.Info("Starting audit cleanup scheduler", "retentionDays", cfg.Audit.RetentionDays, "interval", interval.String())
 
 	go func() {
 		ticker := time.NewTicker(interval)
@@ -97,7 +81,7 @@ func startAuditCleanupScheduler(cfg *config.Config, mongoDB *db.MongoDB) {
 				return
 			}
 
-			cutoff := time.Now().Add(-time.Duration(cfg.AuditRetentionDays) * 24 * time.Hour)
+			cutoff := time.Now().Add(-time.Duration(cfg.Audit.RetentionDays) * 24 * time.Hour)
 
 			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 			defer cancel()
@@ -230,7 +214,7 @@ type Server struct {
 func startFrontendServer(cfg *config.Config, router *gin.Engine) *Server {
 	srv := &Server{
 		Server: &http.Server{
-			Addr:    cfg.FrontendAddress + ":" + cfg.FrontendPort,
+			Addr:    fmt.Sprintf("%s:%d", cfg.Server.Frontend.Address, cfg.Server.Frontend.Port),
 			Handler: router,
 		},
 		Name: "Frontend",
@@ -238,7 +222,7 @@ func startFrontendServer(cfg *config.Config, router *gin.Engine) *Server {
 
 	// Start the server in a goroutine
 	go func() {
-		slog.Info("Frontend server running", "address", cfg.FrontendAddress, "port", cfg.FrontendPort, "version", version)
+		slog.Info("Frontend server running", "address", cfg.Server.Frontend.Address, "port", cfg.Server.Frontend.Port, "version", version)
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start frontend server", "error", err)
@@ -254,7 +238,7 @@ func startFrontendServer(cfg *config.Config, router *gin.Engine) *Server {
 func startProxyServer(cfg *config.Config, proxyRouter *gin.Engine) *Server {
 	srv := &Server{
 		Server: &http.Server{
-			Addr:    cfg.ProxyAddress + ":" + cfg.ProxyPort,
+			Addr:    fmt.Sprintf("%s:%d", cfg.Server.Proxy.Address, cfg.Server.Proxy.Port),
 			Handler: proxyRouter,
 		},
 		Name: "Proxy",
@@ -262,7 +246,7 @@ func startProxyServer(cfg *config.Config, proxyRouter *gin.Engine) *Server {
 
 	// Start the server in a goroutine
 	go func() {
-		slog.Info("Proxy server running", "address", cfg.ProxyAddress, "port", cfg.ProxyPort, "version", version)
+		slog.Info("Proxy server running", "address", cfg.Server.Proxy.Address, "port", cfg.Server.Proxy.Port, "version", version)
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start proxy server", "error", err)
@@ -309,7 +293,7 @@ func performGracefulShutdown(rootCtx context.Context, servers []*Server, mongoDB
 // setupFrontendRouter creates and configures the Gin router for frontend with API routes and middleware
 func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r := gin.New()
-	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
 		slog.Error("Failed to configure trusted proxies for frontend router; falling back to trust-none mode", "error", err)
 		_ = r.SetTrustedProxies(nil)
 	}
@@ -330,7 +314,7 @@ func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 // setupProxyRouter creates and configures the Gin router for proxy with proxy routes
 func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	r := gin.New()
-	if err := r.SetTrustedProxies(cfg.TrustedProxies); err != nil {
+	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
 		slog.Error("Failed to configure trusted proxies for proxy router; falling back to trust-none mode", "error", err)
 		_ = r.SetTrustedProxies(nil)
 	}
@@ -385,11 +369,12 @@ func main() {
 	// Setup logger
 	setupLogger()
 
-	// Load environment variables
-	loadEnvironment()
-
 	// Load configuration
-	cfg := config.LoadConfig()
+	cfg, err := config.LoadConfig()
+	if err != nil {
+		slog.Error("Failed to load configuration", "error", err)
+		os.Exit(1)
+	}
 
 	// Initialize audit policy
 	audit.Init(cfg)

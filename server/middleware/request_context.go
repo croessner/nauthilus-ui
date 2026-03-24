@@ -20,9 +20,9 @@ func NewRequestContextHandler(cfg *config.Config) *RequestContextHandler {
 		cfg = &config.Config{}
 	}
 
-	resolver, err := requestmeta.NewResolver(cfg.TrustedProxies)
+	resolver, err := requestmeta.NewResolver(cfg.Server.TrustedProxies)
 	if err != nil {
-		slog.Error("Invalid TRUSTED_PROXIES configuration; falling back to trust-none mode", "error", err)
+		slog.Error("Invalid server.trusted_proxies configuration; falling back to trust-none mode", "error", err)
 		resolver, _ = requestmeta.NewResolver(nil)
 	}
 

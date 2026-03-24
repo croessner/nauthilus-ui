@@ -16,9 +16,9 @@ const defaultTimeout = 10 * time.Second
 
 func defaultSessionConfig(m *MongoDB) models.SessionConfig {
 	return models.SessionConfig{
-		TokenExpiry:        m.Config.TokenExpiry,
-		RefreshTokenExpiry: m.Config.RefreshTokenExpiry,
-		RememberMeExpiry:   m.Config.RememberMeExpiry,
+		TokenExpiry:        m.Config.Session.TokenExpirySeconds,
+		RefreshTokenExpiry: m.Config.Session.RefreshTokenExpirySeconds,
+		RememberMeExpiry:   m.Config.Session.RememberMeExpirySeconds,
 	}
 }
 
