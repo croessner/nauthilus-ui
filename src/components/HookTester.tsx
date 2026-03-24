@@ -30,6 +30,10 @@ const pretty = (v: any) => {
   try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v, null, 2); } catch { return String(v); }
 };
 
+function isConnectionConfig(value: unknown): value is { backend_url?: string } {
+  return Boolean(value) && typeof value === 'object' && 'backend_url' in (value as Record<string, unknown>);
+}
+
 
 const storageKey = (username: string) => `ui:hooktester:last:${username}`;
 
@@ -106,7 +110,8 @@ const HookTester = (): React.JSX.Element => {
 
   // Connection check via shared utility (DRY)
   const checkConnection = useCallback(async (connParam?: any) => {
-    await checkConnectionUtil(connParam ?? getConnection(), setConnStatus, setStatusMessage);
+    const connectionToCheck = isConnectionConfig(connParam) ? connParam : getConnection();
+    await checkConnectionUtil(connectionToCheck, setConnStatus, setStatusMessage);
   }, [getConnection]);
 
   // Bootstrap: load runtime settings and check connection via shared helper
@@ -302,6 +307,7 @@ const HookTester = (): React.JSX.Element => {
                 const t0 = performance.now();
                 const resp = await authenticatedFetch(url, init);
                 const dt = performance.now() - t0;
+                const respForError = !resp.ok ? resp.clone() : null;
 
                 const hdrs: [string,string][] = [];
                 resp.headers.forEach((v, k) => hdrs.push([k, v]));
@@ -322,13 +328,23 @@ const HookTester = (): React.JSX.Element => {
 
                 if (!resp.ok) {
                     let msg = text;
-                    try { msg = await extractErrorMessage(resp); } catch { /* ignore */ }
+                    if (respForError) {
+                        try { msg = await extractErrorMessage(respForError); } catch { /* ignore */ }
+                    }
                     setNotif({ open: true, severity: 'error', message: msg || `HTTP ${resp.status}` });
                 } else {
                     setNotif({ open: true, severity: 'success', message: `OK (${resp.status})` });
                 }
             } catch (e: any) {
-                setNotif({ open: true, severity: 'error', message: e?.message || String(e) });
+                const message = e?.message || String(e);
+                setStatus({ code: 0, text: 'Request failed' });
+                setRespHeaders([]);
+                setRespContentType('text/plain');
+                setRespBody(message);
+                const prettyText = pretty(message);
+                setRespRawPreviewFull(prettyText);
+                setRespRawPreview(applyPreviewLimit(prettyText, rawJsonMaxBytes));
+                setNotif({ open: true, severity: 'error', message });
             } finally {
                 setLoading(false);
             }
@@ -410,7 +426,7 @@ const HookTester = (): React.JSX.Element => {
             }
         };
 
-        const connectionOk = Boolean(runtimeConnection?.backend_url);
+        const connectionOk = Boolean(runtimeConnection?.backend_url || getConnection()?.backend_url);
 
         // Ensure connection check runs immediately when backend_url becomes available (bypass navigation debounce)
         useEffect(() => {
@@ -438,7 +454,7 @@ const HookTester = (): React.JSX.Element => {
                     )}
                     <Tooltip title="Check connection">
           <span>
-            <IconButton onClick={checkConnection} disabled={connStatus === 'checking'} sx={{ ml: 1 }}>
+            <IconButton onClick={() => { void checkConnection(); }} disabled={connStatus === 'checking' || !connectionOk} sx={{ ml: 1 }}>
               <RefreshIcon />
             </IconButton>
           </span>
