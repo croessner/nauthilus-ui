@@ -251,6 +251,48 @@ function isAuthEndpoint(url: string): boolean {
   );
 }
 
+function getRequestPath(url: string): string {
+  try {
+    return new URL(url, window.location.origin).pathname;
+  } catch {
+    return url;
+  }
+}
+
+function isProxyEndpoint(url: string): boolean {
+  return getRequestPath(url).startsWith('/proxy/');
+}
+
+function hasSessionAuthRequiredHeader(response: Response): boolean {
+  const marker = response.headers.get('x-nauthilus-auth-required');
+  if (!marker) {
+    return false;
+  }
+
+  return marker === '1' || marker.toLowerCase() === 'true';
+}
+
+function shouldNotifySessionExpired(url: string, response: Response): boolean {
+  if (!isProxyEndpoint(url)) {
+    return true;
+  }
+
+  // Proxy endpoints can return upstream 401 (backend auth failure) that are
+  // unrelated to UI session state. Only treat them as session expiry when the
+  // API explicitly marks the response as UI-auth-required.
+  return hasSessionAuthRequiredHeader(response);
+}
+
+async function notifySessionExpiredDialog(): Promise<void> {
+  try {
+    const { notifySessionExpired } = await import('./notify');
+    notifySessionExpired('Your session has expired. Please sign in again.');
+  } catch {
+    // eslint-disable-next-line no-alert
+    window.alert('Your session has expired. Please sign in again.');
+  }
+}
+
 export const authenticatedFetch = async (
   url: string,
   options: RequestInit = {}
@@ -303,25 +345,15 @@ export const authenticatedFetch = async (
       if (ok) {
         // Retry once
         response = await doFetchOnce();
-        if (response.status === 401) {
-          try {
-            const { notifySessionExpired } = await import('./notify');
-            notifySessionExpired('Your session has expired. Please sign in again.');
-          } catch {
-            // eslint-disable-next-line no-alert
-            window.alert('Your session has expired. Please sign in again.');
-          }
+        if (response.status === 401 && shouldNotifySessionExpired(url, response)) {
+          await notifySessionExpiredDialog();
         }
         return response;
       }
 
       // Refresh failed
-      try {
-        const { notifySessionExpired } = await import('./notify');
-        notifySessionExpired('Your session has expired. Please sign in again.');
-      } catch {
-        // eslint-disable-next-line no-alert
-        window.alert('Your session has expired. Please sign in again.');
+      if (shouldNotifySessionExpired(url, response)) {
+        await notifySessionExpiredDialog();
       }
       return response;
     } finally {
@@ -332,7 +364,11 @@ export const authenticatedFetch = async (
   // Another refresh is in progress – wait and retry once if it succeeded
   const ok = await waitForRefresh();
   if (ok) {
-    return doFetchOnce();
+    const retried = await doFetchOnce();
+    if (retried.status === 401 && shouldNotifySessionExpired(url, retried)) {
+      await notifySessionExpiredDialog();
+    }
+    return retried;
   }
   return response;
 };

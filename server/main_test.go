@@ -7,6 +7,7 @@ import (
 
 	"nauthilus-ui/server/config"
 	"nauthilus-ui/server/db"
+	"nauthilus-ui/server/middleware"
 )
 
 func TestProxyOIDCTokenRequiresAuthentication(t *testing.T) {
@@ -18,6 +19,9 @@ func TestProxyOIDCTokenRequiresAuthentication(t *testing.T) {
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("expected status 401 for unauthenticated proxy access, got %d", recorder.Code)
+	}
+	if got := recorder.Header().Get(middleware.SessionAuthRequiredHeader); got != "1" {
+		t.Fatalf("expected %s=1 on unauthenticated proxy response, got %q", middleware.SessionAuthRequiredHeader, got)
 	}
 }
 

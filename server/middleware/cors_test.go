@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/gin-gonic/gin"
@@ -35,6 +36,9 @@ func TestCORSAllowsExplicitOriginAndSetsVary(t *testing.T) {
 	}
 	if got := recorder.Header().Get("Access-Control-Allow-Credentials"); got != "true" {
 		t.Fatalf("expected credentials support, got %q", got)
+	}
+	if got := recorder.Header().Get("Access-Control-Expose-Headers"); !strings.Contains(got, SessionAuthRequiredHeader) {
+		t.Fatalf("expected Access-Control-Expose-Headers to include %q, got %q", SessionAuthRequiredHeader, got)
 	}
 
 	for _, expected := range []string{"Origin", "Access-Control-Request-Method", "Access-Control-Request-Headers"} {

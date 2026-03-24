@@ -37,6 +37,49 @@ axios.interceptors.request.use(
 let isRefreshing = false;
 let pendingResolvers: Array<(ok: boolean) => void> = [];
 
+function getRequestPath(url: string): string {
+  try {
+    return new URL(url, window.location.origin).pathname;
+  } catch {
+    return url;
+  }
+}
+
+function isProxyEndpoint(url: string): boolean {
+  return getRequestPath(url).startsWith('/proxy/');
+}
+
+function hasSessionAuthRequiredHeader(headers: any): boolean {
+  const marker = headers?.['x-nauthilus-auth-required'] ?? headers?.['X-Nauthilus-Auth-Required'];
+  if (!marker) {
+    return false;
+  }
+
+  const value = Array.isArray(marker) ? String(marker[0] ?? '') : String(marker);
+  return value === '1' || value.toLowerCase() === 'true';
+}
+
+function shouldNotifySessionExpired(url: string, response: any): boolean {
+  if (!isProxyEndpoint(url)) {
+    return true;
+  }
+
+  // Proxy endpoints can return upstream 401 (backend auth failure) that are
+  // unrelated to UI session state. Only treat them as session expiry when the
+  // API explicitly marks the response as UI-auth-required.
+  return hasSessionAuthRequiredHeader(response?.headers);
+}
+
+async function notifySessionExpiredDialog(): Promise<void> {
+  try {
+    const { notifySessionExpired } = await import('./notify');
+    notifySessionExpired('Your session has expired. Please sign in again.');
+  } catch {
+    // Fallback just in case dynamic import fails
+    window.alert('Your session has expired. Please sign in again.');
+  }
+}
+
 async function refreshSession(): Promise<boolean> {
   try {
     // Use relative URL to ensure cookies for the current origin are sent reliably in dev/prod
@@ -68,6 +111,14 @@ axios.interceptors.response.use(
       return Promise.reject(error);
     }
 
+    // Already retried once after refresh. Avoid refresh loops.
+    if (originalRequest.__nauthilusRetry) {
+      if (shouldNotifySessionExpired(url, response)) {
+        await notifySessionExpiredDialog();
+      }
+      return Promise.reject(error);
+    }
+
     if (!isRefreshing) {
       isRefreshing = true;
       try {
@@ -76,15 +127,11 @@ axios.interceptors.response.use(
         pendingResolvers = [];
         if (ok) {
           // Retry the original request
-          return axios(originalRequest);
+          return axios({ ...originalRequest, __nauthilusRetry: true });
         }
         // Session expired: inform user with a unified dialog
-        try {
-          const { notifySessionExpired } = await import('./notify');
-          notifySessionExpired('Your session has expired. Please sign in again.');
-        } catch {
-          // Fallback just in case dynamic import fails
-          window.alert('Your session has expired. Please sign in again.');
+        if (shouldNotifySessionExpired(url, response)) {
+          await notifySessionExpiredDialog();
         }
         return Promise.reject(error);
       } finally {
@@ -95,7 +142,7 @@ axios.interceptors.response.use(
     // Wait for the in-flight refresh to finish
     return new Promise((resolve, reject) => {
       pendingResolvers.push((ok) => {
-        if (ok) resolve(axios(originalRequest));
+        if (ok) resolve(axios({ ...originalRequest, __nauthilusRetry: true }));
         else reject(error);
       });
     });

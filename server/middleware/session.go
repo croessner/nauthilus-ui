@@ -12,6 +12,8 @@ import (
 	"nauthilus-ui/server/utils"
 )
 
+const SessionAuthRequiredHeader = "X-Nauthilus-Auth-Required"
+
 // SessionAuthMiddleware validates protected requests using opaque access
 // sessions from HttpOnly cookies.
 func SessionAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
@@ -45,6 +47,7 @@ func SessionAuthMiddleware(mongoDB *db.MongoDB) gin.HandlerFunc {
 		if err != nil {
 			if api.IsNoRequestAuth(err) {
 				slog.Warn("Session Middleware: Missing or invalid session")
+				ctx.Header(SessionAuthRequiredHeader, "1")
 				ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Authentication required"})
 				ctx.Abort()
 				return

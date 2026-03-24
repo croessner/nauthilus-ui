@@ -14,7 +14,7 @@ import (
 const (
 	CORSAllowMethods  = "GET, POST, PUT, PATCH, DELETE, OPTIONS, HEAD"
 	CORSAllowHeaders  = "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-target-url, x-endpoint-path, x-operation, x-action, x-auth-type, x-auth-value, If-None-Match, If-Match, If-Modified-Since, If-Unmodified-Since, Range"
-	CORSExposeHeaders = "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location, Content-Type"
+	CORSExposeHeaders = "Content-Length, Content-Range, ETag, Last-Modified, Accept-Ranges, Location, Content-Type, " + SessionAuthRequiredHeader
 	corsMaxAge        = "86400"
 	defaultVitePort   = "3000"
 	defaultAPIPort    = "3001"
