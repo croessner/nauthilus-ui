@@ -15,7 +15,7 @@ import OpenInFullIcon from '@mui/icons-material/OpenInFull';
 import CloseIcon from '@mui/icons-material/Close';
 import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
-import { authenticatedFetch, extractErrorMessage, getProxyOrigin, prepareAuthParams, getAuthToken, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
+import { authenticatedFetch, extractErrorMessage, getProxyOrigin, loadSettings as loadSettingsUtil, checkConnection as checkConnectionUtil } from '../utils/apiUtils';
 import { getKnownHookEndpointSuggestions } from '../utils/hooks';
 import { byteLengthUtf8, getEffectiveRawJsonMaxBytes, setRawJsonMaxBytesOverride, RAW_JSON_MIN_BYTES, RAW_JSON_MAX_BYTES, applyPreviewLimit } from '../utils/limits';
 import Grid from '@mui/material/Grid';
@@ -25,6 +25,24 @@ const METHODS = ['GET','POST','PUT','PATCH','DELETE','HEAD','OPTIONS'] as const;
 type Method = typeof METHODS[number];
 
 type KV = { key: string; value: string; id: string };
+type HookTesterHeaderPreview = { name: string; value: string };
+type HookTesterExecuteResponse = {
+    request: {
+        method: string;
+        url: string;
+        endpointPath: string;
+        headers: HookTesterHeaderPreview[];
+    };
+    response: {
+        status: number;
+        statusText: string;
+        contentType?: string;
+        headers: HookTesterHeaderPreview[];
+        body: string;
+        bodyTruncated: boolean;
+        durationMs: number;
+    };
+};
 
 const pretty = (v: any) => {
   try { return JSON.stringify(typeof v === 'string' ? JSON.parse(v) : v, null, 2); } catch { return String(v); }
@@ -231,27 +249,8 @@ const HookTester = (): React.JSX.Element => {
             setReqHeaders([]);
         };
 
-        const buildURL = () => {
-            const base = new URL('/proxy/hooks/any', getProxyOrigin());
-            const conn = getConnection();
-            const target = conn?.backend_url || '';
-            if (!target) throw new Error('No backend URL configured in Runtime > Connection');
-
-            // Normalisierung des Pfades für den Proxy
-            let effectivePath = endpointPath;
-            if (effectivePath && !effectivePath.startsWith('/api/v1/custom') && !effectivePath.startsWith('/api')) {
-                effectivePath = `/api/v1/custom${effectivePath.startsWith('/') ? '' : '/'}${effectivePath}`;
-            }
-
-            const params = new URLSearchParams();
-            params.set('url', target);
-            if (effectivePath) params.set('endpoint_path', effectivePath);
-            // add query rows
-            for (const row of query) {
-                if (row.key && row.value) params.append(row.key, row.value);
-            }
-
-            base.search = params.toString();
+        const buildExecuteURL = () => {
+            const base = new URL('/proxy/hooks/execute', getProxyOrigin());
             return base.toString();
         };
 
@@ -270,70 +269,66 @@ const HookTester = (): React.JSX.Element => {
                 setRespViewMode('raw');
                 setRespFullscreen(false);
 
-                const url = buildURL();
-                const conn = getConnection();
-                const { authType, authValue } = prepareAuthParams(conn || {});
-
-                const headers: Record<string, string> = {
-                    'x-auth-type': authType || '',
-                    'x-auth-value': authValue || '',
+                const url = buildExecuteURL();
+                const payload = {
+                    method,
+                    endpointPath,
+                    query: query
+                        .filter((row) => row.key)
+                        .map((row) => ({ key: row.key, value: row.value ?? '' })),
+                    headers: headersRows
+                        .filter((row) => row.key)
+                        .map((row) => ({ key: row.key, value: row.value ?? '' })),
+                    body: hasBody ? (body || '') : '',
+                    contentType: hasBody ? (contentType || 'application/json') : '',
                 };
-                if (hasBody) headers['Content-Type'] = contentType || 'application/json';
-
-                // Merge custom headers (user provided)
-                for (const row of headersRows) {
-                    if (!row.key) continue;
-                    // Avoid letting user override Authorization (handled by authenticatedFetch) but allow other headers including x-auth-* overrides if desired
-                    if (row.key.toLowerCase() === 'authorization') continue;
-                    headers[row.key] = row.value ?? '';
-                }
-
-                // Capture request headers for display (mask Authorization token)
-                const reqList: [string, string][] = Object.entries(headers).map(([k, v]) => [k, String(v)]);
-                const token = getAuthToken?.();
-                if (token) {
-                    const masked = token.length <= 12 ? '***' : `${token.slice(0, 6)}…${token.slice(-4)}`;
-                    reqList.push(['Authorization', `Bearer ${masked}`]);
-                }
-                setReqHeaders(reqList);
-
-                const init: RequestInit = { method };
-                init.headers = headers;
-                if (hasBody) {
-                    // If JSON, keep as entered (user can break it), we do not auto-stringify
-                    init.body = body || '';
-                }
 
                 const t0 = performance.now();
-                const resp = await authenticatedFetch(url, init);
+                const resp = await authenticatedFetch(url, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload),
+                });
                 const dt = performance.now() - t0;
                 const respForError = !resp.ok ? resp.clone() : null;
 
-                const hdrs: [string,string][] = [];
-                resp.headers.forEach((v, k) => hdrs.push([k, v]));
-                setRespHeaders(hdrs);
-                // Capture response content-type (main type, lowercased)
-                const ctRaw = resp.headers.get('content-type') || '';
-                const ctMain = ctRaw.split(';')[0]?.trim().toLowerCase() || '';
-                setRespContentType(ctMain || null);
-                setStatus({ code: resp.status, text: `${resp.statusText} (${dt.toFixed(0)} ms)` });
+                if (!resp.ok) {
+                    let msg = '';
+                    if (respForError) {
+                        try { msg = await extractErrorMessage(respForError); } catch { /* ignore */ }
+                    }
+                    throw new Error(msg || `HTTP ${resp.status}`);
+                }
 
-                let text: string;
-                try { text = await resp.text(); } catch { text = ''; }
+                const data = await resp.json() as HookTesterExecuteResponse;
+
+                const requestHeaders: [string, string][] = (data.request?.headers || []).map((h) => [h.name, h.value]);
+                const responseHeaders: [string, string][] = (data.response?.headers || []).map((h) => [h.name, h.value]);
+                setReqHeaders(requestHeaders);
+                setRespHeaders(responseHeaders);
+
+                const responseContentType = data.response?.contentType || '';
+                const ctMain = responseContentType.split(';')[0]?.trim().toLowerCase() || '';
+                setRespContentType(ctMain || null);
+
+                const responseStatus = Number.isFinite(data.response?.status) ? data.response.status : 0;
+                const responseStatusText = data.response?.statusText || '';
+                const durationFromProxy = Number.isFinite(data.response?.durationMs) ? data.response.durationMs : Math.round(dt);
+                setStatus({ code: responseStatus, text: `${responseStatusText} (${durationFromProxy} ms)` });
+
+                const text = data.response?.body || '';
                 setRespBody(text);
                 // Update ClickHouse-style raw previews
                 const prettyText = pretty(text);
                 setRespRawPreviewFull(prettyText);
                 setRespRawPreview(applyPreviewLimit(prettyText, rawJsonMaxBytes));
 
-                if (!resp.ok) {
-                    let msg = text;
-                    if (respForError) {
-                        try { msg = await extractErrorMessage(respForError); } catch { /* ignore */ }
-                    }
-                    setNotif({ open: true, severity: 'error', message: msg || `HTTP ${resp.status}` });
+                if (responseStatus >= 400) {
+                    const truncatedMsg = data.response?.bodyTruncated ? ' (response truncated)' : '';
+                    setNotif({ open: true, severity: 'error', message: `${responseStatus} ${responseStatusText}${truncatedMsg}`.trim() });
                 } else {
-                    setNotif({ open: true, severity: 'success', message: `OK (${resp.status})` });
+                    const truncatedMsg = data.response?.bodyTruncated ? ' (response truncated)' : '';
+                    setNotif({ open: true, severity: 'success', message: `OK (${responseStatus})${truncatedMsg}` });
                 }
             } catch (e: any) {
                 const message = e?.message || String(e);
@@ -367,15 +362,10 @@ const HookTester = (): React.JSX.Element => {
                 const conn = getConnection();
                 const baseUrl = conn?.backend_url || '';
                 if (!baseUrl) { setNotif({ open: true, severity: 'error', message: 'No backend URL configured in Runtime > Connection' }); return; }
-
-                // Normalisierung des Pfades
-                let effectivePath = endpointPath;
-                if (effectivePath && !effectivePath.startsWith('/api/v1/custom') && !effectivePath.startsWith('/api')) {
-                    effectivePath = `/api/v1/custom${effectivePath.startsWith('/') ? '' : '/'}${effectivePath}`;
-                }
+                if (!endpointPath.trim()) { setNotif({ open: true, severity: 'error', message: 'Endpoint path is required' }); return; }
 
                 // Ensure endpoint path is applied relative to backend_url
-                const path = effectivePath.startsWith('/') ? effectivePath : `/${effectivePath}`;
+                const path = endpointPath.startsWith('/') ? endpointPath : `/${endpointPath}`;
                 const target = new URL(path, baseUrl);
 
                 // Append query params
@@ -385,16 +375,13 @@ const HookTester = (): React.JSX.Element => {
                     }
                 }
 
-                const { authType, authValue } = prepareAuthParams(conn || {});
                 const parts: string[] = ['curl', '-i', '-X', method, `'${target.toString()}'`];
 
-                // Add Authorization header for direct backend access
-                if (authType && authValue) {
-                    if (authType.toLowerCase() === 'bearer') {
-                        parts.push('-H', `'Authorization: Bearer ${authValue}'`);
-                    } else if (authType.toLowerCase() === 'basic') {
-                        parts.push('-H', `'Authorization: Basic ${authValue}'`);
-                    }
+                // Never expose runtime credentials in generated previews.
+                if (conn?.oidc_auth?.enabled && conn?.oidc_auth?.token) {
+                    parts.push('-H', '\'Authorization: Bearer REDACTED\'');
+                } else if (conn?.basic_auth?.enabled && conn?.basic_auth?.username && conn?.basic_auth?.password) {
+                    parts.push('-H', '\'Authorization: Basic REDACTED\'');
                 }
 
                 // Include user-provided custom headers (skip Authorization to avoid duplicates)

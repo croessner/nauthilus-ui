@@ -131,6 +131,10 @@ type ProxyHandler struct {
 	// branch without requiring a live MongoDB instance.
 	allowedOriginLookup func(ctx context.Context, username string) ([]string, error)
 
+	// activeRuntimeConnectionLookup can be injected in tests to provide
+	// backend connection/auth material without a live MongoDB instance.
+	activeRuntimeConnectionLookup func(ctx context.Context, username string) (map[string]interface{}, string, error)
+
 	// AllowPrivateTargets disables the SSRF protection that normally blocks
 	// requests to loopback / RFC1918 addresses.  Set to true only in tests.
 	AllowPrivateTargets bool
@@ -747,6 +751,8 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	// Generic hook proxy route (all methods)
 	router.Any("/proxy/hooks/any", h.HookGenericProxy)
+	// Hook tester delegated execution endpoint (UI sends only intent; proxy resolves backend auth)
+	router.POST("/proxy/hooks/execute", h.HookExecuteProxy)
 
 	// System metrics route
 	router.GET("/proxy/system/metrics", h.SystemMetricsProxy)
@@ -1854,7 +1860,7 @@ func (h *ProxyHandler) writeAudit(ctx *gin.Context, config ProxyConfig, entry mo
 					safeDetails[key] = utils.RedactHeaderValue(key, raw)
 					continue
 				}
-			case "headers":
+			case "headers", "request_headers", "response_headers":
 				if headers, ok := value.(http.Header); ok {
 					safeDetails[key] = utils.RedactHeaders(headers)
 					continue

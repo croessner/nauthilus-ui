@@ -297,30 +297,32 @@ export const authenticatedFetch = async (
   url: string,
   options: RequestInit = {}
 ): Promise<Response> => {
-  // Prepare headers
-  let headers = new Headers(options.headers || {});
-
-  // Decide whether to set a default Content-Type
   const method = (options.method || 'GET').toUpperCase();
   const hasBody = options.body !== undefined && options.body !== null;
   const isFormData = typeof FormData !== 'undefined' && hasBody && (options.body as any) instanceof FormData;
 
-  if (hasBody && !isFormData && !headers.has('Content-Type') && method !== 'GET' && method !== 'HEAD') {
-    headers.set('Content-Type', 'application/json');
-  }
+  const buildFetchOptions = async (): Promise<RequestInit> => {
+    let headers = new Headers(options.headers || {});
 
-  if (!url.includes('/api/auth/csrf') && isMutatingMethod(method)) {
-    headers = await attachCSRFHeader(headers);
-  }
+    // Decide whether to set a default Content-Type
+    if (hasBody && !isFormData && !headers.has('Content-Type') && method !== 'GET' && method !== 'HEAD') {
+      headers.set('Content-Type', 'application/json');
+    }
 
-  // Merge options with headers
-  const fetchOptions: RequestInit = {
-    ...options,
-    headers,
-    credentials: 'include'
+    // Build CSRF header per attempt so retries use the latest rotated CSRF cookie.
+    if (!url.includes('/api/auth/csrf') && isMutatingMethod(method)) {
+      headers = await attachCSRFHeader(headers);
+    }
+
+    return {
+      ...options,
+      headers,
+      credentials: 'include'
+    };
   };
 
   async function doFetchOnce(): Promise<Response> {
+    const fetchOptions = await buildFetchOptions();
     return fetch(url, fetchOptions);
   }
 

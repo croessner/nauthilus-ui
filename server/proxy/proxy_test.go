@@ -2,6 +2,8 @@ package proxy
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -279,5 +281,156 @@ func TestIsOriginAllowedEmptyAllowlistDeniesAll(t *testing.T) {
 		if isOriginAllowed(rawURL, []string{}) {
 			t.Errorf("expected empty allowlist to deny %q", rawURL)
 		}
+	}
+}
+
+func TestResolveRuntimeBackendAuthPrefersOIDCToken(t *testing.T) {
+	connection := map[string]interface{}{
+		"backend_url": "https://backend.example.com",
+		"basic_auth": map[string]interface{}{
+			"enabled":  true,
+			"username": "alice",
+			"password": "secret",
+		},
+		"oidc_auth": map[string]interface{}{
+			"enabled": true,
+			"token":   "oidc-token",
+		},
+	}
+
+	backendURL, authType, authValue, err := resolveRuntimeBackendAuth(connection)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if backendURL != "https://backend.example.com" {
+		t.Fatalf("unexpected backend URL: %q", backendURL)
+	}
+	if authType != "bearer" {
+		t.Fatalf("expected bearer auth type, got %q", authType)
+	}
+	if authValue != "oidc-token" {
+		t.Fatalf("expected oidc token auth value, got %q", authValue)
+	}
+}
+
+func TestResolveRuntimeBackendAuthUsesBasicFallback(t *testing.T) {
+	connection := map[string]interface{}{
+		"backend_url": "https://backend.example.com",
+		"basic_auth": map[string]interface{}{
+			"enabled":  true,
+			"username": "alice",
+			"password": "secret",
+		},
+	}
+
+	_, authType, authValue, err := resolveRuntimeBackendAuth(connection)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if authType != "basic" {
+		t.Fatalf("expected basic auth type, got %q", authType)
+	}
+
+	want := base64.StdEncoding.EncodeToString([]byte("alice:secret"))
+	if authValue != want {
+		t.Fatalf("expected base64 basic auth value %q, got %q", want, authValue)
+	}
+}
+
+func TestHookExecuteProxyUsesServerSideAuthAndReturnsRedactedPreview(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var receivedAuthorization string
+	var receivedXCustom string
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuthorization = r.Header.Get("Authorization")
+		receivedXCustom = r.Header.Get("X-Custom")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer backend.Close()
+
+	handler := &ProxyHandler{
+		AllowPrivateTargets: true,
+		activeRuntimeConnectionLookup: func(_ context.Context, username string) (map[string]interface{}, string, error) {
+			if username != "alice" {
+				t.Fatalf("expected username alice, got %q", username)
+			}
+
+			return map[string]interface{}{
+				"backend_url": backend.URL,
+				"oidc_auth": map[string]interface{}{
+					"enabled": true,
+					"token":   "backend-token",
+				},
+			}, "Default", nil
+		},
+	}
+
+	router := gin.New()
+	router.Use(func(ctx *gin.Context) {
+		ctx.Set("username", "alice")
+		ctx.Next()
+	})
+	handler.RegisterRoutes(router)
+
+	payload := map[string]interface{}{
+		"method":       "GET",
+		"endpointPath": "/api/v1/custom/hooks/hello",
+		"query": []map[string]string{
+			{"key": "action", "value": "run"},
+		},
+		"headers": []map[string]string{
+			{"key": "Authorization", "value": "Bearer should-not-pass"},
+			{"key": "X-Custom", "value": "demo"},
+		},
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/proxy/hooks/execute", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if receivedAuthorization != "Bearer backend-token" {
+		t.Fatalf("expected backend auth from runtime settings, got %q", receivedAuthorization)
+	}
+	if receivedXCustom != "demo" {
+		t.Fatalf("expected forwarded custom header, got %q", receivedXCustom)
+	}
+
+	var response struct {
+		Request struct {
+			Headers []struct {
+				Name  string `json:"name"`
+				Value string `json:"value"`
+			} `json:"headers"`
+		} `json:"request"`
+		Response struct {
+			Status int `json:"status"`
+		} `json:"response"`
+	}
+
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response JSON: %v", err)
+	}
+	if response.Response.Status != http.StatusOK {
+		t.Fatalf("expected backend response status 200 in payload, got %d", response.Response.Status)
+	}
+
+	var gotRedactedAuth bool
+	for _, header := range response.Request.Headers {
+		if strings.EqualFold(header.Name, "Authorization") && header.Value == "[REDACTED]" {
+			gotRedactedAuth = true
+			break
+		}
+	}
+	if !gotRedactedAuth {
+		t.Fatalf("expected redacted Authorization header in request preview, got %+v", response.Request.Headers)
 	}
 }
