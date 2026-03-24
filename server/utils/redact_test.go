@@ -23,8 +23,8 @@ func TestRedactQueryStringMasksSensitiveValues(t *testing.T) {
 
 func TestRedactHeadersMasksSensitiveHeaders(t *testing.T) {
 	headers := http.Header{
-		"Authorization": []string{"Bearer secret-jwt"},
-		"Cookie":        []string{"nauthilus_token=secret-cookie"},
+		"Authorization": []string{"Bearer secret-token"},
+		"Cookie":        []string{"nauthilus_ui_session=secret-cookie"},
 		"X-Auth-Type":   []string{"bearer"},
 		"X-Auth-Value":  []string{"backend-secret"},
 	}

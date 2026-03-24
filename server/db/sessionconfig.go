@@ -11,19 +11,19 @@ import (
 	"nauthilus-ui/server/models"
 )
 
-// defaultTimeout is the default timeout for database operations
+// defaultTimeout is the default timeout for database operations.
 const defaultTimeout = 10 * time.Second
 
-// JWTConfig represents the JWT configuration stored in the database
-type JWTConfig struct {
-	Secret             string `bson:"jwtSecret" json:"-"`
-	TokenExpiry        int    `bson:"tokenExpiry" json:"tokenExpiry"`
-	RefreshTokenExpiry int    `bson:"refreshTokenExpiry" json:"refreshTokenExpiry"`
-	RememberMeExpiry   int    `bson:"rememberMeExpiry" json:"rememberMeExpiry"`
+func defaultSessionConfig(m *MongoDB) models.SessionConfig {
+	return models.SessionConfig{
+		TokenExpiry:        m.Config.TokenExpiry,
+		RefreshTokenExpiry: m.Config.RefreshTokenExpiry,
+		RememberMeExpiry:   m.Config.RememberMeExpiry,
+	}
 }
 
-// GetJWTConfig retrieves the JWT configuration from the database
-func (m *MongoDB) GetJWTConfig() (*JWTConfig, error) {
+// GetSessionConfig retrieves the session configuration from the database.
+func (m *MongoDB) GetSessionConfig() (*models.SessionConfig, error) {
 	if !m.IsConnectedToMongoDB() {
 		return nil, errors.New("not connected to MongoDB")
 	}
@@ -31,34 +31,26 @@ func (m *MongoDB) GetJWTConfig() (*JWTConfig, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	var jwtConfig JWTConfig
-	err := m.JWTConfigColl.FindOne(ctx, bson.M{}).Decode(&jwtConfig)
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			// If no JWT config is found, create a default one from runtime config
-			defaultConfig := JWTConfig{
-				Secret:             m.Config.JWTSecret,
-				TokenExpiry:        m.Config.TokenExpiry,
-				RefreshTokenExpiry: m.Config.RefreshTokenExpiry,
-				RememberMeExpiry:   m.Config.RememberMeExpiry,
-			}
+	var sessionConfig models.SessionConfig
+	err := m.SessionConfigColl.FindOne(ctx, bson.M{}).Decode(&sessionConfig)
+	if err == nil {
+		return &sessionConfig, nil
+	}
 
-			_, err = m.JWTConfigColl.InsertOne(ctx, defaultConfig)
-			if err != nil {
-				return nil, err
-			}
-
-			return &defaultConfig, nil
-		}
-
+	if !errors.Is(err, mongo.ErrNoDocuments) {
 		return nil, err
 	}
 
-	return &jwtConfig, nil
+	sessionConfig = defaultSessionConfig(m)
+	if _, err = m.SessionConfigColl.InsertOne(ctx, sessionConfig); err != nil {
+		return nil, err
+	}
+
+	return &sessionConfig, nil
 }
 
-// UpdateJWTConfig updates the JWT configuration in the database
-func (m *MongoDB) UpdateJWTConfig(config *JWTConfig) error {
+// UpdateSessionConfig replaces the persisted session configuration.
+func (m *MongoDB) UpdateSessionConfig(config *models.SessionConfig) error {
 	if !m.IsConnectedToMongoDB() {
 		return errors.New("not connected to MongoDB")
 	}
@@ -66,19 +58,15 @@ func (m *MongoDB) UpdateJWTConfig(config *JWTConfig) error {
 	ctx, cancel := context.WithTimeout(context.Background(), defaultTimeout)
 	defer cancel()
 
-	// Delete all existing configs
-	_, err := m.JWTConfigColl.DeleteMany(ctx, bson.M{})
-	if err != nil {
+	if _, err := m.SessionConfigColl.DeleteMany(ctx, bson.M{}); err != nil {
 		return err
 	}
 
-	// Insert the new config
-	_, err = m.JWTConfigColl.InsertOne(ctx, config)
-
+	_, err := m.SessionConfigColl.InsertOne(ctx, config)
 	return err
 }
 
-// GetUserByUsername retrieves a user by username
+// GetUserByUsername retrieves a user by username.
 func (m *MongoDB) GetUserByUsername(username string) (*models.User, error) {
 	if !m.IsConnectedToMongoDB() {
 		return nil, errors.New("not connected to MongoDB")
@@ -107,7 +95,7 @@ func (m *MongoDB) GetUserByUsername(username string) (*models.User, error) {
 	err := m.UserColl.FindOne(ctx, bson.M{"username": username}).Decode(&stored)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
-			return nil, nil // User not found
+			return nil, nil
 		}
 
 		return nil, err

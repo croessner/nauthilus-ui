@@ -61,9 +61,8 @@ func TestToUserViewStripsSecrets(t *testing.T) {
 	}
 }
 
-func TestJWTConfigJSONOmitsSecret(t *testing.T) {
-	cfg := JWTConfig{
-		JWTSecret:          "jwt-secret",
+func TestSessionConfigJSONShape(t *testing.T) {
+	cfg := SessionConfig{
 		TokenExpiry:        3600,
 		RefreshTokenExpiry: 7200,
 		RememberMeExpiry:   86400,
@@ -75,12 +74,14 @@ func TestJWTConfigJSONOmitsSecret(t *testing.T) {
 	}
 
 	payload := string(raw)
-	if strings.Contains(payload, "jwtSecret") {
-		t.Fatalf("expected jwtSecret to be omitted from JSON, got %s", payload)
+	for _, key := range []string{"tokenExpiry", "refreshTokenExpiry", "rememberMeExpiry"} {
+		if !strings.Contains(payload, key) {
+			t.Fatalf("expected %q in session config JSON, got %s", key, payload)
+		}
 	}
 
-	view := ToJWTConfigView(cfg)
-	if !view.JWTSecretConfigured {
-		t.Fatal("expected JWTSecretConfigured to be true")
+	view := ToSessionConfigView(cfg)
+	if view.TokenExpiry != cfg.TokenExpiry || view.RefreshTokenExpiry != cfg.RefreshTokenExpiry || view.RememberMeExpiry != cfg.RememberMeExpiry {
+		t.Fatalf("unexpected session config view: %+v", view)
 	}
 }

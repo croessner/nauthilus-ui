@@ -106,45 +106,12 @@ const DEFAULT_CONFIG: UserManagerConfig = {
 // Cache for config to reduce API calls
 let cachedConfig: UserManagerConfig | null = null;
 let cachedUsers: User[] | null = null;
-let cachedJwtConfig: { tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
+let cachedSessionConfig: { tokenExpiry: number, refreshTokenExpiry: number, rememberMeExpiry: number } | null = null;
 let cachedCurrentUser: User | null = null;
 let cachedCurrentUsernameHint: string | null = null;
 
-const CURRENT_USERNAME_STORAGE_KEY = 'nauthilus:current-username';
-
-const readStoredCurrentUsername = (): string | null => {
-  try {
-    if (typeof window === 'undefined') {
-      return null;
-    }
-
-    const value = window.localStorage.getItem(CURRENT_USERNAME_STORAGE_KEY);
-    return value && value.trim() ? value.trim() : null;
-  } catch {
-    return null;
-  }
-};
-
-const persistCurrentUsername = (username: string | null): void => {
-  try {
-    if (typeof window === 'undefined') {
-      return;
-    }
-
-    if (username && username.trim()) {
-      window.localStorage.setItem(CURRENT_USERNAME_STORAGE_KEY, username.trim());
-    } else {
-      window.localStorage.removeItem(CURRENT_USERNAME_STORAGE_KEY);
-    }
-  } catch {
-    // ignore storage failures
-  }
-};
-
 const rememberCurrentUsername = (username?: string | null): void => {
-  const normalized = username?.trim() || null;
-  cachedCurrentUsernameHint = normalized;
-  persistCurrentUsername(normalized);
+  cachedCurrentUsernameHint = username?.trim() || null;
 };
 
 const rememberCurrentUser = (user?: User | null): void => {
@@ -160,18 +127,11 @@ const rememberCurrentUser = (user?: User | null): void => {
 const clearCurrentUserState = (): void => {
   cachedCurrentUser = null;
   cachedCurrentUsernameHint = null;
-  persistCurrentUsername(null);
 };
 
 export const getCurrentUsernameHint = (): string | null => {
   if (cachedCurrentUsernameHint) {
     return cachedCurrentUsernameHint;
-  }
-
-  const stored = readStoredCurrentUsername();
-  if (stored) {
-    cachedCurrentUsernameHint = stored;
-    return stored;
   }
 
   if (cachedCurrentUser?.username) {
@@ -215,16 +175,16 @@ const fetchConfigData = async (): Promise<void> => {
     }
 
     try {
-      const jwtConfigResponse = await axios.get('/api/jwtconfig');
-      if (jwtConfigResponse.data && jwtConfigResponse.data.jwtConfig) {
-        cachedJwtConfig = jwtConfigResponse.data.jwtConfig;
+      const sessionConfigResponse = await axios.get('/api/sessionconfig');
+      if (sessionConfigResponse.data && sessionConfigResponse.data.sessionConfig) {
+        cachedSessionConfig = sessionConfigResponse.data.sessionConfig;
       } else {
-        console.error('Invalid JWT config data format received from API');
-        cachedJwtConfig = null;
+        console.error('Invalid session config data format received from API');
+        cachedSessionConfig = null;
       }
     } catch (error: any) {
       if (error?.response?.status === 403) {
-        cachedJwtConfig = null;
+        cachedSessionConfig = null;
       } else {
         throw error;
       }
@@ -233,7 +193,7 @@ const fetchConfigData = async (): Promise<void> => {
     console.error('Error fetching configuration data:', error);
     // Don't throw the error, just set empty values
     cachedUsers = [];
-    cachedJwtConfig = null;
+    cachedSessionConfig = null;
   }
 };
 
@@ -266,9 +226,9 @@ const constructConfigObject = (): UserManagerConfig => {
   
   return {
       users,
-      tokenExpiry: cachedJwtConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
-      refreshTokenExpiry: cachedJwtConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
-      rememberMeExpiry: cachedJwtConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
+      tokenExpiry: cachedSessionConfig?.tokenExpiry || DEFAULT_CONFIG.tokenExpiry,
+      refreshTokenExpiry: cachedSessionConfig?.refreshTokenExpiry || DEFAULT_CONFIG.refreshTokenExpiry,
+      rememberMeExpiry: cachedSessionConfig?.rememberMeExpiry || DEFAULT_CONFIG.rememberMeExpiry
   };
 };
 
@@ -515,7 +475,7 @@ export const updateUserProfile = async (
 
 // Authenticate a user and generate tokens
 export const authenticate = async (username: string, password: string, rememberMe: boolean = false, recaptchaToken?: string): Promise<
-  | { token: string; refreshToken: string }
+  | { success: true }
   | { mfaRequired: boolean; mfaType: string; username: string; totpEnabled?: boolean; webAuthnEnabled?: boolean }
   | { captchaRequired: true; recaptchaSiteKey?: string }
   | null
@@ -545,15 +505,13 @@ export const authenticate = async (username: string, password: string, rememberM
           totpEnabled: response.data.totpEnabled,
           webAuthnEnabled: response.data.webAuthnEnabled,
         };
-      } else if (response.data && response.data.user && response.data.token) {
-        // Server already set HttpOnly cookies. Return tokens for compatibility, but do not store client-side.
-        const token = response.data.token;
-        const refreshToken = response.data.refreshToken || token;
+      } else if (response.data && response.data.user) {
+        // Server already set HttpOnly session cookies. Do not persist anything client-side.
         rememberCurrentUser(response.data.user);
 
         void updateUserLastLogin(username);
 
-        return { token, refreshToken };
+        return { success: true };
       } else {
         console.error('Invalid response format from server:', response.data);
         return null;
@@ -574,9 +532,8 @@ export const authenticate = async (username: string, password: string, rememberM
   }
 };
 
-// Refresh a token
 // Complete MFA login after successful verification
-export const completeMfaLogin = async (username: string, _rememberMe: boolean = false): Promise<{ token: string, refreshToken: string } | null> => {
+export const completeMfaLogin = async (username: string, _rememberMe: boolean = false): Promise<{ success: true } | null> => {
   console.log('Starting completeMfaLogin for user:', username);
   if (!username) {
     console.error('Username is null or empty');
@@ -591,7 +548,7 @@ export const completeMfaLogin = async (username: string, _rememberMe: boolean = 
       rememberCurrentUser(response.data.user);
       console.log('MFA completion confirmed via current session');
       void updateUserLastLogin(username);
-      return { token: 'cookie-session', refreshToken: 'cookie-session' };
+      return { success: true };
     }
     console.error('Invalid response while confirming MFA completion:', response.data);
     return null;
@@ -611,7 +568,7 @@ export const logout = async (): Promise<void> => {
     // Clear cached data to ensure fresh data is loaded on next login
     cachedConfig = null;
     cachedUsers = null;
-    cachedJwtConfig = null;
+    cachedSessionConfig = null;
 
     console.log('User logged out successfully');
   } catch (error) {
@@ -698,14 +655,14 @@ export const initialize = async (): Promise<void> => {
       // Set default config without trying to save it (will be saved after authentication)
       cachedConfig = DEFAULT_CONFIG;
       cachedUsers = [];
-      cachedJwtConfig = null;
+      cachedSessionConfig = null;
     }
   } catch (error) {
     console.error('Error during initialization:', error);
     // Don't throw the error, just use default values
     cachedConfig = DEFAULT_CONFIG;
     cachedUsers = [];
-    cachedJwtConfig = null;
+    cachedSessionConfig = null;
   }
 };
 

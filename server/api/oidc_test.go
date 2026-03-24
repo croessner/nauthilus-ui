@@ -19,10 +19,16 @@ func TestFinalizeOIDCSessionSetsHttpOnlyCookiesAndRedirectsWithoutTokens(t *test
 	ctx, _ := gin.CreateTestContext(recorder)
 	ctx.Request = httptest.NewRequest(http.MethodGet, "/api/auth/oidc/callback", nil)
 
-	accessExpiresAt := time.Now().Add(time.Hour).Unix()
-	refreshExpiresAt := time.Now().Add(24 * time.Hour).Unix()
+	accessExpiresAt := time.Now().Add(time.Hour)
+	refreshExpiresAt := time.Now().Add(24 * time.Hour)
 
-	finalizeOIDCSession(ctx, "access-secret", accessExpiresAt, "refresh-secret", refreshExpiresAt)
+	finalizeOIDCSession(ctx, issuedSessionPair{
+		accessToken:      "access-secret",
+		accessExpiresAt:  accessExpiresAt,
+		refreshToken:     "refresh-secret",
+		refreshExpiresAt: refreshExpiresAt,
+		rememberMe:       true,
+	})
 
 	if recorder.Code != http.StatusFound {
 		t.Fatalf("expected status 302, got %d", recorder.Code)

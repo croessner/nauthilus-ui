@@ -13,7 +13,6 @@ services:
       - PROXY_ADDRESS=0.0.0.0
       - REACT_APP_PROXY_PORT=443
       - MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongo:27017/nauthilus-ui?authSource=admin
-      - REACT_APP_JWT_SECRET=your-jwt-secret-key-change-in-production
     ports:
       - "3001:3001"
       - "3002:3002"

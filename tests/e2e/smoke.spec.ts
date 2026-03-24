@@ -42,6 +42,19 @@ test('admin can log in and open critical routes', async ({ page }, testInfo) => 
   await expect(page.getByText('Server Configuration')).toBeVisible();
   routeDurations.Login = Date.now() - loginStart;
 
+  const cookieNames = (await page.context().cookies()).map(({ name }) => name);
+  expect(cookieNames).toEqual(
+    expect.arrayContaining([
+      'nauthilus_ui_session',
+      'nauthilus_ui_refresh_session',
+      'nauthilus_ui_csrf_token',
+    ]),
+  );
+  expect(cookieNames).not.toContain('nauthilus_session');
+  expect(cookieNames).not.toContain('nauthilus_refresh_session');
+  expect(cookieNames).not.toContain('nauthilus_csrf_token');
+  expect(cookieNames).not.toContain('nauthilus_mfa_pending');
+
   for (const probe of routeProbes) {
     const startedAt = Date.now();
     await clickMenu(page, probe.menu);

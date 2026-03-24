@@ -47,7 +47,7 @@ func (h *StaticHandler) RegisterMiddleware(router *gin.Engine) {
 // EnvConfigHandler handles the /env-config.js endpoint
 func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 	// Create a JSON object with environment variables
-	// Note: JWT secret and OIDC client secret are NOT exposed to the frontend for security reasons
+	// Note: OIDC client secrets are NOT exposed to the frontend for security reasons.
 	envConfig := map[string]string{
 		"REACT_APP_TOKEN_EXPIRY":              fmt.Sprintf("%d", h.Config.TokenExpiry),
 		"REACT_APP_REFRESH_TOKEN_EXPIRY":      fmt.Sprintf("%d", h.Config.RefreshTokenExpiry),

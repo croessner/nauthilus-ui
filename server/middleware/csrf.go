@@ -13,10 +13,10 @@ import (
 
 const (
 	csrfHeaderName       = "X-CSRF-Token"
-	accessCookieName     = "nauthilus_token"
-	refreshCookieName    = "nauthilus_refresh_token"
-	pendingMFACookieName = "nauthilus_mfa_pending"
-	csrfCookieName       = "nauthilus_csrf_token"
+	accessCookieName     = "nauthilus_ui_session"
+	refreshCookieName    = "nauthilus_ui_refresh_session"
+	pendingMFACookieName = "nauthilus_ui_mfa_pending"
+	csrfCookieName       = "nauthilus_ui_csrf_token"
 )
 
 // CSRFProtection validates mutating cookie-authenticated requests.

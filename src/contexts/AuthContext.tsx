@@ -22,7 +22,7 @@ interface AuthContextType {
   login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
   loginWithOIDC: () => Promise<void>;
   logout: () => Promise<void>;
-  completeMfaLogin: (username: string, rememberMe?: boolean) => Promise<{ token: string; refreshToken: string; } | null>;
+  completeMfaLogin: (username: string, rememberMe?: boolean) => Promise<{ success: true } | null>;
 }
 
 // Create the context with a default value
@@ -185,7 +185,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
                   recaptchaSiteKey: undefined,
                 }));
                 return;
-              } else if ('token' in retry) {
+              } else if ('success' in retry) {
                 setAuth({
                   isAuthenticated: true,
                   username,
@@ -225,7 +225,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
 
           // We don't redirect to MFA pages, instead we let the UI components
           // handle the display of MFA verification UI based on the auth state
-        } else if ('token' in result) {
+        } else if ('success' in result) {
           // Normal authentication success
           setAuth({
             isAuthenticated: true,
@@ -261,8 +261,8 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
       // Redirect to OIDC provider via backend endpoint
       window.location.href = '/api/auth/oidc/login';
 
-      // The rest of the flow will be handled by the OIDC callback
-      // which should set the token and redirect back to the app
+      // The rest of the flow will be handled by the OIDC callback,
+      // which establishes the cookie-backed session and redirects back to the app.
     } catch (err) {
       setAuth(prev => ({
         ...prev,
@@ -293,7 +293,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
   };
 
   // Complete MFA login after successful verification
-  const completeMfaLogin = async (username: string, rememberMe: boolean = false): Promise<{ token: string; refreshToken: string; } | null> => {
+  const completeMfaLogin = async (username: string, rememberMe: boolean = false): Promise<{ success: true } | null> => {
     try {
       console.log('AuthContext: Starting completeMfaLogin for user:', username);
       setAuth(prev => ({ ...prev, loading: true, error: null }));
@@ -304,7 +304,6 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
       console.log('AuthContext: Result from userManager.completeMfaLogin:', result);
 
       if (result) {
-        console.log('AuthContext: Result exists, checking for token property');
         // Authentication success
         setAuth({
           isAuthenticated: true,

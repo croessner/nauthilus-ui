@@ -37,18 +37,19 @@ const (
 
 // MongoDB represents a MongoDB connection
 type MongoDB struct {
-	Client        *mongo.Client
-	DB            *mongo.Database
-	ProfileColl   *mongo.Collection
-	UserColl      *mongo.Collection
-	JWTConfigColl *mongo.Collection
-	RuntimeColl   *mongo.Collection
-	LegalColl     *mongo.Collection
-	AuditColl     *mongo.Collection
-	Config        *config.Config
-	RetryCount    int
-	IsConnected   bool
-	CancelFunc    context.CancelFunc
+	Client            *mongo.Client
+	DB                *mongo.Database
+	ProfileColl       *mongo.Collection
+	UserColl          *mongo.Collection
+	SessionConfigColl *mongo.Collection
+	SessionColl       *mongo.Collection
+	RuntimeColl       *mongo.Collection
+	LegalColl         *mongo.Collection
+	AuditColl         *mongo.Collection
+	Config            *config.Config
+	RetryCount        int
+	IsConnected       bool
+	CancelFunc        context.CancelFunc
 }
 
 // NewMongoDB creates a new MongoDB connection
@@ -89,7 +90,8 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	m.DB = client.Database("nauthilus-ui")
 	m.ProfileColl = m.DB.Collection("profiles")
 	m.UserColl = m.DB.Collection("users")
-	m.JWTConfigColl = m.DB.Collection("jwtconfig")
+	m.SessionConfigColl = m.DB.Collection("sessionconfig")
+	m.SessionColl = m.DB.Collection("sessions")
 	m.RuntimeColl = m.DB.Collection("runtime")
 	m.LegalColl = m.DB.Collection("legal")
 	m.AuditColl = m.DB.Collection("auditlog")
@@ -117,8 +119,8 @@ func (m *MongoDB) Disconnect(ctx context.Context) error {
 
 // InitializeDatabase initializes the database with required collections and default data
 func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
-	// Initialize JWT configuration
-	if err := m.initializeJWTConfig(ctx); err != nil {
+	// Initialize session configuration
+	if err := m.initializeSessionConfig(ctx); err != nil {
 		return err
 	}
 
@@ -137,6 +139,11 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 		return err
 	}
 
+	// Initialize session collection indexes
+	if err := m.initializeSessionCollection(ctx); err != nil {
+		return err
+	}
+
 	// Initialize legal pages
 	if err := m.initializeLegalPages(ctx); err != nil {
 		return err
@@ -152,68 +159,50 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 	return nil
 }
 
-// initializeJWTConfig creates the default JWT configuration if it doesn't exist
-func (m *MongoDB) initializeJWTConfig(ctx context.Context) error {
-	// Check if JWTConfig collection has any documents
-	jwtConfigCount, err := m.JWTConfigColl.CountDocuments(ctx, bson.M{})
+// initializeSessionConfig creates the default session configuration if it doesn't exist.
+func (m *MongoDB) initializeSessionConfig(ctx context.Context) error {
+	sessionConfigCount, err := m.SessionConfigColl.CountDocuments(ctx, bson.M{})
 	if err != nil {
 		return err
 	}
 
-	if jwtConfigCount == 0 {
-		slog.Info("Creating default JWT configuration...")
+	if sessionConfigCount == 0 {
+		slog.Info("Creating default session configuration...")
 
-		// Default JWT configuration
-		jwtConfig := models.JWTConfig{
-			JWTSecret:          m.Config.JWTSecret,
-			TokenExpiry:        m.Config.TokenExpiry,
-			RefreshTokenExpiry: m.Config.RefreshTokenExpiry,
-			RememberMeExpiry:   m.Config.RememberMeExpiry,
-		}
-
-		_, err := m.JWTConfigColl.InsertOne(ctx, jwtConfig)
-		if err != nil {
+		sessionConfig := defaultSessionConfig(m)
+		if _, err := m.SessionConfigColl.InsertOne(ctx, sessionConfig); err != nil {
 			return err
 		}
 
-		slog.Info("Default JWT configuration created successfully")
-	} else {
-		// Optional startup sync: update RememberMeExpiry from env if flag enabled and value differs.
-		if m.Config.SyncRememberMeFromEnvOnBoot {
-			var current models.JWTConfig
-			findErr := m.JWTConfigColl.FindOne(ctx, bson.M{}).Decode(&current)
-			if findErr != nil {
-				return findErr
+		slog.Info("Default session configuration created successfully")
+	}
+
+	var current models.SessionConfig
+	if err := m.SessionConfigColl.FindOne(ctx, bson.M{}).Decode(&current); err != nil {
+		return err
+	}
+
+	// Optional startup sync: update RememberMeExpiry from env if flag enabled and value differs.
+	if m.Config.SyncRememberMeFromEnvOnBoot {
+		if current.RememberMeExpiry != m.Config.RememberMeExpiry && m.Config.RememberMeExpiry > 0 {
+			filter := bson.M{"rememberMeExpiry": current.RememberMeExpiry}
+			update := bson.M{"$set": bson.M{"rememberMeExpiry": m.Config.RememberMeExpiry}}
+
+			res, err := m.SessionConfigColl.UpdateOne(ctx, filter, update)
+			if err != nil {
+				return err
 			}
 
-			if current.RememberMeExpiry != m.Config.RememberMeExpiry && m.Config.RememberMeExpiry > 0 {
-				filter := bson.M{"rememberMeExpiry": current.RememberMeExpiry}
-				update := bson.M{"$set": bson.M{"rememberMeExpiry": m.Config.RememberMeExpiry}}
-
-				res, updErr := m.JWTConfigColl.UpdateOne(ctx, filter, update)
-				if updErr != nil {
-					return updErr
-				}
-
-				if res.MatchedCount > 0 {
-					slog.Info("Synchronized JWT rememberMeExpiry from env on boot", "old", current.RememberMeExpiry, "new", m.Config.RememberMeExpiry)
-				} else {
-					// Likely another instance updated first; log at debug/info and continue
-					slog.Info("rememberMeExpiry sync skipped; configuration changed concurrently")
-				}
+			if res.MatchedCount > 0 {
+				slog.Info("Synchronized session rememberMeExpiry from env on boot", "old", current.RememberMeExpiry, "new", m.Config.RememberMeExpiry)
 			} else {
-				slog.Debug("rememberMeExpiry already matches env or env value not positive; no sync performed")
+				slog.Info("rememberMeExpiry sync skipped; configuration changed concurrently")
 			}
 		} else {
-			// Flag not enabled; optionally log if mismatch for operator visibility
-			var current models.JWTConfig
-
-			if err := m.JWTConfigColl.FindOne(ctx, bson.M{}).Decode(&current); err == nil {
-				if current.RememberMeExpiry != m.Config.RememberMeExpiry {
-					slog.Info("JWT rememberMeExpiry differs from env; set JWT_SYNC_FROM_ENV_ON_BOOT=true to sync on boot", "db", current.RememberMeExpiry, "env", m.Config.RememberMeExpiry)
-				}
-			}
+			slog.Debug("rememberMeExpiry already matches env or env value not positive; no sync performed")
 		}
+	} else if current.RememberMeExpiry != m.Config.RememberMeExpiry {
+		slog.Info("Session rememberMeExpiry differs from env; set SESSION_SYNC_FROM_ENV_ON_BOOT=true to sync on boot", "db", current.RememberMeExpiry, "env", m.Config.RememberMeExpiry)
 	}
 
 	return nil
@@ -279,6 +268,30 @@ func (m *MongoDB) initializeRuntimeCollection(ctx context.Context) error {
 
 	slog.Info("Runtime collection initialized", "documents", runtimeCount)
 	return nil
+}
+
+// initializeSessionCollection creates indexes used by opaque server-side sessions.
+func (m *MongoDB) initializeSessionCollection(ctx context.Context) error {
+	if m.SessionColl == nil {
+		return nil
+	}
+
+	_, err := m.SessionColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys:    bson.D{{Key: "tokenHash", Value: 1}, {Key: "kind", Value: 1}},
+			Options: options.Index().SetUnique(true).SetName("token_hash_kind_unique"),
+		},
+		{
+			Keys:    bson.D{{Key: "expiresAt", Value: 1}},
+			Options: options.Index().SetExpireAfterSeconds(0).SetName("expires_at_ttl"),
+		},
+		{
+			Keys:    bson.D{{Key: "username", Value: 1}, {Key: "kind", Value: 1}},
+			Options: options.Index().SetName("username_kind_lookup"),
+		},
+	})
+
+	return err
 }
 
 // initializeLegalPages creates default legal pages if they don't exist

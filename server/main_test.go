@@ -68,7 +68,7 @@ func TestProxyMutationRejectsMissingCSRFFromCookieSession(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/proxy/ping?url=https://example.invalid", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
-	req.AddCookie(&http.Cookie{Name: "nauthilus_token", Value: "cookie-session"})
+	req.AddCookie(&http.Cookie{Name: "nauthilus_ui_session", Value: "cookie-session"})
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, req)
 

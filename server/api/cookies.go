@@ -12,9 +12,9 @@ import (
 )
 
 const (
-	accessCookieName  = "nauthilus_token"
-	refreshCookieName = "nauthilus_refresh_token"
-	csrfCookieName    = "nauthilus_csrf_token"
+	accessCookieName  = "nauthilus_ui_session"
+	refreshCookieName = "nauthilus_ui_refresh_session"
+	csrfCookieName    = "nauthilus_ui_csrf_token"
 )
 
 // RotateCSRFCookie creates a fresh readable CSRF cookie used for double-submit protection.
@@ -63,67 +63,53 @@ func clearCSRFCookie(ctx *gin.Context) {
 	})
 }
 
-// SetAuthCookies sets secure HttpOnly cookies for access and refresh tokens.
-func SetAuthCookies(ctx *gin.Context, accessToken string, accessExpiresAt int64, refreshToken string, refreshExpiresAt int64) error {
+func setSessionCookie(ctx *gin.Context, name string, value string, expiresAt time.Time, httpOnly bool, persistent bool) {
 	secure := requestmeta.IsSecureRequest(ctx.Request)
+	cookie := &http.Cookie{
+		Name:     name,
+		Value:    value,
+		Path:     "/",
+		HttpOnly: httpOnly,
+		Secure:   secure,
+		SameSite: http.SameSiteLaxMode,
+	}
 
+	if persistent {
+		cookie.Expires = expiresAt
+		cookie.MaxAge = max(int(time.Until(expiresAt).Seconds()), 0)
+	}
+
+	http.SetCookie(ctx.Writer, cookie)
+}
+
+func clearCookie(ctx *gin.Context, name string, httpOnly bool) {
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     name,
+		Value:    "",
+		Path:     "/",
+		Expires:  time.Unix(0, 0),
+		MaxAge:   -1,
+		HttpOnly: httpOnly,
+		Secure:   requestmeta.IsSecureRequest(ctx.Request),
+		SameSite: http.SameSiteLaxMode,
+	})
+}
+
+// SetAuthCookies sets secure HttpOnly cookies for opaque access and refresh sessions.
+func SetAuthCookies(ctx *gin.Context, accessToken string, accessExpiresAt time.Time, refreshToken string, refreshExpiresAt time.Time, persistent bool) error {
 	if _, err := RotateCSRFCookie(ctx); err != nil {
 		return err
 	}
 
-	// Access token cookie
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     accessCookieName,
-		Value:    accessToken,
-		Path:     "/",
-		Expires:  time.Unix(accessExpiresAt, 0),
-		MaxAge:   int(time.Until(time.Unix(accessExpiresAt, 0)).Seconds()),
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	// Refresh token cookie
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     refreshCookieName,
-		Value:    refreshToken,
-		Path:     "/",
-		Expires:  time.Unix(refreshExpiresAt, 0),
-		MaxAge:   int(time.Until(time.Unix(refreshExpiresAt, 0)).Seconds()),
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
+	setSessionCookie(ctx, accessCookieName, accessToken, accessExpiresAt, true, persistent)
+	setSessionCookie(ctx, refreshCookieName, refreshToken, refreshExpiresAt, true, persistent)
 
 	return nil
 }
 
 // ClearAuthCookies removes the auth cookies on the client.
 func ClearAuthCookies(ctx *gin.Context) {
-	secure := requestmeta.IsSecureRequest(ctx.Request)
-	expired := time.Unix(0, 0)
-
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     accessCookieName,
-		Value:    "",
-		Path:     "/",
-		Expires:  expired,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
-
-	http.SetCookie(ctx.Writer, &http.Cookie{
-		Name:     refreshCookieName,
-		Value:    "",
-		Path:     "/",
-		Expires:  expired,
-		MaxAge:   -1,
-		HttpOnly: true,
-		Secure:   secure,
-		SameSite: http.SameSiteLaxMode,
-	})
-
+	clearCookie(ctx, accessCookieName, true)
+	clearCookie(ctx, refreshCookieName, true)
 	clearCSRFCookie(ctx)
 }

@@ -34,7 +34,7 @@ Gate policy: A phase can start only when the previous phase gate is marked `Appr
 | --- | --- | --- | --- |
 | Multi-profile management (create/switch/rename/delete) | Baseline captured | B8-B11 | Parity checklist + UAT evidence |
 | Per-profile runtime connection config in MongoDB | Baseline captured | B1, B3, B11 | API/integration test results |
-| UI authentication (JWT + MFA) | Baseline captured | B8-B11 | Auth flow regression checklist |
+| UI authentication (opaque sessions + MFA) | Baseline captured | B8-B11 | Auth flow regression checklist |
 | Configuration management pages | Baseline captured | B8-B11 | Page-level parity checks |
 | Audit logging and user management | Baseline captured | B8-B11 | CRUD parity + role checks |
 | Runtime tools/pages | Baseline captured | B8-B11 | Runtime flow parity checks |
@@ -75,7 +75,7 @@ Risk review cadence: update status at every batch close and at every phase gate 
 - Requirement: Preserve existing core product capabilities during migration:
   - Multi-profile management (create/switch/rename/delete)
   - Per-profile runtime connection config in MongoDB
-  - UI authentication (JWT + MFA)
+  - UI authentication (opaque sessions + MFA)
   - Configuration management pages
   - Audit logging and user management
   - Runtime tools/pages

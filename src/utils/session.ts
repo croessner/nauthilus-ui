@@ -1,5 +1,4 @@
 import axios from './axiosConfig';
-import { getProxyOrigin } from './apiUtils';
 
 let initialized = false;
 let lastCheck = 0;
@@ -11,7 +10,7 @@ async function checkAndRefreshSession(): Promise<void> {
   lastCheck = now;
 
   try {
-    await axios.get(`${getProxyOrigin()}/api/auth/me`, { withCredentials: true });
+    await axios.get('/api/auth/me', { withCredentials: true });
     // Session is valid; nothing to do
     return;
   } catch (err: any) {
@@ -22,7 +21,7 @@ async function checkAndRefreshSession(): Promise<void> {
     }
     // Try silent refresh
     try {
-      await axios.post(`${getProxyOrigin()}/api/auth/refresh`, {}, { withCredentials: true });
+      await axios.post('/api/auth/refresh', {}, { withCredentials: true });
       return; // refreshed successfully
     } catch {
       // Inform user with unified dialog

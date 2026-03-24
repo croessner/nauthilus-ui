@@ -1,11 +1,10 @@
 import axios from 'axios';
-import { getAuthToken, getProxyOrigin } from './apiUtils';
 import { attachCSRFHeader, isMutatingMethod } from './csrf';
 
 // Configure axios defaults
 axios.defaults.withCredentials = true;
 
-// Add a request interceptor to include JWT token in all requests
+// Add a request interceptor to attach CSRF headers for mutating requests.
 axios.interceptors.request.use(
   async (config) => {
     if (config.url && !config.url.includes('/api/auth/csrf') && isMutatingMethod(config.method)) {
@@ -27,10 +26,6 @@ axios.interceptors.request.use(
       return config;
     }
 
-    const token = getAuthToken();
-    if (token) {
-      (config.headers as any).Authorization = `Bearer ${token}`;
-    }
     return config;
   },
   (error) => {

@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	pendingMFACookieName = "nauthilus_mfa_pending"
+	pendingMFACookieName = "nauthilus_ui_mfa_pending"
 	pendingMFATTL        = 5 * time.Minute
 )
 

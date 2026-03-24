@@ -179,7 +179,7 @@ The project includes a Makefile with several useful commands:
 
 ## Configuration
 
-The UI works completely independently from the Nauthilus service. Configuration data is stored in MongoDB, and you can upload and download configuration files as needed. User session information is stored in the browser memory.
+The UI works completely independently from the Nauthilus service. Configuration data is stored in MongoDB, and you can upload and download configuration files as needed. User session state is stored server-side and bound to HttpOnly cookies.
 
 ### User Authentication
 
@@ -189,7 +189,7 @@ The UI includes a user authentication system that is completely independent from
 - **Default Admin**: A default admin user is created on first run
 - **User Management**: Admins can add, edit, and delete users
 - **Role-Based Access**: Users can have different roles (admin, user)
-- **JWT Authentication**: Secure token-based authentication
+- **Session Authentication**: Secure opaque server-side sessions via HttpOnly cookies
 
 #### Default Admin Credentials
 
@@ -199,17 +199,15 @@ The application uses a default admin user with the following credentials:
 
 After logging in for the first time, it's recommended to change the password using the User Management section.
 
-#### JWT Configuration
+#### Session Configuration
 
-You can configure JWT settings using environment variables:
+You can configure session lifetimes using environment variables:
 
 ```
-REACT_APP_JWT_SECRET=your_secure_jwt_secret_key_here
 REACT_APP_TOKEN_EXPIRY=3600
 REACT_APP_REFRESH_TOKEN_EXPIRY=86400
+REACT_APP_REMEMBER_ME_EXPIRY=86400
 ```
-
-For production deployments, make sure to set a secure JWT secret.
 
 #### WebAuthn Configuration
 
@@ -248,7 +246,7 @@ The UI provides buttons in the top bar for:
 ### Persistent Storage
 
 - Configuration data is stored in MongoDB
-- User session information is stored in browser memory only
+- User session state is stored server-side and bound to HttpOnly cookies
 - MongoDB provides reliable server-side storage
 - Configuration persists even if the browser data is cleared
 - The Go API server provides endpoints to interact with MongoDB
@@ -266,13 +264,13 @@ The UI provides buttons in the top bar for:
 - The Go server handles all backend operations including:
   - API endpoints for configuration management
   - MongoDB database interactions
-  - User authentication and JWT token management
+  - User authentication and server-side session management
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
   - Cross-origin requests are allowed only for the configured CORS allowlist
   - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
   - In non-local deployments, set `CORS_ALLOWED_ORIGINS` explicitly to the UI origin(s)
-  - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_csrf_token`)
+  - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_ui_csrf_token`)
 - In production, the Docker setup includes:
   - A Go API server container that serves both the static React files and handles API requests
   - A MongoDB container for data storage
@@ -688,7 +686,7 @@ The project includes a Makefile with several useful commands:
 
 ## Configuration
 
-The UI works completely independently from the Nauthilus service. Configuration data is stored in MongoDB, and you can upload and download configuration files as needed. User session information is stored in the browser memory.
+The UI works completely independently from the Nauthilus service. Configuration data is stored in MongoDB, and you can upload and download configuration files as needed. User session state is stored server-side and bound to HttpOnly cookies.
 
 ### User Authentication
 
@@ -698,7 +696,7 @@ The UI includes a user authentication system that is completely independent from
 - **Default Admin**: A default admin user is created on first run
 - **User Management**: Admins can add, edit, and delete users
 - **Role-Based Access**: Users can have different roles (admin, user)
-- **JWT Authentication**: Secure token-based authentication
+- **Session Authentication**: Secure opaque server-side sessions via HttpOnly cookies
 
 #### Default Admin Credentials
 
@@ -708,17 +706,15 @@ The application uses a default admin user with the following credentials:
 
 After logging in for the first time, it's recommended to change the password using the User Management section.
 
-#### JWT Configuration
+#### Session Configuration
 
-You can configure JWT settings using environment variables:
+You can configure session lifetimes using environment variables:
 
 ```
-REACT_APP_JWT_SECRET=your_secure_jwt_secret_key_here
 REACT_APP_TOKEN_EXPIRY=3600
 REACT_APP_REFRESH_TOKEN_EXPIRY=86400
+REACT_APP_REMEMBER_ME_EXPIRY=86400
 ```
-
-For production deployments, make sure to set a secure JWT secret.
 
 #### WebAuthn Configuration
 
@@ -757,7 +753,7 @@ The UI provides buttons in the top bar for:
 ### Persistent Storage
 
 - Configuration data is stored in MongoDB
-- User session information is stored in browser memory only
+- User session state is stored server-side and bound to HttpOnly cookies
 - MongoDB provides reliable server-side storage
 - Configuration persists even if the browser data is cleared
 - The Go API server provides endpoints to interact with MongoDB
@@ -775,13 +771,13 @@ The UI provides buttons in the top bar for:
 - The Go server handles all backend operations including:
   - API endpoints for configuration management
   - MongoDB database interactions
-  - User authentication and JWT token management
+  - User authentication and server-side session management
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
   - Cross-origin requests are allowed only for the configured CORS allowlist
   - If `CORS_ALLOWED_ORIGINS` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
   - In non-local deployments, set `CORS_ALLOWED_ORIGINS` explicitly to the UI origin(s)
-  - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_csrf_token`)
+  - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_ui_csrf_token`)
 - In production, the Docker setup includes:
   - A Go API server container that serves both the static React files and handles API requests
   - A MongoDB container for data storage

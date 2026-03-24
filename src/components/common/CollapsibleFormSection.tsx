@@ -1,8 +1,7 @@
 import React, { ReactNode, useEffect, useMemo, useState } from 'react';
-import { Paper, Typography, Box, Divider, Accordion, AccordionSummary, AccordionDetails } from '@mui/material';
+import { Paper, Typography, Box, Accordion, AccordionSummary, AccordionDetails, Divider } from '@mui/material';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
-import Cookies from 'js-cookie';
-import { jwtDecode } from 'jwt-decode';
+import { getCurrentUsernameHint } from '../../utils/userManager';
 
 interface CollapsibleFormSectionProps {
   title: string;
@@ -27,10 +26,7 @@ const CollapsibleFormSection = ({
   // Determine a per-user, per-page storage key for this section
   const username = useMemo(() => {
     try {
-      const token = Cookies.get('nauthilus_token');
-      if (!token) return 'anon';
-      const decoded = jwtDecode<{ sub: string }>(token);
-      return decoded?.sub || 'anon';
+      return getCurrentUsernameHint() || 'anon';
     } catch {
       return 'anon';
     }

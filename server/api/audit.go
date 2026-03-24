@@ -29,7 +29,7 @@ func NewAuditHandler(mongoDB *db.MongoDB) *AuditHandler {
 	return &AuditHandler{MongoDB: mongoDB}
 }
 
-// RegisterGroupRoutes registers routes in a protected apiGroup (with JWT middleware applied)
+// RegisterGroupRoutes registers routes in a protected apiGroup.
 func (h *AuditHandler) RegisterGroupRoutes(apiGroup *gin.RouterGroup) {
 	apiGroup.GET("/audit", h.requireAdmin(), h.List)
 	apiGroup.GET("/audit/meta", h.requireAdmin(), h.Meta)

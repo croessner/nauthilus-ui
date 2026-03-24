@@ -1,6 +1,6 @@
 import Cookies from 'js-cookie';
 
-const CSRF_COOKIE_NAME = 'nauthilus_csrf_token';
+const CSRF_COOKIE_NAME = 'nauthilus_ui_csrf_token';
 const CSRF_HEADER_NAME = 'X-CSRF-Token';
 
 let inFlightCSRFRequest: Promise<string | null> | null = null;

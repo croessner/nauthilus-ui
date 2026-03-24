@@ -118,7 +118,7 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
     try {
       const result = await userManager.authenticate(username, password);
 
-      if (result && 'token' in result) {
+      if (result && 'success' in result) {
         const currentUser = await userManager.getCurrentUser();
         setIsAuthenticated(!!currentUser);
         setUser(currentUser);

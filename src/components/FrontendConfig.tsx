@@ -1193,6 +1193,8 @@ const FrontendConfig = (): React.JSX.Element => {
                                         <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.cert_file`} label="Certificate File" onChange={handleChange} /></Grid>
                                         <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.saml2.service_providers.${spIdx}.cert`} label="Inline Certificate" onChange={handleChange} /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.authn_requests_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.authn_requests_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Authn Requests Signed" /></Grid>
+                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.logout_requests_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.logout_requests_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Logout Requests Signed" /></Grid>
+                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.logout_responses_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.logout_responses_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Logout Responses Signed" /></Grid>
                                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
 
                                         <Grid size={12}><Typography variant="subtitle2">Allowed Attributes</Typography>{renderStringArrayEditor(`idp.saml2.service_providers.${spIdx}.allowed_attributes`, 'Allowed Attribute')}</Grid>
@@ -1220,6 +1222,8 @@ const FrontendConfig = (): React.JSX.Element => {
                                       cert: '',
                                       cert_file: '',
                                       authn_requests_signed: false,
+                                      logout_requests_signed: false,
+                                      logout_responses_signed: false,
                                       allowed_attributes: [],
                                       require_mfa: [],
                                       supported_mfa: [],

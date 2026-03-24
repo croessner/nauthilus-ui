@@ -769,6 +769,8 @@ export interface IdPSAML2ServiceProviderConfig {
   cert?: string;
   cert_file?: string;
   authn_requests_signed?: boolean;
+  logout_requests_signed?: boolean;
+  logout_responses_signed?: boolean;
   allowed_attributes?: string[];
   require_mfa?: string[];
   supported_mfa?: string[];

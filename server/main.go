@@ -127,8 +127,8 @@ func startAuditCleanupScheduler(cfg *config.Config, mongoDB *db.MongoDB) {
 
 // registerAPIHandlers registers all API handlers with the router
 func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
-	// Create a custom middleware that strictly enforces JWT authentication
-	strictJWTMiddleware := func(ctx *gin.Context) {
+	// Create a custom middleware that strictly enforces authenticated sessions.
+	strictSessionMiddleware := func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
 		if middleware.IsPublicPath(path) {
 			ctx.Next()
@@ -136,12 +136,12 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 			return
 		}
 
-		// Delegate auth to the standard JWT middleware (supports header or cookie)
-		middleware.JWTAuthMiddleware(mongoDB)(ctx)
+		// Delegate auth to the standard cookie-based session middleware.
+		middleware.SessionAuthMiddleware(mongoDB)(ctx)
 	}
 
-	// Apply the strict JWT middleware globally (it inspects path to skip public endpoints)
-	r.Use(strictJWTMiddleware)
+	// Apply the strict session middleware globally (it inspects path to skip public endpoints)
+	r.Use(strictSessionMiddleware)
 	apiGroup := r.Group("/api")
 
 	// Register auth endpoints (middleware will skip these)
@@ -168,9 +168,9 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	profileHandler := api.NewProfileHandler(mongoDB)
 	profileHandler.RegisterRoutes(r)
 
-	// Register JWT config routes (will be protected by middleware)
-	jwtConfigHandler := api.NewJWTConfigHandler(mongoDB)
-	jwtConfigHandler.RegisterRoutes(r)
+	// Register session config routes (will be protected by middleware)
+	sessionConfigHandler := api.NewSessionConfigHandler(mongoDB)
+	sessionConfigHandler.RegisterRoutes(r)
 
 	// Register runtime routes (will be protected by middleware)
 	runtimeHandler := api.NewRuntimeHandler(mongoDB)
@@ -359,20 +359,20 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 	})
 	r.Use(csrfProtection.Middleware())
 
-	// Strict JWT middleware for proxy routes.
-	strictProxyJWTMiddleware := func(ctx *gin.Context) {
+	// Strict session middleware for proxy routes.
+	strictProxySessionMiddleware := func(ctx *gin.Context) {
 		if utils.HasLegacyAuthQueryParams(ctx.Request) {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Backend auth must be sent via x-auth-type/x-auth-value headers"})
 			ctx.Abort()
 			return
 		}
 
-		// Delegate JWT validation to the standard middleware (supports cookies or Authorization header)
-		middleware.JWTAuthMiddleware(mongoDB)(ctx)
+		// Delegate session validation to the standard cookie-based middleware.
+		middleware.SessionAuthMiddleware(mongoDB)(ctx)
 	}
 
 	// Apply strict proxy middleware
-	r.Use(strictProxyJWTMiddleware)
+	r.Use(strictProxySessionMiddleware)
 
 	// Register proxy handlers
 	proxyHandler := proxy.NewProxyHandler(mongoDB)

@@ -96,29 +96,25 @@ type Profile struct {
 	CurrentProfileName string        `bson:"currentProfileName" json:"currentProfileName"`
 }
 
-// JWTConfig represents JWT configuration
-type JWTConfig struct {
-	JWTSecret          string `bson:"jwtSecret" json:"-"`
-	TokenExpiry        int    `bson:"tokenExpiry" json:"tokenExpiry"`
-	RefreshTokenExpiry int    `bson:"refreshTokenExpiry" json:"refreshTokenExpiry"`
-	RememberMeExpiry   int    `bson:"rememberMeExpiry" json:"rememberMeExpiry"`
+// SessionConfig represents configurable application session lifetimes.
+type SessionConfig struct {
+	TokenExpiry        int `bson:"tokenExpiry" json:"tokenExpiry"`
+	RefreshTokenExpiry int `bson:"refreshTokenExpiry" json:"refreshTokenExpiry"`
+	RememberMeExpiry   int `bson:"rememberMeExpiry" json:"rememberMeExpiry"`
 }
 
-// JWTConfigView is the sanitized API representation of JWT configuration.
-type JWTConfigView struct {
-	TokenExpiry         int  `json:"tokenExpiry"`
-	RefreshTokenExpiry  int  `json:"refreshTokenExpiry"`
-	RememberMeExpiry    int  `json:"rememberMeExpiry"`
-	JWTSecretConfigured bool `json:"jwtSecretConfigured"`
+// SessionConfigView is the API representation of session configuration.
+type SessionConfigView struct {
+	TokenExpiry        int `json:"tokenExpiry"`
+	RefreshTokenExpiry int `json:"refreshTokenExpiry"`
+	RememberMeExpiry   int `json:"rememberMeExpiry"`
 }
 
-// JWTConfigUpdateRequest accepts updates for JWT configuration.
-// jwtSecret is write-only and will never be echoed back in responses.
-type JWTConfigUpdateRequest struct {
-	JWTSecret          *string `json:"jwtSecret,omitempty"`
-	TokenExpiry        *int    `json:"tokenExpiry,omitempty"`
-	RefreshTokenExpiry *int    `json:"refreshTokenExpiry,omitempty"`
-	RememberMeExpiry   *int    `json:"rememberMeExpiry,omitempty"`
+// SessionConfigUpdateRequest accepts updates for session configuration.
+type SessionConfigUpdateRequest struct {
+	TokenExpiry        *int `json:"tokenExpiry,omitempty"`
+	RefreshTokenExpiry *int `json:"refreshTokenExpiry,omitempty"`
+	RememberMeExpiry   *int `json:"rememberMeExpiry,omitempty"`
 }
 
 // UserResponse represents a user response without the password hash
@@ -137,9 +133,9 @@ type ProfileResponse struct {
 	CurrentProfileName string        `json:"currentProfileName"`
 }
 
-// JWTConfigResponse represents a JWT configuration response
-type JWTConfigResponse struct {
-	JWTConfig JWTConfigView `json:"jwtConfig"`
+// SessionConfigResponse represents a session configuration response.
+type SessionConfigResponse struct {
+	SessionConfig SessionConfigView `json:"sessionConfig"`
 }
 
 // ErrorResponse represents an error response
@@ -182,12 +178,10 @@ type MFARequiredResponse struct {
 	WebAuthnEnabled bool   `json:"webAuthnEnabled"`
 }
 
-// LoginResponse represents a successful login response with JWT token
+// LoginResponse represents a successful login response after the server has
+// established opaque session cookies.
 type LoginResponse struct {
-	User         UserView `json:"user"`
-	Token        string   `json:"token"`
-	RefreshToken string   `json:"refreshToken,omitempty"`
-	ExpiresAt    int64    `json:"expiresAt,omitempty"`
+	User UserView `json:"user"`
 }
 
 // ToUserView strips sensitive fields from a user for API responses.
@@ -207,12 +201,11 @@ func ToUserView(user User) UserView {
 	}
 }
 
-// ToJWTConfigView strips the signing secret from JWT configuration responses.
-func ToJWTConfigView(jwtConfig JWTConfig) JWTConfigView {
-	return JWTConfigView{
-		TokenExpiry:         jwtConfig.TokenExpiry,
-		RefreshTokenExpiry:  jwtConfig.RefreshTokenExpiry,
-		RememberMeExpiry:    jwtConfig.RememberMeExpiry,
-		JWTSecretConfigured: jwtConfig.JWTSecret != "",
+// ToSessionConfigView maps the stored configuration to its API form.
+func ToSessionConfigView(sessionConfig SessionConfig) SessionConfigView {
+	return SessionConfigView{
+		TokenExpiry:        sessionConfig.TokenExpiry,
+		RefreshTokenExpiry: sessionConfig.RefreshTokenExpiry,
+		RememberMeExpiry:   sessionConfig.RememberMeExpiry,
 	}
 }

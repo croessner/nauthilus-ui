@@ -1,7 +1,6 @@
 /**
  * Utility functions for API operations
  */
-import Cookies from 'js-cookie';
 import { attachCSRFHeader, isMutatingMethod } from './csrf';
 
 /**
@@ -45,14 +44,11 @@ function buildUrl(port: string): string {
 }
 
 /**
- * Gets the current JWT token from cookies
- * @returns The JWT token or null if not found
+ * Browser authentication is cookie-only. This helper remains for compatibility
+ * with components that probe for a token, but it intentionally returns null.
  */
 export const getAuthToken = (): string | null => {
-  // Get token from cookie (TOKEN_COOKIE_NAME from userManager.ts is 'nauthilus_token')
-  const token = Cookies.get('nauthilus_token');
-  
-  return token || null;
+  return null;
 };
 
 /**
@@ -217,8 +213,7 @@ export const resetSettingsState = () => {
 };
 
 /**
- * Performs an authenticated fetch request with JWT token and robust 401 handling
- * - Adds Authorization header from cookie token when present
+ * Performs an authenticated fetch request with robust 401 handling.
  * - Sends credentials to proxy
  * - On 401, performs a single-flight refresh and retries the request once
  */
@@ -230,7 +225,7 @@ let waitersFetch: Array<(ok: boolean) => void> = [];
 async function refreshSessionFetch(): Promise<boolean> {
   try {
     const headers = await attachCSRFHeader();
-    const resp = await fetch(`${getProxyOrigin()}/api/auth/refresh`, {
+    const resp = await fetch('/api/auth/refresh', {
       method: 'POST',
       headers,
       credentials: 'include'
@@ -260,9 +255,6 @@ export const authenticatedFetch = async (
   url: string,
   options: RequestInit = {}
 ): Promise<Response> => {
-  // Get the JWT token
-  const token = getAuthToken();
-
   // Prepare headers
   let headers = new Headers(options.headers || {});
 
@@ -277,11 +269,6 @@ export const authenticatedFetch = async (
 
   if (!url.includes('/api/auth/csrf') && isMutatingMethod(method)) {
     headers = await attachCSRFHeader(headers);
-  }
-
-  // Add Authorization header if token exists
-  if (token && !headers.has('Authorization')) {
-    headers.set('Authorization', `Bearer ${token}`);
   }
 
   // Merge options with headers

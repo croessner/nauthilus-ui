@@ -3,7 +3,7 @@ package middleware
 import "strings"
 
 // IsPublicPath reports whether the request path is intentionally reachable
-// without the standard JWT middleware.
+// without the standard session middleware.
 func IsPublicPath(path string) bool {
 	if strings.HasPrefix(path, "/api/health") || strings.HasPrefix(path, "/api/i18n/") {
 		return true

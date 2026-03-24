@@ -13,8 +13,8 @@ This document outlines the migration strategy for the Nauthilus UI from React + 
 - **UI Framework**: Material UI (MUI) 7.3.2
 - **Build Tool**: Vite 7.1.11
 - **Backend Server**: Go (Gin framework)
-- **Database**: MongoDB (6 collections: profiles, users, jwtconfig, runtime, legal, auditlog)
-- **UI Authentication**: JWT-based (proprietary, username/password + MFA)
+- **Database**: MongoDB (6 collections: profiles, users, sessionconfig, runtime, legal, auditlog)
+- **UI Authentication**: Opaque server-side sessions (username/password + MFA)
 - **Backend Connection**: Basic Auth or JWT (needs OIDC Client Credentials support)
 
 ### Architecture: Multi-Profile System
@@ -25,19 +25,19 @@ This document outlines the migration strategy for the Nauthilus UI from React + 
 - Per-user runtime connection settings (MongoDB `runtime` collection, keyed by userId + profileName)
 
 **Authentication Layers**:
-1. **UI Layer**: User logs into nauthilus-ui (JWT-based, stays as-is)
+1. **UI Layer**: User logs into nauthilus-ui (opaque session cookies, stays as-is)
 2. **Backend Connection Layer**: nauthilus-ui → Nauthilus backend (currently Basic/JWT, needs OIDC support)
 
 **Data Flow**:
 ```
-User → UI Login (JWT + MFA) → Profile Selection → Runtime Connection (Basic/OIDC) → Nauthilus Backend
+User → UI Login (opaque session + MFA) → Profile Selection → Runtime Connection (Basic/OIDC) → Nauthilus Backend
 ```
 
 **MongoDB Collections**:
 - `profiles`: Nauthilus configurations per profile
 - `runtime`: Connection settings (backend_url, auth) per user+profile
-- `users`: UI user accounts (JWT, MFA)
-- `jwtconfig`: UI JWT configuration
+- `users`: UI user accounts (sessions, MFA)
+- `sessionconfig`: UI session lifetime configuration
 - `auditlog`: Audit trail
 - `legal`: Legal documents
 
@@ -50,7 +50,7 @@ User → UI Login (JWT + MFA) → Profile Selection → Runtime Connection (Basi
 ### Features to Preserve
 - **Multi-profile management** (create, switch, rename, delete)
 - **Per-profile runtime connection configuration** (stored in MongoDB, not server config)
-- **UI authentication** (JWT + MFA for UI login)
+- **UI authentication** (opaque sessions + MFA for UI login)
 - **Backend connection options**: Basic Auth + OIDC Client Credentials (new)
 - Configuration management (Server, Auth, LDAP, Redis, Features, Backends, etc.)
 - Audit logging, user management
@@ -1000,7 +1000,7 @@ This migration plan addresses the multi-profile architecture, adds OIDC support 
 **Key Principles**:
 1. **Profile isolation**: Each profile = separate Nauthilus backend with its own connection config
 2. **No server config for OIDC**: All connection settings in MongoDB `runtime` collection
-3. **UI auth unchanged**: JWT + MFA for UI login stays as-is
+3. **UI auth unchanged**: Opaque sessions + MFA for UI login stay as-is
 4. **Incremental migration**: Phase-by-phase, test continuously
 5. **Security-first**: CSP, CSRF, encrypted tokens
 

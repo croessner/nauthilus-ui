@@ -9,7 +9,6 @@ import (
 
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
-	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/oauth2"
 
 	"nauthilus-ui/server/db"
@@ -27,8 +26,8 @@ func NewOIDCHandler(mongoDB *db.MongoDB) *OIDCHandler {
 	return &OIDCHandler{MongoDB: mongoDB}
 }
 
-func finalizeOIDCSession(ctx *gin.Context, accessToken string, accessExpiresAt int64, refreshToken string, refreshExpiresAt int64) {
-	if err := SetAuthCookies(ctx, accessToken, accessExpiresAt, refreshToken, refreshExpiresAt); err != nil {
+func finalizeOIDCSession(ctx *gin.Context, sessionPair issuedSessionPair) {
+	if err := SetAuthCookies(ctx, sessionPair.accessToken, sessionPair.accessExpiresAt, sessionPair.refreshToken, sessionPair.refreshExpiresAt, sessionPair.rememberMe); err != nil {
 		slog.Error("OIDC: failed to set auth cookies", "error", err)
 		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to finalize OIDC session"})
 		return
@@ -326,62 +325,13 @@ func (h *OIDCHandler) Callback(ctx *gin.Context) {
 		user = &models.User{Username: username, Roles: roles, Enabled: true}
 	}
 
-	// Issue application JWTs using same logic as password login
-	// Read JWT Config
-	jwtCfg, err := h.MongoDB.GetJWTConfig()
+	sessionPair, err := issueSessionPair(ctx, h.MongoDB, user, true)
 	if err != nil {
-		slog.Error("OIDC: failed to get JWT config", "error", err)
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to generate token"})
+		slog.Error("OIDC: failed to create session", "error", err)
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to finalize OIDC session"})
 
 		return
 	}
 
-	// Create expiration using RememberMeExpiry for a longer default (or TokenExpiry if RememberMeExpiry not set)
-	accessExpiry := jwtCfg.TokenExpiry
-	if jwtCfg.RememberMeExpiry > 0 {
-		accessExpiry = jwtCfg.RememberMeExpiry
-	}
-
-	// Generate access and refresh token (reuse code from auth handler inline)
-	expiresAt := time.Now().Add(time.Duration(accessExpiry) * time.Second).Unix()
-	jwtClaims := map[string]interface{}{
-		"sub":   user.Username,
-		"roles": user.Roles,
-		"exp":   expiresAt,
-		"iat":   time.Now().Unix(),
-	}
-
-	tokenStr, err := signHS256(jwtClaims, jwtCfg.Secret)
-	if err != nil {
-		slog.Error("OIDC: failed to sign token", "error", err)
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to sign token"})
-
-		return
-	}
-
-	refreshExp := time.Now().Add(time.Duration(jwtCfg.RefreshTokenExpiry) * time.Second).Unix()
-	refreshClaims := map[string]interface{}{
-		"sub":   user.Username,
-		"roles": user.Roles,
-		"exp":   refreshExp,
-		"iat":   time.Now().Unix(),
-	}
-
-	refreshStr, err := signHS256(refreshClaims, jwtCfg.Secret)
-	if err != nil {
-		slog.Error("OIDC: failed to sign refresh token", "error", err)
-		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to sign token"})
-
-		return
-	}
-
-	finalizeOIDCSession(ctx, tokenStr, expiresAt, refreshStr, refreshExp)
-}
-
-// signHS256 signs simple map claims with HS256
-// kept locally to avoid importing auth handler internals
-func signHS256(claims map[string]interface{}, secret string) (string, error) {
-	t := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims(claims))
-
-	return t.SignedString([]byte(secret))
+	finalizeOIDCSession(ctx, sessionPair)
 }

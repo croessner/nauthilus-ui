@@ -26,14 +26,12 @@ type Config struct {
 	// MongoURI is the connection string for MongoDB.
 	MongoURI string
 
-	// JWT configuration
-	// JWTSecret is the secret key used to sign JWT tokens.
-	JWTSecret string
-	// TokenExpiry is the expiration time for JWT tokens in seconds.
+	// Session configuration
+	// TokenExpiry is the expiration time for access sessions in seconds.
 	TokenExpiry int
-	// RefreshTokenExpiry is the expiration time for refresh tokens in seconds.
+	// RefreshTokenExpiry is the expiration time for refresh sessions in seconds.
 	RefreshTokenExpiry int
-	// RememberMeExpiry is the expiration time for "remember me" tokens in seconds.
+	// RememberMeExpiry is the expiration time for persistent remember-me refresh sessions in seconds.
 	RememberMeExpiry int
 	// If true, on boot the service will compare RememberMeExpiry from env with DB and update DB if different.
 	SyncRememberMeFromEnvOnBoot bool
@@ -103,12 +101,11 @@ func LoadConfig() *Config {
 		// MongoDB configuration
 		MongoURI: getEnv("MONGODB_URI", "mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin"),
 
-		// JWT configuration
-		JWTSecret:                   getEnv("REACT_APP_JWT_SECRET", "nauthilus-ui-default-secret-key-change-in-production"),
+		// Session configuration
 		TokenExpiry:                 getEnvAsInt("REACT_APP_TOKEN_EXPIRY", 3600),
 		RefreshTokenExpiry:          getEnvAsInt("REACT_APP_REFRESH_TOKEN_EXPIRY", 86400),
 		RememberMeExpiry:            getEnvAsInt("REACT_APP_REMEMBER_ME_EXPIRY", 86400),
-		SyncRememberMeFromEnvOnBoot: getEnv("JWT_SYNC_FROM_ENV_ON_BOOT", "false") == "true",
+		SyncRememberMeFromEnvOnBoot: getEnv("SESSION_SYNC_FROM_ENV_ON_BOOT", "false") == "true",
 
 		// Cookie banner configuration
 		CookieBannerReshowDays: getEnvAsInt("REACT_APP_COOKIE_BANNER_RESHOW_DAYS", -1),
