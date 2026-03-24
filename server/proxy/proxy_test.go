@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -119,6 +120,110 @@ func TestPingProxyUsesDBAllowlistWhenOriginMatches(t *testing.T) {
 	}
 	if got := atomic.LoadInt32(&backendCalls); got != 1 {
 		t.Fatalf("expected backend to be called once, got %d", got)
+	}
+}
+
+func TestOIDCTokenProxySupportsCustomEndpointPath(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var receivedPath string
+	var receivedBody string
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		payload, _ := io.ReadAll(r.Body)
+		receivedBody = string(payload)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"access_token":"token","expires_in":60}`))
+	}))
+	defer backend.Close()
+
+	router := gin.New()
+	(&ProxyHandler{AllowPrivateTargets: true}).RegisterRoutes(router)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/proxy/oidc-token?url="+url.QueryEscape(backend.URL)+"&endpoint_path="+url.QueryEscape("/oauth2/token"),
+		strings.NewReader("grant_type=client_credentials"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if receivedPath != "/oauth2/token" {
+		t.Fatalf("expected custom endpoint path to be forwarded, got %q", receivedPath)
+	}
+	if !strings.Contains(receivedBody, "grant_type=client_credentials") {
+		t.Fatalf("expected token request body to be forwarded, got %q", receivedBody)
+	}
+}
+
+func TestOIDCDiscoveryProxyUsesDefaultEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var receivedPath string
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"issuer":"https://issuer.example.test"}`))
+	}))
+	defer backend.Close()
+
+	router := gin.New()
+	(&ProxyHandler{AllowPrivateTargets: true}).RegisterRoutes(router)
+
+	req := httptest.NewRequest(http.MethodGet, "/proxy/oidc-discovery?url="+url.QueryEscape(backend.URL), nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if receivedPath != "/.well-known/openid-configuration" {
+		t.Fatalf("expected default discovery endpoint path, got %q", receivedPath)
+	}
+}
+
+func TestOIDCIntrospectProxyUsesDefaultEndpoint(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var receivedPath string
+	var receivedBody string
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedPath = r.URL.Path
+		payload, _ := io.ReadAll(r.Body)
+		receivedBody = string(payload)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"active":true}`))
+	}))
+	defer backend.Close()
+
+	router := gin.New()
+	(&ProxyHandler{AllowPrivateTargets: true}).RegisterRoutes(router)
+
+	req := httptest.NewRequest(
+		http.MethodPost,
+		"/proxy/oidc-introspect?url="+url.QueryEscape(backend.URL),
+		strings.NewReader("token=opaque-token"),
+	)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if receivedPath != "/oidc/introspect" {
+		t.Fatalf("expected default introspection endpoint path, got %q", receivedPath)
+	}
+	if !strings.Contains(receivedBody, "token=opaque-token") {
+		t.Fatalf("expected introspection request body to be forwarded, got %q", receivedBody)
 	}
 }
 

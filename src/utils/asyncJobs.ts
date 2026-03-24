@@ -45,7 +45,7 @@ export async function startAsyncJob(
 
   const resp = await authenticatedFetch(proxyUrl.toString(), {
     method,
-    headers: buildBackendAuthHeaders(connectionConfig),
+    headers: await buildBackendAuthHeaders(connectionConfig),
     body: body != null ? JSON.stringify(body) : undefined,
   });
 
@@ -73,7 +73,7 @@ export async function fetchJobStatus(
   const proxyUrl = buildProxyUrl(`/proxy/async/${encodeURIComponent(jobId)}/status`, connectionConfig);
   const resp = await authenticatedFetch(proxyUrl.toString(), {
     method: "GET",
-    headers: buildBackendAuthHeaders(connectionConfig),
+    headers: await buildBackendAuthHeaders(connectionConfig),
     signal,
   });
   if (resp.status === 404) {

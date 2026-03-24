@@ -781,8 +781,19 @@ export interface IdPSAML2ServiceProviderConfig {
 // Connection Configuration
 export interface ConnectionOIDCAuthConfig {
   enabled?: boolean;
+  token_endpoint_auth_method?: 'client_secret_post' | 'client_secret_basic' | 'private_key_jwt';
   client_id?: string;
   client_secret?: string;
+  private_key_pem?: string;
+  private_key_algorithm?: 'RS256' | 'EDDSA';
+  private_key_id?: string;
+  client_assertion_ttl_seconds?: number;
+  discovery_mode?: 'auto' | 'manual' | 'off';
+  discovery_url?: string;
+  token_endpoint?: string;
+  introspection_mode?: 'auto' | 'always' | 'never';
+  introspection_endpoint?: string;
+  introspection_auth_method?: 'auto' | 'client_secret_post' | 'client_secret_basic' | 'private_key_jwt';
   scope?: string;
   token?: string;
   expires_at?: number;

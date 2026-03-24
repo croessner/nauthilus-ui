@@ -809,7 +809,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       try {
         resp = await authenticatedFetch(url, {
           method: 'POST',
-          headers: buildBackendAuthHeaders(conn),
+          headers: await buildBackendAuthHeaders(conn),
           signal: controller.signal,
         });
       } finally {
@@ -1505,7 +1505,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         const url = buildHookUrl(conn, offsetLocal, perReqLimit, includeSearch);
         const resp = await authenticatedFetch(url, {
           method: 'POST',
-          headers: buildBackendAuthHeaders(conn),
+          headers: await buildBackendAuthHeaders(conn),
           signal: controller.signal,
         });
         if (!resp.ok) {
@@ -1667,7 +1667,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const url = buildHookUrl(conn, offsetLocal, perReqLimit, true);
       const resp = await authenticatedFetch(url, {
         method: 'POST',
-        headers: buildBackendAuthHeaders(conn),
+        headers: await buildBackendAuthHeaders(conn),
       });
       if (!resp.ok) throw new Error(await extractErrorMessage(resp));
       const resJson = await resp.json();
@@ -1717,7 +1717,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       const url = buildHookUrl(conn, offsetLocal, perReqLimit, false);
       const resp = await authenticatedFetch(url, {
         method: 'POST',
-        headers: buildBackendAuthHeaders(conn),
+        headers: await buildBackendAuthHeaders(conn),
       });
       if (!resp.ok) throw new Error(await extractErrorMessage(resp));
       const resJson = await resp.json();

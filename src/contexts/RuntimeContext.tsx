@@ -14,6 +14,17 @@ const DEFAULT_CONFIG: ConnectionConfig = {
     enabled: false,
     client_id: '',
     client_secret: '',
+    token_endpoint_auth_method: 'client_secret_post',
+    private_key_pem: '',
+    private_key_algorithm: 'RS256',
+    private_key_id: '',
+    client_assertion_ttl_seconds: 300,
+    discovery_mode: 'auto',
+    discovery_url: '',
+    token_endpoint: '',
+    introspection_mode: 'auto',
+    introspection_endpoint: '',
+    introspection_auth_method: 'auto',
     scope: '',
     token: ''
   }

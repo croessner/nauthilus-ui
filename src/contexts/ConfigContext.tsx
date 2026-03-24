@@ -986,7 +986,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
-        headers: buildBackendAuthHeaders(connectionConfig),
+        headers: await buildBackendAuthHeaders(connectionConfig),
       });
 
       if (!response.ok) {

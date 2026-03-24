@@ -90,7 +90,7 @@ const SecurityPage = (): React.JSX.Element => {
       // 1) Fetch Prometheus-derived security metrics for the page
       const proxyUrl = new URL('/proxy/security/metrics', getProxyOrigin());
       proxyUrl.searchParams.append('url', backendUrl);
-      const backendAuthHeaders = buildBackendAuthHeaders(getConnection());
+      const backendAuthHeaders = await buildBackendAuthHeaders(getConnection());
       const res = await authenticatedFetch(proxyUrl.toString(), { headers: backendAuthHeaders });
       if (!res.ok) {
         setStatusMessage(`Failed to fetch security metrics: ${res.status} ${res.statusText}`);

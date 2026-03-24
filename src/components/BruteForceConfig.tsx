@@ -151,7 +151,7 @@ const BruteForceConfig: React.FC = () => {
 
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
-        headers: buildBackendAuthHeaders(connectionConfig),
+        headers: await buildBackendAuthHeaders(connectionConfig),
       });
 
       if (!response.ok) {
@@ -276,7 +276,7 @@ const BruteForceConfig: React.FC = () => {
 
       const response = await authenticatedFetch(proxyUrl.toString(), {
         method: 'GET',
-        headers: buildBackendAuthHeaders(connectionConfig),
+        headers: await buildBackendAuthHeaders(connectionConfig),
       });
 
       if (response.ok) {

@@ -25,6 +25,36 @@ func TestProxyOIDCTokenRequiresAuthentication(t *testing.T) {
 	}
 }
 
+func TestProxyOIDCDiscoveryRequiresAuthentication(t *testing.T) {
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+
+	req := httptest.NewRequest(http.MethodGet, "/proxy/oidc-discovery?url=https://example.invalid", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 for unauthenticated proxy access, got %d", recorder.Code)
+	}
+	if got := recorder.Header().Get(middleware.SessionAuthRequiredHeader); got != "1" {
+		t.Fatalf("expected %s=1 on unauthenticated proxy response, got %q", middleware.SessionAuthRequiredHeader, got)
+	}
+}
+
+func TestProxyOIDCIntrospectRequiresAuthentication(t *testing.T) {
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+
+	req := httptest.NewRequest(http.MethodPost, "/proxy/oidc-introspect?url=https://example.invalid", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("expected status 401 for unauthenticated proxy access, got %d", recorder.Code)
+	}
+	if got := recorder.Header().Get(middleware.SessionAuthRequiredHeader); got != "1" {
+		t.Fatalf("expected %s=1 on unauthenticated proxy response, got %q", middleware.SessionAuthRequiredHeader, got)
+	}
+}
+
 func TestProxyRejectsLegacyBackendAuthQueryParams(t *testing.T) {
 	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
 

@@ -7,10 +7,10 @@ import (
 )
 
 func TestRedactQueryStringMasksSensitiveValues(t *testing.T) {
-	raw := "url=https%3A%2F%2Fexample.test&authType=bearer&authValue=secret-token&token=abc123&foo=bar"
+	raw := "url=https%3A%2F%2Fexample.test&authType=bearer&authValue=secret-token&token=abc123&client_assertion=signed.jwt&private_key_pem=-----BEGIN&foo=bar"
 	safe := RedactQueryString(raw)
 
-	for _, fragment := range []string{"secret-token", "abc123"} {
+	for _, fragment := range []string{"secret-token", "abc123", "signed.jwt", "-----BEGIN"} {
 		if strings.Contains(safe, fragment) {
 			t.Fatalf("expected query string to redact %q, got %s", fragment, safe)
 		}

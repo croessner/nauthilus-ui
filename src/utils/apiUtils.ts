@@ -77,11 +77,625 @@ export const prepareAuthParams = (connectionConfig: any): { authType: string, au
   return { authType, authValue };
 };
 
+const OIDC_REFRESH_SKEW_SECONDS = 30;
+const oidcRefreshInFlight = new Map<string, Promise<void>>();
+const OIDC_DISCOVERY_CACHE_TTL_MS = 5 * 60 * 1000;
+const oidcDiscoveryCache = new Map<string, { document: OIDCDiscoveryDocument; expiresAt: number }>();
+const JWT_BEARER_ASSERTION_TYPE = 'urn:ietf:params:oauth:client-assertion-type:jwt-bearer';
+
+export type RuntimeOIDCAuthMethod = 'client_secret_post' | 'client_secret_basic' | 'private_key_jwt';
+export type RuntimeOIDCDiscoveryMode = 'auto' | 'manual' | 'off';
+export type RuntimeOIDCIntrospectionMode = 'auto' | 'always' | 'never';
+export type RuntimeOIDCPrivateKeyAlgorithm = 'RS256' | 'EDDSA';
+
+interface OIDCDiscoveryDocument {
+  issuer?: string;
+  token_endpoint?: string;
+  introspection_endpoint?: string;
+  token_endpoint_auth_methods_supported?: string[];
+  introspection_endpoint_auth_methods_supported?: string[];
+}
+
+interface RuntimeOIDCTokenResponse {
+  access_token?: string;
+  expires_in?: number;
+}
+
+interface RuntimeOIDCIntrospectionResponse {
+  active?: boolean;
+  exp?: number;
+}
+
+export interface RuntimeOIDCTokenData {
+  token: string;
+  expires_at: number;
+  token_kind: 'jwt' | 'opaque';
+}
+
+const OIDC_AUTH_METHODS: RuntimeOIDCAuthMethod[] = ['client_secret_post', 'client_secret_basic', 'private_key_jwt'];
+const OIDC_DISCOVERY_MODES: RuntimeOIDCDiscoveryMode[] = ['auto', 'manual', 'off'];
+const OIDC_INTROSPECTION_MODES: RuntimeOIDCIntrospectionMode[] = ['auto', 'always', 'never'];
+const OIDC_PRIVATE_KEY_ALGORITHMS: RuntimeOIDCPrivateKeyAlgorithm[] = ['RS256', 'EDDSA'];
+
+export function normalizeRuntimeOIDCAuthMethod(value: unknown): RuntimeOIDCAuthMethod {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (OIDC_AUTH_METHODS.includes(normalized as RuntimeOIDCAuthMethod)) {
+    return normalized as RuntimeOIDCAuthMethod;
+  }
+
+  return 'client_secret_post';
+}
+
+export function normalizeRuntimeOIDCDiscoveryMode(value: unknown): RuntimeOIDCDiscoveryMode {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (OIDC_DISCOVERY_MODES.includes(normalized as RuntimeOIDCDiscoveryMode)) {
+    return normalized as RuntimeOIDCDiscoveryMode;
+  }
+
+  return 'auto';
+}
+
+export function normalizeRuntimeOIDCIntrospectionMode(value: unknown): RuntimeOIDCIntrospectionMode {
+  const normalized = String(value || '').trim().toLowerCase();
+  if (OIDC_INTROSPECTION_MODES.includes(normalized as RuntimeOIDCIntrospectionMode)) {
+    return normalized as RuntimeOIDCIntrospectionMode;
+  }
+
+  return 'auto';
+}
+
+export function normalizeRuntimeOIDCPrivateKeyAlgorithm(value: unknown): RuntimeOIDCPrivateKeyAlgorithm {
+  const normalized = String(value || '').trim().toUpperCase();
+  if (OIDC_PRIVATE_KEY_ALGORITHMS.includes(normalized as RuntimeOIDCPrivateKeyAlgorithm)) {
+    return normalized as RuntimeOIDCPrivateKeyAlgorithm;
+  }
+
+  return 'RS256';
+}
+
+export function requiresClientSecretForOIDCAuth(method: unknown): boolean {
+  const authMethod = normalizeRuntimeOIDCAuthMethod(method);
+  return authMethod === 'client_secret_post' || authMethod === 'client_secret_basic';
+}
+
+export function requiresPrivateKeyForOIDCAuth(method: unknown): boolean {
+  return normalizeRuntimeOIDCAuthMethod(method) === 'private_key_jwt';
+}
+
+export function hasOIDCRuntimeAuthMaterial(connectionConfig: any): boolean {
+  if (!connectionConfig?.oidc_auth?.enabled) {
+    return false;
+  }
+
+  if (!String(connectionConfig?.backend_url || '').trim()) {
+    return false;
+  }
+
+  if (!String(connectionConfig?.oidc_auth?.client_id || '').trim()) {
+    return false;
+  }
+
+  const authMethod = normalizeRuntimeOIDCAuthMethod(connectionConfig?.oidc_auth?.token_endpoint_auth_method);
+  if (requiresClientSecretForOIDCAuth(authMethod)) {
+    return String(connectionConfig?.oidc_auth?.client_secret || '') !== '';
+  }
+
+  if (requiresPrivateKeyForOIDCAuth(authMethod)) {
+    return String(connectionConfig?.oidc_auth?.private_key_pem || '').trim() !== '';
+  }
+
+  return false;
+}
+
+function looksLikeJWT(value: string): boolean {
+  return value.split('.').length === 3;
+}
+
+function shouldRefreshOIDCToken(connectionConfig: any): boolean {
+  if (!hasOIDCRuntimeAuthMaterial(connectionConfig)) {
+    return false;
+  }
+
+  const token = String(connectionConfig?.oidc_auth?.token || '').trim();
+  const expiresAt = Number(connectionConfig?.oidc_auth?.expires_at || 0);
+  const now = Math.floor(Date.now() / 1000);
+
+  if (!token) {
+    return true;
+  }
+
+  return expiresAt <= (now + OIDC_REFRESH_SKEW_SECONDS);
+}
+
+function buildOIDCRefreshKey(connectionConfig: any): string {
+  const backendUrl = String(connectionConfig?.backend_url || '');
+  const oidcAuth = connectionConfig?.oidc_auth || {};
+  const clientId = String(oidcAuth.client_id || '');
+  const scope = String(oidcAuth.scope || '');
+  const authMethod = normalizeRuntimeOIDCAuthMethod(oidcAuth.token_endpoint_auth_method);
+  const discoveryMode = normalizeRuntimeOIDCDiscoveryMode(oidcAuth.discovery_mode);
+  const discoveryURL = String(oidcAuth.discovery_url || '');
+  return `${backendUrl}|${clientId}|${scope}|${authMethod}|${discoveryMode}|${discoveryURL}`;
+}
+
+function buildProxyURLForAbsoluteEndpoint(proxyPath: string, endpointURL: string): string {
+  const parsedEndpoint = new URL(endpointURL);
+  const proxyUrl = new URL(proxyPath, getProxyOrigin());
+  proxyUrl.searchParams.set('url', `${parsedEndpoint.protocol}//${parsedEndpoint.host}`);
+  proxyUrl.searchParams.set('endpoint_path', parsedEndpoint.pathname || '/');
+  parsedEndpoint.searchParams.forEach((value, key) => {
+    proxyUrl.searchParams.append(key, value);
+  });
+
+  return proxyUrl.toString();
+}
+
+function parsePKCS8FromPEM(pem: string): Uint8Array {
+  const normalized = pem
+    .replace(/-----BEGIN [^-]+-----/g, '')
+    .replace(/-----END [^-]+-----/g, '')
+    .replace(/\s+/g, '');
+
+  if (!normalized) {
+    throw new Error('Private key is empty');
+  }
+
+  const binary = atob(normalized);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) {
+    bytes[index] = binary.charCodeAt(index);
+  }
+
+  return bytes;
+}
+
+function base64UrlEncodeBytes(bytes: Uint8Array): string {
+  let binary = '';
+  for (let index = 0; index < bytes.length; index += 1) {
+    binary += String.fromCharCode(bytes[index]);
+  }
+
+  return btoa(binary)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function base64UrlEncodeJSON(value: Record<string, unknown>): string {
+  return base64UrlEncodeBytes(new TextEncoder().encode(JSON.stringify(value)));
+}
+
+function generateAssertionID(): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+async function buildPrivateKeyClientAssertion(connectionConfig: any, audience: string): Promise<string> {
+  const oidcAuth = connectionConfig?.oidc_auth || {};
+  const privateKeyPem = String(oidcAuth.private_key_pem || '').trim();
+  if (!privateKeyPem) {
+    throw new Error('OIDC private key is required for private_key_jwt');
+  }
+
+  const clientID = String(oidcAuth.client_id || '').trim();
+  if (!clientID) {
+    throw new Error('OIDC client_id is required for private_key_jwt');
+  }
+
+  const algorithm = normalizeRuntimeOIDCPrivateKeyAlgorithm(oidcAuth.private_key_algorithm);
+  const keyData = parsePKCS8FromPEM(privateKeyPem);
+
+  const importAlgorithm: any = algorithm === 'EDDSA'
+    ? { name: 'Ed25519' }
+    : { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' };
+  const key = await crypto.subtle.importKey('pkcs8', keyData, importAlgorithm, false, ['sign']);
+
+  const now = Math.floor(Date.now() / 1000);
+  const configuredTTL = Number(oidcAuth.client_assertion_ttl_seconds || 300);
+  const assertionTTL = Number.isFinite(configuredTTL)
+    ? Math.min(600, Math.max(30, Math.floor(configuredTTL)))
+    : 300;
+
+  const header: Record<string, unknown> = {
+    alg: algorithm === 'EDDSA' ? 'EdDSA' : 'RS256',
+    typ: 'JWT',
+  };
+  const keyID = String(oidcAuth.private_key_id || '').trim();
+  if (keyID) {
+    header.kid = keyID;
+  }
+
+  const claims: Record<string, unknown> = {
+    iss: clientID,
+    sub: clientID,
+    aud: audience,
+    iat: now,
+    exp: now + assertionTTL,
+    jti: generateAssertionID(),
+  };
+
+  const payload = `${base64UrlEncodeJSON(header)}.${base64UrlEncodeJSON(claims)}`;
+
+  const signAlgorithm: any = algorithm === 'EDDSA'
+    ? { name: 'Ed25519' }
+    : { name: 'RSASSA-PKCS1-v1_5' };
+  const signature = await crypto.subtle.sign(signAlgorithm, key, new TextEncoder().encode(payload));
+  const signaturePart = base64UrlEncodeBytes(new Uint8Array(signature));
+
+  return `${payload}.${signaturePart}`;
+}
+
+function extractDiscoveryCacheKey(connectionConfig: any, discoveryURL: string): string {
+  const oidcAuth = connectionConfig?.oidc_auth || {};
+  const mode = normalizeRuntimeOIDCDiscoveryMode(oidcAuth.discovery_mode);
+  return `${mode}|${String(discoveryURL || '').trim()}`;
+}
+
+function resolveDefaultDiscoveryURL(connectionConfig: any): string | null {
+  const backendURL = String(connectionConfig?.backend_url || '').trim();
+  if (!backendURL) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(backendURL);
+    return `${parsed.protocol}//${parsed.host}/.well-known/openid-configuration`;
+  } catch {
+    return null;
+  }
+}
+
+function resolveDiscoveryURL(connectionConfig: any): string | null {
+  const oidcAuth = connectionConfig?.oidc_auth || {};
+  const mode = normalizeRuntimeOIDCDiscoveryMode(oidcAuth.discovery_mode);
+  if (mode === 'off') {
+    return null;
+  }
+
+  const configuredURL = String(oidcAuth.discovery_url || '').trim();
+  if (mode === 'manual') {
+    return configuredURL || null;
+  }
+
+  if (configuredURL) {
+    return configuredURL;
+  }
+
+  return resolveDefaultDiscoveryURL(connectionConfig);
+}
+
+async function fetchOIDCDiscoveryDocument(connectionConfig: any): Promise<OIDCDiscoveryDocument | null> {
+  const discoveryURL = resolveDiscoveryURL(connectionConfig);
+  if (!discoveryURL) {
+    return null;
+  }
+
+  let parsedDiscoveryURL: URL;
+  try {
+    parsedDiscoveryURL = new URL(discoveryURL);
+  } catch (error) {
+    console.error('OIDC discovery URL is invalid:', error);
+    return null;
+  }
+
+  const cacheKey = extractDiscoveryCacheKey(connectionConfig, parsedDiscoveryURL.toString());
+  const cached = oidcDiscoveryCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.document;
+  }
+
+  const proxyURL = buildProxyURLForAbsoluteEndpoint('/proxy/oidc-discovery', parsedDiscoveryURL.toString());
+  const response = await authenticatedFetch(proxyURL, { method: 'GET' });
+  if (!response.ok) {
+    console.error('OIDC discovery failed:', response.status, response.statusText);
+    return null;
+  }
+
+  const document = await response.json().catch(() => null) as OIDCDiscoveryDocument | null;
+  if (!document || typeof document !== 'object') {
+    console.error('OIDC discovery failed: response was not a valid JSON object');
+    return null;
+  }
+
+  oidcDiscoveryCache.set(cacheKey, {
+    document,
+    expiresAt: Date.now() + OIDC_DISCOVERY_CACHE_TTL_MS,
+  });
+
+  return document;
+}
+
+function resolveTokenEndpoint(connectionConfig: any, discoveryDocument: OIDCDiscoveryDocument | null): string | null {
+  const configuredEndpoint = String(connectionConfig?.oidc_auth?.token_endpoint || '').trim();
+  if (configuredEndpoint) {
+    return configuredEndpoint;
+  }
+
+  const discoveredEndpoint = String(discoveryDocument?.token_endpoint || '').trim();
+  if (discoveredEndpoint) {
+    return discoveredEndpoint;
+  }
+
+  const backendURL = String(connectionConfig?.backend_url || '').trim();
+  if (!backendURL) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(backendURL);
+    return `${parsed.protocol}//${parsed.host}/oidc/token`;
+  } catch {
+    return null;
+  }
+}
+
+function resolveIntrospectionEndpoint(connectionConfig: any, discoveryDocument: OIDCDiscoveryDocument | null): string {
+  const configuredEndpoint = String(connectionConfig?.oidc_auth?.introspection_endpoint || '').trim();
+  if (configuredEndpoint) {
+    return configuredEndpoint;
+  }
+
+  const discoveredEndpoint = String(discoveryDocument?.introspection_endpoint || '').trim();
+  if (discoveredEndpoint) {
+    return discoveredEndpoint;
+  }
+
+  return '';
+}
+
+function resolveIntrospectionAuthMethod(
+  connectionConfig: any,
+  discoveryDocument: OIDCDiscoveryDocument | null,
+): RuntimeOIDCAuthMethod | '' {
+  const configured = String(connectionConfig?.oidc_auth?.introspection_auth_method || '').trim().toLowerCase();
+  if (configured === 'client_secret_post' || configured === 'client_secret_basic' || configured === 'private_key_jwt') {
+    return configured;
+  }
+
+  const preferred = normalizeRuntimeOIDCAuthMethod(connectionConfig?.oidc_auth?.token_endpoint_auth_method);
+  const supported = Array.isArray(discoveryDocument?.introspection_endpoint_auth_methods_supported)
+    ? discoveryDocument?.introspection_endpoint_auth_methods_supported || []
+    : [];
+
+  if (supported.length === 0 || supported.includes(preferred)) {
+    return preferred;
+  }
+
+  if (supported.includes('client_secret_post') && String(connectionConfig?.oidc_auth?.client_secret || '') !== '') {
+    return 'client_secret_post';
+  }
+
+  if (supported.includes('client_secret_basic') && String(connectionConfig?.oidc_auth?.client_secret || '') !== '') {
+    return 'client_secret_basic';
+  }
+
+  if (supported.includes('private_key_jwt') && String(connectionConfig?.oidc_auth?.private_key_pem || '').trim() !== '') {
+    return 'private_key_jwt';
+  }
+
+  return '';
+}
+
+async function runOIDCIntrospection(
+  connectionConfig: any,
+  endpointURL: string,
+  token: string,
+  method: RuntimeOIDCAuthMethod,
+): Promise<RuntimeOIDCIntrospectionResponse | null> {
+  const body = new URLSearchParams();
+  body.set('token', token);
+
+  const headers = new Headers({
+    'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+  });
+
+  const clientID = String(connectionConfig?.oidc_auth?.client_id || '').trim();
+  const clientSecret = String(connectionConfig?.oidc_auth?.client_secret || '');
+  if (method === 'client_secret_post') {
+    body.set('client_id', clientID);
+    body.set('client_secret', clientSecret);
+  } else if (method === 'client_secret_basic') {
+    headers.set('Authorization', `Basic ${btoa(`${clientID}:${clientSecret}`)}`);
+  } else if (method === 'private_key_jwt') {
+    const assertion = await buildPrivateKeyClientAssertion(connectionConfig, endpointURL);
+    body.set('client_id', clientID);
+    body.set('client_assertion_type', JWT_BEARER_ASSERTION_TYPE);
+    body.set('client_assertion', assertion);
+  }
+
+  const proxyURL = buildProxyURLForAbsoluteEndpoint('/proxy/oidc-introspect', endpointURL);
+  const response = await authenticatedFetch(proxyURL, {
+    method: 'POST',
+    headers,
+    body: body.toString(),
+  });
+  if (!response.ok) {
+    return null;
+  }
+
+  const payload = await response.json().catch(() => null) as RuntimeOIDCIntrospectionResponse | null;
+  if (!payload || typeof payload !== 'object') {
+    return null;
+  }
+
+  return payload;
+}
+
+function resolveIntrospectionRequirement(
+  mode: RuntimeOIDCIntrospectionMode,
+  tokenKind: 'jwt' | 'opaque',
+): { shouldTry: boolean; mustSucceed: boolean } {
+  if (mode === 'never') {
+    return { shouldTry: false, mustSucceed: false };
+  }
+
+  if (mode === 'always') {
+    return { shouldTry: true, mustSucceed: true };
+  }
+
+  // "auto": always try when available; opaque tokens must pass introspection.
+  return {
+    shouldTry: true,
+    mustSucceed: tokenKind === 'opaque',
+  };
+}
+
+export async function fetchRuntimeOIDCToken(connectionConfig: any): Promise<RuntimeOIDCTokenData | null> {
+  try {
+    if (!hasOIDCRuntimeAuthMaterial(connectionConfig)) {
+      console.error('Failed to refresh runtime OIDC token: missing OIDC auth material');
+      return null;
+    }
+
+    const oidcAuth = connectionConfig?.oidc_auth || {};
+    const clientID = String(oidcAuth.client_id || '').trim();
+    const scope = String(oidcAuth.scope || '').trim();
+    const authMethod = normalizeRuntimeOIDCAuthMethod(oidcAuth.token_endpoint_auth_method);
+
+    const discovery = await fetchOIDCDiscoveryDocument(connectionConfig);
+    const tokenEndpoint = resolveTokenEndpoint(connectionConfig, discovery);
+    if (!tokenEndpoint) {
+      console.error('Failed to refresh runtime OIDC token: token endpoint could not be resolved');
+      return null;
+    }
+
+    const body = new URLSearchParams();
+    body.set('grant_type', 'client_credentials');
+    if (scope) {
+      body.set('scope', scope);
+    }
+
+    const headers = new Headers({
+      'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8',
+    });
+
+    if (authMethod === 'client_secret_post') {
+      body.set('client_id', clientID);
+      body.set('client_secret', String(oidcAuth.client_secret || ''));
+    } else if (authMethod === 'client_secret_basic') {
+      headers.set('Authorization', `Basic ${btoa(`${clientID}:${String(oidcAuth.client_secret || '')}`)}`);
+      body.set('client_id', clientID);
+    } else if (authMethod === 'private_key_jwt') {
+      const assertion = await buildPrivateKeyClientAssertion(connectionConfig, tokenEndpoint);
+      body.set('client_id', clientID);
+      body.set('client_assertion_type', JWT_BEARER_ASSERTION_TYPE);
+      body.set('client_assertion', assertion);
+    }
+
+    const tokenProxyURL = buildProxyURLForAbsoluteEndpoint('/proxy/oidc-token', tokenEndpoint);
+    const tokenResponse = await authenticatedFetch(tokenProxyURL, {
+      method: 'POST',
+      headers,
+      body: body.toString(),
+    });
+    if (!tokenResponse.ok) {
+      console.error('Failed to refresh runtime OIDC token:', tokenResponse.status, tokenResponse.statusText);
+      return null;
+    }
+
+    const payload = await tokenResponse.json().catch(() => null) as RuntimeOIDCTokenResponse | null;
+    const token = typeof payload?.access_token === 'string' ? payload.access_token.trim() : '';
+    if (!token) {
+      console.error('Failed to refresh runtime OIDC token: response did not include access_token');
+      return null;
+    }
+
+    const tokenKind: 'jwt' | 'opaque' = looksLikeJWT(token) ? 'jwt' : 'opaque';
+    const expiresIn = Number(payload?.expires_in || 0);
+    let expiresAt = Math.floor(Date.now() / 1000) + Math.max(expiresIn, 0);
+
+    const introspectionMode = normalizeRuntimeOIDCIntrospectionMode(oidcAuth.introspection_mode);
+    const introspectionRequirement = resolveIntrospectionRequirement(introspectionMode, tokenKind);
+    if (introspectionRequirement.shouldTry) {
+      const introspectionEndpoint = resolveIntrospectionEndpoint(connectionConfig, discovery);
+      if (!introspectionEndpoint) {
+        if (introspectionMode === 'always') {
+          console.error('Failed to refresh runtime OIDC token: introspection endpoint is required but unavailable');
+          return null;
+        }
+      } else {
+        const introspectionMethod = resolveIntrospectionAuthMethod(connectionConfig, discovery);
+        if (!introspectionMethod) {
+          if (introspectionMode === 'always' || introspectionRequirement.mustSucceed) {
+            console.error('Failed to refresh runtime OIDC token: no supported introspection auth method could be resolved');
+            return null;
+          }
+        } else {
+          const introspection = await runOIDCIntrospection(connectionConfig, introspectionEndpoint, token, introspectionMethod);
+          if (!introspection || introspection.active !== true) {
+            if (introspectionMode === 'always' || introspectionRequirement.mustSucceed) {
+              console.error('Failed to refresh runtime OIDC token: token introspection did not return active=true');
+              return null;
+            }
+          } else if (Number.isFinite(Number(introspection.exp)) && Number(introspection.exp) > 0) {
+            expiresAt = Number(introspection.exp);
+          }
+        }
+      }
+    }
+
+    return {
+      token,
+      expires_at: expiresAt,
+      token_kind: tokenKind,
+    };
+  } catch (error) {
+    console.error('Failed to refresh runtime OIDC token:', error);
+    return null;
+  }
+}
+
+/**
+ * Ensures the runtime OIDC token is valid before proxy requests use it.
+ * Uses a single-flight guard to avoid duplicate token refresh calls.
+ */
+export const ensureRuntimeOIDCToken = async (connectionConfig: any): Promise<void> => {
+  if (!shouldRefreshOIDCToken(connectionConfig)) {
+    return;
+  }
+
+  const refreshKey = buildOIDCRefreshKey(connectionConfig);
+  const existingRefresh = oidcRefreshInFlight.get(refreshKey);
+  if (existingRefresh) {
+    await existingRefresh;
+    return;
+  }
+
+  const refreshPromise = (async () => {
+    const tokenData = await fetchRuntimeOIDCToken(connectionConfig);
+    if (!tokenData) {
+      return;
+    }
+
+    if (!connectionConfig.oidc_auth || typeof connectionConfig.oidc_auth !== 'object') {
+      connectionConfig.oidc_auth = {};
+    }
+
+    connectionConfig.oidc_auth.token = tokenData.token;
+    connectionConfig.oidc_auth.expires_at = tokenData.expires_at;
+  })();
+
+  oidcRefreshInFlight.set(refreshKey, refreshPromise);
+
+  try {
+    await refreshPromise;
+  } finally {
+    if (oidcRefreshInFlight.get(refreshKey) === refreshPromise) {
+      oidcRefreshInFlight.delete(refreshKey);
+    }
+  }
+};
+
 /**
  * Builds backend authentication headers for proxy requests.
  * These headers are consumed by the Go proxy and must never be sent via query params.
  */
-export const buildBackendAuthHeaders = (connectionConfig: any, init?: HeadersInit): Headers => {
+export const buildBackendAuthHeaders = async (connectionConfig: any, init?: HeadersInit): Promise<Headers> => {
+  await ensureRuntimeOIDCToken(connectionConfig);
+
   const headers = new Headers(init || {});
   const { authType, authValue } = prepareAuthParams(connectionConfig);
 
@@ -157,7 +771,7 @@ export const checkConnection = async (
     // Use the authenticatedFetch helper
     const response = await authenticatedFetch(proxyUrl.toString(), {
       method: 'GET',
-      headers: buildBackendAuthHeaders(connectionConfig),
+      headers: await buildBackendAuthHeaders(connectionConfig),
     });
 
     if (response.ok) {

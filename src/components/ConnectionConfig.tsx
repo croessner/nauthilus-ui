@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, ReactNode } from 'react';
 import { Formik, Form, Field, getIn } from 'formik';
 import * as Yup from 'yup';
-import { TextField, FormControlLabel, Button, Box, Typography, Switch, CircularProgress, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment, Stack } from '@mui/material';
+import { TextField, FormControlLabel, Button, Box, Typography, Switch, CircularProgress, Tooltip, IconButton, Dialog, DialogTitle, DialogContent, DialogContentText, DialogActions, InputAdornment, Stack, MenuItem } from '@mui/material';
 import InfoTooltip from './common/InfoTooltip';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorIcon from '@mui/icons-material/Error';
@@ -10,7 +10,19 @@ import { useConfig } from '../contexts/ConfigContext';
 import { useRuntime, getCurrentUserId } from '../contexts/RuntimeContext';
 import FormSection from './common/FormSection';
 import PasswordField from './common/PasswordField';
-import { checkConnection as checkConnectionUtil, loadSettings as loadSettingsUtil, resetSettingsState, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
+import {
+  checkConnection as checkConnectionUtil,
+  loadSettings as loadSettingsUtil,
+  resetSettingsState,
+  fetchRuntimeOIDCToken,
+  hasOIDCRuntimeAuthMaterial,
+  normalizeRuntimeOIDCAuthMethod,
+  normalizeRuntimeOIDCDiscoveryMode,
+  normalizeRuntimeOIDCIntrospectionMode,
+  normalizeRuntimeOIDCPrivateKeyAlgorithm,
+  requiresClientSecretForOIDCAuth,
+  requiresPrivateKeyForOIDCAuth
+} from '../utils/apiUtils';
 import Grid from '@mui/material/Grid';
 
 function isValidBackendURL(value?: string): boolean {
@@ -26,6 +38,29 @@ function isValidBackendURL(value?: string): boolean {
     return false;
   }
 }
+
+const OIDC_AUTH_METHOD_OPTIONS = [
+  { value: 'client_secret_post', label: 'Client secret post' },
+  { value: 'client_secret_basic', label: 'Client secret basic' },
+  { value: 'private_key_jwt', label: 'Private key JWT' },
+];
+
+const OIDC_DISCOVERY_MODE_OPTIONS = [
+  { value: 'auto', label: 'Auto detect' },
+  { value: 'manual', label: 'Manual URL' },
+  { value: 'off', label: 'Disabled' },
+];
+
+const OIDC_INTROSPECTION_MODE_OPTIONS = [
+  { value: 'auto', label: 'Auto detect' },
+  { value: 'always', label: 'Always required' },
+  { value: 'never', label: 'Disabled' },
+];
+
+const OIDC_PRIVATE_KEY_ALGORITHM_OPTIONS = [
+  { value: 'RS256', label: 'RS256' },
+  { value: 'EDDSA', label: 'EdDSA (Ed25519)' },
+];
 
 // Validation schema
 const ConnectionConfigSchema = Yup.object().shape({
@@ -53,6 +88,9 @@ const ConnectionConfigSchema = Yup.object().shape({
   // OIDC client credentials validation
   oidc_auth: Yup.object().shape({
     enabled: Yup.boolean(),
+    token_endpoint_auth_method: Yup.string()
+      .oneOf(OIDC_AUTH_METHOD_OPTIONS.map((option) => option.value))
+      .default('client_secret_post'),
     client_id: Yup.string().when(['enabled'], {
       is: (enabled: any) => Boolean(enabled),
       then: (schema) => schema
@@ -60,12 +98,28 @@ const ConnectionConfigSchema = Yup.object().shape({
         .matches(/^\S+$/, 'Client ID cannot contain spaces'),
       otherwise: (schema) => schema,
     }),
-    client_secret: Yup.string().when(['enabled'], {
-      is: (enabled: any) => Boolean(enabled),
+    client_secret: Yup.string().when(['enabled', 'token_endpoint_auth_method'], {
+      is: (enabled: any, method: any) => Boolean(enabled) && requiresClientSecretForOIDCAuth(method),
       then: (schema) => schema
         .required('Client secret is required when OIDC Authentication is enabled'),
       otherwise: (schema) => schema,
     }),
+    private_key_pem: Yup.string().when(['enabled', 'token_endpoint_auth_method'], {
+      is: (enabled: any, method: any) => Boolean(enabled) && requiresPrivateKeyForOIDCAuth(method),
+      then: (schema) => schema.required('Private key is required for private_key_jwt'),
+      otherwise: (schema) => schema,
+    }),
+    discovery_mode: Yup.string()
+      .oneOf(OIDC_DISCOVERY_MODE_OPTIONS.map((option) => option.value))
+      .default('auto'),
+    discovery_url: Yup.string().when(['enabled', 'discovery_mode'], {
+      is: (enabled: any, mode: any) => Boolean(enabled) && String(mode || '').toLowerCase() === 'manual',
+      then: (schema) => schema.required('Discovery URL is required in manual mode').url('Discovery URL must be valid'),
+      otherwise: (schema) => schema,
+    }),
+    introspection_mode: Yup.string()
+      .oneOf(OIDC_INTROSPECTION_MODE_OPTIONS.map((option) => option.value))
+      .default('auto'),
   }),
 });
 
@@ -166,54 +220,51 @@ const ConnectionConfig: React.FC = () => {
       enabled: connectionSource.oidc_auth?.enabled || false,
       client_id: connectionSource.oidc_auth?.client_id || '',
       client_secret: connectionSource.oidc_auth?.client_secret || '',
+      token_endpoint_auth_method: normalizeRuntimeOIDCAuthMethod(connectionSource.oidc_auth?.token_endpoint_auth_method),
+      private_key_pem: connectionSource.oidc_auth?.private_key_pem || '',
+      private_key_algorithm: normalizeRuntimeOIDCPrivateKeyAlgorithm(connectionSource.oidc_auth?.private_key_algorithm),
+      private_key_id: connectionSource.oidc_auth?.private_key_id || '',
+      client_assertion_ttl_seconds: Number(connectionSource.oidc_auth?.client_assertion_ttl_seconds || 300),
+      discovery_mode: normalizeRuntimeOIDCDiscoveryMode(connectionSource.oidc_auth?.discovery_mode),
+      discovery_url: connectionSource.oidc_auth?.discovery_url || '',
+      token_endpoint: connectionSource.oidc_auth?.token_endpoint || '',
+      introspection_mode: normalizeRuntimeOIDCIntrospectionMode(connectionSource.oidc_auth?.introspection_mode),
+      introspection_endpoint: connectionSource.oidc_auth?.introspection_endpoint || '',
+      introspection_auth_method: connectionSource.oidc_auth?.introspection_auth_method || 'auto',
       scope: connectionSource.oidc_auth?.scope || 'nauthilus:authenticate nauthilus:security',
       token: connectionSource.oidc_auth?.token || '',
       expires_at: connectionSource.oidc_auth?.expires_at || 0,
     },
   };
 
-  // Function to fetch OIDC access token using client_credentials
-  const fetchOIDCToken = async (
-    backendUrl: string,
-    clientId: string,
-    clientSecret: string,
-    scope?: string
-  ): Promise<{ token: string, expires_at: number } | null> => {
-    try {
-      // Use the proxy endpoint to make the request server-side
-      // This avoids CORS issues by making the request through the Go backend
-      const proxyUrl = new URL('/proxy/oidc-token', getProxyOrigin());
-      proxyUrl.searchParams.append('url', backendUrl);
-
-      const body = new URLSearchParams();
-      body.append('grant_type', 'client_credentials');
-      body.append('client_id', clientId);
-      body.append('client_secret', clientSecret);
-      if (scope && scope.trim() !== '') {
-        body.append('scope', scope.trim());
+  const canFetchOIDCToken = (values: any): boolean => {
+    const normalized = {
+      ...values,
+      oidc_auth: {
+        ...values?.oidc_auth,
+        token_endpoint_auth_method: normalizeRuntimeOIDCAuthMethod(values?.oidc_auth?.token_endpoint_auth_method),
       }
+    };
 
-      const response = await authenticatedFetch(proxyUrl.toString(), {
-        method: 'POST',
-        body: body.toString(),
-      });
+    return hasOIDCRuntimeAuthMaterial(normalized);
+  };
 
-      if (!response.ok) {
-        console.error('Error fetching OIDC token:', response.statusText);
+  const fetchOIDCToken = async (values: any): Promise<{ token: string, expires_at: number } | null> => {
+    try {
+      const tokenData = await fetchRuntimeOIDCToken(values);
+      if (!tokenData) {
         setNotification({
           open: true,
-          message: `Failed to fetch OIDC token: ${response.statusText}`,
+          message: 'Failed to fetch OIDC token. Please check method, credentials and discovery settings.',
           severity: 'error'
         });
+
         return null;
       }
 
-      const data = await response.json();
-      const expiresIn = Number(data.expires_in) || 0;
-      const expiresAt = Math.floor(Date.now() / 1000) + expiresIn;
       return {
-        token: data.access_token,
-        expires_at: expiresAt
+        token: tokenData.token,
+        expires_at: tokenData.expires_at,
       };
     } catch (error) {
       console.error('Error fetching OIDC token:', error);
@@ -232,16 +283,10 @@ const ConnectionConfig: React.FC = () => {
       // If OIDC auth is enabled, fetch token when missing or expired.
       if (
         values.oidc_auth?.enabled &&
-        values.oidc_auth.client_id &&
-        values.oidc_auth.client_secret &&
+        canFetchOIDCToken(values) &&
         (!values.oidc_auth.token || (values.oidc_auth.expires_at || 0) <= Math.floor(Date.now() / 1000))
       ) {
-        const tokenData = await fetchOIDCToken(
-          values.backend_url,
-          values.oidc_auth.client_id,
-          values.oidc_auth.client_secret,
-          values.oidc_auth.scope
-        );
+        const tokenData = await fetchOIDCToken(values);
 
         if (tokenData) {
           // Update the values with the new token data
@@ -291,10 +336,10 @@ const ConnectionConfig: React.FC = () => {
   const refreshOIDCToken = async (values: any) => {
     const oidcAuth = values.oidc_auth;
 
-    if (!values.backend_url || !oidcAuth?.client_id || !oidcAuth?.client_secret) {
+    if (!canFetchOIDCToken(values)) {
       setNotification({
         open: true,
-        message: 'OIDC token could not be refreshed because backend URL, client ID or client secret is missing.',
+        message: 'OIDC token could not be refreshed because required OIDC fields are missing.',
         severity: 'error'
       });
       return;
@@ -302,12 +347,7 @@ const ConnectionConfig: React.FC = () => {
 
     try {
       setIsRefreshingToken(true);
-      const tokenData = await fetchOIDCToken(
-        values.backend_url,
-        oidcAuth.client_id,
-        oidcAuth.client_secret,
-        oidcAuth.scope
-      );
+      const tokenData = await fetchOIDCToken(values);
 
       if (!tokenData) {
         return;
@@ -364,8 +404,17 @@ const ConnectionConfig: React.FC = () => {
         onSubmit={handleSubmit}
         enableReinitialize={true}
       >
-        {({ errors, touched, values, handleChange, setFieldValue }) => (
-          <Form>
+        {({ errors, touched, values, handleChange, setFieldValue }) => {
+          const oidcAuthMethod = normalizeRuntimeOIDCAuthMethod(values.oidc_auth?.token_endpoint_auth_method);
+          const oidcNeedsClientSecret = requiresClientSecretForOIDCAuth(oidcAuthMethod);
+          const oidcNeedsPrivateKey = requiresPrivateKeyForOIDCAuth(oidcAuthMethod);
+          const oidcDiscoveryMode = normalizeRuntimeOIDCDiscoveryMode(values.oidc_auth?.discovery_mode);
+          const oidcIntrospectionMode = normalizeRuntimeOIDCIntrospectionMode(values.oidc_auth?.introspection_mode);
+          const oidcIntrospectionEnabled = oidcIntrospectionMode !== 'never';
+          const canFetchTokenNow = canFetchOIDCToken(values);
+
+          return (
+            <Form>
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1, flexWrap: 'wrap', rowGap: 1 }}>
               <Typography variant="h5" sx={{ fontWeight: 700 }}>Connection</Typography>
             </Stack>
@@ -526,69 +575,333 @@ const ConnectionConfig: React.FC = () => {
                 {values.oidc_auth?.enabled && (
                   <>
                     <Grid size={12}>
-                      <Grid container spacing={2}>
-                        <Grid size={{ xs: 12, sm: 6 }}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="oidc_auth.client_id"
-                            label="Client ID"
-                            InputProps={{ endAdornment: (
-                              <InputAdornment position="end"><InfoTooltip title="OIDC client_id used for client_credentials token requests." /></InputAdornment>
-                            ) }}
-                            variant="outlined"
-                            error={getIn(touched, 'oidc_auth.client_id') && Boolean(getIn(errors, 'oidc_auth.client_id'))}
-                            helperText={
-                              (getIn(touched, 'oidc_auth.client_id') && getIn(errors, 'oidc_auth.client_id')) ||
-                              "OIDC client ID"
-                            }
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 12, sm: 6 }}>
-                          <Field
-                            as={PasswordField}
-                            fullWidth
-                            name="oidc_auth.client_secret"
-                            label="Client Secret"
-                            infoTitle="OIDC client_secret used for token retrieval. Keep it secure."
-                            variant="outlined"
-                            error={getIn(touched, 'oidc_auth.client_secret') && Boolean(getIn(errors, 'oidc_auth.client_secret'))}
-                            helperText={
-                              (getIn(touched, 'oidc_auth.client_secret') && getIn(errors, 'oidc_auth.client_secret')) ||
-                              "OIDC client secret"
-                            }
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                        <Grid size={{ xs: 12 }}>
-                          <Field
-                            as={TextField}
-                            fullWidth
-                            name="oidc_auth.scope"
-                            label="Scope"
-                            InputProps={{ endAdornment: (
-                              <InputAdornment position="end"><InfoTooltip title="Space-separated OIDC scopes, e.g. nauthilus:authenticate nauthilus:security. Add nauthilus:admin when administrative endpoints are needed." /></InputAdornment>
-                            ) }}
-                            variant="outlined"
-                            helperText="Space-separated scopes for the token request"
-                            onChange={(e: React.ChangeEvent<any>) => {
-                              handleChange(e);
-                              setHasUnsavedChanges(true);
-                            }}
-                          />
-                        </Grid>
-                      </Grid>
+                      <Stack spacing={2}>
+                        <Box sx={{ p: 2, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            Client Authentication
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Define how the client authenticates at the token endpoint.
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field
+                                as={TextField}
+                                select
+                                fullWidth
+                                name="oidc_auth.token_endpoint_auth_method"
+                                label="Token Auth Method"
+                                variant="outlined"
+                                helperText="Authentication method used for /oidc/token"
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              >
+                                {OIDC_AUTH_METHOD_OPTIONS.map((option) => (
+                                  <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                ))}
+                              </Field>
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 8 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                            <Grid size={{ xs: 12, md: 8 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                name="oidc_auth.client_id"
+                                label="Client ID"
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="OIDC client_id used for client_credentials token requests." /></InputAdornment>
+                                ) }}
+                                variant="outlined"
+                                error={getIn(touched, 'oidc_auth.client_id') && Boolean(getIn(errors, 'oidc_auth.client_id'))}
+                                helperText={
+                                  (getIn(touched, 'oidc_auth.client_id') && getIn(errors, 'oidc_auth.client_id')) ||
+                                  "OIDC client ID"
+                                }
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                            {oidcNeedsClientSecret && (
+                              <Grid size={{ xs: 12, md: 8 }}>
+                                <Field
+                                  as={PasswordField}
+                                  fullWidth
+                                  name="oidc_auth.client_secret"
+                                  label="Client Secret"
+                                  infoTitle="OIDC client_secret used for token retrieval. Keep it secure."
+                                  variant="outlined"
+                                  error={getIn(touched, 'oidc_auth.client_secret') && Boolean(getIn(errors, 'oidc_auth.client_secret'))}
+                                  helperText={
+                                    (getIn(touched, 'oidc_auth.client_secret') && getIn(errors, 'oidc_auth.client_secret')) ||
+                                    "OIDC client secret"
+                                  }
+                                  onChange={(e: React.ChangeEvent<any>) => {
+                                    handleChange(e);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                />
+                              </Grid>
+                            )}
+                            {oidcNeedsClientSecret && (
+                              <Grid size={{ xs: 12, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                            )}
+                            {oidcNeedsPrivateKey && (
+                              <>
+                                <Grid size={{ xs: 12, md: 4 }}>
+                                  <Field
+                                    as={TextField}
+                                    select
+                                    fullWidth
+                                    name="oidc_auth.private_key_algorithm"
+                                    label="Private Key Algorithm"
+                                    variant="outlined"
+                                    helperText="JWT signing algorithm for private_key_jwt"
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  >
+                                    {OIDC_PRIVATE_KEY_ALGORITHM_OPTIONS.map((option) => (
+                                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                    ))}
+                                  </Field>
+                                </Grid>
+                                <Grid size={{ xs: 12, md: 4 }}>
+                                  <Field
+                                    as={TextField}
+                                    fullWidth
+                                    name="oidc_auth.private_key_id"
+                                    label="Private Key ID (kid)"
+                                    variant="outlined"
+                                    helperText="Optional JWT header kid"
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  />
+                                </Grid>
+                                <Grid size={{ xs: 12, md: 4 }}>
+                                  <Field
+                                    as={TextField}
+                                    fullWidth
+                                    type="number"
+                                    name="oidc_auth.client_assertion_ttl_seconds"
+                                    label="Client Assertion TTL (s)"
+                                    variant="outlined"
+                                    helperText="Assertion lifetime (30-600s)"
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  />
+                                </Grid>
+                                <Grid size={12}>
+                                  <Field
+                                    as={TextField}
+                                    fullWidth
+                                    multiline
+                                    minRows={6}
+                                    name="oidc_auth.private_key_pem"
+                                    label="Private Key (PEM, PKCS#8)"
+                                    variant="outlined"
+                                    error={getIn(touched, 'oidc_auth.private_key_pem') && Boolean(getIn(errors, 'oidc_auth.private_key_pem'))}
+                                    helperText={
+                                      (getIn(touched, 'oidc_auth.private_key_pem') && getIn(errors, 'oidc_auth.private_key_pem')) ||
+                                      'PEM-encoded private key used to sign client_assertion JWTs'
+                                    }
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  />
+                                </Grid>
+                              </>
+                            )}
+                          </Grid>
+                        </Box>
+
+                        <Box sx={{ p: 2, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            Endpoint Discovery
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Resolve token and introspection endpoints automatically or provide explicit overrides.
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field
+                                as={TextField}
+                                select
+                                fullWidth
+                                name="oidc_auth.discovery_mode"
+                                label="Discovery Mode"
+                                variant="outlined"
+                                helperText="Auto fetch from /.well-known/openid-configuration"
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              >
+                                {OIDC_DISCOVERY_MODE_OPTIONS.map((option) => (
+                                  <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                ))}
+                              </Field>
+                            </Grid>
+                            {oidcDiscoveryMode !== 'manual' && (
+                              <Grid size={{ xs: 12, md: 8 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                            )}
+                            {oidcDiscoveryMode === 'manual' && (
+                              <Grid size={{ xs: 12, md: 8 }}>
+                                <Field
+                                  as={TextField}
+                                  fullWidth
+                                  name="oidc_auth.discovery_url"
+                                  label="Discovery URL"
+                                  variant="outlined"
+                                  placeholder="https://issuer.example.com/.well-known/openid-configuration"
+                                  error={getIn(touched, 'oidc_auth.discovery_url') && Boolean(getIn(errors, 'oidc_auth.discovery_url'))}
+                                  helperText={
+                                    (getIn(touched, 'oidc_auth.discovery_url') && getIn(errors, 'oidc_auth.discovery_url')) ||
+                                    'Used to resolve token and introspection endpoints'
+                                  }
+                                  onChange={(e: React.ChangeEvent<any>) => {
+                                    handleChange(e);
+                                    setHasUnsavedChanges(true);
+                                  }}
+                                />
+                              </Grid>
+                            )}
+                            <Grid size={{ xs: 12, md: 8 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                name="oidc_auth.token_endpoint"
+                                label="Token Endpoint Override (optional)"
+                                variant="outlined"
+                                helperText="Optional absolute URL override. If empty, discovery or /oidc/token is used."
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                          </Grid>
+                        </Box>
+
+                        <Box sx={{ p: 2, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            Token Validation
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Configure introspection for opaque and JWT token validation behavior.
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid size={{ xs: 12, md: 4 }}>
+                              <Field
+                                as={TextField}
+                                select
+                                fullWidth
+                                name="oidc_auth.introspection_mode"
+                                label="Introspection Mode"
+                                variant="outlined"
+                                helperText="Auto validates opaque tokens via introspection"
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              >
+                                {OIDC_INTROSPECTION_MODE_OPTIONS.map((option) => (
+                                  <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                ))}
+                              </Field>
+                            </Grid>
+                            {oidcIntrospectionEnabled ? (
+                              <>
+                                <Grid size={{ xs: 12, md: 4 }}>
+                                  <Field
+                                    as={TextField}
+                                    select
+                                    fullWidth
+                                    name="oidc_auth.introspection_auth_method"
+                                    label="Introspection Auth Method"
+                                    variant="outlined"
+                                    helperText="Auto tries discovery-supported methods"
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  >
+                                    <MenuItem value="auto">Auto detect</MenuItem>
+                                    {OIDC_AUTH_METHOD_OPTIONS.map((option) => (
+                                      <MenuItem key={option.value} value={option.value}>{option.label}</MenuItem>
+                                    ))}
+                                  </Field>
+                                </Grid>
+                                <Grid size={{ xs: 12, md: 8 }}>
+                                  <Field
+                                    as={TextField}
+                                    fullWidth
+                                    name="oidc_auth.introspection_endpoint"
+                                    label="Introspection Endpoint Override (optional)"
+                                    variant="outlined"
+                                    helperText="Optional absolute URL override. If empty, discovery is used."
+                                    onChange={(e: React.ChangeEvent<any>) => {
+                                      handleChange(e);
+                                      setHasUnsavedChanges(true);
+                                    }}
+                                  />
+                                </Grid>
+                                <Grid size={{ xs: 12, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                              </>
+                            ) : (
+                              <Grid size={{ xs: 12, md: 8 }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+                                  Introspection is disabled. No token introspection request will be sent.
+                                </Typography>
+                              </Grid>
+                            )}
+                          </Grid>
+                        </Box>
+
+                        <Box sx={{ p: 2, borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+                          <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                            Token Request
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                            Define scopes requested for the client_credentials token flow.
+                          </Typography>
+                          <Grid container spacing={2}>
+                            <Grid size={{ xs: 12, md: 8 }}>
+                              <Field
+                                as={TextField}
+                                fullWidth
+                                name="oidc_auth.scope"
+                                label="Scope"
+                                InputProps={{ endAdornment: (
+                                  <InputAdornment position="end"><InfoTooltip title="Space-separated OIDC scopes, e.g. nauthilus:authenticate nauthilus:security. Add nauthilus:admin when administrative endpoints are needed." /></InputAdornment>
+                                ) }}
+                                variant="outlined"
+                                helperText="Space-separated scopes for the token request"
+                                onChange={(e: React.ChangeEvent<any>) => {
+                                  handleChange(e);
+                                  setHasUnsavedChanges(true);
+                                }}
+                              />
+                            </Grid>
+                            <Grid size={{ xs: 12, md: 4 }} sx={{ display: { xs: 'none', md: 'block' } }} />
+                          </Grid>
+                        </Box>
+                      </Stack>
                     </Grid>
 
                     {/* Token Status and Refresh Button */}
-                    {(values.oidc_auth?.client_id && values.oidc_auth?.client_secret) && (
+                    {values.oidc_auth?.client_id && (
                       <Grid sx={{ mt: 2 }} size={12}>
                         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
                           <Box>
@@ -598,6 +911,8 @@ const ConnectionConfig: React.FC = () => {
                             <Typography variant="body2" color="text.secondary">
                               {!values.backend_url
                                 ? 'Backend URL is missing. Configure it before fetching a token.'
+                                : !canFetchTokenNow
+                                ? `Required OIDC fields for ${oidcAuthMethod} are missing.`
                                 : values.oidc_auth.token
                                 ? values.oidc_auth.expires_at > Date.now() / 1000
                                 ? `Valid until: ${new Date(values.oidc_auth.expires_at * 1000).toLocaleString()}`
@@ -610,7 +925,7 @@ const ConnectionConfig: React.FC = () => {
                             color="secondary"
                             onClick={() => refreshOIDCToken(values)}
                             startIcon={<RefreshIcon />}
-                            disabled={isRefreshingToken || !values.backend_url}
+                            disabled={isRefreshingToken || !values.backend_url || !canFetchTokenNow}
                           >
                             {isRefreshingToken ? 'Refreshing...' : values.oidc_auth.token ? 'Refresh Token' : 'Fetch Token'}
                           </Button>
@@ -655,7 +970,8 @@ const ConnectionConfig: React.FC = () => {
               </Button>
             </Box>
           </Form>
-        )}
+          );
+        }}
       </Formik>
 
       {/* Load Configuration Confirmation Dialog */}

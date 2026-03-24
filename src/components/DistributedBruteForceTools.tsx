@@ -382,7 +382,7 @@ const DistributedBruteForceTools = (): React.JSX.Element => {
       const options: RequestInit = { method: 'GET' } as any;
       const resp = await authenticatedFetch(url.toString(), {
         ...options,
-        headers: buildBackendAuthHeaders(conn, options.headers),
+        headers: await buildBackendAuthHeaders(conn, options.headers),
       });
       if (!resp.ok) {
         const msg = await extractErrorMessage(resp);

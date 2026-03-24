@@ -212,6 +212,18 @@ func getEndpointPath(ctx *gin.Context) (string, int, string, bool) {
 	return endpointPath, 0, "", true
 }
 
+func getOptionalEndpointPath(ctx *gin.Context, fallback string) string {
+	endpointPath := strings.TrimSpace(ctx.GetHeader("x-endpoint-path"))
+	if endpointPath == "" {
+		endpointPath = strings.TrimSpace(ctx.Query("endpoint_path"))
+	}
+	if endpointPath == "" {
+		return fallback
+	}
+
+	return endpointPath
+}
+
 // getOperation extracts the operation/action from the request (accepts both for compatibility)
 func getOperation(ctx *gin.Context) string {
 	// Prefer explicit headers first
@@ -722,6 +734,8 @@ func (h *ProxyHandler) RegisterRoutes(router *gin.Engine) {
 
 	router.GET("/proxy/oidc-token", h.OIDCTokenProxy)
 	router.POST("/proxy/oidc-token", h.OIDCTokenProxy)
+	router.GET("/proxy/oidc-discovery", h.OIDCDiscoveryProxy)
+	router.POST("/proxy/oidc-introspect", h.OIDCIntrospectProxy)
 
 	router.GET("/proxy/bruteforce/list", h.BruteforceListProxy)
 	router.POST("/proxy/bruteforce/list", h.BruteforceListProxy)
@@ -780,8 +794,31 @@ func (h *ProxyHandler) PingProxy(ctx *gin.Context) {
 // OIDCTokenProxy handles the /proxy/oidc-token endpoint
 func (h *ProxyHandler) OIDCTokenProxy(ctx *gin.Context) {
 	config := ProxyConfig{
-		EndpointPath: "/oidc/token",
+		EndpointPath: getOptionalEndpointPath(ctx, "/oidc/token"),
 		LogEndpoint:  "/proxy/oidc-token",
+		RequiresAuth: false,
+		ContentType:  "application/x-www-form-urlencoded",
+	}
+
+	h.handleProxyRequest(ctx, config)
+}
+
+// OIDCDiscoveryProxy handles the /proxy/oidc-discovery endpoint.
+func (h *ProxyHandler) OIDCDiscoveryProxy(ctx *gin.Context) {
+	config := ProxyConfig{
+		EndpointPath: getOptionalEndpointPath(ctx, "/.well-known/openid-configuration"),
+		LogEndpoint:  "/proxy/oidc-discovery",
+		RequiresAuth: false,
+	}
+
+	h.handleProxyRequest(ctx, config)
+}
+
+// OIDCIntrospectProxy handles the /proxy/oidc-introspect endpoint.
+func (h *ProxyHandler) OIDCIntrospectProxy(ctx *gin.Context) {
+	config := ProxyConfig{
+		EndpointPath: getOptionalEndpointPath(ctx, "/oidc/introspect"),
+		LogEndpoint:  "/proxy/oidc-introspect",
 		RequiresAuth: false,
 		ContentType:  "application/x-www-form-urlencoded",
 	}

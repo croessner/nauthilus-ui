@@ -236,7 +236,7 @@ const SystemPage = (): React.JSX.Element => {
       proxyUrl.searchParams.append('url', backendUrl);
 
       const res = await authenticatedFetch(proxyUrl.toString(), {
-        headers: buildBackendAuthHeaders(getConnection()),
+        headers: await buildBackendAuthHeaders(getConnection()),
       });
       if (!res.ok) {
         setStatusMessage(`Failed to fetch metrics: ${res.status} ${res.statusText}`);

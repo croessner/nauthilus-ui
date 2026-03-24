@@ -9,15 +9,18 @@ import (
 const redactedValue = "[REDACTED]"
 
 var sensitiveQueryKeys = map[string]struct{}{
-	"access_key":    {},
-	"access_token":  {},
-	"authvalue":     {},
-	"client_secret": {},
-	"code":          {},
-	"id_token":      {},
-	"refresh_token": {},
-	"refreshtoken":  {},
-	"token":         {},
+	"access_key":       {},
+	"access_token":     {},
+	"authvalue":        {},
+	"client_assertion": {},
+	"client_secret":    {},
+	"code":             {},
+	"id_token":         {},
+	"private_key":      {},
+	"private_key_pem":  {},
+	"refresh_token":    {},
+	"refreshtoken":     {},
+	"token":            {},
 }
 
 var sensitiveHeaderKeys = map[string]struct{}{
