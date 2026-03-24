@@ -1068,3 +1068,7 @@ Notes:
 
 - Daily-Check (DE): docs/Daily-Check.de.md
 - Dependency Updates (EN): docs/Dependency-Updates.md
+
+## License
+
+This project is licensed under the MIT License. See [LICENSE](LICENSE).
