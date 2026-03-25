@@ -14,6 +14,7 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestCopyResponseHeadersFiltersBackendCORSHeaders(t *testing.T) {
@@ -442,6 +443,27 @@ func TestResolveRuntimeBackendAuthUsesBasicFallback(t *testing.T) {
 	}
 }
 
+func TestResolveRuntimeBackendAuthHandlesBSONNestedAuthDocuments(t *testing.T) {
+	connection := map[string]interface{}{
+		"backend_url": "https://backend.example.com",
+		"oidc_auth": bson.D{
+			{Key: "enabled", Value: true},
+			{Key: "token", Value: "token-from-bson-d"},
+		},
+	}
+
+	_, authType, authValue, err := resolveRuntimeBackendAuth(connection)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if authType != "bearer" {
+		t.Fatalf("expected bearer auth type, got %q", authType)
+	}
+	if authValue != "token-from-bson-d" {
+		t.Fatalf("expected bearer token from bson.D nested object, got %q", authValue)
+	}
+}
+
 func TestHookExecuteProxyUsesServerSideAuthAndReturnsRedactedPreview(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
@@ -458,9 +480,12 @@ func TestHookExecuteProxyUsesServerSideAuthAndReturnsRedactedPreview(t *testing.
 
 	handler := &ProxyHandler{
 		AllowPrivateTargets: true,
-		activeRuntimeConnectionLookup: func(_ context.Context, username string) (map[string]interface{}, string, error) {
+		activeRuntimeConnectionLookup: func(_ context.Context, username, profileName string) (map[string]interface{}, string, error) {
 			if username != "alice" {
 				t.Fatalf("expected username alice, got %q", username)
+			}
+			if profileName != "" {
+				t.Fatalf("expected empty profileName fallback, got %q", profileName)
 			}
 
 			return map[string]interface{}{
@@ -537,5 +562,65 @@ func TestHookExecuteProxyUsesServerSideAuthAndReturnsRedactedPreview(t *testing.
 	}
 	if !gotRedactedAuth {
 		t.Fatalf("expected redacted Authorization header in request preview, got %+v", response.Request.Headers)
+	}
+}
+
+func TestHookExecuteProxyUsesRequestedProfileNameForRuntimeConnection(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	var receivedAuthorization string
+
+	backend := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		receivedAuthorization = r.Header.Get("Authorization")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"ok":true}`))
+	}))
+	defer backend.Close()
+
+	handler := &ProxyHandler{
+		AllowPrivateTargets: true,
+		activeRuntimeConnectionLookup: func(_ context.Context, username, profileName string) (map[string]interface{}, string, error) {
+			if username != "alice" {
+				t.Fatalf("expected username alice, got %q", username)
+			}
+			if profileName != "Kubernetes" {
+				t.Fatalf("expected requested profileName Kubernetes, got %q", profileName)
+			}
+
+			return map[string]interface{}{
+				"backend_url": backend.URL,
+				"oidc_auth": map[string]interface{}{
+					"enabled": true,
+					"token":   "kubernetes-token",
+				},
+			}, profileName, nil
+		},
+	}
+
+	router := gin.New()
+	router.Use(func(ctx *gin.Context) {
+		ctx.Set("username", "alice")
+		ctx.Next()
+	})
+	handler.RegisterRoutes(router)
+
+	payload := map[string]interface{}{
+		"profileName":  "Kubernetes",
+		"method":       "GET",
+		"endpointPath": "/api/v1/custom/hooks/hello",
+	}
+	body, _ := json.Marshal(payload)
+
+	req := httptest.NewRequest(http.MethodPost, "/proxy/hooks/execute", strings.NewReader(string(body)))
+	req.Header.Set("Content-Type", "application/json")
+
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, req)
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("expected status 200, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if receivedAuthorization != "Bearer kubernetes-token" {
+		t.Fatalf("expected backend auth from requested profile runtime settings, got %q", receivedAuthorization)
 	}
 }

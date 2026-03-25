@@ -59,6 +59,7 @@ type hookTesterKV struct {
 }
 
 type hookTesterExecuteRequest struct {
+	ProfileName  string         `json:"profileName"`
 	Method       string         `json:"method"`
 	EndpointPath string         `json:"endpointPath"`
 	Query        []hookTesterKV `json:"query"`
@@ -127,6 +128,19 @@ func normalizeHookTesterEndpointPath(raw string) (string, bool) {
 	return path, true
 }
 
+func normalizeOptionalHookTesterProfileName(raw string) (string, bool) {
+	profileName := strings.TrimSpace(raw)
+	if profileName == "" {
+		return "", true
+	}
+
+	if strings.ContainsAny(profileName, "\r\n") {
+		return "", false
+	}
+
+	return profileName, true
+}
+
 func mapString(m map[string]interface{}, key string) string {
 	if m == nil {
 		return ""
@@ -176,12 +190,30 @@ func mapObject(m map[string]interface{}, key string) map[string]interface{} {
 		return nil
 	}
 
-	obj, ok := raw.(map[string]interface{})
-	if !ok {
+	return toStringAnyMap(raw)
+}
+
+func toStringAnyMap(raw interface{}) map[string]interface{} {
+	switch typed := raw.(type) {
+	case map[string]interface{}:
+		return typed
+	case bson.M:
+		mapped := make(map[string]interface{}, len(typed))
+		for key, value := range typed {
+			mapped[key] = value
+		}
+
+		return mapped
+	case bson.D:
+		mapped := make(map[string]interface{}, len(typed))
+		for _, element := range typed {
+			mapped[element.Key] = element.Value
+		}
+
+		return mapped
+	default:
 		return nil
 	}
-
-	return obj
 }
 
 func resolveRuntimeBackendAuth(connection map[string]interface{}) (backendURL, authType, authValue string, err error) {
@@ -228,37 +260,13 @@ func resolveRuntimeBackendAuth(connection map[string]interface{}) (backendURL, a
 	return backendURL, authType, authValue, nil
 }
 
-func (h *ProxyHandler) loadActiveRuntimeConnection(ctx *gin.Context) (map[string]interface{}, string, error) {
-	username := strings.TrimSpace(ctx.GetString("username"))
-	if username == "" {
-		return nil, "", errors.New("authenticated user context missing")
-	}
-
-	if h.activeRuntimeConnectionLookup != nil {
-		return h.activeRuntimeConnectionLookup(ctx.Request.Context(), username)
-	}
-
-	if h.Mongo == nil || !h.Mongo.IsConnectedToMongoDB() {
-		return nil, "", errors.New("runtime storage unavailable")
-	}
-
-	var profile models.Profile
-	profileErr := h.Mongo.ProfileColl.FindOne(ctx.Request.Context(), bson.M{"userId": username}).Decode(&profile)
-	if profileErr != nil {
-		if errors.Is(profileErr, mongo.ErrNoDocuments) {
-			return nil, "", errors.New("no active profile configured")
-		}
-
-		return nil, "", profileErr
-	}
-
-	profileName := strings.TrimSpace(profile.CurrentProfileName)
-	if profileName == "" {
+func (h *ProxyHandler) loadRuntimeConnectionByProfile(ctx context.Context, username, profileName string) (map[string]interface{}, string, error) {
+	if strings.TrimSpace(profileName) == "" {
 		return nil, "", errors.New("no active profile configured")
 	}
 
 	var runtimeSettings models.RuntimeSettings
-	runtimeErr := h.Mongo.RuntimeColl.FindOne(ctx.Request.Context(), bson.M{
+	runtimeErr := h.Mongo.RuntimeColl.FindOne(ctx, bson.M{
 		"userId":      username,
 		"profileName": profileName,
 	}).Decode(&runtimeSettings)
@@ -275,6 +283,44 @@ func (h *ProxyHandler) loadActiveRuntimeConnection(ctx *gin.Context) (map[string
 	}
 
 	return runtimeSettings.Connection, profileName, nil
+}
+
+func (h *ProxyHandler) loadActiveRuntimeConnection(ctx *gin.Context, requestedProfileName string) (map[string]interface{}, string, error) {
+	username := strings.TrimSpace(ctx.GetString("username"))
+	if username == "" {
+		return nil, "", errors.New("authenticated user context missing")
+	}
+
+	profileName := strings.TrimSpace(requestedProfileName)
+
+	if h.activeRuntimeConnectionLookup != nil {
+		return h.activeRuntimeConnectionLookup(ctx.Request.Context(), username, profileName)
+	}
+
+	if h.Mongo == nil || !h.Mongo.IsConnectedToMongoDB() {
+		return nil, "", errors.New("runtime storage unavailable")
+	}
+
+	if profileName != "" {
+		return h.loadRuntimeConnectionByProfile(ctx.Request.Context(), username, profileName)
+	}
+
+	var profile models.Profile
+	profileErr := h.Mongo.ProfileColl.FindOne(ctx.Request.Context(), bson.M{"userId": username}).Decode(&profile)
+	if profileErr != nil {
+		if errors.Is(profileErr, mongo.ErrNoDocuments) {
+			return nil, "", errors.New("no active profile configured")
+		}
+
+		return nil, "", profileErr
+	}
+
+	profileName = strings.TrimSpace(profile.CurrentProfileName)
+	if profileName == "" {
+		return nil, "", errors.New("no active profile configured")
+	}
+
+	return h.loadRuntimeConnectionByProfile(ctx.Request.Context(), username, profileName)
 }
 
 func buildHookTesterHeaderPreview(headers http.Header) []hookTesterHeaderPreview {
@@ -360,7 +406,13 @@ func (h *ProxyHandler) HookExecuteProxy(ctx *gin.Context) {
 		return
 	}
 
-	connection, profileName, err := h.loadActiveRuntimeConnection(ctx)
+	profileName, ok := normalizeOptionalHookTesterProfileName(payload.ProfileName)
+	if !ok {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "profileName contains invalid control characters"})
+		return
+	}
+
+	connection, profileName, err := h.loadActiveRuntimeConnection(ctx, profileName)
 	if err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: err.Error()})
 		return

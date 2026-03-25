@@ -271,6 +271,7 @@ const HookTester = (): React.JSX.Element => {
 
                 const url = buildExecuteURL();
                 const payload = {
+                    profileName: currentProfileName,
                     method,
                     endpointPath,
                     query: query

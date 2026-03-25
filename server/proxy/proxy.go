@@ -132,7 +132,8 @@ type ProxyHandler struct {
 
 	// activeRuntimeConnectionLookup can be injected in tests to provide
 	// backend connection/auth material without a live MongoDB instance.
-	activeRuntimeConnectionLookup func(ctx context.Context, username string) (map[string]interface{}, string, error)
+	// The profileName is optional; empty means "use active profile".
+	activeRuntimeConnectionLookup func(ctx context.Context, username, profileName string) (map[string]interface{}, string, error)
 
 	// AllowPrivateTargets disables the SSRF protection that normally blocks
 	// requests to loopback / RFC1918 addresses.  Set to true only in tests.
