@@ -230,6 +230,8 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
   // Row DOM refs for scroll stabilization
   const rowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
+  const tableRef = useRef<HTMLTableElement | null>(null);
+  const [expandedPanelOffsetPx, setExpandedPanelOffsetPx] = useState<number>(56);
   const isEmptyValue = useCallback((v:any)=>{
     if (v === null || v === undefined) return true;
     if (typeof v === 'string') return v.trim() === '';
@@ -297,6 +299,38 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   ], []);
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
+  useEffect(() => {
+    const table = tableRef.current;
+    if (!table) return;
+
+    const updateExpandedPanelOffset = (): void => {
+      const headerCell = table.querySelector('thead th:first-child') as HTMLElement | null;
+      const bodyCell = table.querySelector('tbody tr td:first-child') as HTMLElement | null;
+      const stickyCellWidth = Math.max(
+        headerCell?.getBoundingClientRect().width ?? 0,
+        bodyCell?.getBoundingClientRect().width ?? 0
+      );
+      if (stickyCellWidth > 0) {
+        const nextOffset = Math.round(stickyCellWidth + 8);
+        setExpandedPanelOffsetPx((prev) => (prev === nextOffset ? prev : nextOffset));
+      }
+    };
+
+    updateExpandedPanelOffset();
+    const headerCell = table.querySelector('thead th:first-child') as HTMLElement | null;
+    if (!headerCell || typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const resizeObserver = new ResizeObserver(() => updateExpandedPanelOffset());
+    resizeObserver.observe(headerCell);
+    window.addEventListener('resize', updateExpandedPanelOffset);
+
+    return () => {
+      resizeObserver.disconnect();
+      window.removeEventListener('resize', updateExpandedPanelOffset);
+    };
+  }, [selectedFields, rows.length, page]);
   // Track if the user explicitly reordered columns during this session; do not auto-adjust after that
   const [userReorderedCols, setUserReorderedCols] = useState<boolean>(false);
   // Default normalization: if 'ts' is part of the selection, make it the leftmost column by default
@@ -2894,7 +2928,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         ) : (
           <Box sx={{ opacity: changePulse && !hasAnyExpanded ? 0.6 : 1, transition: 'opacity 120ms ease' }}>
             <Box sx={{ overflowX:'auto' }}>
-              <table style={{ width:'max-content', minWidth:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
+              <table ref={tableRef} style={{ width:'max-content', minWidth:'100%', borderCollapse:'collapse', tableLayout:'fixed' as any }}>
                 <thead>
                   <tr>
                     <th
@@ -3059,7 +3093,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             }}
                           >
                             <Collapse in={expanded} timeout="auto" unmountOnExit>
-                              <Box sx={{ ml: '56px', py: 0.5, width:'max-content', maxWidth:'calc(100vw - 128px)' }}>
+                              <Box sx={{ ml: `${expandedPanelOffsetPx}px`, py: 0.5, width:'max-content', maxWidth:'calc(100vw - 128px)' }}>
                                 <Box data-testid="clickhouse-expanded-panel" sx={{ p:1.25, bgcolor:'rgba(25,118,210,0.06)', border:'1px solid', borderColor:'primary.light', borderRadius:1 }}>
                                   {/* Use an intrinsic two-column grid so that values stay right next to keys regardless of overall table width */}
                                   <Box

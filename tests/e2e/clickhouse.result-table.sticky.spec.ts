@@ -1,5 +1,7 @@
 import { expect, test } from '@playwright/test';
 
+type ClickhouseRow = Record<string, string | number>;
+
 const loginAsAdmin = async (page: import('@playwright/test').Page): Promise<void> => {
   await page.goto('/');
   await page.getByLabel('Username').fill('admin');
@@ -8,7 +10,18 @@ const loginAsAdmin = async (page: import('@playwright/test').Page): Promise<void
   await expect(page.getByText('Server Configuration')).toBeVisible();
 };
 
-test('expanded clickhouse details stay horizontally anchored while data cells scroll', async ({ page }) => {
+const buildMeta = (columns: string[]): Array<{ name: string; type: string }> => (
+  columns.map((name) => ({
+    name,
+    type: name === 'ts' ? 'DateTime64(3, UTC)' : 'String',
+  }))
+);
+
+const mockClickhouseRoutes = async (
+  page: import('@playwright/test').Page,
+  columns: string[],
+  data: ClickhouseRow[],
+): Promise<void> => {
   await page.route('**/api/runtime/**', async (route) => {
     if (route.request().method() !== 'GET') {
       await route.continue();
@@ -38,11 +51,7 @@ test('expanded clickhouse details stay horizontally anchored while data cells sc
           clickhouse_query: {
             enabled: true,
             endpoint_path: '/api/v1/custom/clickhouse-query',
-            columns: [
-              'ts', 'session', 'service', 'features', 'client_ip', 'client_port', 'client_net',
-              'client_id', 'hostname', 'proto', 'method', 'user_agent', 'local_ip', 'local_port',
-              'display_name', 'account', 'username', 'password_hash',
-            ],
+            columns,
           },
         },
       }),
@@ -65,79 +74,21 @@ test('expanded clickhouse details stay horizontally anchored while data cells sc
         status: 'success',
         clickhouse: {
           query_result: {
-            meta: [
-              { name: 'ts', type: 'DateTime64(3, UTC)' },
-              { name: 'session', type: 'String' },
-              { name: 'service', type: 'String' },
-              { name: 'features', type: 'String' },
-              { name: 'client_ip', type: 'String' },
-              { name: 'client_port', type: 'String' },
-              { name: 'client_net', type: 'String' },
-              { name: 'client_id', type: 'String' },
-              { name: 'hostname', type: 'String' },
-              { name: 'proto', type: 'String' },
-              { name: 'method', type: 'String' },
-              { name: 'user_agent', type: 'String' },
-              { name: 'local_ip', type: 'String' },
-              { name: 'local_port', type: 'String' },
-              { name: 'display_name', type: 'String' },
-              { name: 'account', type: 'String' },
-              { name: 'username', type: 'String' },
-              { name: 'password_hash', type: 'String' },
-            ],
-            data: [
-              {
-                ts: '2026-03-25 16:20:00.000',
-                session: 'sess-a',
-                service: 'imap',
-                features: 'f1',
-                client_ip: '203.0.113.10',
-                client_port: '50001',
-                client_net: 'public',
-                client_id: 'c1',
-                hostname: 'mail-a',
-                proto: 'imap',
-                method: 'plain',
-                user_agent: 'Mozilla/5.0 test-agent',
-                local_ip: '10.0.0.10',
-                local_port: '993',
-                display_name: 'Alice',
-                account: 'alice',
-                username: 'alice',
-                password_hash: 'hash-a',
-              },
-              {
-                ts: '2026-03-25 16:19:59.000',
-                session: 'sess-b',
-                service: 'smtp',
-                features: 'f2',
-                client_ip: '203.0.113.11',
-                client_port: '50002',
-                client_net: 'public',
-                client_id: 'c2',
-                hostname: 'mail-b',
-                proto: 'smtp',
-                method: 'login',
-                user_agent: 'Mozilla/5.0 second-test-agent',
-                local_ip: '10.0.0.11',
-                local_port: '587',
-                display_name: 'Bob',
-                account: 'bob',
-                username: 'bob',
-                password_hash: 'hash-b',
-              },
-            ],
+            meta: buildMeta(columns),
+            data,
           },
         },
       }),
     });
   });
+};
 
+const openClickhouseAndRefresh = async (page: import('@playwright/test').Page, marker: string): Promise<void> => {
   await loginAsAdmin(page);
   await page.goto('/runtime-clickhouse');
-  await expect(page.getByRole('heading', { name: 'ClickHouse' })).toBeVisible();
 
   const endpointInput = page.getByLabel('Hook endpoint (path)');
+  await expect(endpointInput).toBeVisible();
   const enabledSwitch = page.locator('input[type="checkbox"]').first();
   if ((await endpointInput.inputValue()).trim() === '') {
     await endpointInput.fill('/api/v1/custom/clickhouse-query');
@@ -145,8 +96,63 @@ test('expanded clickhouse details stay horizontally anchored while data cells sc
   if (!(await enabledSwitch.isChecked())) {
     await enabledSwitch.click();
   }
+
   await page.getByRole('button', { name: /^Refresh$/ }).click();
-  await expect(page.getByText('sess-a')).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(marker)).toBeVisible({ timeout: 15_000 });
+};
+
+test('expanded clickhouse details stay horizontally anchored while data cells scroll', async ({ page }) => {
+  const columns = [
+    'ts', 'session', 'service', 'features', 'client_ip', 'client_port', 'client_net',
+    'client_id', 'hostname', 'proto', 'method', 'user_agent', 'local_ip', 'local_port',
+    'display_name', 'account', 'username', 'password_hash',
+  ];
+
+  const rows: ClickhouseRow[] = [
+    {
+      ts: '2026-03-25 16:20:00.000',
+      session: 'sess-a',
+      service: 'imap',
+      features: 'f1',
+      client_ip: '203.0.113.10',
+      client_port: '50001',
+      client_net: 'public',
+      client_id: 'c1',
+      hostname: 'mail-a',
+      proto: 'imap',
+      method: 'plain',
+      user_agent: 'Mozilla/5.0 test-agent',
+      local_ip: '10.0.0.10',
+      local_port: '993',
+      display_name: 'Alice',
+      account: 'alice',
+      username: 'alice',
+      password_hash: 'hash-a',
+    },
+    {
+      ts: '2026-03-25 16:19:59.000',
+      session: 'sess-b',
+      service: 'smtp',
+      features: 'f2',
+      client_ip: '203.0.113.11',
+      client_port: '50002',
+      client_net: 'public',
+      client_id: 'c2',
+      hostname: 'mail-b',
+      proto: 'smtp',
+      method: 'login',
+      user_agent: 'Mozilla/5.0 second-test-agent',
+      local_ip: '10.0.0.11',
+      local_port: '587',
+      display_name: 'Bob',
+      account: 'bob',
+      username: 'bob',
+      password_hash: 'hash-b',
+    },
+  ];
+
+  await mockClickhouseRoutes(page, columns, rows);
+  await openClickhouseAndRefresh(page, 'sess-a');
 
   await page.getByRole('button', { name: 'Expand row' }).first().click();
   await expect(page.getByTestId('clickhouse-expanded-panel').first()).toBeVisible();
@@ -164,7 +170,7 @@ test('expanded clickhouse details stay horizontally anchored while data cells sc
     }
     if (!scroller) throw new Error('Horizontal scroller not found');
 
-    const expandedPanel = table.querySelector('[data-testid=\"clickhouse-expanded-panel\"]') as HTMLElement | null;
+    const expandedPanel = table.querySelector('[data-testid="clickhouse-expanded-panel"]') as HTMLElement | null;
     if (!expandedPanel) throw new Error('Expanded panel not found');
 
     const dataCell = table.querySelector('tbody tr td:nth-child(3)') as HTMLElement | null;
@@ -186,4 +192,69 @@ test('expanded clickhouse details stay horizontally anchored while data cells sc
 
   expect(Math.abs(offsets.panelDelta)).toBeLessThan(3);
   expect(offsets.cellDelta).toBeLessThan(-100);
+});
+
+test('expanded panel stays right of sticky column when table has no horizontal overflow', async ({ page }) => {
+  const columns = ['ts', 'client_ip', 'username'];
+  const rows: ClickhouseRow[] = [
+    {
+      ts: '2026-03-25 16:20:00.000',
+      client_ip: '192.168.0.182',
+      username: 'zabbix_mail',
+    },
+    {
+      ts: '2026-03-25 16:19:59.000',
+      client_ip: '80.151.163.64',
+      username: 'root',
+    },
+  ];
+
+  await mockClickhouseRoutes(page, columns, rows);
+  await openClickhouseAndRefresh(page, 'zabbix_mail');
+
+  await page.evaluate(() => {
+    const table = document.querySelector('table');
+    if (!table) throw new Error('Table not found');
+
+    for (const cell of table.querySelectorAll('thead th:first-child, tbody tr td:first-child')) {
+      const element = cell as HTMLElement;
+      element.style.width = '120px';
+      element.style.minWidth = '120px';
+      element.style.maxWidth = '120px';
+    }
+  });
+
+  await page.getByRole('button', { name: 'Expand row' }).first().click();
+  await expect(page.getByTestId('clickhouse-expanded-panel').first()).toBeVisible();
+
+  const layout = await page.evaluate(() => {
+    const table = document.querySelector('table');
+    if (!table) throw new Error('Table not found');
+
+    const expandedPanel = table.querySelector('[data-testid="clickhouse-expanded-panel"]') as HTMLElement | null;
+    if (!expandedPanel) throw new Error('Expanded panel not found');
+
+    const stickyCell = table.querySelector('tbody tr td:first-child') as HTMLElement | null;
+    if (!stickyCell) throw new Error('Sticky cell not found');
+
+    let scroller: HTMLElement | null = table.parentElement;
+    while (scroller) {
+      const style = window.getComputedStyle(scroller);
+      const hasHorizontalScrollContext = style.overflowX === 'auto' || style.overflowX === 'scroll';
+      if (hasHorizontalScrollContext) break;
+      scroller = scroller.parentElement;
+    }
+    if (!scroller) throw new Error('Scroller not found');
+
+    const panelLeft = expandedPanel.getBoundingClientRect().left;
+    const stickyRight = stickyCell.getBoundingClientRect().right;
+
+    return {
+      hasHorizontalOverflow: scroller.scrollWidth > scroller.clientWidth + 1,
+      gapPx: panelLeft - stickyRight,
+    };
+  });
+
+  expect(layout.hasHorizontalOverflow).toBe(false);
+  expect(layout.gapPx).toBeGreaterThanOrEqual(6);
 });
