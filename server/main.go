@@ -206,7 +206,7 @@ func registerMiddleware(r *gin.Engine, cfg *config.Config, _ *db.MongoDB) {
 	requestContext := middleware.NewRequestContextHandler(cfg)
 	requestContext.RegisterMiddleware(r)
 
-	securityHeaders := middleware.NewSecurityHeadersHandler()
+	securityHeaders := middleware.NewSecurityHeadersHandler(cfg)
 	securityHeaders.RegisterMiddleware(r)
 
 	// Register CORS middleware first (should be registered before other middleware)
@@ -348,7 +348,7 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB, runtimeSSHProvide
 	r.Use(middleware.Logger())
 	requestContext := middleware.NewRequestContextHandler(cfg)
 	requestContext.RegisterMiddleware(r)
-	securityHeaders := middleware.NewSecurityHeadersHandler()
+	securityHeaders := middleware.NewSecurityHeadersHandler(cfg)
 	securityHeaders.RegisterMiddleware(r)
 	originPolicy := middleware.NewOriginPolicy(cfg)
 	csrfProtection := middleware.NewCSRFProtection(cfg)

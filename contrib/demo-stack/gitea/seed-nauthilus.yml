@@ -1,0 +1,80 @@
+server:
+  address: "0.0.0.0:8080"
+  max_concurrent_requests: 512
+  instance_name: "nauthilus-demo-from-git"
+
+  log:
+    level: "info"
+    add_source: true
+    json: false
+
+  keep_alive:
+    enabled: true
+
+  dedup:
+    in_process_enabled: true
+
+  brute_force_protocols: [ imap, pop3, smtp, http ]
+  backends: [ cache, lua ]
+  features: [ lua, brute_force ]
+  basic_auth:
+    enabled: true
+    username: "demo-backchannel"
+    password: "demoBackchannelPass01"
+
+  redis:
+    master:
+      address: "valkey:6379"
+
+    database_number: 0
+    prefix: "nt:"
+    pool_size: 64
+    idle_pool_size: 8
+    positive_cache_ttl: 3600
+    negative_cache_ttl: 120
+    password_nonce: "demoPasswordNonceValue01"
+    encryption_secret: "demoEncryptionSecret01"
+
+    batching:
+      enabled: true
+
+brute_force:
+  pw_history_for_known_accounts: false
+  tolerate_percent: 10
+  tolerate_ttl: 10m
+  adaptive_toleration: true
+  min_tolerate_percent: 3
+  max_tolerate_percent: 50
+
+  buckets:
+    - { name: b_1m_ipv4_32_http, period: 1m, cidr: 32, ipv4: true, failed_requests: 20, filter_by_protocol: [ http ] }
+
+lua:
+  actions:
+    - type: post
+      name: clickhouse
+      script_path: "server/lua-plugins.d/actions/clickhouse.lua"
+
+  custom_hooks:
+    - http_location: "clickhouse-query"
+      http_method: "GET"
+      script_path: "server/lua-plugins.d/hooks/clickhouse-query.lua"
+
+  search:
+    - protocol: [ imap, pop3, smtp, http ]
+      cache_name: default
+
+  config:
+    backend_script_path: "server/lua-plugins.d/backend/testing_csv_backend.lua"
+    init_script_paths:
+      - "server/lua-plugins.d/init/testing_csv_loader.lua"
+    package_path: "server/lua-plugins.d/share/?.lua;server/lua-plugins.d/backend/?.lua;server/lua-plugins.d/init/?.lua"
+
+    backend_number_of_workers: 8
+    action_number_of_workers: 8
+
+    feature_vm_pool_size: 16
+    filter_vm_pool_size: 16
+    hook_vm_pool_size: 16
+
+    queue_length: 0

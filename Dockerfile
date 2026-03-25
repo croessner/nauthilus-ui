@@ -68,6 +68,8 @@ RUN echo "https://dl-cdn.alpinelinux.org/alpine/v3.22/main" > /etc/apk/repositor
 # Install ca-certificates for HTTPS and Chromium for server-side PDF rendering
 RUN apk --no-cache add \
     ca-certificates \
+    git \
+    openssh-client \
     chromium \
     nss \
     freetype \

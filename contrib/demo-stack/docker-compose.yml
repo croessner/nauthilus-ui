@@ -1,0 +1,191 @@
+name: nauthilus-ui-demo
+
+services:
+  nauthilus-ui:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    container_name: nauthilus-ui-demo
+    restart: unless-stopped
+    environment:
+      NAUTHILUS_UI_CONFIG_FILE: /app/config.yaml
+      NAUTHILUS_UI_DATABASE_MONGODB_URI: mongodb://nauthilus:nauthilus_password@mongodb:27017/nauthilus-ui?authSource=admin
+      NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT: 3002
+    ports:
+      - "3001:3001"
+      - "3002:3002"
+    volumes:
+      - ./nauthilus-ui/config.yaml:/app/config.yaml:ro
+      - demo_ssh:/demo/ssh:ro
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      gitea-bootstrap:
+        condition: service_completed_successfully
+    networks:
+      - demo-net
+
+  mongodb:
+    image: mongo:8.0
+    container_name: nauthilus-ui-demo-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_DATABASE: nauthilus-ui
+      MONGO_INITDB_ROOT_USERNAME: nauthilus
+      MONGO_INITDB_ROOT_PASSWORD: nauthilus_password
+    volumes:
+      - mongodb_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "mongodb://nauthilus:nauthilus_password@127.0.0.1:27017/admin", "--eval", "db.runCommand({ ping: 1 }).ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    networks:
+      - demo-net
+
+  valkey:
+    image: valkey/valkey:8-alpine
+    container_name: nauthilus-ui-demo-valkey
+    restart: unless-stopped
+    command:
+      - valkey-server
+      - --bind
+      - 0.0.0.0
+      - --save
+      - ""
+      - --appendonly
+      - "no"
+      - --loglevel
+      - warning
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 10
+    networks:
+      - demo-net
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: nauthilus-ui-demo-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: nauthilus
+      CLICKHOUSE_USER: nauthilus
+      CLICKHOUSE_PASSWORD: nauthilus_clickhouse_password
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+    ports:
+      - "8123:8123"
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --user nauthilus --password nauthilus_clickhouse_password --query 'SELECT 1' >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - demo-net
+
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: nauthilus-ui-demo-clickhouse-init
+    restart: "no"
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        clickhouse-client \
+          --host clickhouse \
+          --user nauthilus \
+          --password nauthilus_clickhouse_password \
+          --multiquery < /demo/clickhouse/schema.sql
+    volumes:
+      - ./clickhouse/schema.sql:/demo/clickhouse/schema.sql:ro
+    networks:
+      - demo-net
+
+  nauthilus:
+    image: ghcr.io/croessner/nauthilus:v2.0.17
+    container_name: nauthilus-ui-demo-nauthilus
+    restart: unless-stopped
+    environment:
+      TESTING_CSV: /etc/nauthilus/client/logins.csv
+      CLICKHOUSE_INSERT_URL: http://clickhouse:8123/?query=INSERT%20INTO%20nauthilus.logins%20FORMAT%20JSONEachRow
+      CLICKHOUSE_SELECT_BASE: http://clickhouse:8123
+      CLICKHOUSE_TABLE: nauthilus.logins
+      CLICKHOUSE_USER: nauthilus
+      CLICKHOUSE_PASSWORD: nauthilus_clickhouse_password
+      CLICKHOUSE_BATCH_SIZE: "1"
+    depends_on:
+      valkey:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+    volumes:
+      - ./nauthilus/nauthilus.yml:/etc/nauthilus/nauthilus.yml:ro
+      - ./nauthilus/logins.csv:/etc/nauthilus/client/logins.csv:ro
+    ports:
+      - "8080:8080"
+    networks:
+      - demo-net
+
+  gitea:
+    image: gitea/gitea:1.22.6
+    container_name: nauthilus-ui-demo-gitea
+    restart: unless-stopped
+    environment:
+      USER_UID: "1000"
+      USER_GID: "1000"
+      GITEA__security__INSTALL_LOCK: "true"
+      GITEA__service__DISABLE_REGISTRATION: "true"
+      GITEA__service__REQUIRE_SIGNIN_VIEW: "false"
+      GITEA__database__DB_TYPE: sqlite3
+      GITEA__database__PATH: /data/gitea/gitea.db
+      GITEA__server__DOMAIN: gitea
+      GITEA__server__ROOT_URL: http://localhost:3003/
+      GITEA__server__SSH_DOMAIN: gitea
+      GITEA__server__SSH_PORT: "2222"
+      GITEA__server__START_SSH_SERVER: "false"
+      GITEA__server__SSH_LISTEN_PORT: "22"
+      GITEA__server__DISABLE_SSH: "false"
+    ports:
+      - "3003:3000"
+      - "2222:22"
+    volumes:
+      - gitea_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3000/api/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+    networks:
+      - demo-net
+
+  gitea-bootstrap:
+    image: gitea/gitea:1.22.6
+    container_name: nauthilus-ui-demo-gitea-bootstrap
+    restart: "no"
+    depends_on:
+      gitea:
+        condition: service_healthy
+    entrypoint: ["/bin/bash", "/demo/bootstrap/bootstrap-gitea.sh"]
+    volumes:
+      - gitea_data:/data
+      - demo_ssh:/demo/ssh
+      - ./scripts/bootstrap-gitea.sh:/demo/bootstrap/bootstrap-gitea.sh:ro
+      - ./gitea/seed-nauthilus.yml:/demo/bootstrap/seed-nauthilus.yml:ro
+    networks:
+      - demo-net
+
+networks:
+  demo-net:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+  gitea_data:
+  demo_ssh:
+  clickhouse_data:
