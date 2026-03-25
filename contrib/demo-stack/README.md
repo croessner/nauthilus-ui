@@ -85,6 +85,13 @@ curl -sS -u demo-backchannel:demoBackchannelPass01 \
   http://localhost:8080/api/v1/auth/json
 ```
 
+Or use the provided helper scripts:
+
+```bash
+./contrib/demo-stack/scripts/auth-json-demo-user.sh
+./contrib/demo-stack/scripts/auth-json-invalid-user.sh
+```
+
 2. Query recent rows via Nauthilus custom hook:
 
 ```bash

@@ -31,7 +31,13 @@ import {
     getProxyOrigin,
     loadSettings as loadSettingsUtil
 } from '../utils/apiUtils';
-import {getKnownHookEndpointSuggestions} from '../utils/hooks';
+import {
+  CANONICAL_CLICKHOUSE_ENDPOINT,
+  getKnownHookEndpointSuggestions,
+  getKnownHookHttpMethodForEndpoint,
+  hasCanonicalClickhouseEndpoint,
+  normalizeCustomHookEndpointPath
+} from '../utils/hooks';
 import {usePersistedAutoRefresh} from '../hooks/usePersistedAutoRefresh';
 import {
     applyPreviewLimit,
@@ -57,7 +63,7 @@ const MAX_BOOKMARKS = 5;
 
 const ClickhouseRuntime = (): React.JSX.Element => {
   const theme = useTheme();
-  const { currentProfileName } = useConfig();
+  const { currentProfileName, config } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings, saveRuntimeSettings } = useRuntime();
 
   // Connection status display similar to DistributedBruteForceTools/ConnectionConfig
@@ -65,10 +71,26 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const [statusMessage, setStatusMessage] = useState('');
 
   // Hook endpoint config like Distributed-BF page
-  const [hookEnabled, setHookEnabled] = useState<boolean>(Boolean((runtimeHooks as any)?.clickhouse_query?.enabled));
+  const [hookEnabled, setHookEnabled] = useState<boolean>(false);
   const [notif, setNotif] = useState<{open:boolean; message:string; severity:'success'|'error'|'info'|'warning'}>({open:false,message:'',severity:'info'});
-  const [endpointPath, setEndpointPath] = useState<string>((runtimeHooks as any)?.clickhouse_query?.endpoint_path || '/hooks/clickhouse-query');
-  const endpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
+  const [endpointPath, setEndpointPath] = useState<string>('');
+  const endpointSuggestions = useMemo(
+    () => getKnownHookEndpointSuggestions(runtimeHooks, config?.lua),
+    [runtimeHooks, config]
+  );
+  const hasCanonicalClickhouseMatch = useMemo(
+    () => hasCanonicalClickhouseEndpoint(runtimeHooks, config?.lua),
+    [runtimeHooks, config]
+  );
+  const normalizedEndpointPath = useMemo(() => normalizeCustomHookEndpointPath(endpointPath), [endpointPath]);
+  const persistedEndpointPath = useMemo(
+    () => normalizedEndpointPath || endpointPath.trim(),
+    [normalizedEndpointPath, endpointPath]
+  );
+  const hookRequestMethod = useMemo(
+    () => getKnownHookHttpMethodForEndpoint(persistedEndpointPath, runtimeHooks, config?.lua) || 'POST',
+    [persistedEndpointPath, runtimeHooks, config]
+  );
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const menuOpen = Boolean(anchorEl);
 
@@ -76,6 +98,10 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const connectionRef = useRef(runtimeConnection);
   useEffect(() => { connectionRef.current = runtimeConnection; }, [runtimeConnection]);
   const getConnection = useCallback(() => connectionRef.current, []);
+  const resolveEndpointToPersist = useCallback((candidate?: string): string => {
+    const fallback = typeof candidate === 'string' ? candidate.trim() : '';
+    return persistedEndpointPath || fallback;
+  }, [persistedEndpointPath]);
 
   // Query controls
   const [action, setAction] = useState<Action>('recent');
@@ -378,6 +404,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     try {
       const userId = await getCurrentUserId();
       const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+      const endpointToSave = resolveEndpointToPersist(prevCQ?.endpoint_path);
       const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
       if (action === 'raw_sql') {
         // Do not persist column widths for ad-hoc raw SQL results
@@ -386,13 +413,13 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       }
       await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
         ...(runtimeHooks || {}),
-        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, columnWidths: next, ui }
+        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointToSave, columns: selectedFields, columnWidths: next, ui }
       } as any);
       setNotif({ open:true, severity:'success', message:'Column width saved' });
     } catch(e:any) {
       setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
     }
-  }, [runtimeHooks, action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, saveRuntimeSettings]);
+  }, [runtimeHooks, action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, resolveEndpointToPersist, selectedFields, saveRuntimeSettings]);
 
   const onResizeStart = useCallback((col: string, clientX: number) => {
     const startW = getColWidth(col);
@@ -428,18 +455,19 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     try {
       const userId = await getCurrentUserId();
       const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+      const endpointToSave = resolveEndpointToPersist(prevCQ?.endpoint_path);
       const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
       const cols = action === 'raw_sql' ? ((prevCQ?.columns) || []) : selectedFields;
       await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
         ...(runtimeHooks || {}),
-        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: cols, bookmarks: next, ui }
+        clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointToSave, columns: cols, bookmarks: next, ui }
       } as any);
       setBookmarks(next);
       setNotif({ open:true, severity:'success', message:'Bookmarks saved' });
     } catch(e:any) {
       setNotif({ open:true, severity:'error', message:`Save failed: ${e?.message || String(e)}` });
     }
-  }, [runtimeHooks, action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, endpointPath, selectedFields, columnWidths, saveRuntimeSettings]);
+  }, [runtimeHooks, action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery, currentProfileName, runtimeConnection, hookEnabled, resolveEndpointToPersist, selectedFields, columnWidths, saveRuntimeSettings]);
 
 
   const loadBookmark = useCallback((kind: keyof BookmarkState, id: string) => {
@@ -544,6 +572,42 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     }
   }, [connStatus, statusMessage]);
 
+  // Initialize hook state once per profile:
+  // 1) use persisted runtime settings when available
+  // 2) otherwise auto-enable canonical ClickHouse endpoint when discovered
+  // 3) otherwise keep disabled and let admin select from suggestions
+  const didInitHookStateRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (didInitHookStateRef.current === currentProfileName) return;
+
+    const cq: any = (runtimeHooks as any)?.clickhouse_query;
+    const persistedEndpoint = typeof cq?.endpoint_path === 'string' ? cq.endpoint_path.trim() : '';
+    const hasPersistedEndpoint = persistedEndpoint.length > 0;
+    const hasPersistedEnabled = typeof cq?.enabled === 'boolean';
+
+    if (hasPersistedEndpoint || hasPersistedEnabled) {
+      setEndpointPath(persistedEndpoint);
+      setHookEnabled(Boolean(cq?.enabled));
+      didInitHookStateRef.current = currentProfileName;
+      return;
+    }
+
+    if (hasCanonicalClickhouseMatch) {
+      setEndpointPath(CANONICAL_CLICKHOUSE_ENDPOINT);
+      setHookEnabled(true);
+      didInitHookStateRef.current = currentProfileName;
+      return;
+    }
+
+    if (endpointSuggestions.length === 0) {
+      return;
+    }
+
+    setEndpointPath('');
+    setHookEnabled(false);
+    didInitHookStateRef.current = currentProfileName;
+  }, [currentProfileName, runtimeHooks, hasCanonicalClickhouseMatch, endpointSuggestions]);
+
   // Load persisted columns when runtimeHooks changes
   useEffect(() => {
     const cq: any = (runtimeHooks as any)?.clickhouse_query;
@@ -556,23 +620,6 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       setColumnWidths(savedWidths as Record<string, number>);
     }
   }, [runtimeHooks]);
-
-  // Ensure hook configuration (enabled + endpoint_path) syncs once runtimeHooks are loaded
-  const didSyncHookConfigRef = useRef<string | null>(null);
-  useEffect(() => {
-    // Reset guard when profile changes
-    if (didSyncHookConfigRef.current !== currentProfileName) {
-      didSyncHookConfigRef.current = null;
-    }
-    if (didSyncHookConfigRef.current) return;
-    const cq: any = (runtimeHooks as any)?.clickhouse_query;
-    if (!cq || typeof cq !== 'object') return;
-    // Mark as synced for this profile
-    didSyncHookConfigRef.current = currentProfileName;
-    // Only update if values are present in runtime settings
-    if (typeof cq.enabled === 'boolean') setHookEnabled(Boolean(cq.enabled));
-    if (typeof cq.endpoint_path === 'string' && cq.endpoint_path) setEndpointPath(cq.endpoint_path);
-  }, [runtimeHooks, currentProfileName]);
 
   // Initialize UI state from persisted runtime settings (once per profile, after hooks have data)
   const didInitUiForProfileRef = useRef<string | null>(null);
@@ -640,7 +687,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
     const proxyUrl = new URL('/proxy/hooks/any', getProxyOrigin());
     proxyUrl.searchParams.append('url', (connectionConfig?.backend_url || '').toString());
     // The proxy expects 'endpoint_path'
-    proxyUrl.searchParams.append('endpoint_path', endpointPath);
+    proxyUrl.searchParams.append('endpoint_path', persistedEndpointPath);
     // Add action-specific query params directly
     proxyUrl.searchParams.set('action', action);
     if (action === 'by_user' && username) proxyUrl.searchParams.set('username', username);
@@ -723,7 +770,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       }
     }
     return proxyUrl.toString();
-  }, [endpointPath, action, username, account, ip, rawSql, pageSize, page, authFilter, tsStart, tsEnd, tsTimeZone, searchQuery]);
+  }, [persistedEndpointPath, action, username, account, ip, rawSql, pageSize, page, authFilter, tsStart, tsEnd, tsTimeZone, searchQuery]);
 
   const parseHookResult = (input: any): Row[] => {
     try {
@@ -763,7 +810,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         setError('Hook is disabled. Enable it in Hook Configuration.');
         return;
       }
-      if (!endpointPath) {
+      if (!persistedEndpointPath) {
         setError('Hook endpoint path is empty.');
         return;
       }
@@ -808,7 +855,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       let resp: Response | null = null;
       try {
         resp = await authenticatedFetch(url, {
-          method: 'POST',
+          method: hookRequestMethod,
           headers: await buildBackendAuthHeaders(conn),
           signal: controller.signal,
         });
@@ -961,7 +1008,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         }
       }
     }
-  }, [getConnection, endpointPath, action, username, account, ip, pageSize, hookEnabled, rawSql, tsStart, tsEnd, authFilter, buildHookUrl, searchQuery, rows, rowKey]);
+  }, [getConnection, persistedEndpointPath, action, username, account, ip, pageSize, hookEnabled, rawSql, tsStart, tsEnd, authFilter, buildHookUrl, searchQuery, rows, rowKey, hookRequestMethod]);
 
   // Stable reference to runQuery to avoid effects re-firing on its identity changes
   const runQueryRef = useRef(runQuery);
@@ -1504,7 +1551,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
         const includeSearch = Boolean((searchDraft || '').trim());
         const url = buildHookUrl(conn, offsetLocal, perReqLimit, includeSearch);
         const resp = await authenticatedFetch(url, {
-          method: 'POST',
+          method: hookRequestMethod,
           headers: await buildBackendAuthHeaders(conn),
           signal: controller.signal,
         });
@@ -1556,7 +1603,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       setAnalysisLoading(false);
       analysisAbortRef.current = null;
     }
-  }, [limit, action, username, account, ip, authFilter, tsStart, tsEnd, rawSql, searchDraft]);
+  }, [limit, action, username, account, ip, authFilter, tsStart, tsEnd, rawSql, searchDraft, hookRequestMethod]);
 
   const cancelAnalysisLoad = useCallback(() => {
     if (analysisAbortRef.current) {
@@ -1666,7 +1713,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
       const url = buildHookUrl(conn, offsetLocal, perReqLimit, true);
       const resp = await authenticatedFetch(url, {
-        method: 'POST',
+        method: hookRequestMethod,
         headers: await buildBackendAuthHeaders(conn),
       });
       if (!resp.ok) throw new Error(await extractErrorMessage(resp));
@@ -1716,7 +1763,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
 
       const url = buildHookUrl(conn, offsetLocal, perReqLimit, false);
       const resp = await authenticatedFetch(url, {
-        method: 'POST',
+        method: hookRequestMethod,
         headers: await buildBackendAuthHeaders(conn),
       });
       if (!resp.ok) throw new Error(await extractErrorMessage(resp));
@@ -2213,6 +2260,11 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             try {
               const userId = await getCurrentUserId();
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+              const endpointToSave = resolveEndpointToPersist(prevCQ?.endpoint_path);
+              if (hookEnabled && !endpointToSave) {
+                setNotif({ open:true, severity:'error', message:'Select a hook endpoint before enabling and saving.' });
+                return;
+              }
               // Avoid overwriting normal columns with ad-hoc raw SQL columns
               const colsToSave = action === 'raw_sql'
                 ? (prevCQ?.columns || [])
@@ -2222,7 +2274,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
               } as any;
               await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                 ...(runtimeHooks || {}),
-                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: colsToSave, ui }
+                clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointToSave, columns: colsToSave, ui }
               } as any);
               setNotif({ open:true, severity:'success', message:'Hook settings saved' });
             } catch(e:any) {
@@ -2619,13 +2671,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
             try {
               const userId = await getCurrentUserId();
               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+              const endpointToSave = resolveEndpointToPersist(prevCQ?.endpoint_path);
               const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
               if (action === 'raw_sql') {
                 setNotif({ open:true, severity:'info', message:'Column selection not persisted for raw SQL results' });
               } else {
                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                   ...(runtimeHooks || {}),
-                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: selectedFields, ui }
+                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointToSave, columns: selectedFields, ui }
                 } as any);
                 setNotif({ open:true, severity:'success', message:'Column selection saved' });
               }
@@ -2894,13 +2947,14 @@ const ClickhouseRuntime = (): React.JSX.Element => {
                             try {
                               const userId = await getCurrentUserId();
                               const prevCQ: any = (runtimeHooks as any)?.clickhouse_query || {};
+                              const endpointToSave = resolveEndpointToPersist(prevCQ?.endpoint_path);
                               const ui = { action, username, account, ip, limit, pageSize, authFilter, tsStart, tsEnd, tsTimeZone, rawSql, searchQuery } as any;
                               if (action === 'raw_sql') {
                                 setNotif({ open:true, severity:'info', message:'Column order change not persisted for raw SQL results' });
                               } else {
                                 await saveRuntimeSettings(userId, currentProfileName, runtimeConnection, {
                                   ...(runtimeHooks || {}),
-                                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointPath, columns: next, columnWidths, ui }
+                                  clickhouse_query: { ...prevCQ, enabled: hookEnabled, endpoint_path: endpointToSave, columns: next, columnWidths, ui }
                                 } as any);
                                 setNotif({ open:true, severity:'success', message:'Column order saved' });
                               }

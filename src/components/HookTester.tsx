@@ -78,7 +78,7 @@ function ensureLightHtml(html: string): string {
 }
 
 const HookTester = (): React.JSX.Element => {
-  const { currentProfileName } = useConfig();
+  const { currentProfileName, config } = useConfig();
   const { connection: runtimeConnection, hooks: runtimeHooks, loadRuntimeSettings } = useRuntime();
   const [storageUsername, setStorageUsername] = useState('anonymous');
 
@@ -233,7 +233,10 @@ const HookTester = (): React.JSX.Element => {
         const removeHeaderRow = (id: string) => setHeadersRows((rows) => rows.filter(r => r.id !== id));
         const updateHeaderRow = (id: string, patch: Partial<KV>) => setHeadersRows((rows) => rows.map(r => r.id === id ? { ...r, ...patch } : r));
 
-        const effectiveEndpointSuggestions = useMemo(() => getKnownHookEndpointSuggestions(runtimeHooks), [runtimeHooks]);
+        const effectiveEndpointSuggestions = useMemo(
+            () => getKnownHookEndpointSuggestions(runtimeHooks, config?.lua),
+            [runtimeHooks, config]
+        );
 
         const resetForm = () => {
             setMethod('POST');
