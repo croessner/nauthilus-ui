@@ -17,6 +17,8 @@ import (
 	"nauthilus-ui/server/audit"
 	"nauthilus-ui/server/config"
 	"nauthilus-ui/server/db"
+	"nauthilus-ui/server/integrations/gitops"
+	"nauthilus-ui/server/integrations/sshprovider"
 	"nauthilus-ui/server/middleware"
 	"nauthilus-ui/server/proxy"
 	"nauthilus-ui/server/utils"
@@ -110,7 +112,13 @@ func startAuditCleanupScheduler(cfg *config.Config, mongoDB *db.MongoDB) {
 }
 
 // registerAPIHandlers registers all API handlers with the router
-func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
+func registerAPIHandlers(
+	r *gin.Engine,
+	cfg *config.Config,
+	mongoDB *db.MongoDB,
+	gitSSHProvider *sshprovider.Provider,
+	runtimeSSHProvider *sshprovider.Provider,
+) {
 	// Create a custom middleware that strictly enforces authenticated sessions.
 	strictSessionMiddleware := func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
@@ -157,7 +165,7 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	sessionConfigHandler.RegisterRoutes(r)
 
 	// Register runtime routes (will be protected by middleware)
-	runtimeHandler := api.NewRuntimeHandler(mongoDB)
+	runtimeHandler := api.NewRuntimeHandler(mongoDB, runtimeSSHProvider)
 	runtimeHandler.RegisterRoutes(r)
 
 	// Register MFA handler (will be protected by middleware)
@@ -179,6 +187,18 @@ func registerAPIHandlers(r *gin.Engine, mongoDB *db.MongoDB) {
 	// Register Report handler (protected by middleware)
 	reportHandler := api.NewReportHandler(mongoDB)
 	reportHandler.RegisterRoutes(r)
+
+	// Register Git integration endpoints (protected by middleware)
+	gitService := gitops.NewService(gitops.Settings{
+		Enabled:                cfg.Integrations.Git.Enabled,
+		DefaultBranch:          cfg.Integrations.Git.DefaultBranch,
+		DefaultFilePath:        cfg.Integrations.Git.DefaultFilePath,
+		OperationTimeout:       time.Duration(cfg.Integrations.Git.OperationTimeoutSeconds) * time.Second,
+		MaxFileBytes:           int64(cfg.Integrations.Git.MaxFileBytes),
+		PassphraseCacheSeconds: cfg.Integrations.Git.PassphraseCacheSeconds,
+	}, gitSSHProvider)
+	gitHandler := api.NewGitHandler(gitService, mongoDB)
+	gitHandler.RegisterRoutes(r)
 }
 
 // registerMiddleware registers all middleware with the router
@@ -291,7 +311,12 @@ func performGracefulShutdown(rootCtx context.Context, servers []*Server, mongoDB
 }
 
 // setupFrontendRouter creates and configures the Gin router for frontend with API routes and middleware
-func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
+func setupFrontendRouter(
+	cfg *config.Config,
+	mongoDB *db.MongoDB,
+	gitSSHProvider *sshprovider.Provider,
+	runtimeSSHProvider *sshprovider.Provider,
+) *gin.Engine {
 	r := gin.New()
 	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
 		slog.Error("Failed to configure trusted proxies for frontend router; falling back to trust-none mode", "error", err)
@@ -306,13 +331,13 @@ func setupFrontendRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 
 	// Register API handlers after global middleware so request metadata, CORS, CSRF and headers
 	// are applied to every endpoint.
-	registerAPIHandlers(r, mongoDB)
+	registerAPIHandlers(r, cfg, mongoDB, gitSSHProvider, runtimeSSHProvider)
 
 	return r
 }
 
 // setupProxyRouter creates and configures the Gin router for proxy with proxy routes
-func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
+func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB, runtimeSSHProvider *sshprovider.Provider) *gin.Engine {
 	r := gin.New()
 	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
 		slog.Error("Failed to configure trusted proxies for proxy router; falling back to trust-none mode", "error", err)
@@ -360,9 +385,24 @@ func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB) *gin.Engine {
 
 	// Register proxy handlers
 	proxyHandler := proxy.NewProxyHandler(mongoDB)
+	proxyHandler.SSH = runtimeSSHProvider
 	proxyHandler.RegisterRoutes(r)
 
 	return r
+}
+
+func buildSSHProviderMappings(users []config.SSHUserConfig) []sshprovider.UserMapping {
+	sshMappings := make([]sshprovider.UserMapping, 0, len(users))
+	for _, user := range users {
+		sshMappings = append(sshMappings, sshprovider.UserMapping{
+			Username:       user.Username,
+			SSHUser:        user.SSHUser,
+			PrivateKeyPath: user.PrivateKeyPath,
+			KnownHostsPath: user.KnownHostsPath,
+		})
+	}
+
+	return sshMappings
 }
 
 func main() {
@@ -385,14 +425,23 @@ func main() {
 	// Setup MongoDB
 	mongoDB := setupMongoDB(rootCtx, cfg)
 
+	gitSSHProvider := sshprovider.NewProvider(
+		cfg.Integrations.Git.PassphraseCacheSeconds,
+		buildSSHProviderMappings(cfg.Integrations.Git.SSH.Users),
+	)
+	runtimeSSHProvider := sshprovider.NewProvider(
+		cfg.Integrations.Runtime.SSH.PassphraseCacheSeconds,
+		buildSSHProviderMappings(cfg.Integrations.Runtime.SSH.Users),
+	)
+
 	// Start audit cleanup scheduler (if enabled)
 	startAuditCleanupScheduler(cfg, mongoDB)
 
 	// Setup frontend router with API routes and middleware
-	frontendRouter := setupFrontendRouter(cfg, mongoDB)
+	frontendRouter := setupFrontendRouter(cfg, mongoDB, gitSSHProvider, runtimeSSHProvider)
 
 	// Setup proxy router with proxy routes
-	proxyRouter := setupProxyRouter(cfg, mongoDB)
+	proxyRouter := setupProxyRouter(cfg, mongoDB, runtimeSSHProvider)
 
 	// Start the frontend server
 	frontendSrv := startFrontendServer(cfg, frontendRouter)

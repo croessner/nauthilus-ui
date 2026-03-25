@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strings"
 
@@ -141,8 +142,10 @@ type AuditPolicyConfig struct {
 
 // IntegrationsConfig contains optional external integrations.
 type IntegrationsConfig struct {
-	IPAPI  IPAPIConfig  `mapstructure:"ipapi" validate:"required"`
-	Report ReportConfig `mapstructure:"report" validate:"required"`
+	IPAPI   IPAPIConfig              `mapstructure:"ipapi" validate:"required"`
+	Report  ReportConfig             `mapstructure:"report" validate:"required"`
+	Git     GitConfig                `mapstructure:"git" validate:"required"`
+	Runtime RuntimeIntegrationConfig `mapstructure:"runtime" validate:"required"`
 }
 
 // IPAPIConfig contains ipapi.com integration settings.
@@ -153,6 +156,41 @@ type IPAPIConfig struct {
 // ReportConfig contains PDF/report generation settings.
 type ReportConfig struct {
 	ChromePath string `mapstructure:"chrome_path"`
+}
+
+// GitConfig contains optional Git integration settings for importing/exporting profiles.
+type GitConfig struct {
+	Enabled                 bool         `mapstructure:"enabled"`
+	DefaultBranch           string       `mapstructure:"default_branch" validate:"required"`
+	DefaultFilePath         string       `mapstructure:"default_file_path" validate:"required"`
+	OperationTimeoutSeconds int          `mapstructure:"operation_timeout_seconds" validate:"required,min=5,max=300"`
+	MaxFileBytes            int          `mapstructure:"max_file_bytes" validate:"required,min=1024,max=4194304"`
+	PassphraseCacheSeconds  int          `mapstructure:"passphrase_cache_seconds" validate:"min=-1,max=86400"`
+	SSH                     GitSSHConfig `mapstructure:"ssh" validate:"required"`
+}
+
+// GitSSHConfig contains SSH credential mappings that can be used by authenticated UI users.
+type GitSSHConfig struct {
+	Users []SSHUserConfig `mapstructure:"users"`
+}
+
+// SSHUserConfig binds a UI username to SSH auth material.
+type SSHUserConfig struct {
+	Username       string `mapstructure:"username" validate:"required"`
+	SSHUser        string `mapstructure:"ssh_user" validate:"required"`
+	PrivateKeyPath string `mapstructure:"private_key_path" validate:"required"`
+	KnownHostsPath string `mapstructure:"known_hosts_path" validate:"required"`
+}
+
+// RuntimeIntegrationConfig contains optional runtime-specific integration settings.
+type RuntimeIntegrationConfig struct {
+	SSH RuntimeSSHConfig `mapstructure:"ssh" validate:"required"`
+}
+
+// RuntimeSSHConfig contains SSH credential mappings used for runtime SSH tunnels.
+type RuntimeSSHConfig struct {
+	PassphraseCacheSeconds int             `mapstructure:"passphrase_cache_seconds" validate:"min=-1,max=86400"`
+	Users                  []SSHUserConfig `mapstructure:"users"`
 }
 
 // LoadConfig loads application configuration from YAML and environment overrides.
@@ -239,6 +277,18 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	if strings.Contains(c.Integrations.Git.DefaultFilePath, "\x00") {
+		return errors.New("integrations.git.default_file_path must not contain null bytes")
+	}
+
+	if err := validateSSHUsers(c.Integrations.Git.SSH.Users, "integrations.git.ssh.users"); err != nil {
+		return err
+	}
+
+	if err := validateSSHUsers(c.Integrations.Runtime.SSH.Users, "integrations.runtime.ssh.users"); err != nil {
+		return err
+	}
+
 	hasRecaptchaSecret := strings.TrimSpace(c.Security.Recaptcha.Secret) != ""
 	hasRecaptchaSiteKey := strings.TrimSpace(c.Security.Recaptcha.SiteKey) != ""
 
@@ -257,6 +307,13 @@ func (c *Config) normalize() {
 	c.Server.TrustedProxies = normalizeStringSlice(c.Server.TrustedProxies)
 	c.Security.CORS.AllowedOrigins = normalizeStringSlice(c.Security.CORS.AllowedOrigins)
 	c.Identity.WebAuthn.RPOrigins = normalizeStringSlice(c.Identity.WebAuthn.RPOrigins)
+
+	c.Integrations.Git.DefaultBranch = strings.TrimSpace(c.Integrations.Git.DefaultBranch)
+	c.Integrations.Git.DefaultFilePath = strings.TrimSpace(c.Integrations.Git.DefaultFilePath)
+	c.Integrations.Report.ChromePath = strings.TrimSpace(c.Integrations.Report.ChromePath)
+
+	c.Integrations.Git.SSH.Users = normalizeSSHUsers(c.Integrations.Git.SSH.Users)
+	c.Integrations.Runtime.SSH.Users = normalizeSSHUsers(c.Integrations.Runtime.SSH.Users)
 
 	if c.Server.Proxy.PublicPort == 0 {
 		c.Server.Proxy.PublicPort = c.Server.Proxy.Port
@@ -327,8 +384,17 @@ func configureDefaults(v *viper.Viper) {
 		"audit.policy.dedup_window_seconds": 30,
 		"audit.policy.force_path_regex":     "",
 
-		"integrations.ipapi.api_key":      "",
-		"integrations.report.chrome_path": "",
+		"integrations.ipapi.api_key":                        "",
+		"integrations.report.chrome_path":                   "",
+		"integrations.git.enabled":                          false,
+		"integrations.git.default_branch":                   "main",
+		"integrations.git.default_file_path":                "nauthilus.yml",
+		"integrations.git.operation_timeout_seconds":        30,
+		"integrations.git.max_file_bytes":                   1048576,
+		"integrations.git.passphrase_cache_seconds":         -1,
+		"integrations.git.ssh.users":                        []SSHUserConfig{},
+		"integrations.runtime.ssh.passphrase_cache_seconds": -1,
+		"integrations.runtime.ssh.users":                    []SSHUserConfig{},
 	}
 
 	for key, value := range defaults {
@@ -377,6 +443,13 @@ func configureEnvironment(v *viper.Viper) {
 		"audit.policy.force_path_regex",
 		"integrations.ipapi.api_key",
 		"integrations.report.chrome_path",
+		"integrations.git.enabled",
+		"integrations.git.default_branch",
+		"integrations.git.default_file_path",
+		"integrations.git.operation_timeout_seconds",
+		"integrations.git.max_file_bytes",
+		"integrations.git.passphrase_cache_seconds",
+		"integrations.runtime.ssh.passphrase_cache_seconds",
 	}
 
 	for _, key := range keys {
@@ -472,4 +545,81 @@ func firstNonEmpty(values ...string) string {
 	}
 
 	return ""
+}
+
+func normalizeSSHUsers(users []SSHUserConfig) []SSHUserConfig {
+	if len(users) == 0 {
+		return nil
+	}
+
+	normalizedSSHUsers := make([]SSHUserConfig, 0, len(users))
+	for _, user := range users {
+		username := strings.TrimSpace(user.Username)
+		sshUser := strings.TrimSpace(user.SSHUser)
+		privateKeyPath := strings.TrimSpace(user.PrivateKeyPath)
+		knownHostsPath := strings.TrimSpace(user.KnownHostsPath)
+		if username == "" || sshUser == "" || privateKeyPath == "" || knownHostsPath == "" {
+			continue
+		}
+
+		normalizedSSHUsers = append(normalizedSSHUsers, SSHUserConfig{
+			Username:       username,
+			SSHUser:        sshUser,
+			PrivateKeyPath: privateKeyPath,
+			KnownHostsPath: knownHostsPath,
+		})
+	}
+
+	if len(normalizedSSHUsers) == 0 {
+		return nil
+	}
+
+	return normalizedSSHUsers
+}
+
+func validateSSHUsers(users []SSHUserConfig, fieldName string) error {
+	if len(users) == 0 {
+		return nil
+	}
+
+	seen := map[string]struct{}{}
+	for index, user := range users {
+		prefix := fmt.Sprintf("%s[%d]", fieldName, index)
+		username := strings.TrimSpace(user.Username)
+		sshUser := strings.TrimSpace(user.SSHUser)
+		privateKeyPath := strings.TrimSpace(user.PrivateKeyPath)
+		knownHostsPath := strings.TrimSpace(user.KnownHostsPath)
+
+		if username == "" {
+			return fmt.Errorf("%s.username is required", prefix)
+		}
+
+		if _, exists := seen[username]; exists {
+			return fmt.Errorf("%s contains duplicate username %q", fieldName, username)
+		}
+
+		seen[username] = struct{}{}
+
+		if sshUser == "" {
+			return fmt.Errorf("%s.ssh_user is required", prefix)
+		}
+
+		if privateKeyPath == "" {
+			return fmt.Errorf("%s.private_key_path is required", prefix)
+		}
+
+		if !filepath.IsAbs(privateKeyPath) {
+			return fmt.Errorf("%s.private_key_path must be an absolute path", prefix)
+		}
+
+		if knownHostsPath == "" {
+			return fmt.Errorf("%s.known_hosts_path is required", prefix)
+		}
+
+		if !filepath.IsAbs(knownHostsPath) {
+			return fmt.Errorf("%s.known_hosts_path must be an absolute path", prefix)
+		}
+	}
+
+	return nil
 }

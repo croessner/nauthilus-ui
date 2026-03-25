@@ -2,6 +2,7 @@
  * Utility functions for API operations
  */
 import { attachCSRFHeader, isMutatingMethod } from './csrf';
+import { readCachedSSHPassphrase } from './sshPassphraseCache';
 
 /**
  * Retrieves the proxy origin URL based on the current environment configuration.
@@ -702,6 +703,21 @@ export const buildBackendAuthHeaders = async (connectionConfig: any, init?: Head
   if (authType && authValue) {
     headers.set('x-auth-type', authType);
     headers.set('x-auth-value', authValue);
+  }
+
+  if (connectionConfig?.ssh_tunnel?.enabled) {
+    const remoteTarget = String(connectionConfig?.ssh_tunnel?.remote_target || '').trim();
+    const remotePort = Number(connectionConfig?.ssh_tunnel?.remote_port || 0);
+    if (remoteTarget && Number.isFinite(remotePort) && remotePort > 0 && remotePort <= 65535) {
+      headers.set('x-ssh-tunnel-enabled', 'true');
+      headers.set('x-ssh-remote-target', remoteTarget);
+      headers.set('x-ssh-remote-port', String(Math.floor(remotePort)));
+
+      const cachedPassphrase = readCachedSSHPassphrase('runtime');
+      if (cachedPassphrase) {
+        headers.set('x-ssh-passphrase', cachedPassphrase);
+      }
+    }
   }
 
   return headers;

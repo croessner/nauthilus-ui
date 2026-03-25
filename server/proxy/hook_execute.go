@@ -6,7 +6,6 @@ import (
 	"errors"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -38,19 +37,23 @@ var allowedHookTesterMethods = map[string]struct{}{
 }
 
 var blockedHookTesterHeaders = map[string]struct{}{
-	"authorization":       {},
-	"proxy-authorization": {},
-	"cookie":              {},
-	"set-cookie":          {},
-	"host":                {},
-	"connection":          {},
-	"content-length":      {},
-	"transfer-encoding":   {},
-	"x-auth-type":         {},
-	"x-auth-value":        {},
-	"x-csrf-token":        {},
-	"x-target-url":        {},
-	"x-endpoint-path":     {},
+	"authorization":        {},
+	"proxy-authorization":  {},
+	"cookie":               {},
+	"set-cookie":           {},
+	"host":                 {},
+	"connection":           {},
+	"content-length":       {},
+	"transfer-encoding":    {},
+	"x-auth-type":          {},
+	"x-auth-value":         {},
+	"x-csrf-token":         {},
+	"x-target-url":         {},
+	"x-endpoint-path":      {},
+	"x-ssh-tunnel-enabled": {},
+	"x-ssh-remote-target":  {},
+	"x-ssh-remote-port":    {},
+	"x-ssh-passphrase":     {},
 }
 
 type hookTesterKV struct {
@@ -191,6 +194,67 @@ func mapObject(m map[string]interface{}, key string) map[string]interface{} {
 	}
 
 	return toStringAnyMap(raw)
+}
+
+func mapInt(m map[string]interface{}, key string) int {
+	if m == nil {
+		return 0
+	}
+
+	raw, ok := m[key]
+	if !ok || raw == nil {
+		return 0
+	}
+
+	switch typed := raw.(type) {
+	case int:
+		return typed
+	case int32:
+		return int(typed)
+	case int64:
+		return int(typed)
+	case float64:
+		return int(typed)
+	case float32:
+		return int(typed)
+	case string:
+		value, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err != nil {
+			return 0
+		}
+
+		return value
+	default:
+		return 0
+	}
+}
+
+func resolveRuntimeSSHTunnel(connection map[string]interface{}, passphrase string) (sshTunnelConfig, error) {
+	sshTunnelRaw := mapObject(connection, "ssh_tunnel")
+	if !mapBool(sshTunnelRaw, "enabled") {
+		return sshTunnelConfig{}, nil
+	}
+
+	remoteTarget := mapString(sshTunnelRaw, "remote_target")
+	if remoteTarget == "" {
+		return sshTunnelConfig{}, errors.New("runtime ssh_tunnel.remote_target is required when enabled")
+	}
+
+	remotePort := mapInt(sshTunnelRaw, "remote_port")
+	if remotePort < 1 || remotePort > 65535 {
+		return sshTunnelConfig{}, errors.New("runtime ssh_tunnel.remote_port must be a valid TCP port")
+	}
+
+	if strings.ContainsAny(remoteTarget, "\r\n\t ") {
+		return sshTunnelConfig{}, errors.New("runtime ssh_tunnel.remote_target contains invalid whitespace")
+	}
+
+	return sshTunnelConfig{
+		Enabled:      true,
+		RemoteTarget: remoteTarget,
+		RemotePort:   remotePort,
+		Passphrase:   passphrase,
+	}, nil
 }
 
 func toStringAnyMap(raw interface{}) map[string]interface{} {
@@ -473,6 +537,15 @@ func (h *ProxyHandler) HookExecuteProxy(ctx *gin.Context) {
 	}
 	target.RawQuery = query.Encode()
 
+	sshTunnel, sshTunnelErr := resolveRuntimeSSHTunnel(connection, ctx.GetHeader("x-ssh-passphrase"))
+	if sshTunnelErr != nil {
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": sshTunnelErr.Error(),
+			"code":  "ssh_tunnel_invalid_runtime_config",
+		})
+		return
+	}
+
 	var bodyReader io.Reader
 	if methodSupportsBody(method) && payload.Body != "" {
 		bodyReader = strings.NewReader(payload.Body)
@@ -522,14 +595,17 @@ func (h *ProxyHandler) HookExecuteProxy(ctx *gin.Context) {
 
 	req.Header.Set("Accept-Encoding", "identity")
 
-	transport := &http.Transport{
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		IdleConnTimeout:       90 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
+	transport, cleanupTransport, transportErr := h.buildTransportWithSSHTunnel(ctx, target, sshTunnel)
+	if transportErr != nil {
+		status, code, message := mapSSHTunnelError(transportErr)
+		ctx.JSON(status, gin.H{
+			"error": message,
+			"code":  code,
+		})
+		return
 	}
+	defer cleanupTransport()
+
 	client := &http.Client{
 		Transport: transport,
 		Timeout:   hookTesterRequestTimeout,

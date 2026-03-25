@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"net/url"
 	"reflect"
+	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
@@ -13,6 +14,7 @@ import (
 	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"nauthilus-ui/server/db"
+	"nauthilus-ui/server/integrations/sshprovider"
 	"nauthilus-ui/server/models"
 )
 
@@ -48,6 +50,12 @@ func canonicalizeBSONRuntime(v interface{}) interface{} {
 // RuntimeHandler handles runtime settings requests
 type RuntimeHandler struct {
 	MongoDB *db.MongoDB
+	SSH     *sshprovider.Provider
+}
+
+type runtimeCapabilitiesResponse struct {
+	SSHAvailable           bool `json:"sshAvailable"`
+	PassphraseCacheSeconds int  `json:"passphraseCacheSeconds"`
 }
 
 func validateBackendURL(rawURL string) error {
@@ -79,16 +87,93 @@ func validateRuntimeConnection(connection map[string]interface{}) error {
 	}
 
 	rawBackendURL, hasBackendURL := connection["backend_url"]
-	if !hasBackendURL {
+	if hasBackendURL {
+		backendURL, ok := rawBackendURL.(string)
+		if !ok {
+			return fmt.Errorf("connection.backend_url must be a string")
+		}
+
+		if err := validateBackendURL(backendURL); err != nil {
+			return err
+		}
+	}
+
+	return validateRuntimeSSHTunnel(connection["ssh_tunnel"])
+}
+
+func validateRuntimeSSHTunnel(raw interface{}) error {
+	if raw == nil {
 		return nil
 	}
 
-	backendURL, ok := rawBackendURL.(string)
+	tunnel, ok := raw.(map[string]interface{})
 	if !ok {
-		return fmt.Errorf("connection.backend_url must be a string")
+		return fmt.Errorf("connection.ssh_tunnel must be an object")
 	}
 
-	return validateBackendURL(backendURL)
+	enabled := false
+	if enabledRaw, exists := tunnel["enabled"]; exists && enabledRaw != nil {
+		switch typed := enabledRaw.(type) {
+		case bool:
+			enabled = typed
+		case string:
+			normalized := strings.TrimSpace(strings.ToLower(typed))
+			enabled = normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on"
+		default:
+			return fmt.Errorf("connection.ssh_tunnel.enabled must be a boolean")
+		}
+	}
+
+	if !enabled {
+		return nil
+	}
+
+	targetRaw, targetExists := tunnel["remote_target"]
+	target, targetOK := targetRaw.(string)
+	if !targetExists || !targetOK || strings.TrimSpace(target) == "" {
+		return fmt.Errorf("connection.ssh_tunnel.remote_target is required when ssh tunnel is enabled")
+	}
+
+	target = strings.TrimSpace(target)
+	if strings.ContainsAny(target, "\r\n\t ") {
+		return fmt.Errorf("connection.ssh_tunnel.remote_target contains invalid whitespace")
+	}
+
+	portRaw, portExists := tunnel["remote_port"]
+	if !portExists || portRaw == nil {
+		return fmt.Errorf("connection.ssh_tunnel.remote_port is required when ssh tunnel is enabled")
+	}
+
+	port, err := normalizeRuntimePort(portRaw)
+	if err != nil || port < 1 || port > 65535 {
+		return fmt.Errorf("connection.ssh_tunnel.remote_port must be a valid TCP port")
+	}
+
+	return nil
+}
+
+func normalizeRuntimePort(raw interface{}) (int, error) {
+	switch typed := raw.(type) {
+	case int:
+		return typed, nil
+	case int32:
+		return int(typed), nil
+	case int64:
+		return int(typed), nil
+	case float64:
+		return int(typed), nil
+	case float32:
+		return int(typed), nil
+	case string:
+		value, err := strconv.Atoi(strings.TrimSpace(typed))
+		if err != nil {
+			return 0, err
+		}
+
+		return value, nil
+	default:
+		return 0, fmt.Errorf("unsupported port type")
+	}
 }
 
 // deepEqualNormalizedRuntime mirrors the normalized equality used for profile diffs.
@@ -270,18 +355,68 @@ func diffPathsRuntime(prev, next interface{}, prefix string, out *[]string) {
 	}
 }
 
-// NewRuntimeHandler creates a new RuntimeHandler
-func NewRuntimeHandler(mongoDB *db.MongoDB) *RuntimeHandler {
+// NewRuntimeHandler creates a new RuntimeHandler.
+func NewRuntimeHandler(mongoDB *db.MongoDB, sshProvider *sshprovider.Provider) *RuntimeHandler {
 	return &RuntimeHandler{
 		MongoDB: mongoDB,
+		SSH:     sshProvider,
 	}
 }
 
-// RegisterRoutes registers the runtime settings routes
+func isRuntimeSSHTunnelEnabled(connection map[string]interface{}) bool {
+	if connection == nil {
+		return false
+	}
+
+	rawTunnel, exists := connection["ssh_tunnel"]
+	if !exists || rawTunnel == nil {
+		return false
+	}
+
+	tunnel, ok := rawTunnel.(map[string]interface{})
+	if !ok {
+		return false
+	}
+
+	enabledRaw, exists := tunnel["enabled"]
+	if !exists || enabledRaw == nil {
+		return false
+	}
+
+	switch typed := enabledRaw.(type) {
+	case bool:
+		return typed
+	case string:
+		normalized := strings.TrimSpace(strings.ToLower(typed))
+		return normalized == "1" || normalized == "true" || normalized == "yes" || normalized == "on"
+	default:
+		return false
+	}
+}
+
+// RegisterRoutes registers the runtime settings routes.
 func (h *RuntimeHandler) RegisterRoutes(router *gin.Engine) {
+	router.GET("/api/runtime/capabilities", h.GetCapabilities)
 	router.GET("/api/runtime/:userId/:profileName", RequireSelfOrAdmin("userId"), h.GetRuntimeSettings)
 	router.POST("/api/runtime/:userId/:profileName", RequireSelfOrAdmin("userId"), h.SaveRuntimeSettings)
 	router.DELETE("/api/runtime/:userId/:profileName", RequireSelfOrAdmin("userId"), h.DeleteRuntimeSettings)
+}
+
+// GetCapabilities returns runtime SSH capabilities for the current user.
+func (h *RuntimeHandler) GetCapabilities(ctx *gin.Context) {
+	username := strings.TrimSpace(CurrentUsername(ctx))
+	cacheTTL := -1
+	sshAvailable := false
+
+	if h.SSH != nil {
+		cacheTTL = h.SSH.PassphraseCacheSeconds()
+		sshAvailable = h.SSH.HasUser(username)
+	}
+
+	ctx.JSON(http.StatusOK, runtimeCapabilitiesResponse{
+		SSHAvailable:           sshAvailable,
+		PassphraseCacheSeconds: cacheTTL,
+	})
 }
 
 // GetRuntimeSettings handles the GET /api/runtime/:userId/:profileName endpoint
@@ -323,22 +458,6 @@ func (h *RuntimeHandler) GetRuntimeSettings(ctx *gin.Context) {
 
 // SaveRuntimeSettings handles the POST /api/runtime/:userId/:profileName endpoint
 func (h *RuntimeHandler) SaveRuntimeSettings(ctx *gin.Context) {
-	// If MongoDB is not connected, return success but log warning
-	if !h.MongoDB.IsConnected {
-		var runtimeResponse models.RuntimeSettingsResponse
-		if err := ctx.ShouldBindJSON(&runtimeResponse); err != nil {
-			ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
-
-			return
-		}
-
-		ctx.JSON(http.StatusOK, runtimeResponse)
-
-		return
-	}
-
-	userID := ctx.Param("userId")
-	profileName := ctx.Param("profileName")
 	var runtimeResponse models.RuntimeSettingsResponse
 	if err := ctx.ShouldBindJSON(&runtimeResponse); err != nil {
 		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
@@ -351,6 +470,35 @@ func (h *RuntimeHandler) SaveRuntimeSettings(ctx *gin.Context) {
 
 		return
 	}
+
+	if isRuntimeSSHTunnelEnabled(runtimeResponse.Connection) {
+		username := strings.TrimSpace(ctx.Param("userId"))
+		if username == "" {
+			username = strings.TrimSpace(CurrentUsername(ctx))
+		}
+
+		if username == "" {
+			ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authentication required"})
+
+			return
+		}
+
+		if h.SSH == nil || !h.SSH.HasUser(username) {
+			ctx.JSON(http.StatusForbidden, models.ErrorResponse{Error: "No SSH key is configured for the current user"})
+
+			return
+		}
+	}
+
+	// If MongoDB is not connected, return success but preserve validation and policy checks above.
+	if !h.MongoDB.IsConnected {
+		ctx.JSON(http.StatusOK, runtimeResponse)
+
+		return
+	}
+
+	userID := ctx.Param("userId")
+	profileName := ctx.Param("profileName")
 
 	// Load previous runtime to compute diffs (best-effort)
 	type prevDoc struct {

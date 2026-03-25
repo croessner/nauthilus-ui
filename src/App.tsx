@@ -51,6 +51,7 @@ import DescriptionIcon from '@mui/icons-material/Description';
 import GavelIcon from '@mui/icons-material/Gavel';
 import BuildIcon from '@mui/icons-material/Build';
 import LinkIcon from '@mui/icons-material/Link';
+import SourceIcon from '@mui/icons-material/Source';
 import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 import ExpandLessIcon from '@mui/icons-material/ExpandLess';
 import ViewHeadlineIcon from '@mui/icons-material/ViewHeadline';
@@ -69,6 +70,8 @@ import LoginPage from './components/LoginPage';
 import MFAPage from './components/MFAPage';
 import OIDCCallback from './components/OIDCCallback';
 import { authenticatedFetch, resetSettingsState, loadSettings as loadSettingsUtil } from './utils/apiUtils';
+import { formatConfigAsYaml } from './utils/yamlUtils';
+import { cacheSSHPassphrase, clearCachedSSHPassphrase, readCachedSSHPassphrase } from './utils/sshPassphraseCache';
 import CookieBanner from './components/CookieBanner';
 import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
 
@@ -91,6 +94,14 @@ interface NavigationMenuItem {
   text: string;
   icon: React.ReactNode;
   path: string;
+}
+
+interface GitCapabilities {
+  enabled: boolean;
+  sshAvailable: boolean;
+  passphraseCacheSeconds: number;
+  defaultBranch: string;
+  defaultFilePath: string;
 }
 
 const ServerConfig = lazy(() => import('./components/ServerConfig'));
@@ -141,6 +152,18 @@ const MainContent = (): React.JSX.Element => {
   const [uploadProfileDialogOpen, setUploadProfileDialogOpen] = useState(false);
   const [uploadProfileName, setUploadProfileName] = useState('');
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
+  const [gitDialogOpen, setGitDialogOpen] = useState(false);
+  const [gitBusy, setGitBusy] = useState(false);
+  const [gitCapabilities, setGitCapabilities] = useState<GitCapabilities | null>(null);
+  const [gitRepositoryUrl, setGitRepositoryUrl] = useState('');
+  const [gitBranch, setGitBranch] = useState('');
+  const [gitFilePath, setGitFilePath] = useState('');
+  const [gitUseSSH, setGitUseSSH] = useState(false);
+  const [gitHttpsUsername, setGitHttpsUsername] = useState('');
+  const [gitHttpsPassword, setGitHttpsPassword] = useState('');
+  const [gitPassphraseDialogOpen, setGitPassphraseDialogOpen] = useState(false);
+  const [gitPassphraseInput, setGitPassphraseInput] = useState('');
+  const [pendingGitAction, setPendingGitAction] = useState<'pull' | 'push' | null>(null);
   // Profile state variables removed as we now use a dedicated page
 
   // Global session-expired dialog state
@@ -252,6 +275,7 @@ const MainContent = (): React.JSX.Element => {
     navigate('/login', { replace: true });
   };
   const { 
+    config,
     loading, 
     error, 
     hasUnsavedChanges, 
@@ -388,6 +412,55 @@ const MainContent = (): React.JSX.Element => {
     };
   }, []);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadGitCapabilities = async () => {
+      if (!user) {
+        if (isMounted) {
+          setGitCapabilities(null);
+        }
+        return;
+      }
+
+      try {
+        const response = await authenticatedFetch('/api/git/capabilities');
+        if (!response.ok) {
+          if (isMounted) {
+            setGitCapabilities(null);
+          }
+          return;
+        }
+
+        const payload = await response.json() as GitCapabilities;
+        if (!isMounted) {
+          return;
+        }
+
+        const next: GitCapabilities = {
+          enabled: Boolean(payload?.enabled),
+          sshAvailable: Boolean(payload?.sshAvailable),
+          passphraseCacheSeconds: Number(payload?.passphraseCacheSeconds ?? -1),
+          defaultBranch: String(payload?.defaultBranch || 'main'),
+          defaultFilePath: String(payload?.defaultFilePath || 'nauthilus.yml'),
+        };
+        setGitCapabilities(next);
+        setGitBranch((prev) => prev || next.defaultBranch);
+        setGitFilePath((prev) => prev || next.defaultFilePath);
+      } catch {
+        if (isMounted) {
+          setGitCapabilities(null);
+        }
+      }
+    };
+
+    loadGitCapabilities().catch(() => { /* intentionally ignored */ });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [user]);
+
   // Define MFA menu items (available to all users)
   const mfaMenuItems: NavigationMenuItem[] = [
     { text: 'Two-Factor Authentication', icon: <SecurityIcon />, path: '/mfa-settings' },
@@ -438,6 +511,142 @@ const MainContent = (): React.JSX.Element => {
       // ignore download errors for now
     }
     setDownloadDialogOpen(false);
+  };
+
+  const openGitDialog = () => {
+    setGitBranch((prev) => prev || gitCapabilities?.defaultBranch || 'main');
+    setGitFilePath((prev) => prev || gitCapabilities?.defaultFilePath || 'nauthilus.yml');
+    setGitDialogOpen(true);
+  };
+
+  const handleGitDialogClose = () => {
+    if (gitBusy) {
+      return;
+    }
+    setGitDialogOpen(false);
+  };
+
+  const buildGitAuthPayload = (passphraseOverride?: string): any => {
+    const passphrase = passphraseOverride !== undefined ? passphraseOverride : readCachedSSHPassphrase('git');
+    return {
+      useSsh: gitUseSSH,
+      username: gitUseSSH ? '' : gitHttpsUsername.trim(),
+      password: gitUseSSH ? '' : gitHttpsPassword,
+      passphrase: gitUseSSH ? passphrase : '',
+    };
+  };
+
+  const executeGitAction = async (action: 'pull' | 'push', passphraseOverride?: string): Promise<void> => {
+    if (!gitCapabilities?.enabled) {
+      setError('Git integration is disabled on the server.');
+      return;
+    }
+
+    const repositoryUrl = gitRepositoryUrl.trim();
+    if (!repositoryUrl) {
+      setError('Repository URL is required for Git operations.');
+      return;
+    }
+
+    const branch = (gitBranch || gitCapabilities.defaultBranch || 'main').trim();
+    const filePath = (gitFilePath || gitCapabilities.defaultFilePath || 'nauthilus.yml').trim();
+    if (!branch || !filePath) {
+      setError('Branch and file path are required for Git operations.');
+      return;
+    }
+
+    if (!gitUseSSH && (!gitHttpsUsername.trim() || !gitHttpsPassword)) {
+      setError('Username and password are required when HTTPS auth is selected.');
+      return;
+    }
+
+    if (gitUseSSH && !gitCapabilities.sshAvailable) {
+      setError('No server-side SSH key mapping is configured for the current user.');
+      return;
+    }
+
+    setGitBusy(true);
+    setError(null);
+
+    try {
+      const endpoint = action === 'pull' ? '/api/git/pull' : '/api/git/push';
+      const body: any = {
+        repositoryUrl,
+        branch,
+        filePath,
+        auth: buildGitAuthPayload(passphraseOverride),
+      };
+
+      if (action === 'push') {
+        if (!config) {
+          throw new Error('No configuration available for Git export.');
+        }
+        body.content = formatConfigAsYaml(config);
+        body.commitMessage = `nauthilus-ui: update profile ${currentProfileName}`;
+      }
+
+      const response = await authenticatedFetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => ({} as any));
+        const errorCode = String(errorPayload?.code || '');
+        if (gitUseSSH && (errorCode === 'ssh_passphrase_required' || errorCode === 'ssh_invalid_passphrase')) {
+          setPendingGitAction(action);
+          setGitPassphraseInput('');
+          setGitPassphraseDialogOpen(true);
+          if (errorCode === 'ssh_invalid_passphrase') {
+            clearCachedSSHPassphrase('git');
+          }
+          return;
+        }
+
+        const backendError = String(errorPayload?.error || response.statusText || 'Git operation failed');
+        const message = `[${response.status} ${response.statusText}] ${backendError}`;
+        setError(message);
+        return;
+      }
+
+      if (action === 'pull') {
+        const payload = await response.json() as { content?: string };
+        const content = String(payload?.content || '');
+        const uploadedFile = new File([content], 'nauthilus.yml', { type: 'text/yaml' });
+        await uploadConfig(uploadedFile, currentProfileName);
+      } else {
+        await response.json().catch(() => ({}));
+      }
+
+      setGitDialogOpen(false);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setGitBusy(false);
+    }
+  };
+
+  const handleGitPassphraseConfirm = async () => {
+    if (!pendingGitAction) {
+      setGitPassphraseDialogOpen(false);
+      return;
+    }
+
+    if (!gitPassphraseInput) {
+      setError('SSH key passphrase is required.');
+      return;
+    }
+
+    cacheSSHPassphrase(gitPassphraseInput, Number(gitCapabilities?.passphraseCacheSeconds ?? -1), 'git');
+    setGitPassphraseDialogOpen(false);
+
+    try {
+      await executeGitAction(pendingGitAction, gitPassphraseInput);
+    } finally {
+      setPendingGitAction(null);
+      setGitPassphraseInput('');
+    }
   };
 
   const handleResetClick = () => {
@@ -1077,6 +1286,32 @@ const MainContent = (): React.JSX.Element => {
                 <DownloadIcon />
               </IconButton>
             </Tooltip>
+            {gitCapabilities?.enabled && (
+              <Tooltip title="Git Integration">
+                <Button
+                  color="inherit"
+                  onClick={openGitDialog}
+                  startIcon={<SourceIcon />}
+                  sx={{
+                    mr: { xs: 0.5, sm: 1 },
+                    display: { xs: 'none', sm: 'flex' }
+                  }}
+                >
+                  Git
+                </Button>
+              </Tooltip>
+            )}
+            {gitCapabilities?.enabled && (
+              <Tooltip title="Git Integration">
+                <IconButton
+                  color="inherit"
+                  onClick={openGitDialog}
+                  sx={{ display: { xs: 'flex', sm: 'none' } }}
+                >
+                  <SourceIcon />
+                </IconButton>
+              </Tooltip>
+            )}
             <Tooltip title="Reset to Default">
               <Button 
                 color="inherit" 
@@ -1477,6 +1712,142 @@ const MainContent = (): React.JSX.Element => {
           <Button onClick={() => setDownloadDialogOpen(false)}>Cancel</Button>
           <Button onClick={() => void handleDownloadConfirm('yaml')}>Monolithic YAML</Button>
           <Button onClick={() => void handleDownloadConfirm('zip')} color="primary" variant="contained">ZIP with Includes</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={gitDialogOpen}
+        onClose={handleGitDialogClose}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Git Integration</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Pull the current profile from Git or push the current profile to Git.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Repository URL"
+            fullWidth
+            variant="outlined"
+            value={gitRepositoryUrl}
+            onChange={(e) => setGitRepositoryUrl(e.target.value)}
+            placeholder={gitUseSSH ? 'git@github.com:org/repo.git' : 'https://github.com/org/repo.git'}
+          />
+          <TextField
+            margin="dense"
+            label="Branch"
+            fullWidth
+            variant="outlined"
+            value={gitBranch}
+            onChange={(e) => setGitBranch(e.target.value)}
+          />
+          <TextField
+            margin="dense"
+            label="File Path"
+            fullWidth
+            variant="outlined"
+            value={gitFilePath}
+            onChange={(e) => setGitFilePath(e.target.value)}
+            placeholder="nauthilus.yml"
+          />
+          <FormControl fullWidth margin="dense">
+            <InputLabel id="git-auth-mode-label">Auth Mode</InputLabel>
+            <Select
+              labelId="git-auth-mode-label"
+              label="Auth Mode"
+              value={gitUseSSH ? 'ssh' : 'https'}
+              onChange={(event) => setGitUseSSH(event.target.value === 'ssh')}
+            >
+              <MenuItem value="https">HTTPS (Username/Password)</MenuItem>
+              <MenuItem value="ssh" disabled={!gitCapabilities?.sshAvailable}>SSH Key (Server Mapping)</MenuItem>
+            </Select>
+          </FormControl>
+          {!gitUseSSH && (
+            <>
+              <TextField
+                margin="dense"
+                label="Git Username"
+                fullWidth
+                variant="outlined"
+                value={gitHttpsUsername}
+                onChange={(e) => setGitHttpsUsername(e.target.value)}
+              />
+              <TextField
+                margin="dense"
+                label="Git Password"
+                type="password"
+                fullWidth
+                variant="outlined"
+                value={gitHttpsPassword}
+                onChange={(e) => setGitHttpsPassword(e.target.value)}
+              />
+            </>
+          )}
+          {gitUseSSH && (
+            <DialogContentText sx={{ mt: 2 }}>
+              SSH is enabled for this operation. A passphrase dialog is shown only when required by the configured SSH key.
+            </DialogContentText>
+          )}
+        </DialogContent>
+        <DialogActions>
+          {gitUseSSH && (
+            <Button
+              onClick={() => clearCachedSSHPassphrase('git')}
+              disabled={gitBusy}
+            >
+              Clear Cached Passphrase
+            </Button>
+          )}
+          <Button onClick={handleGitDialogClose} disabled={gitBusy}>Cancel</Button>
+          <Button onClick={() => void executeGitAction('pull')} disabled={gitBusy}>
+            {gitBusy ? 'Working...' : 'Pull from Git'}
+          </Button>
+          <Button onClick={() => void executeGitAction('push')} color="primary" variant="contained" disabled={gitBusy}>
+            {gitBusy ? 'Working...' : 'Push to Git'}
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={gitPassphraseDialogOpen}
+        onClose={() => {
+          setGitPassphraseDialogOpen(false);
+          setPendingGitAction(null);
+          setGitPassphraseInput('');
+        }}
+        fullWidth
+        maxWidth="xs"
+      >
+        <DialogTitle>SSH Passphrase Required</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Enter the passphrase for your configured SSH key.
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Passphrase"
+            type="password"
+            fullWidth
+            variant="outlined"
+            value={gitPassphraseInput}
+            onChange={(e) => setGitPassphraseInput(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => {
+            setGitPassphraseDialogOpen(false);
+            setPendingGitAction(null);
+            setGitPassphraseInput('');
+          }}>
+            Cancel
+          </Button>
+          <Button onClick={() => void handleGitPassphraseConfirm()} color="primary" variant="contained">
+            Continue
+          </Button>
         </DialogActions>
       </Dialog>
 

@@ -155,3 +155,42 @@ integrations:
     # Optional absolute path to Chrome/Chromium executable for PDF rendering.
     # If empty, the server searches common binary paths.
     chrome_path: ""
+
+  git:
+    # Optional Git integration for importing/exporting profile files.
+    enabled: false
+
+    # Default branch and profile file path used by the UI dialog.
+    default_branch: "main"
+    default_file_path: "nauthilus.yml"
+
+    # Security and resource limits for server-side Git operations.
+    operation_timeout_seconds: 30
+    max_file_bytes: 1048576
+
+    # Browser passphrase caching:
+    # -1: always ask on use, >=0: cache seconds in the browser session.
+    passphrase_cache_seconds: -1
+
+    ssh:
+      # Per-UI-user SSH credential mapping used for Git SSH operations.
+      users: []
+      # users:
+      #   - username: "alice"
+      #     ssh_user: "git"
+      #     private_key_path: "/etc/nauthilus-ui/ssh/alice_id_ed25519"
+      #     known_hosts_path: "/etc/nauthilus-ui/ssh/known_hosts"
+
+  runtime:
+    ssh:
+      # Browser passphrase caching for Runtime > Connection SSH tunnels:
+      # -1: always ask on use, >=0: cache seconds in the browser session.
+      passphrase_cache_seconds: -1
+
+      # Per-UI-user SSH credential mapping used for Runtime > Connection tunnels.
+      users: []
+      # users:
+      #   - username: "alice"
+      #     ssh_user: "ops"
+      #     private_key_path: "/etc/nauthilus-ui/ssh/alice_runtime_ed25519"
+      #     known_hosts_path: "/etc/nauthilus-ui/ssh/runtime_known_hosts"

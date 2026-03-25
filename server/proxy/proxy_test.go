@@ -17,6 +17,61 @@ import (
 	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
+func TestParseSSHTunnelHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+
+	recorder := httptest.NewRecorder()
+	ctx, _ := gin.CreateTestContext(recorder)
+	req := httptest.NewRequest(http.MethodGet, "/proxy/ping", nil)
+	req.Header.Set("x-ssh-tunnel-enabled", "true")
+	req.Header.Set("x-ssh-remote-target", "bastion.example.com")
+	req.Header.Set("x-ssh-remote-port", "22")
+	req.Header.Set("x-ssh-passphrase", "secret")
+	ctx.Request = req
+
+	tunnel, err := parseSSHTunnelHeaders(ctx)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !tunnel.Enabled {
+		t.Fatal("expected tunnel to be enabled")
+	}
+	if tunnel.RemoteTarget != "bastion.example.com" {
+		t.Fatalf("unexpected remote target: %q", tunnel.RemoteTarget)
+	}
+	if tunnel.RemotePort != 22 {
+		t.Fatalf("unexpected remote port: %d", tunnel.RemotePort)
+	}
+	if tunnel.Passphrase != "secret" {
+		t.Fatalf("unexpected passphrase propagation: %q", tunnel.Passphrase)
+	}
+}
+
+func TestResolveRuntimeSSHTunnel(t *testing.T) {
+	tunnel, err := resolveRuntimeSSHTunnel(map[string]interface{}{
+		"ssh_tunnel": map[string]interface{}{
+			"enabled":       true,
+			"remote_target": "bastion.example.com",
+			"remote_port":   22,
+		},
+	}, "secret")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if !tunnel.Enabled {
+		t.Fatal("expected tunnel to be enabled")
+	}
+	if tunnel.RemoteTarget != "bastion.example.com" {
+		t.Fatalf("unexpected remote target: %q", tunnel.RemoteTarget)
+	}
+	if tunnel.RemotePort != 22 {
+		t.Fatalf("unexpected remote port: %d", tunnel.RemotePort)
+	}
+	if tunnel.Passphrase != "secret" {
+		t.Fatalf("unexpected passphrase propagation: %q", tunnel.Passphrase)
+	}
+}
+
 func TestCopyResponseHeadersFiltersBackendCORSHeaders(t *testing.T) {
 	dst := http.Header{}
 	src := http.Header{}

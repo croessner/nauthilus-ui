@@ -118,3 +118,119 @@ database:
 		t.Fatalf("expected regex validation error, got %v", err)
 	}
 }
+
+func TestLoadConfigRejectsRelativeGitSSHPaths(t *testing.T) {
+	path := writeTempConfigFile(t, `
+integrations:
+  git:
+    ssh:
+      users:
+        - username: "alice"
+          ssh_user: "git"
+          private_key_path: "relative/key"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/known_hosts"
+database:
+  mongodb:
+    uri: mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+`)
+
+	t.Setenv(envPrefix+"_CONFIG_FILE", path)
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected LoadConfig to reject relative git private key path")
+	}
+
+	if !strings.Contains(err.Error(), "private_key_path must be an absolute path") {
+		t.Fatalf("expected private_key_path validation error, got %v", err)
+	}
+}
+
+func TestLoadConfigRejectsDuplicateGitSSHUsernames(t *testing.T) {
+	path := writeTempConfigFile(t, `
+integrations:
+  git:
+    ssh:
+      users:
+        - username: "alice"
+          ssh_user: "git"
+          private_key_path: "/etc/nauthilus-ui/ssh/alice"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/known_hosts"
+        - username: "alice"
+          ssh_user: "git"
+          private_key_path: "/etc/nauthilus-ui/ssh/alice-second"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/known_hosts"
+database:
+  mongodb:
+    uri: mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+`)
+
+	t.Setenv(envPrefix+"_CONFIG_FILE", path)
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected LoadConfig to reject duplicate git ssh usernames")
+	}
+
+	if !strings.Contains(err.Error(), "duplicate username") {
+		t.Fatalf("expected duplicate username validation error, got %v", err)
+	}
+}
+
+func TestLoadConfigRejectsRelativeRuntimeSSHPaths(t *testing.T) {
+	path := writeTempConfigFile(t, `
+integrations:
+  runtime:
+    ssh:
+      users:
+        - username: "alice"
+          ssh_user: "ops"
+          private_key_path: "relative/runtime-key"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/runtime-known_hosts"
+database:
+  mongodb:
+    uri: mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+`)
+
+	t.Setenv(envPrefix+"_CONFIG_FILE", path)
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected LoadConfig to reject relative runtime private key path")
+	}
+
+	if !strings.Contains(err.Error(), "private_key_path must be an absolute path") {
+		t.Fatalf("expected private_key_path validation error, got %v", err)
+	}
+}
+
+func TestLoadConfigRejectsDuplicateRuntimeSSHUsernames(t *testing.T) {
+	path := writeTempConfigFile(t, `
+integrations:
+  runtime:
+    ssh:
+      users:
+        - username: "alice"
+          ssh_user: "ops"
+          private_key_path: "/etc/nauthilus-ui/ssh/runtime-alice"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/runtime-known_hosts"
+        - username: "alice"
+          ssh_user: "ops"
+          private_key_path: "/etc/nauthilus-ui/ssh/runtime-alice-secondary"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/runtime-known_hosts"
+database:
+  mongodb:
+    uri: mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
+`)
+
+	t.Setenv(envPrefix+"_CONFIG_FILE", path)
+
+	_, err := LoadConfig()
+	if err == nil {
+		t.Fatal("expected LoadConfig to reject duplicate runtime ssh usernames")
+	}
+
+	if !strings.Contains(err.Error(), "duplicate username") {
+		t.Fatalf("expected duplicate username validation error, got %v", err)
+	}
+}

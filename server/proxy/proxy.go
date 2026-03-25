@@ -22,6 +22,7 @@ import (
 
 	"nauthilus-ui/server/api"
 	"nauthilus-ui/server/db"
+	"nauthilus-ui/server/integrations/sshprovider"
 	"nauthilus-ui/server/models"
 	"nauthilus-ui/server/utils"
 )
@@ -125,6 +126,7 @@ func validateProxyTargetURL(rawURL string) error {
 // ProxyHandler handles proxy requests to external services
 type ProxyHandler struct {
 	Mongo *db.MongoDB
+	SSH   *sshprovider.Provider
 
 	// allowedOriginLookup can be injected in tests to exercise the DB-allowlist
 	// branch without requiring a live MongoDB instance.
@@ -150,6 +152,13 @@ type ProxyConfig struct {
 	LogEndpoint     string
 	UseReverseProxy bool
 	SkipAudit       bool
+}
+
+type sshTunnelConfig struct {
+	Enabled      bool
+	RemoteTarget string
+	RemotePort   int
+	Passphrase   string
 }
 
 // NewProxyHandler creates a new ProxyHandler
@@ -247,6 +256,157 @@ func getOperation(ctx *gin.Context) string {
 // getAuthParams extracts authentication parameters from the request
 func getAuthParams(ctx *gin.Context) (string, string) {
 	return strings.ToLower(ctx.GetHeader("x-auth-type")), ctx.GetHeader("x-auth-value")
+}
+
+func parseOptionalBoolHeader(ctx *gin.Context, key string) (bool, error) {
+	raw := strings.TrimSpace(strings.ToLower(ctx.GetHeader(key)))
+	if raw == "" {
+		return false, nil
+	}
+
+	switch raw {
+	case "1", "true", "yes", "on":
+		return true, nil
+	case "0", "false", "no", "off":
+		return false, nil
+	default:
+		return false, errors.New("invalid boolean header value")
+	}
+}
+
+func parseSSHTunnelHeaders(ctx *gin.Context) (sshTunnelConfig, error) {
+	enabled, err := parseOptionalBoolHeader(ctx, "x-ssh-tunnel-enabled")
+	if err != nil {
+		return sshTunnelConfig{}, errors.New("x-ssh-tunnel-enabled must be a boolean")
+	}
+
+	if !enabled {
+		return sshTunnelConfig{}, nil
+	}
+
+	remoteTarget := strings.TrimSpace(ctx.GetHeader("x-ssh-remote-target"))
+	if remoteTarget == "" {
+		return sshTunnelConfig{}, errors.New("x-ssh-remote-target is required when ssh tunnel is enabled")
+	}
+
+	if strings.ContainsAny(remoteTarget, "\r\n\t ") {
+		return sshTunnelConfig{}, errors.New("x-ssh-remote-target contains invalid whitespace")
+	}
+
+	portRaw := strings.TrimSpace(ctx.GetHeader("x-ssh-remote-port"))
+	if portRaw == "" {
+		return sshTunnelConfig{}, errors.New("x-ssh-remote-port is required when ssh tunnel is enabled")
+	}
+
+	remotePort, parseErr := strconv.Atoi(portRaw)
+	if parseErr != nil || remotePort < 1 || remotePort > 65535 {
+		return sshTunnelConfig{}, errors.New("x-ssh-remote-port must be a valid TCP port")
+	}
+
+	return sshTunnelConfig{
+		Enabled:      true,
+		RemoteTarget: remoteTarget,
+		RemotePort:   remotePort,
+		Passphrase:   ctx.GetHeader("x-ssh-passphrase"),
+	}, nil
+}
+
+func defaultPortForScheme(scheme string) int {
+	switch strings.ToLower(strings.TrimSpace(scheme)) {
+	case "https":
+		return 443
+	default:
+		return 80
+	}
+}
+
+func resolveTargetHostPort(target *url.URL) (string, int, error) {
+	if target == nil {
+		return "", 0, errors.New("target URL is required")
+	}
+
+	host := strings.TrimSpace(target.Hostname())
+	if host == "" {
+		return "", 0, errors.New("target host is missing")
+	}
+
+	portRaw := strings.TrimSpace(target.Port())
+	if portRaw == "" {
+		return host, defaultPortForScheme(target.Scheme), nil
+	}
+
+	port, err := strconv.Atoi(portRaw)
+	if err != nil || port < 1 || port > 65535 {
+		return "", 0, errors.New("target port is invalid")
+	}
+
+	return host, port, nil
+}
+
+func mapSSHTunnelError(err error) (status int, code string, message string) {
+	switch {
+	case errors.Is(err, sshprovider.ErrUserNotMapped):
+		return http.StatusForbidden, "ssh_mapping_missing", "No SSH key is configured for the current user"
+	case errors.Is(err, sshprovider.ErrPassphraseRequired):
+		return http.StatusBadRequest, "ssh_passphrase_required", "SSH key passphrase is required"
+	case errors.Is(err, sshprovider.ErrInvalidPassphrase):
+		return http.StatusBadRequest, "ssh_invalid_passphrase", "SSH key passphrase is invalid"
+	case errors.Is(err, sshprovider.ErrInsecurePrivateKeyPermissions):
+		return http.StatusInternalServerError, "ssh_insecure_key_permissions", "SSH private key permissions are too permissive"
+	case errors.Is(err, sshprovider.ErrTunnelStartTimeout):
+		return http.StatusBadGateway, "ssh_tunnel_timeout", "SSH tunnel could not be established in time"
+	default:
+		return http.StatusBadGateway, "ssh_tunnel_failed", "SSH tunnel setup failed"
+	}
+}
+
+func (h *ProxyHandler) buildTransportWithSSHTunnel(ctx *gin.Context, target *url.URL, tunnelConfig sshTunnelConfig) (*http.Transport, func(), error) {
+	transport := &http.Transport{
+		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
+		TLSHandshakeTimeout:   10 * time.Second,
+		IdleConnTimeout:       90 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
+		MaxIdleConns:          100,
+		MaxIdleConnsPerHost:   10,
+	}
+
+	if !tunnelConfig.Enabled {
+		return transport, func() {}, nil
+	}
+
+	if h.SSH == nil {
+		return nil, nil, errors.New("ssh provider unavailable")
+	}
+
+	username := strings.TrimSpace(ctx.GetString("username"))
+	if username == "" {
+		return nil, nil, errors.New("authenticated user context missing")
+	}
+
+	targetHost, targetPort, err := resolveTargetHostPort(target)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	tunnel, err := h.SSH.StartTunnel(
+		ctx.Request.Context(),
+		username,
+		tunnelConfig.Passphrase,
+		tunnelConfig.RemoteTarget,
+		tunnelConfig.RemotePort,
+		targetHost,
+		targetPort,
+		5*time.Second,
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	transport.DialContext = func(requestCtx context.Context, network, _ string) (net.Conn, error) {
+		return (&net.Dialer{Timeout: 10 * time.Second}).DialContext(requestCtx, network, net.JoinHostPort("127.0.0.1", strconv.Itoa(tunnel.LocalPort)))
+	}
+
+	return transport, func() { _ = tunnel.Close() }, nil
 }
 
 // copyHeaders copies headers from source to destination
@@ -490,9 +650,65 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 		"in_query", utils.RedactQueryString(ctx.Request.URL.RawQuery),
 	)
 
+	sshTunnel, sshHeaderErr := parseSSHTunnelHeaders(ctx)
+	if sshHeaderErr != nil {
+		action := getOperation(ctx)
+		targetHost := target.Scheme + "://" + target.Host
+
+		h.writeAudit(ctx, config, models.AuditLogEntry{
+			Action: action,
+			Target: targetHost + config.EndpointPath,
+			Details: map[string]any{
+				"status":        http.StatusBadRequest,
+				"http_method":   ctx.Request.Method,
+				"endpoint":      config.LogEndpoint,
+				"endpoint_path": config.EndpointPath,
+				"error":         sshHeaderErr.Error(),
+				"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
+			},
+		})
+
+		ctx.JSON(http.StatusBadRequest, gin.H{
+			"error": sshHeaderErr.Error(),
+			"code":  "ssh_tunnel_invalid_headers",
+		})
+
+		return
+	}
+
+	transport, cleanupTransport, tunnelErr := h.buildTransportWithSSHTunnel(ctx, target, sshTunnel)
+	if tunnelErr != nil {
+		status, code, message := mapSSHTunnelError(tunnelErr)
+		action := getOperation(ctx)
+		targetHost := target.Scheme + "://" + target.Host
+
+		h.writeAudit(ctx, config, models.AuditLogEntry{
+			Action: action,
+			Target: targetHost + config.EndpointPath,
+			Details: map[string]any{
+				"status":        status,
+				"http_method":   ctx.Request.Method,
+				"endpoint":      config.LogEndpoint,
+				"endpoint_path": config.EndpointPath,
+				"error":         message,
+				"code":          code,
+				"query":         utils.RedactQueryString(ctx.Request.URL.RawQuery),
+			},
+		})
+
+		ctx.JSON(status, gin.H{
+			"error": message,
+			"code":  code,
+		})
+
+		return
+	}
+	defer cleanupTransport()
+
 	// Use reverse proxy if specified
 	if config.UseReverseProxy {
 		proxy := httputil.NewSingleHostReverseProxy(target)
+		proxy.Transport = transport
 
 		// Modify the request
 		originalDirector := proxy.Director
@@ -604,15 +820,7 @@ func (h *ProxyHandler) handleProxyRequest(ctx *gin.Context, config ProxyConfig) 
 	}
 
 	// Send the proxy request with a tuned Transport (no overall timeout to allow streaming)
-	tr := &http.Transport{
-		DialContext:           (&net.Dialer{Timeout: 10 * time.Second}).DialContext,
-		TLSHandshakeTimeout:   10 * time.Second,
-		IdleConnTimeout:       90 * time.Second,
-		ExpectContinueTimeout: 1 * time.Second,
-		MaxIdleConns:          100,
-		MaxIdleConnsPerHost:   10,
-	}
-	client := &http.Client{Transport: tr}
+	client := &http.Client{Transport: transport}
 
 	resp, err := client.Do(req)
 	if err != nil {

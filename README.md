@@ -248,6 +248,52 @@ The UI provides buttons in the top bar for:
 - **Download**: Download the current configuration as a nauthilus.yml file
 - **Reset**: Reset the configuration to default values
 
+### Git Integration and Runtime SSH Tunnels
+
+Git profile sync and Runtime SSH tunneling are configured independently.
+
+- Git import/export (`/api/git/*`) uses `integrations.git`.
+- Runtime connection tunneling (`connection.ssh_tunnel`) uses `integrations.runtime.ssh`.
+
+Example configuration:
+
+```yaml
+integrations:
+  git:
+    enabled: true
+    default_branch: "main"
+    default_file_path: "nauthilus.yml"
+    passphrase_cache_seconds: 900
+    ssh:
+      users:
+        - username: "alice"
+          ssh_user: "git"
+          private_key_path: "/etc/nauthilus-ui/ssh/alice_git_ed25519"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/git_known_hosts"
+
+  runtime:
+    ssh:
+      passphrase_cache_seconds: 60
+      users:
+        - username: "alice"
+          ssh_user: "ops"
+          private_key_path: "/etc/nauthilus-ui/ssh/alice_runtime_ed25519"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/runtime_known_hosts"
+```
+
+Security and behavior notes:
+
+- SSH mappings are user-scoped. A logged-in UI user can only use SSH identities mapped to that same username.
+- `private_key_path` and `known_hosts_path` must be absolute filesystem paths.
+- Host key verification is strict and always uses the configured `known_hosts_path`.
+- On Unix-like systems, private keys must use restrictive file permissions (for example `0600`), otherwise SSH operations are denied.
+- Browser passphrase caching is session-based and scoped separately for Git and Runtime usage.
+- `passphrase_cache_seconds: -1` disables browser caching and forces passphrase entry on each use.
+- Runtime saves with `connection.ssh_tunnel.enabled: true` are rejected if no Runtime SSH mapping exists for the user.
+- Runtime tunnel passphrase cache can be overridden with `NAUTHILUS_UI_INTEGRATIONS_RUNTIME_SSH_PASSPHRASE_CACHE_SECONDS`.
+- Git passphrase cache can be overridden with `NAUTHILUS_UI_INTEGRATIONS_GIT_PASSPHRASE_CACHE_SECONDS`.
+- Frontend capability endpoints are `GET /api/git/capabilities` and `GET /api/runtime/capabilities`.
+
 ### Persistent Storage
 
 - Configuration data is stored in MongoDB
@@ -757,6 +803,52 @@ The UI provides buttons in the top bar for:
 - **Upload**: Upload an existing nauthilus.yml or JSON configuration file
 - **Download**: Download the current configuration as a nauthilus.yml file
 - **Reset**: Reset the configuration to default values
+
+### Git Integration and Runtime SSH Tunnels
+
+Git profile sync and Runtime SSH tunneling are configured independently.
+
+- Git import/export (`/api/git/*`) uses `integrations.git`.
+- Runtime connection tunneling (`connection.ssh_tunnel`) uses `integrations.runtime.ssh`.
+
+Example configuration:
+
+```yaml
+integrations:
+  git:
+    enabled: true
+    default_branch: "main"
+    default_file_path: "nauthilus.yml"
+    passphrase_cache_seconds: 900
+    ssh:
+      users:
+        - username: "alice"
+          ssh_user: "git"
+          private_key_path: "/etc/nauthilus-ui/ssh/alice_git_ed25519"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/git_known_hosts"
+
+  runtime:
+    ssh:
+      passphrase_cache_seconds: 60
+      users:
+        - username: "alice"
+          ssh_user: "ops"
+          private_key_path: "/etc/nauthilus-ui/ssh/alice_runtime_ed25519"
+          known_hosts_path: "/etc/nauthilus-ui/ssh/runtime_known_hosts"
+```
+
+Security and behavior notes:
+
+- SSH mappings are user-scoped. A logged-in UI user can only use SSH identities mapped to that same username.
+- `private_key_path` and `known_hosts_path` must be absolute filesystem paths.
+- Host key verification is strict and always uses the configured `known_hosts_path`.
+- On Unix-like systems, private keys must use restrictive file permissions (for example `0600`), otherwise SSH operations are denied.
+- Browser passphrase caching is session-based and scoped separately for Git and Runtime usage.
+- `passphrase_cache_seconds: -1` disables browser caching and forces passphrase entry on each use.
+- Runtime saves with `connection.ssh_tunnel.enabled: true` are rejected if no Runtime SSH mapping exists for the user.
+- Runtime tunnel passphrase cache can be overridden with `NAUTHILUS_UI_INTEGRATIONS_RUNTIME_SSH_PASSPHRASE_CACHE_SECONDS`.
+- Git passphrase cache can be overridden with `NAUTHILUS_UI_INTEGRATIONS_GIT_PASSPHRASE_CACHE_SECONDS`.
+- Frontend capability endpoints are `GET /api/git/capabilities` and `GET /api/runtime/capabilities`.
 
 ### Persistent Storage
 

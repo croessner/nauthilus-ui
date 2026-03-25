@@ -23,11 +23,12 @@ func TestRedactQueryStringMasksSensitiveValues(t *testing.T) {
 
 func TestRedactHeadersMasksSensitiveHeaders(t *testing.T) {
 	headers := http.Header{
-		"Authorization": []string{"Bearer secret-token"},
-		"Cookie":        []string{"nauthilus_ui_session=secret-cookie"},
-		"X-Auth-Type":   []string{"bearer"},
-		"X-Auth-Value":  []string{"backend-secret"},
-		"X-CSRF-Token":  []string{"csrf-secret"},
+		"Authorization":    []string{"Bearer secret-token"},
+		"Cookie":           []string{"nauthilus_ui_session=secret-cookie"},
+		"X-Auth-Type":      []string{"bearer"},
+		"X-Auth-Value":     []string{"backend-secret"},
+		"X-CSRF-Token":     []string{"csrf-secret"},
+		"X-SSH-Passphrase": []string{"top-secret"},
 	}
 
 	safe := RedactHeaders(headers)
@@ -43,6 +44,9 @@ func TestRedactHeadersMasksSensitiveHeaders(t *testing.T) {
 	}
 	if got := safe["X-CSRF-Token"][0]; got != redactedValue {
 		t.Fatalf("expected X-CSRF-Token to be redacted, got %q", got)
+	}
+	if got := safe["X-SSH-Passphrase"][0]; got != redactedValue {
+		t.Fatalf("expected X-SSH-Passphrase to be redacted, got %q", got)
 	}
 	if got := safe["X-Auth-Type"][0]; got != "bearer" {
 		t.Fatalf("expected X-Auth-Type to remain visible, got %q", got)

@@ -14,6 +14,7 @@ import {
   checkConnection as checkConnectionUtil,
   loadSettings as loadSettingsUtil,
   resetSettingsState,
+  authenticatedFetch,
   fetchRuntimeOIDCToken,
   hasOIDCRuntimeAuthMaterial,
   normalizeRuntimeOIDCAuthMethod,
@@ -23,6 +24,7 @@ import {
   requiresClientSecretForOIDCAuth,
   requiresPrivateKeyForOIDCAuth
 } from '../utils/apiUtils';
+import { cacheSSHPassphrase, clearCachedSSHPassphrase } from '../utils/sshPassphraseCache';
 import Grid from '@mui/material/Grid';
 
 function isValidBackendURL(value?: string): boolean {
@@ -121,6 +123,26 @@ const ConnectionConfigSchema = Yup.object().shape({
       .oneOf(OIDC_INTROSPECTION_MODE_OPTIONS.map((option) => option.value))
       .default('auto'),
   }),
+
+  ssh_tunnel: Yup.object().shape({
+    enabled: Yup.boolean(),
+    remote_target: Yup.string().when(['enabled'], {
+      is: (enabled: any) => Boolean(enabled),
+      then: (schema) => schema
+        .required('Remote target is required when SSH tunnel is enabled')
+        .matches(/^[^\s\r\n\t]+$/, 'Remote target must not contain whitespace'),
+      otherwise: (schema) => schema,
+    }),
+    remote_port: Yup.number().when(['enabled'], {
+      is: (enabled: any) => Boolean(enabled),
+      then: (schema) => schema
+        .required('Remote port is required when SSH tunnel is enabled')
+        .integer('Remote port must be an integer')
+        .min(1, 'Remote port must be between 1 and 65535')
+        .max(65535, 'Remote port must be between 1 and 65535'),
+      otherwise: (schema) => schema,
+    }),
+  }),
 });
 
 // Connection status type
@@ -132,6 +154,9 @@ const ConnectionConfig: React.FC = () => {
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [isRefreshingToken, setIsRefreshingToken] = useState(false);
+  const [sshPassphrase, setSshPassphrase] = useState('');
+  const [sshPassphraseCacheSeconds, setSshPassphraseCacheSeconds] = useState<number>(-1);
+  const [runtimeSSHAvailable, setRuntimeSSHAvailable] = useState<boolean>(false);
   const [, setNotification] = useState<{ open: boolean, message: ReactNode, severity: 'success' | 'error' | 'info' | 'warning' }>({
     open: false,
     message: '',
@@ -201,6 +226,37 @@ const ConnectionConfig: React.FC = () => {
     })();
   }, [setHasUnsavedChanges, currentProfileName, loadRuntimeSettings, checkConnection, getRuntimeConnection]);
 
+  useEffect(() => {
+    let isMounted = true;
+
+    (async () => {
+      try {
+        const response = await authenticatedFetch('/api/runtime/capabilities');
+        if (!response.ok || !isMounted) {
+          return;
+        }
+
+        const payload = await response.json() as { sshAvailable?: boolean; passphraseCacheSeconds?: number };
+        if (!isMounted) {
+          return;
+        }
+
+        setRuntimeSSHAvailable(Boolean(payload?.sshAvailable));
+        setSshPassphraseCacheSeconds(Number(payload?.passphraseCacheSeconds ?? -1));
+      } catch {
+        // ignore capability lookup errors
+        if (isMounted) {
+          setRuntimeSSHAvailable(false);
+          setSshPassphraseCacheSeconds(-1);
+        }
+      }
+    })();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   if (!config) {
     return null;
   }
@@ -234,6 +290,11 @@ const ConnectionConfig: React.FC = () => {
       scope: connectionSource.oidc_auth?.scope || 'nauthilus:authenticate nauthilus:security',
       token: connectionSource.oidc_auth?.token || '',
       expires_at: connectionSource.oidc_auth?.expires_at || 0,
+    },
+    ssh_tunnel: {
+      enabled: connectionSource.ssh_tunnel?.enabled || false,
+      remote_target: connectionSource.ssh_tunnel?.remote_target || '',
+      remote_port: Number(connectionSource.ssh_tunnel?.remote_port || 22),
     },
   };
 
@@ -304,6 +365,7 @@ const ConnectionConfig: React.FC = () => {
           backend_url: values.backend_url,
           basic_auth: values.basic_auth,
           oidc_auth: values.oidc_auth,
+          ssh_tunnel: values.ssh_tunnel,
         },
         runtimeHooks || {}
       );
@@ -477,6 +539,112 @@ const ConnectionConfig: React.FC = () => {
                     }}
                   />
                 </Grid>
+
+                {/* Optional SSH tunnel configuration */}
+                <Grid size={12}>
+                  <Typography variant="subtitle1" sx={{ mt: 2, mb: 1 }}>SSH Tunnel (Optional)</Typography>
+                </Grid>
+                <Grid size={{ xs: 12, md: 6 }}>
+                  <FormControlLabel
+                    control={
+                      <Switch
+                        checked={values.ssh_tunnel?.enabled || false}
+                        disabled={!runtimeSSHAvailable && !values.ssh_tunnel?.enabled}
+                        onChange={(e) => {
+                          setFieldValue('ssh_tunnel.enabled', e.target.checked)
+                            .then(() => setHasUnsavedChanges(true));
+                        }}
+                        name="ssh_tunnel.enabled"
+                      />
+                    }
+                    label={
+                      <Box sx={{ display: 'inline-flex', alignItems: 'center' }}>
+                        Enable SSH Tunnel
+                        <InfoTooltip title="Route backend API traffic through an SSH tunnel. SSH keys are resolved server-side per logged-in UI user." />
+                      </Box>
+                    }
+                  />
+                </Grid>
+                {!runtimeSSHAvailable && !values.ssh_tunnel?.enabled && (
+                  <Grid size={12}>
+                    <Typography variant="body2" color="warning.main">
+                      No runtime SSH key mapping is configured for your user on this server.
+                    </Typography>
+                  </Grid>
+                )}
+                {values.ssh_tunnel?.enabled && (
+                  <>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <Field
+                        as={TextField}
+                        fullWidth
+                        name="ssh_tunnel.remote_target"
+                        label="SSH Remote Target"
+                        InputProps={{ endAdornment: (
+                          <InputAdornment position="end"><InfoTooltip title="SSH server hostname or IP used as tunnel entrypoint (for example bastion.example.com)." /></InputAdornment>
+                        ) }}
+                        variant="outlined"
+                        error={getIn(touched, 'ssh_tunnel.remote_target') && Boolean(getIn(errors, 'ssh_tunnel.remote_target'))}
+                        helperText={getIn(touched, 'ssh_tunnel.remote_target') && getIn(errors, 'ssh_tunnel.remote_target')}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                    <Grid size={{ xs: 12, md: 6 }}>
+                      <Field
+                        as={TextField}
+                        fullWidth
+                        type="number"
+                        name="ssh_tunnel.remote_port"
+                        label="SSH Remote Port"
+                        InputProps={{ endAdornment: (
+                          <InputAdornment position="end"><InfoTooltip title="SSH TCP port on the remote target, usually 22." /></InputAdornment>
+                        ) }}
+                        variant="outlined"
+                        error={getIn(touched, 'ssh_tunnel.remote_port') && Boolean(getIn(errors, 'ssh_tunnel.remote_port'))}
+                        helperText={getIn(touched, 'ssh_tunnel.remote_port') && getIn(errors, 'ssh_tunnel.remote_port')}
+                        onChange={(e: React.ChangeEvent<any>) => {
+                          handleChange(e);
+                          setHasUnsavedChanges(true);
+                        }}
+                      />
+                    </Grid>
+                    <Grid size={12}>
+                      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+                        <TextField
+                          fullWidth
+                          type="password"
+                          label="SSH Key Passphrase (Session Cache)"
+                          value={sshPassphrase}
+                          onChange={(event) => setSshPassphrase(event.target.value)}
+                          helperText="Stored in browser session only. Used for Runtime SSH tunnel operations."
+                          sx={{ flexGrow: 1, minWidth: 260 }}
+                        />
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            cacheSSHPassphrase(sshPassphrase, sshPassphraseCacheSeconds, 'runtime');
+                            setSshPassphrase('');
+                          }}
+                          disabled={!sshPassphrase}
+                        >
+                          Store Passphrase
+                        </Button>
+                        <Button
+                          variant="text"
+                          onClick={() => {
+                            clearCachedSSHPassphrase('runtime');
+                            setSshPassphrase('');
+                          }}
+                        >
+                          Clear Cached Passphrase
+                        </Button>
+                      </Box>
+                    </Grid>
+                  </>
+                )}
 
                 {/* Basic Authentication */}
                 <Grid size={12}>

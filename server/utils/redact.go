@@ -30,6 +30,7 @@ var sensitiveHeaderKeys = map[string]struct{}{
 	"set-cookie":          {},
 	"x-auth-value":        {},
 	"x-csrf-token":        {},
+	"x-ssh-passphrase":    {},
 }
 
 func isSensitiveQueryKey(key string) bool {

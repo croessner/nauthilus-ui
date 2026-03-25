@@ -803,6 +803,13 @@ export interface ConnectionConfig {
   backend_url?: string;
   basic_auth?: BasicAuthConfig;
   oidc_auth?: ConnectionOIDCAuthConfig;
+  ssh_tunnel?: ConnectionSSHTunnelConfig;
+}
+
+export interface ConnectionSSHTunnelConfig {
+  enabled?: boolean;
+  remote_target?: string;
+  remote_port?: number;
 }
 
 // Complete Configuration

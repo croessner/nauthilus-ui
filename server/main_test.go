@@ -11,7 +11,7 @@ import (
 )
 
 func TestProxyOIDCTokenRequiresAuthentication(t *testing.T) {
-	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/proxy/oidc-token?url=https://example.invalid", nil)
 	recorder := httptest.NewRecorder()
@@ -26,7 +26,7 @@ func TestProxyOIDCTokenRequiresAuthentication(t *testing.T) {
 }
 
 func TestProxyOIDCDiscoveryRequiresAuthentication(t *testing.T) {
-	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/proxy/oidc-discovery?url=https://example.invalid", nil)
 	recorder := httptest.NewRecorder()
@@ -41,7 +41,7 @@ func TestProxyOIDCDiscoveryRequiresAuthentication(t *testing.T) {
 }
 
 func TestProxyOIDCIntrospectRequiresAuthentication(t *testing.T) {
-	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/proxy/oidc-introspect?url=https://example.invalid", nil)
 	recorder := httptest.NewRecorder()
@@ -56,7 +56,7 @@ func TestProxyOIDCIntrospectRequiresAuthentication(t *testing.T) {
 }
 
 func TestProxyRejectsLegacyBackendAuthQueryParams(t *testing.T) {
-	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodGet, "/proxy/ping?url=https://example.invalid&authType=bearer&authValue=secret-token", nil)
 	recorder := httptest.NewRecorder()
@@ -68,7 +68,7 @@ func TestProxyRejectsLegacyBackendAuthQueryParams(t *testing.T) {
 }
 
 func TestProxyOIDCTokenOptionsRemainsPublicPreflight(t *testing.T) {
-	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodOptions, "/proxy/oidc-token", nil)
 	req.Header.Set("Origin", "http://localhost:3000")
@@ -88,7 +88,7 @@ func TestProxyPreflightRejectsDisallowedOrigin(t *testing.T) {
 				AllowedOrigins: []string{"https://ui.example.com"},
 			},
 		},
-	}, &db.MongoDB{})
+	}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodOptions, "/proxy/oidc-token", nil)
 	req.Header.Set("Origin", "https://evil.example.com")
@@ -102,7 +102,7 @@ func TestProxyPreflightRejectsDisallowedOrigin(t *testing.T) {
 }
 
 func TestProxyMutationRejectsMissingCSRFFromCookieSession(t *testing.T) {
-	router := setupProxyRouter(&config.Config{}, &db.MongoDB{})
+	router := setupProxyRouter(&config.Config{}, &db.MongoDB{}, nil)
 
 	req := httptest.NewRequest(http.MethodPost, "/proxy/ping?url=https://example.invalid", nil)
 	req.Header.Set("Origin", "http://localhost:3000")

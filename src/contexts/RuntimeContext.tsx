@@ -27,6 +27,11 @@ const DEFAULT_CONFIG: ConnectionConfig = {
     introspection_auth_method: 'auto',
     scope: '',
     token: ''
+  },
+  ssh_tunnel: {
+    enabled: false,
+    remote_target: '',
+    remote_port: 22
   }
 }
 
