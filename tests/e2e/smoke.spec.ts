@@ -31,6 +31,68 @@ const loginAsAdmin = async (page: Page): Promise<void> => {
   await expect(page.getByText('Server Configuration')).toBeVisible();
 };
 
+const mockBruteForceRuntime = async (page: Page): Promise<void> => {
+  await page.route('**/api/runtime/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        connection: {
+          backend_url: 'https://runtime.example.invalid',
+          basic_auth: {
+            enabled: false,
+            username: '',
+            password: '',
+          },
+          oidc_auth: {
+            enabled: false,
+            client_id: '',
+            client_secret: '',
+            token: '',
+            expires_at: 0,
+          },
+        },
+        hooks: {},
+      }),
+    });
+  });
+
+  await page.route('**/proxy/ping**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ status: 'ok' }),
+    });
+  });
+
+  await page.route('**/proxy/bruteforce/list**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        result: [
+          {
+            entries: [
+              {
+                network: '2001:db8:85a3::8a2e:370:7334/64',
+                bucket: 'public-net',
+                ban_time: 1_200_000_000_000,
+                ttl: 900_000_000_000,
+                banned_at: '2026-03-25T10:15:00.000Z',
+              },
+            ],
+          },
+          {
+            accounts: {
+              demo: ['2001:db8:85a3::8a2e:370:7334'],
+            },
+          },
+        ],
+      }),
+    });
+  });
+};
+
 test('admin can log in and open critical routes', async ({ page }, testInfo) => {
   const routeDurations: Record<string, number> = {};
   const consoleErrors: string[] = [];
@@ -77,6 +139,57 @@ test('admin can log in and open critical routes', async ({ page }, testInfo) => 
       message.includes('cannot contain a nested'),
     ),
   ).toEqual([]);
+});
+
+test('OIDC clients and SAML service providers are editable via selectors', async ({ page }) => {
+  await loginAsAdmin(page);
+  await clickMenu(page, 'Frontend');
+  await expect(page.getByText('Frontend & IdP Configuration', { exact: false }).first()).toBeVisible();
+
+  const oidcSection = page.locator('#oidc-content');
+  await page.locator('#oidc-header').click();
+  await oidcSection.getByRole('button', { name: 'OIDC Clients' }).click();
+  await expect(oidcSection.getByRole('button', { name: 'Add OIDC Client' })).toBeVisible();
+
+  await oidcSection.getByRole('button', { name: 'Add OIDC Client' }).click();
+  const oidcClientCard = oidcSection.locator('.MuiCard-root').filter({
+    has: page.getByRole('button', { name: 'Remove Client' }),
+  }).first();
+  await oidcClientCard.getByLabel('Name').fill('Alpha Client');
+  await oidcClientCard.getByLabel('Client ID').fill('alpha-client-id');
+
+  await oidcSection.getByRole('button', { name: 'Add OIDC Client' }).click();
+  await oidcSection.locator('#oidc-client-selector').click();
+  await page.getByRole('listbox').last().getByRole('option').last().click();
+  await oidcClientCard.getByLabel('Name').fill('Beta Client');
+  await oidcClientCard.getByLabel('Client ID').fill('beta-client-id');
+
+  await oidcSection.locator('#oidc-client-selector').click();
+  await expect(page.getByRole('option', { name: 'Alpha Client (alpha-client-id)' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Beta Client (beta-client-id)' })).toBeVisible();
+  await page.keyboard.press('Escape');
+
+  const samlSection = page.locator('#saml2-content');
+  await page.locator('#saml2-header').click();
+  await samlSection.getByRole('button', { name: 'Service Providers' }).click();
+  await expect(samlSection.getByRole('button', { name: 'Add Service Provider' })).toBeVisible();
+
+  await samlSection.getByRole('button', { name: 'Add Service Provider' }).click();
+  const serviceProviderCard = samlSection.locator('.MuiCard-root').filter({
+    has: page.getByRole('button', { name: 'Remove Service Provider' }),
+  }).first();
+  await serviceProviderCard.getByLabel('Name').fill('SP Alpha');
+  await serviceProviderCard.getByLabel('Entity ID').fill('sp-alpha-entity');
+
+  await samlSection.getByRole('button', { name: 'Add Service Provider' }).click();
+  await samlSection.locator('#saml-service-provider-selector').click();
+  await page.getByRole('listbox').last().getByRole('option').last().click();
+  await serviceProviderCard.getByLabel('Name').fill('SP Beta');
+  await serviceProviderCard.getByLabel('Entity ID').fill('sp-beta-entity');
+
+  await samlSection.locator('#saml-service-provider-selector').click();
+  await expect(page.getByRole('option', { name: 'SP Alpha (sp-alpha-entity)' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'SP Beta (sp-beta-entity)' })).toBeVisible();
 });
 
 test('runtime OIDC token is refreshed automatically when expired', async ({ page }) => {
@@ -177,4 +290,39 @@ test('runtime OIDC token is refreshed automatically when expired', async ({ page
   await expect.poll(() => seenAuthValues.length, { timeout: 15_000 }).toBeGreaterThan(0);
   expect(seenAuthValues).toContain(refreshedTokenValue);
   expect(seenAuthValues).not.toContain('runtime-expired-token');
+});
+
+test('brute-force list action does not overlap on iPhone width', async ({ page }) => {
+  await page.setViewportSize({ width: 402, height: 874 });
+  await mockBruteForceRuntime(page);
+  await loginAsAdmin(page);
+
+  await page.goto('/bruteforce');
+  await expect(page.getByText('Brute Force Protection Management')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Refresh List' })).toBeVisible();
+
+  const freeButton = page.getByRole('button', { name: /^Free$/ }).first();
+  await expect(freeButton).toBeVisible();
+  const layout = await freeButton.evaluate((button) => {
+    const row = button.closest('.MuiListItem-root');
+    const primaryText = row?.querySelector('.MuiListItemText-primary');
+    const secondaryAction = row?.querySelector('.MuiListItemSecondaryAction-root');
+    const buttonRect = button.getBoundingClientRect();
+    const primaryRect = primaryText?.getBoundingClientRect();
+    const buttonStyle = window.getComputedStyle(button);
+
+    return {
+      hasSecondaryAction: Boolean(secondaryAction),
+      buttonWidth: Math.round(buttonRect.width),
+      buttonTop: Math.round(buttonRect.top),
+      primaryBottom: primaryRect ? Math.round(primaryRect.bottom) : null,
+      buttonDisplay: buttonStyle.display,
+    };
+  });
+
+  expect(layout.hasSecondaryAction).toBe(false);
+  expect(layout.buttonWidth).toBeGreaterThan(200);
+  expect(layout.buttonDisplay.includes('flex')).toBe(true);
+  expect(layout.primaryBottom).not.toBeNull();
+  expect(layout.buttonTop).toBeGreaterThanOrEqual(layout.primaryBottom as number);
 });

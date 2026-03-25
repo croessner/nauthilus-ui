@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Formik, Form, Field, getIn, FieldArray } from 'formik';
 import * as Yup from 'yup';
 import {
@@ -311,8 +311,35 @@ const configCardActionsSx = {
 
 const localizedDescriptionPrefix = 'description_';
 
+const formatManagedEntityLabel = (
+  index: number,
+  name: unknown,
+  identifier: unknown,
+  fallbackPrefix: string
+): string => {
+  const trimmedName = typeof name === 'string' ? name.trim() : '';
+  const trimmedIdentifier = typeof identifier === 'string' ? identifier.trim() : '';
+  const fallback = `${fallbackPrefix} ${index + 1}`;
+
+  if (trimmedName && trimmedIdentifier) {
+    return `${trimmedName} (${trimmedIdentifier})`;
+  }
+
+  if (trimmedName) {
+    return trimmedName;
+  }
+
+  if (trimmedIdentifier) {
+    return trimmedIdentifier;
+  }
+
+  return fallback;
+};
+
 const FrontendConfig = (): React.JSX.Element => {
   const { config, updateConfig, setHasUnsavedChanges, error } = useConfig();
+  const [selectedOidcClientIndex, setSelectedOidcClientIndex] = useState(0);
+  const [selectedSamlServiceProviderIndex, setSelectedSamlServiceProviderIndex] = useState(0);
 
   const initialValues = useMemo<FrontendPageValues>(() => ({
     frontend: {
@@ -402,6 +429,11 @@ const FrontendConfig = (): React.JSX.Element => {
       setHasUnsavedChanges(false);
     });
   };
+
+  useEffect(() => {
+    setSelectedOidcClientIndex(0);
+    setSelectedSamlServiceProviderIndex(0);
+  }, [initialValues]);
 
   return (
     <>
@@ -964,14 +996,242 @@ const FrontendConfig = (): React.JSX.Element => {
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.back_channel_logout_supported ?? true} onChange={(e) => setFieldValue('idp.oidc.back_channel_logout_supported', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Back Channel Logout Supported" /></Grid>
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.back_channel_logout_session_supported || false} onChange={(e) => setFieldValue('idp.oidc.back_channel_logout_session_supported', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Back Channel Logout Session Supported" /></Grid>
 
-                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">OIDC Discovery Metadata</Typography></Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.scopes_supported', 'Scope')}</Grid>
-                        <Grid size={12}>{renderMultiSelectField('idp.oidc.response_types_supported', 'Response Types', oidcResponseTypeOptions, 'These are authorization-endpoint response types. With the current backend implementation this is only `code`.')}</Grid>
-                        <Grid size={12}>{renderMultiSelectField('idp.oidc.subject_types_supported', 'Subject Types', oidcSubjectTypeOptions, 'The current IdP implementation supports the public subject type.')}</Grid>
-                        <Grid size={12}>{renderMultiSelectField('idp.oidc.id_token_signing_alg_values_supported', 'ID Token Signing Algorithms', oidcSigningAlgorithmOptions)}</Grid>
-                        <Grid size={12}>{renderMultiSelectField('idp.oidc.token_endpoint_auth_methods_supported', 'Token Endpoint Auth Methods', oidcTokenEndpointAuthMethodOptions)}</Grid>
-                        <Grid size={12}>{renderMultiSelectField('idp.oidc.code_challenge_methods_supported', 'Code Challenge Methods', oidcCodeChallengeMethodOptions, 'Only S256 is accepted by the backend.')}</Grid>
-                        <Grid size={12}>{renderStringArrayEditor('idp.oidc.claims_supported', 'Claim')}</Grid>
+                        <Grid size={12}>
+                          <Accordion>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Typography variant="subtitle1">OIDC Discovery Metadata</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <Grid container spacing={3}>
+                                <Grid size={12}>{renderStringArrayEditor('idp.oidc.scopes_supported', 'Scope')}</Grid>
+                                <Grid size={12}>{renderMultiSelectField('idp.oidc.response_types_supported', 'Response Types', oidcResponseTypeOptions, 'These are authorization-endpoint response types. With the current backend implementation this is only `code`.')}</Grid>
+                                <Grid size={12}>{renderMultiSelectField('idp.oidc.subject_types_supported', 'Subject Types', oidcSubjectTypeOptions, 'The current IdP implementation supports the public subject type.')}</Grid>
+                                <Grid size={12}>{renderMultiSelectField('idp.oidc.id_token_signing_alg_values_supported', 'ID Token Signing Algorithms', oidcSigningAlgorithmOptions)}</Grid>
+                                <Grid size={12}>{renderMultiSelectField('idp.oidc.token_endpoint_auth_methods_supported', 'Token Endpoint Auth Methods', oidcTokenEndpointAuthMethodOptions)}</Grid>
+                                <Grid size={12}>{renderMultiSelectField('idp.oidc.code_challenge_methods_supported', 'Code Challenge Methods', oidcCodeChallengeMethodOptions, 'Only S256 is accepted by the backend.')}</Grid>
+                                <Grid size={12}>{renderStringArrayEditor('idp.oidc.claims_supported', 'Claim')}</Grid>
+                              </Grid>
+                            </AccordionDetails>
+                          </Accordion>
+                        </Grid>
+
+                        <Grid size={12}>
+                          <Accordion>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Typography variant="subtitle1">Custom Scopes</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <FieldArray name="idp.oidc.custom_scopes">
+                                {({ push, remove }: any) => (
+                                  <Box>
+                                    {(values.idp?.oidc?.custom_scopes || []).map((_: any, sIdx: number) => (
+                                      <Card key={`scope-${sIdx}`} sx={configCardSx}>
+                                        <CardContent sx={configCardContentSx}>
+                                          <Grid container spacing={3}>
+                                            <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.name`} label="Scope Name" onChange={handleChange} /></Grid>
+                                            <Grid size={{ xs: 12, md: 8 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.description`} label="Description" onChange={handleChange} /></Grid>
+                                            <Grid size={12}>
+                                              <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                                                Localized Descriptions
+                                              </Typography>
+                                              {renderLocalizedScopeDescriptionsEditor(`idp.oidc.custom_scopes.${sIdx}`)}
+                                            </Grid>
+                                            <Grid size={12}>
+                                              <FieldArray name={`idp.oidc.custom_scopes.${sIdx}.claims`}>
+                                                {({ push: pushClaim, remove: removeClaim }: any) => (
+                                                  <Box>
+                                                    {((getIn(values, `idp.oidc.custom_scopes.${sIdx}.claims`) as any[]) || []).map((__: any, cIdx: number) => (
+                                                      <Grid container spacing={2} key={`scope-${sIdx}-claim-${cIdx}`} sx={{ mb: 1.5 }}>
+                                                        <Grid size={{ xs: 12, md: 5 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.name`} label="Claim Name" onChange={handleChange} /></Grid>
+                                                        <Grid size={{ xs: 12, md: 5 }}>{renderSingleSelectField(`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.type`, 'Claim Type', oidcClaimTypeOptions)}</Grid>
+                                                        <Grid size={{ xs: 12, md: 2 }}><IconButton color="error" onClick={() => { removeClaim(cIdx); setHasUnsavedChanges(true); }}><DeleteIcon /></IconButton></Grid>
+                                                      </Grid>
+                                                    ))}
+                                                    <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={() => { pushClaim({ name: '', type: 'string' }); setHasUnsavedChanges(true); }}>
+                                                      Add Claim
+                                                    </Button>
+                                                  </Box>
+                                                )}
+                                              </FieldArray>
+                                            </Grid>
+                                          </Grid>
+                                        </CardContent>
+                                        <CardActions sx={configCardActionsSx}>
+                                          <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(sIdx); setHasUnsavedChanges(true); }}>Remove Scope</Button>
+                                        </CardActions>
+                                      </Card>
+                                    ))}
+                                    <Button startIcon={<AddIcon />} variant="outlined" onClick={() => { push({ name: '', description: '', claims: [] }); setHasUnsavedChanges(true); }}>
+                                      Add Custom Scope
+                                    </Button>
+                                  </Box>
+                                )}
+                              </FieldArray>
+                            </AccordionDetails>
+                          </Accordion>
+                        </Grid>
+
+                        <Grid size={12}>
+                          <Accordion>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Typography variant="subtitle1">OIDC Clients</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <FieldArray name="idp.oidc.clients">
+                                {({ push, remove }: any) => (
+                                  <Box>
+                                {(values.idp?.oidc?.clients || []).length > 0 ? (
+                                  <>
+                                    <FormControl fullWidth sx={{ mb: 2 }}>
+                                      <InputLabel id="oidc-client-selector-label">Client</InputLabel>
+                                      <Select
+                                        id="oidc-client-selector"
+                                        labelId="oidc-client-selector-label"
+                                        label="Client"
+                                        inputProps={{ 'data-testid': 'oidc-client-selector' }}
+                                        value={String(Math.min(selectedOidcClientIndex, (values.idp?.oidc?.clients || []).length - 1))}
+                                        onChange={(event) => {
+                                          setSelectedOidcClientIndex(Number(event.target.value));
+                                        }}
+                                      >
+                                        {(values.idp?.oidc?.clients || []).map((client: any, index: number) => (
+                                          <MenuItem key={`oidc-client-option-${index}`} value={String(index)}>
+                                            {formatManagedEntityLabel(index, client?.name, client?.client_id, 'Client')}
+                                          </MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                    {(() => {
+                                      const clients = values.idp?.oidc?.clients || [];
+                                      const cIdx = Math.min(selectedOidcClientIndex, clients.length - 1);
+
+                                      return (
+                                        <Card key={`oidc-client-${cIdx}`} sx={configCardSx}>
+                                          <CardContent sx={configCardContentSx}>
+                                            <Grid container spacing={3}>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.name`} label="Name" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_id`} label="Client ID" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={PasswordField} fullWidth name={`idp.oidc.clients.${cIdx}.client_secret`} label="Client Secret" onChange={handleChange} /></Grid>
+
+                                              <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.token_endpoint_auth_method`, 'Token Endpoint Auth Method', oidcTokenEndpointAuthMethodOptions, 'Leave empty to accept the default client-secret based behavior.', 'Use default')}</Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.access_token_type`, 'Access Token Type', oidcAccessTokenTypeOptions, 'Leave empty to inherit the global access token type.', 'Inherit global setting')}</Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.consent_mode`, 'Consent Mode', oidcConsentModeOptions, 'Leave empty to inherit the global consent mode.', 'Inherit global setting')}</Grid>
+
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.access_token_lifetime`} label="Access Token Lifetime" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.refresh_token_lifetime`} label="Refresh Token Lifetime" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.consent_ttl`} label="Consent TTL" onChange={handleChange} /></Grid>
+
+                                              <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.client_public_key_algorithm`, 'Client Public Key Algorithm', oidcSigningAlgorithmOptions, 'Required for private_key_jwt clients. Leave empty to default to RS256.', 'Use default (RS256)')}</Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_public_key_file`} label="Client Public Key File" onChange={handleChange} /></Grid>
+                                              <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.oidc.clients.${cIdx}.client_public_key`} label="Client Public Key" onChange={handleChange} /></Grid>
+
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.backchannel_logout_uri`} label="Backchannel Logout URI" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.frontchannel_logout_uri`} label="Frontchannel Logout URI" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.logout_redirect_uri`} label="Logout Redirect URI" onChange={handleChange} /></Grid>
+
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.skip_consent`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.skip_consent`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Skip Consent" /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Frontchannel Logout Session Required" /></Grid>
+
+                                              <Grid size={12}><Typography variant="subtitle2">Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.redirect_uris`, 'Redirect URI')}</Grid>
+                                              <Grid size={12}><Typography variant="subtitle2">Post Logout Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.post_logout_redirect_uris`, 'Post Logout Redirect URI')}</Grid>
+                                              <Grid size={12}><Typography variant="subtitle2">Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.scopes`, 'Scope')}</Grid>
+                                              <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.grant_types`, 'Grant Types', oidcGrantTypeOptions, 'Choose the flows this client may use at the token and device endpoints.')}</Grid>
+                                              <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.require_mfa`, 'Required MFA', mfaMethodOptions, 'Must stay a subset of the supported MFA methods when both are configured.')}</Grid>
+                                              <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.supported_mfa`, 'Supported MFA', mfaMethodOptions)}</Grid>
+                                              <Grid size={12}><Typography variant="subtitle2">Required Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.required_scopes`, 'Required Scope')}</Grid>
+                                              <Grid size={12}><Typography variant="subtitle2">Optional Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.optional_scopes`, 'Optional Scope')}</Grid>
+
+                                              <Grid size={12}><Typography variant="subtitle2">ID Token Claim Mappings</Typography>{renderClaimMappingsEditor(`idp.oidc.clients.${cIdx}.id_token_claims.mappings`)}</Grid>
+                                              <Grid size={12}><Typography variant="subtitle2">Access Token Claim Mappings</Typography>{renderClaimMappingsEditor(`idp.oidc.clients.${cIdx}.access_token_claims.mappings`)}</Grid>
+                                            </Grid>
+                                          </CardContent>
+                                          <CardActions sx={configCardActionsSx}>
+                                            <Button
+                                              color="error"
+                                              startIcon={<DeleteIcon />}
+                                              onClick={() => {
+                                                const clients = values.idp?.oidc?.clients || [];
+                                                remove(cIdx);
+                                                setSelectedOidcClientIndex((currentIndex) => {
+                                                  if (clients.length <= 1) {
+                                                    return 0;
+                                                  }
+
+                                                  if (currentIndex > cIdx) {
+                                                    return currentIndex - 1;
+                                                  }
+
+                                                  if (currentIndex === cIdx) {
+                                                    return Math.min(cIdx, clients.length - 2);
+                                                  }
+
+                                                  return currentIndex;
+                                                });
+                                                setHasUnsavedChanges(true);
+                                              }}
+                                            >
+                                              Remove Client
+                                            </Button>
+                                          </CardActions>
+                                        </Card>
+                                      );
+                                    })()}
+                                  </>
+                                ) : (
+                                  <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                    No OIDC clients configured.
+                                  </Typography>
+                                )}
+                                    <Button
+                                      startIcon={<AddIcon />}
+                                      variant="outlined"
+                                      onClick={() => {
+                                        const clients = values.idp?.oidc?.clients || [];
+                                        push({
+                                          name: '',
+                                          client_id: '',
+                                          client_secret: '',
+                                          redirect_uris: [],
+                                          scopes: [],
+                                          grant_types: [],
+                                          require_mfa: [],
+                                          supported_mfa: [],
+                                          post_logout_redirect_uris: [],
+                                          backchannel_logout_uri: '',
+                                          frontchannel_logout_uri: '',
+                                          logout_redirect_uri: '',
+                                          access_token_type: '',
+                                          token_endpoint_auth_method: '',
+                                          client_public_key: '',
+                                          client_public_key_file: '',
+                                          client_public_key_algorithm: '',
+                                          id_token_claims: { mappings: [] },
+                                          access_token_claims: { mappings: [] },
+                                          access_token_lifetime: '',
+                                          refresh_token_lifetime: '',
+                                          consent_ttl: '',
+                                          consent_mode: '',
+                                          required_scopes: [],
+                                          optional_scopes: [],
+                                          skip_consent: false,
+                                          delayed_response: false,
+                                          frontchannel_logout_session_required: false,
+                                        });
+                                        if (clients.length === 0) {
+                                          setSelectedOidcClientIndex(0);
+                                        }
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    >
+                                      Add OIDC Client
+                                    </Button>
+                                  </Box>
+                                )}
+                              </FieldArray>
+                            </AccordionDetails>
+                          </Accordion>
+                        </Grid>
 
                         <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">Signing Keys</Typography></Grid>
                         <Grid size={12}>
@@ -1001,153 +1261,6 @@ const FrontendConfig = (): React.JSX.Element => {
                             )}
                           </FieldArray>
                         </Grid>
-
-                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">Custom Scopes</Typography></Grid>
-                        <Grid size={12}>
-                          <FieldArray name="idp.oidc.custom_scopes">
-                            {({ push, remove }: any) => (
-                              <Box>
-                                {(values.idp?.oidc?.custom_scopes || []).map((_: any, sIdx: number) => (
-                                  <Card key={`scope-${sIdx}`} sx={configCardSx}>
-                                    <CardContent sx={configCardContentSx}>
-                                      <Grid container spacing={3}>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.name`} label="Scope Name" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 8 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.description`} label="Description" onChange={handleChange} /></Grid>
-                                        <Grid size={12}>
-                                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                                            Localized Descriptions
-                                          </Typography>
-                                          {renderLocalizedScopeDescriptionsEditor(`idp.oidc.custom_scopes.${sIdx}`)}
-                                        </Grid>
-                                        <Grid size={12}>
-                                          <FieldArray name={`idp.oidc.custom_scopes.${sIdx}.claims`}>
-                                            {({ push: pushClaim, remove: removeClaim }: any) => (
-                                              <Box>
-                                                {((getIn(values, `idp.oidc.custom_scopes.${sIdx}.claims`) as any[]) || []).map((__: any, cIdx: number) => (
-                                                  <Grid container spacing={2} key={`scope-${sIdx}-claim-${cIdx}`} sx={{ mb: 1.5 }}>
-                                                    <Grid size={{ xs: 12, md: 5 }}><Field as={TextField} fullWidth name={`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.name`} label="Claim Name" onChange={handleChange} /></Grid>
-                                                    <Grid size={{ xs: 12, md: 5 }}>{renderSingleSelectField(`idp.oidc.custom_scopes.${sIdx}.claims.${cIdx}.type`, 'Claim Type', oidcClaimTypeOptions)}</Grid>
-                                                    <Grid size={{ xs: 12, md: 2 }}><IconButton color="error" onClick={() => { removeClaim(cIdx); setHasUnsavedChanges(true); }}><DeleteIcon /></IconButton></Grid>
-                                                  </Grid>
-                                                ))}
-                                                <Button startIcon={<AddIcon />} variant="outlined" size="small" onClick={() => { pushClaim({ name: '', type: 'string' }); setHasUnsavedChanges(true); }}>
-                                                  Add Claim
-                                                </Button>
-                                              </Box>
-                                            )}
-                                          </FieldArray>
-                                        </Grid>
-                                      </Grid>
-                                    </CardContent>
-                                    <CardActions sx={configCardActionsSx}>
-                                      <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(sIdx); setHasUnsavedChanges(true); }}>Remove Scope</Button>
-                                    </CardActions>
-                                  </Card>
-                                ))}
-                                <Button startIcon={<AddIcon />} variant="outlined" onClick={() => { push({ name: '', description: '', claims: [] }); setHasUnsavedChanges(true); }}>
-                                  Add Custom Scope
-                                </Button>
-                              </Box>
-                            )}
-                          </FieldArray>
-                        </Grid>
-
-                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">OIDC Clients</Typography></Grid>
-                        <Grid size={12}>
-                          <FieldArray name="idp.oidc.clients">
-                            {({ push, remove }: any) => (
-                              <Box>
-                                {(values.idp?.oidc?.clients || []).map((_: any, cIdx: number) => (
-                                  <Card key={`oidc-client-${cIdx}`} sx={configCardSx}>
-                                    <CardContent sx={configCardContentSx}>
-                                      <Grid container spacing={3}>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.name`} label="Name" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_id`} label="Client ID" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={PasswordField} fullWidth name={`idp.oidc.clients.${cIdx}.client_secret`} label="Client Secret" onChange={handleChange} /></Grid>
-
-                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.token_endpoint_auth_method`, 'Token Endpoint Auth Method', oidcTokenEndpointAuthMethodOptions, 'Leave empty to accept the default client-secret based behavior.', 'Use default')}</Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.access_token_type`, 'Access Token Type', oidcAccessTokenTypeOptions, 'Leave empty to inherit the global access token type.', 'Inherit global setting')}</Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.consent_mode`, 'Consent Mode', oidcConsentModeOptions, 'Leave empty to inherit the global consent mode.', 'Inherit global setting')}</Grid>
-
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.access_token_lifetime`} label="Access Token Lifetime" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.refresh_token_lifetime`} label="Refresh Token Lifetime" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.consent_ttl`} label="Consent TTL" onChange={handleChange} /></Grid>
-
-                                        <Grid size={{ xs: 12, md: 4 }}>{renderSingleSelectField(`idp.oidc.clients.${cIdx}.client_public_key_algorithm`, 'Client Public Key Algorithm', oidcSigningAlgorithmOptions, 'Required for private_key_jwt clients. Leave empty to default to RS256.', 'Use default (RS256)')}</Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.client_public_key_file`} label="Client Public Key File" onChange={handleChange} /></Grid>
-                                        <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.oidc.clients.${cIdx}.client_public_key`} label="Client Public Key" onChange={handleChange} /></Grid>
-
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.backchannel_logout_uri`} label="Backchannel Logout URI" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.frontchannel_logout_uri`} label="Frontchannel Logout URI" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.oidc.clients.${cIdx}.logout_redirect_uri`} label="Logout Redirect URI" onChange={handleChange} /></Grid>
-
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.skip_consent`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.skip_consent`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Skip Consent" /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Frontchannel Logout Session Required" /></Grid>
-
-                                        <Grid size={12}><Typography variant="subtitle2">Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.redirect_uris`, 'Redirect URI')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Post Logout Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.post_logout_redirect_uris`, 'Post Logout Redirect URI')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.scopes`, 'Scope')}</Grid>
-                                        <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.grant_types`, 'Grant Types', oidcGrantTypeOptions, 'Choose the flows this client may use at the token and device endpoints.')}</Grid>
-                                        <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.require_mfa`, 'Required MFA', mfaMethodOptions, 'Must stay a subset of the supported MFA methods when both are configured.')}</Grid>
-                                        <Grid size={12}>{renderMultiSelectField(`idp.oidc.clients.${cIdx}.supported_mfa`, 'Supported MFA', mfaMethodOptions)}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Required Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.required_scopes`, 'Required Scope')}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Optional Scopes</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.optional_scopes`, 'Optional Scope')}</Grid>
-
-                                        <Grid size={12}><Typography variant="subtitle2">ID Token Claim Mappings</Typography>{renderClaimMappingsEditor(`idp.oidc.clients.${cIdx}.id_token_claims.mappings`)}</Grid>
-                                        <Grid size={12}><Typography variant="subtitle2">Access Token Claim Mappings</Typography>{renderClaimMappingsEditor(`idp.oidc.clients.${cIdx}.access_token_claims.mappings`)}</Grid>
-                                      </Grid>
-                                    </CardContent>
-                                    <CardActions sx={configCardActionsSx}>
-                                      <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(cIdx); setHasUnsavedChanges(true); }}>
-                                        Remove Client
-                                      </Button>
-                                    </CardActions>
-                                  </Card>
-                                ))}
-                                <Button
-                                  startIcon={<AddIcon />}
-                                  variant="outlined"
-                                  onClick={() => {
-                                    push({
-                                      name: '',
-                                      client_id: '',
-                                      client_secret: '',
-                                      redirect_uris: [],
-                                      scopes: [],
-                                      grant_types: [],
-                                      require_mfa: [],
-                                      supported_mfa: [],
-                                      post_logout_redirect_uris: [],
-                                      backchannel_logout_uri: '',
-                                      frontchannel_logout_uri: '',
-                                      logout_redirect_uri: '',
-                                      access_token_type: '',
-                                      token_endpoint_auth_method: '',
-                                      client_public_key: '',
-                                      client_public_key_file: '',
-                                      client_public_key_algorithm: '',
-                                      id_token_claims: { mappings: [] },
-                                      access_token_claims: { mappings: [] },
-                                      access_token_lifetime: '',
-                                      refresh_token_lifetime: '',
-                                      consent_ttl: '',
-                                      consent_mode: '',
-                                      required_scopes: [],
-                                      optional_scopes: [],
-                                      skip_consent: false,
-                                      delayed_response: false,
-                                      frontchannel_logout_session_required: false,
-                                    });
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                >
-                                  Add OIDC Client
-                                </Button>
-                              </Box>
-                            )}
-                          </FieldArray>
-                        </Grid>
                       </Grid>
                     </CollapsibleFormSection>
                   </Grid>
@@ -1167,77 +1280,152 @@ const FrontendConfig = (): React.JSX.Element => {
                         <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name="idp.saml2.cert" label="Inline Certificate" onChange={handleChange} /></Grid>
                         <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name="idp.saml2.key" label="Inline Private Key" onChange={handleChange} /></Grid>
 
-                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">SLO</Typography></Grid>
-                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.saml2?.slo?.enabled ?? true} onChange={(e) => setFieldValue('idp.saml2.slo.enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="SLO Enabled" /></Grid>
-                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.saml2?.slo?.front_channel_enabled ?? true} onChange={(e) => setFieldValue('idp.saml2.slo.front_channel_enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="SLO Front-Channel Enabled" /></Grid>
-                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.saml2?.slo?.back_channel_enabled || false} onChange={(e) => setFieldValue('idp.saml2.slo.back_channel_enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="SLO Back-Channel Enabled" /></Grid>
-                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.saml2.slo.request_timeout" label="SLO Request Timeout" onChange={handleChange} /></Grid>
-                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth type="number" name="idp.saml2.slo.max_participants" label="SLO Max Participants" onChange={handleChange} /></Grid>
-                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth type="number" name="idp.saml2.slo.back_channel_max_retries" label="SLO Back-Channel Retries" onChange={handleChange} /></Grid>
-
-                        <Grid size={12}><Divider sx={{ my: 1 }} /><Typography variant="subtitle1">Service Providers</Typography></Grid>
                         <Grid size={12}>
-                          <FieldArray name="idp.saml2.service_providers">
-                            {({ push, remove }: any) => (
-                              <Box>
-                                {(values.idp?.saml2?.service_providers || []).map((_: any, spIdx: number) => (
-                                  <Card key={`saml-sp-${spIdx}`} sx={configCardSx}>
-                                    <CardContent sx={configCardContentSx}>
-                                      <Grid container spacing={3}>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.name`} label="Name" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.entity_id`} label="Entity ID" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.acs_url`} label="ACS URL" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.slo_url`} label="SLO URL" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.slo_back_channel_url`} label="SLO Back-Channel URL" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.logout_redirect_uri`} label="Logout Redirect URI" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.cert_file`} label="Certificate File" onChange={handleChange} /></Grid>
-                                        <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.saml2.service_providers.${spIdx}.cert`} label="Inline Certificate" onChange={handleChange} /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.authn_requests_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.authn_requests_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Authn Requests Signed" /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.logout_requests_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.logout_requests_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Logout Requests Signed" /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.logout_responses_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.logout_responses_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Logout Responses Signed" /></Grid>
-                                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
+                          <Accordion>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Typography variant="subtitle1">SLO</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <Grid container spacing={3}>
+                                <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.saml2?.slo?.enabled ?? true} onChange={(e) => setFieldValue('idp.saml2.slo.enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="SLO Enabled" /></Grid>
+                                <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.saml2?.slo?.front_channel_enabled ?? true} onChange={(e) => setFieldValue('idp.saml2.slo.front_channel_enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="SLO Front-Channel Enabled" /></Grid>
+                                <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.saml2?.slo?.back_channel_enabled || false} onChange={(e) => setFieldValue('idp.saml2.slo.back_channel_enabled', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="SLO Back-Channel Enabled" /></Grid>
+                                <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.saml2.slo.request_timeout" label="SLO Request Timeout" onChange={handleChange} /></Grid>
+                                <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth type="number" name="idp.saml2.slo.max_participants" label="SLO Max Participants" onChange={handleChange} /></Grid>
+                                <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth type="number" name="idp.saml2.slo.back_channel_max_retries" label="SLO Back-Channel Retries" onChange={handleChange} /></Grid>
+                              </Grid>
+                            </AccordionDetails>
+                          </Accordion>
+                        </Grid>
 
-                                        <Grid size={12}><Typography variant="subtitle2">Allowed Attributes</Typography>{renderStringArrayEditor(`idp.saml2.service_providers.${spIdx}.allowed_attributes`, 'Allowed Attribute')}</Grid>
-                                        <Grid size={12}>{renderMultiSelectField(`idp.saml2.service_providers.${spIdx}.require_mfa`, 'Required MFA', mfaMethodOptions, 'Must stay a subset of the supported MFA methods when both are configured.')}</Grid>
-                                        <Grid size={12}>{renderMultiSelectField(`idp.saml2.service_providers.${spIdx}.supported_mfa`, 'Supported MFA', mfaMethodOptions)}</Grid>
-                                      </Grid>
-                                    </CardContent>
-                                    <CardActions sx={configCardActionsSx}>
-                                      <Button color="error" startIcon={<DeleteIcon />} onClick={() => { remove(spIdx); setHasUnsavedChanges(true); }}>
-                                        Remove Service Provider
-                                      </Button>
-                                    </CardActions>
-                                  </Card>
-                                ))}
-                                <Button
-                                  startIcon={<AddIcon />}
-                                  variant="outlined"
-                                  onClick={() => {
-                                    push({
-                                      name: '',
-                                      entity_id: '',
-                                      acs_url: '',
-                                      slo_url: '',
-                                      slo_back_channel_url: '',
-                                      cert: '',
-                                      cert_file: '',
-                                      authn_requests_signed: false,
-                                      logout_requests_signed: false,
-                                      logout_responses_signed: false,
-                                      allowed_attributes: [],
-                                      require_mfa: [],
-                                      supported_mfa: [],
-                                      logout_redirect_uri: '',
-                                      delayed_response: false,
-                                    });
-                                    setHasUnsavedChanges(true);
-                                  }}
-                                >
-                                  Add Service Provider
-                                </Button>
-                              </Box>
-                            )}
-                          </FieldArray>
+                        <Grid size={12}>
+                          <Accordion>
+                            <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                              <Typography variant="subtitle1">Service Providers</Typography>
+                            </AccordionSummary>
+                            <AccordionDetails>
+                              <FieldArray name="idp.saml2.service_providers">
+                                {({ push, remove }: any) => (
+                                  <Box>
+                                {(values.idp?.saml2?.service_providers || []).length > 0 ? (
+                                  <>
+                                    <FormControl fullWidth sx={{ mb: 2 }}>
+                                      <InputLabel id="saml-service-provider-selector-label">Service Provider</InputLabel>
+                                      <Select
+                                        id="saml-service-provider-selector"
+                                        labelId="saml-service-provider-selector-label"
+                                        label="Service Provider"
+                                        inputProps={{ 'data-testid': 'saml-service-provider-selector' }}
+                                        value={String(Math.min(selectedSamlServiceProviderIndex, (values.idp?.saml2?.service_providers || []).length - 1))}
+                                        onChange={(event) => {
+                                          setSelectedSamlServiceProviderIndex(Number(event.target.value));
+                                        }}
+                                      >
+                                        {(values.idp?.saml2?.service_providers || []).map((provider: any, index: number) => (
+                                          <MenuItem key={`saml-service-provider-option-${index}`} value={String(index)}>
+                                            {formatManagedEntityLabel(index, provider?.name, provider?.entity_id, 'Service Provider')}
+                                          </MenuItem>
+                                        ))}
+                                      </Select>
+                                    </FormControl>
+                                    {(() => {
+                                      const providers = values.idp?.saml2?.service_providers || [];
+                                      const spIdx = Math.min(selectedSamlServiceProviderIndex, providers.length - 1);
+
+                                      return (
+                                        <Card key={`saml-sp-${spIdx}`} sx={configCardSx}>
+                                          <CardContent sx={configCardContentSx}>
+                                            <Grid container spacing={3}>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.name`} label="Name" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.entity_id`} label="Entity ID" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.acs_url`} label="ACS URL" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.slo_url`} label="SLO URL" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.slo_back_channel_url`} label="SLO Back-Channel URL" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.logout_redirect_uri`} label="Logout Redirect URI" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 6 }}><Field as={TextField} fullWidth name={`idp.saml2.service_providers.${spIdx}.cert_file`} label="Certificate File" onChange={handleChange} /></Grid>
+                                              <Grid size={12}><Field as={TextField} fullWidth multiline minRows={2} name={`idp.saml2.service_providers.${spIdx}.cert`} label="Inline Certificate" onChange={handleChange} /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.authn_requests_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.authn_requests_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Authn Requests Signed" /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.logout_requests_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.logout_requests_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Logout Requests Signed" /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.logout_responses_signed`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.logout_responses_signed`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Logout Responses Signed" /></Grid>
+                                              <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.saml2.service_providers.${spIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.saml2.service_providers.${spIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
+
+                                              <Grid size={12}><Typography variant="subtitle2">Allowed Attributes</Typography>{renderStringArrayEditor(`idp.saml2.service_providers.${spIdx}.allowed_attributes`, 'Allowed Attribute')}</Grid>
+                                              <Grid size={12}>{renderMultiSelectField(`idp.saml2.service_providers.${spIdx}.require_mfa`, 'Required MFA', mfaMethodOptions, 'Must stay a subset of the supported MFA methods when both are configured.')}</Grid>
+                                              <Grid size={12}>{renderMultiSelectField(`idp.saml2.service_providers.${spIdx}.supported_mfa`, 'Supported MFA', mfaMethodOptions)}</Grid>
+                                            </Grid>
+                                          </CardContent>
+                                          <CardActions sx={configCardActionsSx}>
+                                            <Button
+                                              color="error"
+                                              startIcon={<DeleteIcon />}
+                                              onClick={() => {
+                                                const providers = values.idp?.saml2?.service_providers || [];
+                                                remove(spIdx);
+                                                setSelectedSamlServiceProviderIndex((currentIndex) => {
+                                                  if (providers.length <= 1) {
+                                                    return 0;
+                                                  }
+
+                                                  if (currentIndex > spIdx) {
+                                                    return currentIndex - 1;
+                                                  }
+
+                                                  if (currentIndex === spIdx) {
+                                                    return Math.min(spIdx, providers.length - 2);
+                                                  }
+
+                                                  return currentIndex;
+                                                });
+                                                setHasUnsavedChanges(true);
+                                              }}
+                                            >
+                                              Remove Service Provider
+                                            </Button>
+                                          </CardActions>
+                                        </Card>
+                                      );
+                                    })()}
+                                  </>
+                                ) : (
+                                  <Typography color="text.secondary" sx={{ mb: 2 }}>
+                                    No service providers configured.
+                                  </Typography>
+                                )}
+                                    <Button
+                                      startIcon={<AddIcon />}
+                                      variant="outlined"
+                                      onClick={() => {
+                                        const providers = values.idp?.saml2?.service_providers || [];
+                                        push({
+                                          name: '',
+                                          entity_id: '',
+                                          acs_url: '',
+                                          slo_url: '',
+                                          slo_back_channel_url: '',
+                                          cert: '',
+                                          cert_file: '',
+                                          authn_requests_signed: false,
+                                          logout_requests_signed: false,
+                                          logout_responses_signed: false,
+                                          allowed_attributes: [],
+                                          require_mfa: [],
+                                          supported_mfa: [],
+                                          logout_redirect_uri: '',
+                                          delayed_response: false,
+                                        });
+                                        if (providers.length === 0) {
+                                          setSelectedSamlServiceProviderIndex(0);
+                                        }
+                                        setHasUnsavedChanges(true);
+                                      }}
+                                    >
+                                      Add Service Provider
+                                    </Button>
+                                  </Box>
+                                )}
+                              </FieldArray>
+                            </AccordionDetails>
+                          </Accordion>
                         </Grid>
                       </Grid>
                     </CollapsibleFormSection>

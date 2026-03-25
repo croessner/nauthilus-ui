@@ -31,6 +31,7 @@ import {
   Stack,
   Tooltip
 } from '@mui/material';
+import useMediaQuery from '@mui/material/useMediaQuery';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import DeleteIcon from '@mui/icons-material/Delete';
 import SecurityIcon from '@mui/icons-material/Security';
@@ -84,6 +85,7 @@ interface BruteForceListResponse {
 
 
 const BruteForceConfig: React.FC = () => {
+  const isMobile = useMediaQuery('(max-width:600px)');
   const { config, currentProfileName } = useConfig();
   const { connection: runtimeConnection, loadRuntimeSettings } = useRuntime();
   const [connectionStatus, setConnectionStatus] = useState<'unknown' | 'connected' | 'disconnected' | 'checking'>('unknown');
@@ -130,6 +132,35 @@ const BruteForceConfig: React.FC = () => {
   const [page, setPage] = useState<number>(0);
   const [rowsPerPage, setRowsPerPage] = useState<number>(10);
   const rowsPerPageOptions = [10, 25, 50, 100]; // Options for items per page
+
+  // Keep item actions in normal flow and stack them on small screens to avoid overlap.
+  const responsiveListItemSx = {
+    py: 1.5,
+    px: 2,
+  } as const;
+
+  const responsiveListItemContentSx = {
+    width: '100%',
+    display: 'flex',
+    flexDirection: { xs: 'column', sm: 'row' },
+    alignItems: { xs: 'stretch', sm: 'center' },
+    justifyContent: 'space-between',
+    gap: 1,
+  } as const;
+
+  const responsiveListItemTextSx = {
+    m: 0,
+    pr: { xs: 0, sm: 2 },
+  } as const;
+
+  const responsiveListItemActionSx = {
+    width: { xs: '100%', sm: 'auto' },
+    flexShrink: 0,
+  } as const;
+
+  const responsiveFreeButtonSx = {
+    width: '100%',
+  } as const;
 
   // Function to fetch the brute force list
   const fetchBruteForceList = useCallback(async (connectionConfig: any) => {
@@ -646,40 +677,43 @@ const BruteForceConfig: React.FC = () => {
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((item, index) => (
                         <React.Fragment key={index}>
-                          <ListItem
-                            secondaryAction={
-                              <Button
-                                sx={{ mt: { xs: 1, sm: 0 } }}
-                                variant="outlined"
-                                color="secondary"
-                                onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
-                                startIcon={<DeleteIcon />}
-                                size="small"
-                              >
-                                Free
-                              </Button>
-                            }
-                          >
-                            <ListItemText
-                              primary={item.ip_address}
-                              secondary={
-                                <>
-                                  <Typography component="span" variant="body2">
-                                    Bucket: {item.rule_name}
-                                    {item.protocol && ` | Protocol: ${item.protocol}`}
-                                    {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
-                                  </Typography>
-                                  <br />
-                                  <Typography component="span" variant="body2">
-                                    Ban duration: {formatNanoDuration(item.ban_time)} | Remaining: {formatNanoDuration(item.ttl)}
-                                  </Typography>
-                                  <br />
-                                  <Typography component="span" variant="body2">
-                                    Banned at: {new Date(item.banned_at).toLocaleString()}
-                                  </Typography>
-                                </>
-                              }
-                            />
+                          <ListItem sx={responsiveListItemSx}>
+                            <Box sx={responsiveListItemContentSx}>
+                              <ListItemText
+                                sx={responsiveListItemTextSx}
+                                primary={item.ip_address}
+                                secondary={
+                                  <>
+                                    <Typography component="span" variant="body2">
+                                      Bucket: {item.rule_name}
+                                      {item.protocol && ` | Protocol: ${item.protocol}`}
+                                      {item.oidc_cid && ` | OIDC Client ID: ${item.oidc_cid}`}
+                                    </Typography>
+                                    <br />
+                                    <Typography component="span" variant="body2">
+                                      Ban duration: {formatNanoDuration(item.ban_time)} | Remaining: {formatNanoDuration(item.ttl)}
+                                    </Typography>
+                                    <br />
+                                    <Typography component="span" variant="body2">
+                                      Banned at: {new Date(item.banned_at).toLocaleString()}
+                                    </Typography>
+                                  </>
+                                }
+                              />
+                              <Box sx={responsiveListItemActionSx}>
+                                <Button
+                                  fullWidth={isMobile}
+                                  sx={responsiveFreeButtonSx}
+                                  variant="outlined"
+                                  color="secondary"
+                                  onClick={() => handleOpenIpDialog(item.ip_address, item.rule_name, item.protocol, item.oidc_cid)}
+                                  startIcon={<DeleteIcon />}
+                                  size="small"
+                                >
+                                  Free
+                                </Button>
+                              </Box>
+                            </Box>
                           </ListItem>
                           <Divider />
                         </React.Fragment>
@@ -714,30 +748,33 @@ const BruteForceConfig: React.FC = () => {
                         .slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage)
                         .map((account, index) => (
                         <React.Fragment key={index}>
-                          <ListItem
-                            secondaryAction={
-                              <Button
-                                sx={{ mt: { xs: 1, sm: 0 } }}
-                                variant="outlined"
-                                color="secondary"
-                                onClick={() => handleOpenUserDialog(account.username)}
-                                startIcon={<DeleteIcon />}
-                                size="small"
-                              >
-                                Free
-                              </Button>
-                            }
-                          >
-                            <ListItemText
-                              primary={account.username}
-                              secondary={
-                                <>
-                                  <Typography component="span" variant="body2">
-                                    Associated IP Addresses: {account.ip_addresses.join(', ')}
-                                  </Typography>
-                                </>
-                              }
-                            />
+                          <ListItem sx={responsiveListItemSx}>
+                            <Box sx={responsiveListItemContentSx}>
+                              <ListItemText
+                                sx={responsiveListItemTextSx}
+                                primary={account.username}
+                                secondary={
+                                  <>
+                                    <Typography component="span" variant="body2">
+                                      Associated IP Addresses: {account.ip_addresses.join(', ')}
+                                    </Typography>
+                                  </>
+                                }
+                              />
+                              <Box sx={responsiveListItemActionSx}>
+                                <Button
+                                  fullWidth={isMobile}
+                                  sx={responsiveFreeButtonSx}
+                                  variant="outlined"
+                                  color="secondary"
+                                  onClick={() => handleOpenUserDialog(account.username)}
+                                  startIcon={<DeleteIcon />}
+                                  size="small"
+                                >
+                                  Free
+                                </Button>
+                              </Box>
+                            </Box>
                           </ListItem>
                           <Divider />
                         </React.Fragment>
