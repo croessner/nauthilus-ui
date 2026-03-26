@@ -3,3 +3,5 @@ node_modules/
 .env
 config.yaml
 build/
+/quality/eslint-report.json
+/quality/typescript-errors.txt
