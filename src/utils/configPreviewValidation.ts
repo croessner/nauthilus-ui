@@ -43,6 +43,38 @@ const hasText = (value: unknown): value is string => {
   return typeof value === 'string' && value.trim() !== '';
 };
 
+/**
+ * Normalizes config values that may be provided as either a scalar string
+ * or an explicit string list (Go-Viper compatible behavior).
+ */
+const toTextList = (value: unknown): string[] => {
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value
+    .filter((entry): entry is string => typeof entry === 'string')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const toList = (value: unknown): unknown[] => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (value === undefined || value === null) {
+    return [];
+  }
+
+  return [value];
+};
+
 const hasAnyKeys = (value: unknown): boolean => {
   return isObject(value) && Object.keys(value).length > 0;
 };
@@ -70,22 +102,11 @@ const toValidationConfig = (config: NauthilusConfig): { normalizedConfig: Nauthi
 };
 
 const normalizedBackends = (config: NauthilusConfig): string[] => {
-  if (!Array.isArray(config.server?.backends)) {
-    return [];
-  }
-
-  return config.server.backends
-    .filter((backend): backend is string => typeof backend === 'string')
-    .map((backend) => backend.trim())
-    .filter(Boolean);
+  return toTextList(config.server?.backends);
 };
 
 const hasServerFeature = (features: unknown, featureName: string): boolean => {
-  if (!Array.isArray(features)) {
-    return false;
-  }
-
-  return features.some((feature) => {
+  return toList(features).some((feature) => {
     if (typeof feature === 'string') {
       return feature === featureName;
     }
@@ -122,9 +143,9 @@ const validateRedis = (config: NauthilusConfig, findings: ConfigValidationFindin
   }
 
   const masterAddress = redis.master?.address;
-  const replicaAddresses = Array.isArray(redis.replica?.addresses) ? redis.replica?.addresses.filter(hasText) : [];
-  const sentinelAddresses = Array.isArray(redis.sentinels?.addresses) ? redis.sentinels?.addresses.filter(hasText) : [];
-  const clusterAddresses = Array.isArray(redis.cluster?.addresses) ? redis.cluster?.addresses.filter(hasText) : [];
+  const replicaAddresses = toTextList(redis.replica?.addresses);
+  const sentinelAddresses = toTextList(redis.sentinels?.addresses);
+  const clusterAddresses = toTextList(redis.cluster?.addresses);
 
   const isMasterConfigured = hasText(masterAddress);
   const isReplicaConfigured = hasText(redis.replica?.address) || replicaAddresses.length > 0;
@@ -262,7 +283,7 @@ const validateLDAP = (config: NauthilusConfig, findings: ConfigValidationFinding
     );
   }
 
-  const serverUris = Array.isArray(ldapConfig.server_uri) ? ldapConfig.server_uri.filter(hasText) : [];
+  const serverUris = toTextList(ldapConfig.server_uri);
   if (serverUris.length === 0) {
     pushFinding(
       findings,
@@ -290,7 +311,7 @@ const validateLDAP = (config: NauthilusConfig, findings: ConfigValidationFinding
   const searches = Array.isArray(config.ldap.search) ? config.ldap.search : [];
   searches.forEach((search, index) => {
     const basePath = `ldap.search[${index}]`;
-    if (!Array.isArray(search.protocol) || search.protocol.filter(hasText).length === 0) {
+    if (toTextList(search.protocol).length === 0) {
       pushFinding(
         findings,
         'required.ldap.search.protocol',
@@ -348,7 +369,7 @@ const validateLDAP = (config: NauthilusConfig, findings: ConfigValidationFinding
       );
     }
 
-    if (!Array.isArray(search.attribute) || search.attribute.filter(hasText).length === 0) {
+    if (toTextList(search.attribute).length === 0) {
       pushFinding(
         findings,
         'required.ldap.search.attribute',
@@ -506,12 +527,13 @@ const validateLua = (config: NauthilusConfig, findings: ConfigValidationFinding[
 };
 
 const validateFeatureDependentSections = (config: NauthilusConfig, findings: ConfigValidationFinding[]): void => {
-  if (!Array.isArray(config.server?.features)) {
+  const serverFeatures = toList(config.server?.features);
+  if (serverFeatures.length === 0) {
     return;
   }
 
-  if (hasServerFeature(config.server.features, 'rbl')) {
-    if (!config.realtime_blackhole_lists || !Array.isArray(config.realtime_blackhole_lists.lists) || config.realtime_blackhole_lists.lists.length === 0) {
+  if (hasServerFeature(serverFeatures, 'rbl')) {
+    if (!config.realtime_blackhole_lists || toTextList(config.realtime_blackhole_lists.lists).length === 0) {
       pushFinding(
         findings,
         'required.realtime_blackhole_lists.lists',
@@ -522,8 +544,8 @@ const validateFeatureDependentSections = (config: NauthilusConfig, findings: Con
     }
   }
 
-  if (hasServerFeature(config.server.features, 'relay_domains')) {
-    if (!config.relay_domains || !Array.isArray(config.relay_domains.static) || config.relay_domains.static.length === 0) {
+  if (hasServerFeature(serverFeatures, 'relay_domains')) {
+    if (!config.relay_domains || toTextList(config.relay_domains.static).length === 0) {
       pushFinding(
         findings,
         'required.relay_domains.static',
@@ -534,7 +556,7 @@ const validateFeatureDependentSections = (config: NauthilusConfig, findings: Con
     }
   }
 
-  if (hasServerFeature(config.server.features, 'brute_force')) {
+  if (hasServerFeature(serverFeatures, 'brute_force')) {
     if (!config.brute_force || !Array.isArray(config.brute_force.buckets) || config.brute_force.buckets.length === 0) {
       pushFinding(
         findings,
@@ -546,8 +568,8 @@ const validateFeatureDependentSections = (config: NauthilusConfig, findings: Con
     }
   }
 
-  if (hasServerFeature(config.server.features, 'tls_encryption')) {
-    if (!Array.isArray(config.cleartext_networks) && !config.server?.tls?.enabled) {
+  if (hasServerFeature(serverFeatures, 'tls_encryption')) {
+    if (toTextList(config.cleartext_networks).length === 0 && !config.server?.tls?.enabled) {
       pushFinding(
         findings,
         'required.tls_encryption.prerequisite',
@@ -592,7 +614,7 @@ const validateIDP = (config: NauthilusConfig, findings: ConfigValidationFinding[
           'required_tag',
         );
       }
-      if (!Array.isArray(scope?.claims) || scope.claims.length === 0) {
+      if (toTextList(scope?.claims).length === 0) {
         pushFinding(
           findings,
           'required.idp.oidc.custom_scopes.claims',

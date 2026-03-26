@@ -60,3 +60,62 @@ test('detects required Redis secrets', () => {
   assert.ok(report.blockingFindings.some((finding) => finding.path === 'server.redis.password_nonce'));
   assert.ok(report.blockingFindings.some((finding) => finding.path === 'server.redis.encryption_secret'));
 });
+
+test('accepts scalar string values for backend and LDAP string-list fields', () => {
+  const config = validBaseConfig();
+  config.server.backends = 'ldap';
+  config.ldap = {
+    config: {
+      lookup_pool_size: 2,
+      server_uri: 'ldap://127.0.0.1:389',
+    },
+    search: [
+      {
+        protocol: 'imap',
+        cache_name: 'default',
+        base_dn: 'dc=example,dc=org',
+        filter: { user: '(uid=%s)' },
+        mapping: { account_field: 'uid' },
+        attribute: 'mail',
+      },
+    ],
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'ldap.search[0].protocol'));
+});
+
+test('accepts scalar string values for feature-dependent string lists', () => {
+  const config = validBaseConfig();
+  config.server.features = 'relay_domains';
+  config.relay_domains = {
+    static: 'example.org',
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'relay_domains.static'));
+});
+
+test('accepts scalar string values for OIDC custom scope claims', () => {
+  const config = validBaseConfig();
+  config.idp = {
+    oidc: {
+      custom_scopes: [
+        {
+          name: 'profile',
+          description: 'Profile scope',
+          claims: 'sub',
+        },
+      ],
+    },
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'idp.oidc.custom_scopes[0].claims'));
+});
