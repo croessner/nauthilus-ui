@@ -1,4 +1,4 @@
-import { FeatureConfig } from '../types/config';
+import type { FeatureConfig } from '../types/config';
 
 export type ServerFeature = string | FeatureConfig;
 

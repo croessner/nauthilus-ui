@@ -1,12 +1,10 @@
 import React from 'react';
 import { Box, Paper, Typography, useTheme, Alert, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
-import yaml from 'js-yaml';
 import { formatConfigAsYaml } from '../utils/yamlUtils';
 import { useConfig } from '../contexts/ConfigContext';
-import { BackendConfig } from '../types/config';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import { hasServerFeature } from '../utils/featureFlags';
+import { validateEssentialConfigSettings } from '../utils/configPreviewValidation';
 
 const ConfigPreview = (): React.JSX.Element => {
   const { config, validateConfigSection } = useConfig();
@@ -15,144 +13,7 @@ const ConfigPreview = (): React.JSX.Element => {
   // Convert config to YAML
   const yamlContent = config ? formatConfigAsYaml(config) : '';
 
-  // Validate essential settings
-  const validateEssentialSettings = () => {
-    if (!config) return { isValid: false, errors: ['No configuration loaded'] };
-
-    // Create a deep copy of the config object with the same modifications as for YAML generation
-    const configCopy = JSON.parse(JSON.stringify(config));
-
-    // Drop legacy auth config after migration to server.oidc_auth
-    if (configCopy.server?.jwt_auth) {
-      delete configCopy.server.jwt_auth;
-    }
-
-    // Collect validation errors from different sections using the modified config
-    const serverErrors = validateConfigSection('server', configCopy);
-
-    // Check for specific essential settings
-    const essentialErrors = [];
-
-    // Check if backends are configured
-    if (!configCopy.server?.backends || configCopy.server.backends.length === 0) {
-      essentialErrors.push('No backends configured. At least one backend is required for operation.');
-    } else {
-      // Check if all backends are valid strings
-      const invalidBackends = configCopy.server.backends.filter((backend: BackendConfig) => 
-        !backend || backend.trim() === ''
-      );
-
-      if (invalidBackends.length > 0) {
-        essentialErrors.push('Some backends are not properly configured. Each backend must be a valid string.');
-      }
-    }
-
-    // Redis configuration is validated in validateConfigSection('server', configCopy)
-
-    // Check if LDAP is configured when LDAP backend is used
-    const hasLdapBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-      return backend === 'ldap' || backend.startsWith('ldap(');
-    });
-
-    if (hasLdapBackend) {
-      // Check if standard LDAP is configured
-      const hasStandardLdapBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-        return backend === 'ldap';
-      });
-
-      if (hasStandardLdapBackend && (!configCopy.ldap || !configCopy.ldap.config || !configCopy.ldap.config.server_uri)) {
-        essentialErrors.push('LDAP backend is configured but LDAP configuration is missing or incomplete.');
-      }
-
-      // Check if an LDAP pool is configured
-      const ldapPoolRegex = /^ldap\((.+)\)$/;
-      configCopy.server?.backends?.forEach((backend: BackendConfig) => {
-        const match = backend.match(ldapPoolRegex);
-        if (match) {
-          const poolName = match[1];
-          if (!configCopy.ldap || !configCopy.ldap.optional_ldap_pools || !configCopy.ldap.optional_ldap_pools[poolName]) {
-            essentialErrors.push(`LDAP pool "${poolName}" is configured as a backend but the pool configuration is missing.`);
-          }
-        }
-      });
-    }
-
-    // Check if Lua is configured when Lua backend is used
-    const hasLuaBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-      return backend === 'lua' || backend.startsWith('lua(');
-    });
-
-    if (hasLuaBackend) {
-      // Check if a standard Lua backend is configured
-      const hasStandardLuaBackend = configCopy.server?.backends?.some((backend: BackendConfig) => {
-        return backend === 'lua';
-      });
-
-      if (hasStandardLuaBackend && (!configCopy.lua || !configCopy.lua.search || configCopy.lua.search.length === 0)) {
-        essentialErrors.push('Lua backend is configured but Lua configuration is missing or incomplete.');
-      }
-
-      // Check if optional Lua backends are configured
-      const luaBackendRegex = /^lua\((.+)\)$/;
-      configCopy.server?.backends?.forEach((backend: BackendConfig) => {
-        const match = backend.match(luaBackendRegex);
-        if (match) {
-          const backendName = match[1];
-          if (!configCopy.lua || !configCopy.lua.optional_lua_backends || !configCopy.lua.optional_lua_backends[backendName]) {
-            essentialErrors.push(`Lua backend "${backendName}" is configured but the backend configuration is missing.`);
-          }
-        }
-      });
-    }
-
-    // Check if features are properly configured
-    if (configCopy.server?.features && Array.isArray(configCopy.server.features)) {
-      // Check RBL feature
-      if (hasServerFeature(configCopy.server.features, 'rbl')) {
-        if (!configCopy.realtime_blackhole_lists) {
-          essentialErrors.push('RBL feature is enabled but RBL configuration is missing.');
-        } else if (!configCopy.realtime_blackhole_lists.lists || !Array.isArray(configCopy.realtime_blackhole_lists.lists) || configCopy.realtime_blackhole_lists.lists.length === 0) {
-          essentialErrors.push('RBL feature is enabled but RBL lists configuration is missing or empty.');
-        }
-      }
-
-      // Check the relay_domains feature
-      if (hasServerFeature(configCopy.server.features, 'relay_domains')) {
-        if (!configCopy.relay_domains) {
-          essentialErrors.push('Relay Domains feature is enabled but Relay Domains configuration is missing.');
-        } else if (!configCopy.relay_domains.static || !Array.isArray(configCopy.relay_domains.static)) {
-          essentialErrors.push('Relay Domains feature is enabled but static domains configuration is missing or invalid.');
-        }
-      }
-
-      // Check brute_force feature
-      if (hasServerFeature(configCopy.server.features, 'brute_force')) {
-        if (!configCopy.brute_force) {
-          essentialErrors.push('Brute Force feature is enabled but Brute Force configuration is missing.');
-        } else if (!configCopy.brute_force.buckets || !Array.isArray(configCopy.brute_force.buckets) || configCopy.brute_force.buckets.length === 0) {
-          essentialErrors.push('Brute Force feature is enabled but buckets configuration is missing or empty.');
-        }
-      }
-
-      // Check tls_encryption feature
-      if (hasServerFeature(configCopy.server.features, 'tls_encryption')) {
-        if (!configCopy.cleartext_networks && (!configCopy.server.tls || !configCopy.server.tls.enabled)) {
-          essentialErrors.push('TLS Encryption feature is enabled but neither TLS configuration nor cleartext networks are configured.');
-        }
-      }
-    }
-
-    // Combine all errors and remove duplicates
-    const combinedErrors = [...serverErrors, ...essentialErrors];
-    const allErrors = Array.from(new Set(combinedErrors));
-
-    return {
-      isValid: allErrors.length === 0,
-      errors: allErrors
-    };
-  };
-
-  const validationResult = validateEssentialSettings();
+  const validationResult = validateEssentialConfigSettings(config, validateConfigSection, formatConfigAsYaml);
 
   return (
     <Box sx={{ width: '100%', mt: 2 }}>

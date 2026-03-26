@@ -79,6 +79,7 @@ type ProfileConfig struct {
 type UIConfig struct {
 	CookieBannerReshowDays int `mapstructure:"cookie_banner_reshow_days" validate:"min=-1"`
 	RawJSONMaxBytes        int `mapstructure:"raw_json_max_bytes" validate:"required,min=1024,max=1048576"`
+	YAMLFlowLevel          int `mapstructure:"yaml_flow_level" validate:"min=-1,max=10"`
 }
 
 // IdentityConfig contains identity-provider related settings.
@@ -351,6 +352,7 @@ func configureDefaults(v *viper.Viper) {
 
 		"ui.cookie_banner_reshow_days": -1,
 		"ui.raw_json_max_bytes":        8192,
+		"ui.yaml_flow_level":           3,
 
 		"identity.oidc.enabled":        false,
 		"identity.oidc.issuer":         "",
@@ -411,6 +413,7 @@ func configureEnvironment(v *viper.Viper) {
 		"profiles.max_versions_per_profile",
 		"ui.cookie_banner_reshow_days",
 		"ui.raw_json_max_bytes",
+		"ui.yaml_flow_level",
 		"identity.oidc.enabled",
 		"identity.oidc.issuer",
 		"identity.oidc.client_id",

@@ -1,6 +1,52 @@
 import yaml from 'js-yaml';
 import type { NauthilusConfig } from '../types/config';
 
+const DEFAULT_YAML_FLOW_LEVEL = 3;
+const MIN_YAML_FLOW_LEVEL = -1;
+const MAX_YAML_FLOW_LEVEL = 10;
+const YAML_FLOW_LEVEL_ENV_KEY = 'REACT_APP_YAML_FLOW_LEVEL';
+
+const parseYamlFlowLevel = (rawValue: unknown): number | null => {
+  if (rawValue === undefined || rawValue === null || rawValue === '') {
+    return null;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isInteger(parsed)) {
+    return null;
+  }
+
+  return parsed;
+};
+
+/**
+ * Returns the configured YAML flow level for config serialization.
+ *
+ * Precedence:
+ * 1. runtime-injected `window._env_`
+ * 2. build/runtime environment (`process.env`)
+ * 3. default value (`3`)
+ */
+export const getYamlFlowLevel = (): number => {
+  const runtimeEnvValue = typeof window !== 'undefined' ? window._env_?.[YAML_FLOW_LEVEL_ENV_KEY] : undefined;
+  const processEnvValue = typeof process !== 'undefined' ? (process as { env?: Record<string, string | undefined> }).env?.[YAML_FLOW_LEVEL_ENV_KEY] : undefined;
+  const parsed = parseYamlFlowLevel(runtimeEnvValue ?? processEnvValue);
+
+  if (parsed === null) {
+    return DEFAULT_YAML_FLOW_LEVEL;
+  }
+
+  if (parsed < MIN_YAML_FLOW_LEVEL) {
+    return MIN_YAML_FLOW_LEVEL;
+  }
+
+  if (parsed > MAX_YAML_FLOW_LEVEL) {
+    return MAX_YAML_FLOW_LEVEL;
+  }
+
+  return parsed;
+};
+
 /**
  * Preserves the admin-defined bucket order during export operations.
  * This is intentionally defensive: even if intermediate transformations
@@ -99,6 +145,8 @@ export const orderTopLevelConfigKeys = (config: Record<string, any>): string[] =
  * @returns A formatted YAML string
  */
 export const formatConfigAsYaml = (config: NauthilusConfig): string => {
+  const yamlFlowLevel = getYamlFlowLevel();
+
   // Create a deep copy to avoid modifying the original config
   const configCopy = JSON.parse(JSON.stringify(config));
 
@@ -167,9 +215,12 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   // --- Dump to YAML ---
   const yamlString = yaml.dump(sortedConfig, {
     indent: 2,
+    flowLevel: yamlFlowLevel,
     lineWidth: -1, // Disable line wrapping
     noRefs: true,  // Prevent aliases/anchors
-    sortKeys: false // We handled sorting manually
+    sortKeys: false, // We handled sorting manually
+    forceQuotes: true, // Keep all string values explicitly quoted
+    quotingType: '"'
   });
 
   // --- Post-process: Insert empty lines between sections and second-level elements ---

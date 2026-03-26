@@ -53,6 +53,10 @@ database:
 	if cfg.Profiles.MaxVersionsPerProfile != 50 {
 		t.Fatalf("expected default profiles.max_versions_per_profile to be 50, got %d", cfg.Profiles.MaxVersionsPerProfile)
 	}
+
+	if cfg.UI.YAMLFlowLevel != 3 {
+		t.Fatalf("expected default ui.yaml_flow_level to be 3, got %d", cfg.UI.YAMLFlowLevel)
+	}
 }
 
 func TestLoadConfigAppliesEnvOverridesWithPrefix(t *testing.T) {
@@ -68,6 +72,7 @@ database:
 	t.Setenv(envPrefix+"_IDENTITY_OIDC_ENABLED", "true")
 	t.Setenv(envPrefix+"_IDENTITY_OIDC_ISSUER", "https://id.example.com/realms/ui")
 	t.Setenv(envPrefix+"_IDENTITY_OIDC_CLIENT_ID", "ui-client")
+	t.Setenv(envPrefix+"_UI_YAML_FLOW_LEVEL", "2")
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -88,6 +93,10 @@ database:
 
 	if !cfg.Identity.OIDC.Enabled {
 		t.Fatal("expected OIDC to be enabled via env override")
+	}
+
+	if cfg.UI.YAMLFlowLevel != 2 {
+		t.Fatalf("expected ui.yaml_flow_level to be overridden to 2, got %d", cfg.UI.YAMLFlowLevel)
 	}
 }
 

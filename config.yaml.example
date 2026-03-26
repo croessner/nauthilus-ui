@@ -65,6 +65,12 @@ ui:
   # Allowed range: 1024..1048576
   raw_json_max_bytes: 8192
 
+  # YAML serializer flow style level for config preview/download/git push.
+  # -1: block style everywhere
+  #  0: full flow style (JSON-like)
+  #  N: flow style from depth N and deeper
+  yaml_flow_level: 3
+
 identity:
   oidc:
     # Optional OIDC login.
