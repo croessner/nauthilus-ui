@@ -58,7 +58,6 @@ export interface EndpointConfig {
   auth_json?: boolean;
   auth_basic?: boolean;
   auth_nginx?: boolean;
-  auth_saslauthd?: boolean;
   auth_jwt?: boolean;
   custom_hooks?: boolean;
   configuration: boolean;

@@ -107,6 +107,40 @@ const preserveBruteForceBucketOrder = (
   }
 };
 
+/**
+ * Recursively removes empty-string values from config exports.
+ *
+ * This keeps optional fields out of generated YAML when the UI currently
+ * stores them as "", which avoids runtime parsers treating empty durations
+ * and similar fields as invalid explicit values.
+ */
+const pruneEmptyStrings = (value: any): any => {
+  if (value === '') {
+    return undefined;
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => pruneEmptyStrings(entry))
+      .filter((entry) => entry !== undefined);
+  }
+
+  if (value && typeof value === 'object') {
+    const sanitized: Record<string, any> = {};
+
+    Object.keys(value).forEach((key) => {
+      const nextValue = pruneEmptyStrings(value[key]);
+      if (nextValue !== undefined) {
+        sanitized[key] = nextValue;
+      }
+    });
+
+    return sanitized;
+  }
+
+  return value;
+};
+
 export const orderTopLevelConfigKeys = (config: Record<string, any>): string[] => {
   const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
   const featureKeys = Object.keys(config)
@@ -190,14 +224,17 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   // Preserve admin-defined bucket order for preview/download/git export.
   preserveBruteForceBucketOrder(config, configCopy);
 
+  // Remove empty-string placeholders before serialization.
+  const sanitizedConfig = pruneEmptyStrings(configCopy);
+
   // --- Sort the object keys ---
   const sortedConfig: any = {};
   
-  orderTopLevelConfigKeys(configCopy).forEach(key => {
-    if (configCopy[key] !== undefined) {
+  orderTopLevelConfigKeys(sanitizedConfig).forEach(key => {
+    if (sanitizedConfig[key] !== undefined) {
       // Special sorting for lua and ldap: put "config" at the top of the section
-      if ((key === 'lua' || key === 'ldap') && configCopy[key].config) {
-        const section = configCopy[key];
+      if ((key === 'lua' || key === 'ldap') && sanitizedConfig[key].config) {
+        const section = sanitizedConfig[key];
         const sortedSection: any = {};
         sortedSection.config = section.config;
         Object.keys(section).forEach(k => {
@@ -207,7 +244,7 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
         });
         sortedConfig[key] = sortedSection;
       } else {
-        sortedConfig[key] = configCopy[key];
+        sortedConfig[key] = sanitizedConfig[key];
       }
     }
   });

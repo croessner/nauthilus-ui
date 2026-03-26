@@ -95,7 +95,6 @@ const ServerConfigSchema = Yup.object().shape({
     auth_json: Yup.boolean(),
     auth_basic: Yup.boolean(),
     auth_nginx: Yup.boolean(),
-    auth_saslauthd: Yup.boolean(),
     auth_jwt: Yup.boolean(),
     custom_hooks: Yup.boolean(),
     configuration: Yup.boolean(),
@@ -279,7 +278,6 @@ const ServerConfig = (): React.JSX.Element | null => {
       auth_json: config.server.disabled_endpoints?.auth_json || false,
       auth_basic: config.server.disabled_endpoints?.auth_basic || false,
       auth_nginx: config.server.disabled_endpoints?.auth_nginx || false,
-      auth_saslauthd: config.server.disabled_endpoints?.auth_saslauthd || false,
       auth_jwt: config.server.disabled_endpoints?.auth_jwt || false,
       custom_hooks: config.server.disabled_endpoints?.custom_hooks || false,
       configuration: config.server.disabled_endpoints?.configuration || false,
@@ -1094,21 +1092,6 @@ const ServerConfig = (): React.JSX.Element | null => {
                     />
                   }
                   label="Disable Auth Nginx Endpoint (/api/v1/auth/nginx)"
-                />
-              </Grid>
-              <Grid size={{ xs: 12, md: 6 }}>
-                <FormControlLabel
-                  control={
-                    <Switch
-                      checked={values.disabled_endpoints?.auth_saslauthd || false}
-                      onChange={(e) => {
-                        setFieldValue('disabled_endpoints.auth_saslauthd', e.target.checked)
-                            .then(() => setHasUnsavedChanges(true));
-                      }}
-                      name="disabled_endpoints.auth_saslauthd"
-                    />
-                  }
-                  label="Disable Auth SASL Endpoint (/api/v1/auth/saslauthd)"
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 6 }}>
