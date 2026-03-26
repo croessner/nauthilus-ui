@@ -184,6 +184,9 @@ const MainContent = (): React.JSX.Element => {
   const [profileVersionsLoading, setProfileVersionsLoading] = useState(false);
   const [profileVersionActionBusy, setProfileVersionActionBusy] = useState(false);
   const [manualSnapshotComment, setManualSnapshotComment] = useState('');
+  const [restoreVersionDialogOpen, setRestoreVersionDialogOpen] = useState(false);
+  const [restoreVersionTarget, setRestoreVersionTarget] = useState<number | null>(null);
+  const [restoreVersionComment, setRestoreVersionComment] = useState('');
   // Profile state variables removed as we now use a dedicated page
 
   // Global session-expired dialog state
@@ -855,6 +858,24 @@ const MainContent = (): React.JSX.Element => {
     });
   };
 
+  const closeRestoreProfileVersionDialog = () => {
+    if (profileVersionActionBusy) {
+      return;
+    }
+    setRestoreVersionDialogOpen(false);
+    setRestoreVersionTarget(null);
+    setRestoreVersionComment('');
+  };
+
+  const openRestoreProfileVersionDialog = (version: number): void => {
+    if (profileVersionActionBusy) {
+      return;
+    }
+    setRestoreVersionTarget(version);
+    setRestoreVersionComment('');
+    setRestoreVersionDialogOpen(true);
+  };
+
   const handleCreateManualSnapshot = async (): Promise<void> => {
     setProfileVersionActionBusy(true);
     try {
@@ -881,13 +902,12 @@ const MainContent = (): React.JSX.Element => {
     }
   };
 
-  const handleRestoreProfileVersion = async (version: number): Promise<void> => {
-    const restoreComment = window.prompt('Optional restore comment:', '') || '';
-    const confirmRestore = window.confirm(`Restore profile "${currentProfileName}" from version ${version}?`);
-    if (!confirmRestore) {
+  const handleRestoreProfileVersion = async (): Promise<void> => {
+    if (restoreVersionTarget === null) {
       return;
     }
 
+    const version = restoreVersionTarget;
     setProfileVersionActionBusy(true);
     try {
       const userId = await getCurrentUserId();
@@ -895,7 +915,7 @@ const MainContent = (): React.JSX.Element => {
         `/api/profiles/${encodeURIComponent(userId)}/${encodeURIComponent(currentProfileName)}/versions/${version}/restore`,
         {
           method: 'POST',
-          body: JSON.stringify({ comment: restoreComment.trim() }),
+          body: JSON.stringify({ comment: restoreVersionComment.trim() }),
         },
       );
       if (!response.ok) {
@@ -903,6 +923,9 @@ const MainContent = (): React.JSX.Element => {
         throw new Error(message || 'Failed to restore profile version');
       }
 
+      setRestoreVersionDialogOpen(false);
+      setRestoreVersionTarget(null);
+      setRestoreVersionComment('');
       await refreshConfig();
       await loadProfileVersions();
       setGitNotice(`Profile "${currentProfileName}" restored from version ${version}.`);
@@ -1825,7 +1848,13 @@ const MainContent = (): React.JSX.Element => {
 
       <Dialog
         open={profileVersionsDialogOpen}
-        onClose={() => setProfileVersionsDialogOpen(false)}
+        onClose={() => {
+          if (profileVersionActionBusy) {
+            return;
+          }
+          setProfileVersionsDialogOpen(false);
+          closeRestoreProfileVersionDialog();
+        }}
         fullWidth
         maxWidth="md"
       >
@@ -1901,7 +1930,7 @@ const MainContent = (): React.JSX.Element => {
                       <Button
                         size="small"
                         variant="outlined"
-                        onClick={() => void handleRestoreProfileVersion(profileVersion.version)}
+                        onClick={() => openRestoreProfileVersionDialog(profileVersion.version)}
                         disabled={profileVersionActionBusy}
                       >
                         Restore
@@ -1923,7 +1952,51 @@ const MainContent = (): React.JSX.Element => {
           )}
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setProfileVersionsDialogOpen(false)}>Close</Button>
+          <Button onClick={() => {
+            if (profileVersionActionBusy) {
+              return;
+            }
+            setProfileVersionsDialogOpen(false);
+            closeRestoreProfileVersionDialog();
+          }}>Close</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={restoreVersionDialogOpen}
+        onClose={closeRestoreProfileVersionDialog}
+        fullWidth
+        maxWidth="sm"
+      >
+        <DialogTitle>Restore Profile Version</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            {restoreVersionTarget === null
+              ? `Restore profile "${currentProfileName}"?`
+              : `Restore profile "${currentProfileName}" from version ${restoreVersionTarget}?`}
+          </DialogContentText>
+          <TextField
+            autoFocus
+            margin="dense"
+            label="Restore Comment (optional)"
+            fullWidth
+            multiline
+            minRows={2}
+            variant="outlined"
+            value={restoreVersionComment}
+            onChange={(event) => setRestoreVersionComment(event.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeRestoreProfileVersionDialog} disabled={profileVersionActionBusy}>Cancel</Button>
+          <Button
+            onClick={() => void handleRestoreProfileVersion()}
+            color="primary"
+            variant="contained"
+            disabled={profileVersionActionBusy || restoreVersionTarget === null}
+          >
+            Restore
+          </Button>
         </DialogActions>
       </Dialog>
 

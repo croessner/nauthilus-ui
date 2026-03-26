@@ -31,6 +31,12 @@ const loginAsAdmin = async (page: Page): Promise<void> => {
   await expect(page.getByText('Server Configuration')).toBeVisible();
 };
 
+const openProfileVersionsDialog = async (page: Page): Promise<void> => {
+  await page.getByRole('button', { name: /manage profiles/i }).first().click();
+  await page.getByRole('menuitem', { name: /profile versions/i }).click();
+  await expect(page.getByRole('heading', { name: /Profile Versions:/i })).toBeVisible();
+};
+
 const mockBruteForceRuntime = async (page: Page): Promise<void> => {
   await page.route('**/api/runtime/**', async (route) => {
     await route.fulfill({
@@ -139,6 +145,59 @@ test('admin can log in and open critical routes', async ({ page }, testInfo) => 
       message.includes('cannot contain a nested'),
     ),
   ).toEqual([]);
+});
+
+test('profile restore uses in-app confirmation dialog without native browser dialogs', async ({ page }) => {
+  const profileVersion = {
+    profileName: 'default',
+    version: 42,
+    createdAt: '2026-03-26T10:00:00.000Z',
+    createdBy: 'admin',
+    source: 'manual',
+    comment: 'snapshot for restore',
+  };
+  let restoreRequestBody = '';
+  let nativeDialogCount = 0;
+
+  page.on('dialog', async (dialog) => {
+    nativeDialogCount += 1;
+    await dialog.dismiss();
+  });
+
+  await page.route('**/api/profiles/**/versions?limit=200', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ items: [profileVersion] }),
+    });
+  });
+
+  await page.route('**/api/profiles/**/versions/42/restore', async (route) => {
+    restoreRequestBody = route.request().postData() || '';
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ message: 'Profile restored' }),
+    });
+  });
+
+  await loginAsAdmin(page);
+  await openProfileVersionsDialog(page);
+  await expect(page.getByText('Version 42', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Restore' }).first().click();
+
+  const restoreDialog = page.getByRole('dialog').filter({
+    has: page.getByRole('heading', { name: 'Restore Profile Version' }),
+  });
+  await expect(restoreDialog).toBeVisible();
+  await restoreDialog.getByLabel('Restore Comment (optional)').fill('restore smoke comment');
+  await restoreDialog.getByRole('button', { name: 'Restore' }).click();
+
+  await expect.poll(() => restoreRequestBody, { timeout: 10_000 }).not.toBe('');
+  expect(JSON.parse(restoreRequestBody) as { comment: string }).toEqual({
+    comment: 'restore smoke comment',
+  });
+  expect(nativeDialogCount).toBe(0);
 });
 
 test('auth probe 401 on focus stays silent and does not force session-expired dialog', async ({ page }) => {
