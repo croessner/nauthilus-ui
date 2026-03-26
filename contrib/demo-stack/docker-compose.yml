@@ -134,7 +134,7 @@ services:
       - demo-net
 
   alloy:
-    image: grafana/alloy:latest
+    image: grafana/alloy:v1.14.2
     container_name: nauthilus-ui-demo-alloy
     restart: unless-stopped
     command:
