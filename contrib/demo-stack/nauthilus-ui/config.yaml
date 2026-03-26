@@ -14,6 +14,9 @@ session:
   remember_me_expiry_seconds: 86400
   sync_remember_me_from_config_on_boot: false
 
+profiles:
+  max_versions_per_profile: 50
+
 ui:
   cookie_banner_reshow_days: -1
   raw_json_max_bytes: 8192

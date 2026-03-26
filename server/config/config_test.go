@@ -49,6 +49,10 @@ database:
 	if len(cfg.Identity.WebAuthn.RPOrigins) != 1 || cfg.Identity.WebAuthn.RPOrigins[0] != "https://127.0.0.1" {
 		t.Fatalf("expected derived WebAuthn origins [https://127.0.0.1], got %+v", cfg.Identity.WebAuthn.RPOrigins)
 	}
+
+	if cfg.Profiles.MaxVersionsPerProfile != 50 {
+		t.Fatalf("expected default profiles.max_versions_per_profile to be 50, got %d", cfg.Profiles.MaxVersionsPerProfile)
+	}
 }
 
 func TestLoadConfigAppliesEnvOverridesWithPrefix(t *testing.T) {

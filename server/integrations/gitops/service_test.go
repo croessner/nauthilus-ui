@@ -133,3 +133,59 @@ func TestNormalizeTagName(t *testing.T) {
 		})
 	}
 }
+
+func TestClassifyGitCommandError(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		in   string
+		want error
+	}{
+		{
+			name: "unreachable host",
+			in:   "ssh: connect to host localhost port 2222: Connection refused",
+			want: ErrRepositoryUnreachable,
+		},
+		{
+			name: "auth failed",
+			in:   "Permission denied (publickey).",
+			want: ErrRepositoryAuthFailed,
+		},
+		{
+			name: "not found",
+			in:   "remote: Repository not found.",
+			want: ErrRepositoryNotFound,
+		},
+		{
+			name: "host key verification failed",
+			in:   "Host key verification failed.",
+			want: ErrSSHHostKeyVerificationFailed,
+		},
+		{
+			name: "unknown",
+			in:   "fatal: some unknown error",
+			want: nil,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got := classifyGitCommandError(tc.in)
+			if tc.want == nil {
+				if got != nil {
+					t.Fatalf("expected nil classification, got %v", got)
+				}
+
+				return
+			}
+
+			if !errors.Is(got, tc.want) {
+				t.Fatalf("expected %v, got %v", tc.want, got)
+			}
+		})
+	}
+}

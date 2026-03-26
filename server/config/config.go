@@ -32,6 +32,7 @@ type Config struct {
 	Server       ServerConfig       `mapstructure:"server" validate:"required"`
 	Database     DatabaseConfig     `mapstructure:"database" validate:"required"`
 	Session      SessionConfig      `mapstructure:"session" validate:"required"`
+	Profiles     ProfileConfig      `mapstructure:"profiles" validate:"required"`
 	UI           UIConfig           `mapstructure:"ui" validate:"required"`
 	Identity     IdentityConfig     `mapstructure:"identity" validate:"required"`
 	Security     SecurityConfig     `mapstructure:"security" validate:"required"`
@@ -67,6 +68,11 @@ type SessionConfig struct {
 	RefreshTokenExpirySeconds      int  `mapstructure:"refresh_token_expiry_seconds" validate:"required,min=1"`
 	RememberMeExpirySeconds        int  `mapstructure:"remember_me_expiry_seconds" validate:"required,min=1"`
 	SyncRememberMeFromConfigOnBoot bool `mapstructure:"sync_remember_me_from_config_on_boot"`
+}
+
+// ProfileConfig contains profile persistence settings.
+type ProfileConfig struct {
+	MaxVersionsPerProfile int `mapstructure:"max_versions_per_profile" validate:"required,min=1,max=10000"`
 }
 
 // UIConfig contains frontend runtime settings injected by the backend.
@@ -341,6 +347,7 @@ func configureDefaults(v *viper.Viper) {
 		"session.refresh_token_expiry_seconds":         86400,
 		"session.remember_me_expiry_seconds":           86400,
 		"session.sync_remember_me_from_config_on_boot": false,
+		"profiles.max_versions_per_profile":            50,
 
 		"ui.cookie_banner_reshow_days": -1,
 		"ui.raw_json_max_bytes":        8192,
@@ -401,6 +408,7 @@ func configureEnvironment(v *viper.Viper) {
 		"session.refresh_token_expiry_seconds",
 		"session.remember_me_expiry_seconds",
 		"session.sync_remember_me_from_config_on_boot",
+		"profiles.max_versions_per_profile",
 		"ui.cookie_banner_reshow_days",
 		"ui.raw_json_max_bytes",
 		"identity.oidc.enabled",

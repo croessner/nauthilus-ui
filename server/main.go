@@ -21,6 +21,7 @@ import (
 	"nauthilus-ui/server/integrations/gitops"
 	"nauthilus-ui/server/integrations/sshprovider"
 	"nauthilus-ui/server/middleware"
+	"nauthilus-ui/server/profileversion"
 	"nauthilus-ui/server/proxy"
 	"nauthilus-ui/server/utils"
 )
@@ -164,7 +165,8 @@ func registerAPIHandlers(
 	userHandler.RegisterRoutes(r)
 
 	// Register profile routes (will be protected by middleware)
-	profileHandler := api.NewProfileHandler(mongoDB)
+	profileVersionService := profileversion.NewService(mongoDB, cfg.Profiles.MaxVersionsPerProfile)
+	profileHandler := api.NewProfileHandler(mongoDB, profileVersionService)
 	profileHandler.RegisterRoutes(r)
 
 	// Register session config routes (will be protected by middleware)

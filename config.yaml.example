@@ -50,6 +50,10 @@ session:
   # If true, sync remember_me_expiry_seconds into DB on startup.
   sync_remember_me_from_config_on_boot: false
 
+profiles:
+  # Maximum retained immutable versions per profile.
+  max_versions_per_profile: 50
+
 ui:
   # Cookie banner policy:
   #  -1: never show

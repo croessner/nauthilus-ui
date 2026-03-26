@@ -133,6 +133,56 @@ type ProfileResponse struct {
 	CurrentProfileName string        `json:"currentProfileName"`
 }
 
+// ProfileVersionContext carries optional metadata for automatic version creation
+// when profile data is persisted.
+type ProfileVersionContext struct {
+	Source   string                 `json:"source,omitempty"`
+	Comment  string                 `json:"comment,omitempty"`
+	Metadata map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// SaveProfilesRequest represents profile persistence requests.
+type SaveProfilesRequest struct {
+	Profiles           []ProfileData          `json:"profiles"`
+	CurrentProfileName string                 `json:"currentProfileName"`
+	VersionContext     *ProfileVersionContext `json:"versionContext,omitempty"`
+}
+
+// ProfileVersion stores an immutable snapshot for a single profile.
+type ProfileVersion struct {
+	UserID      string                 `bson:"userId" json:"-"`
+	ProfileName string                 `bson:"profileName" json:"profileName"`
+	Version     int64                  `bson:"version" json:"version"`
+	CreatedAt   string                 `bson:"createdAt" json:"createdAt"`
+	CreatedBy   string                 `bson:"createdBy" json:"createdBy"`
+	Source      string                 `bson:"source" json:"source"`
+	Comment     string                 `bson:"comment,omitempty" json:"comment,omitempty"`
+	Metadata    map[string]interface{} `bson:"metadata,omitempty" json:"metadata,omitempty"`
+	ConfigHash  string                 `bson:"configHash" json:"-"`
+	Config      map[string]interface{} `bson:"config,omitempty" json:"config,omitempty"`
+}
+
+// ProfileVersionsResponse wraps a profile version list response.
+type ProfileVersionsResponse struct {
+	Items []ProfileVersion `json:"items"`
+}
+
+// ProfileVersionResponse wraps a profile version response.
+type ProfileVersionResponse struct {
+	Version ProfileVersion `json:"version"`
+	Created bool           `json:"created"`
+}
+
+// ProfileSnapshotRequest is used for creating manual snapshots.
+type ProfileSnapshotRequest struct {
+	Comment string `json:"comment"`
+}
+
+// ProfileRestoreRequest is used for restoring historical profile versions.
+type ProfileRestoreRequest struct {
+	Comment string `json:"comment"`
+}
+
 // SessionConfigResponse represents a session configuration response.
 type SessionConfigResponse struct {
 	SessionConfig SessionConfigView `json:"sessionConfig"`

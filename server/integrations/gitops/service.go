@@ -29,6 +29,14 @@ var (
 	ErrInvalidFilePath = errors.New("file_path is invalid")
 	// ErrMissingHTTPSCredentials indicates missing username/password when HTTPS auth is selected.
 	ErrMissingHTTPSCredentials = errors.New("username and password are required for https auth")
+	// ErrRepositoryUnreachable indicates that the repository host cannot be reached from the server runtime.
+	ErrRepositoryUnreachable = errors.New("repository host is not reachable from server runtime")
+	// ErrRepositoryAuthFailed indicates that repository authentication failed.
+	ErrRepositoryAuthFailed = errors.New("repository authentication failed")
+	// ErrRepositoryNotFound indicates that the requested repository does not exist.
+	ErrRepositoryNotFound = errors.New("repository not found")
+	// ErrSSHHostKeyVerificationFailed indicates host key verification failure for SSH.
+	ErrSSHHostKeyVerificationFailed = errors.New("ssh host key verification failed")
 )
 
 var (
@@ -412,10 +420,43 @@ func runGitCommand(ctx context.Context, dir string, extraEnv []string, args ...s
 			return "", normalized
 		}
 
+		if classified := classifyGitCommandError(stderr.String()); classified != nil {
+			return "", classified
+		}
+
 		return "", fmt.Errorf("git command failed: %w", err)
 	}
 
 	return stdout.String(), nil
+}
+
+func classifyGitCommandError(stderrOutput string) error {
+	normalized := strings.ToLower(strings.TrimSpace(stderrOutput))
+	if normalized == "" {
+		return nil
+	}
+
+	switch {
+	case strings.Contains(normalized, "host key verification failed"):
+		return ErrSSHHostKeyVerificationFailed
+	case strings.Contains(normalized, "repository not found"):
+		return ErrRepositoryNotFound
+	case strings.Contains(normalized, "could not resolve hostname"),
+		strings.Contains(normalized, "name or service not known"),
+		strings.Contains(normalized, "connection refused"),
+		strings.Contains(normalized, "connection closed by remote host"),
+		strings.Contains(normalized, "connection timed out"),
+		strings.Contains(normalized, "operation timed out"),
+		strings.Contains(normalized, "no route to host"):
+		return ErrRepositoryUnreachable
+	case strings.Contains(normalized, "authentication failed"),
+		strings.Contains(normalized, "permission denied (publickey)"),
+		strings.Contains(normalized, "permission denied"),
+		strings.Contains(normalized, "could not read from remote repository"):
+		return ErrRepositoryAuthFailed
+	default:
+		return nil
+	}
 }
 
 func getHeadCommitHash(ctx context.Context, repoDir string) (string, error) {

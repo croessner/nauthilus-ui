@@ -195,6 +195,14 @@ func mapGitError(err error) (int, string, string) {
 		return http.StatusBadRequest, "git_invalid_file_path", "File path is invalid"
 	case errors.Is(err, gitops.ErrMissingHTTPSCredentials):
 		return http.StatusBadRequest, "git_missing_https_credentials", "Username and password are required for HTTPS auth"
+	case errors.Is(err, gitops.ErrRepositoryUnreachable):
+		return http.StatusBadRequest, "git_repository_unreachable", "Repository host is not reachable from the server runtime"
+	case errors.Is(err, gitops.ErrRepositoryAuthFailed):
+		return http.StatusBadRequest, "git_repository_auth_failed", "Repository authentication failed"
+	case errors.Is(err, gitops.ErrRepositoryNotFound):
+		return http.StatusNotFound, "git_repository_not_found", "Repository was not found"
+	case errors.Is(err, gitops.ErrSSHHostKeyVerificationFailed):
+		return http.StatusBadRequest, "git_ssh_host_key_verification_failed", "SSH host key verification failed"
 	case errors.Is(err, sshprovider.ErrUserNotMapped):
 		return http.StatusForbidden, "ssh_mapping_missing", "No SSH key is configured for the current user"
 	case errors.Is(err, sshprovider.ErrPassphraseRequired):

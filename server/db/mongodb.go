@@ -37,19 +37,20 @@ const (
 
 // MongoDB represents a MongoDB connection
 type MongoDB struct {
-	Client            *mongo.Client
-	DB                *mongo.Database
-	ProfileColl       *mongo.Collection
-	UserColl          *mongo.Collection
-	SessionConfigColl *mongo.Collection
-	SessionColl       *mongo.Collection
-	RuntimeColl       *mongo.Collection
-	LegalColl         *mongo.Collection
-	AuditColl         *mongo.Collection
-	Config            *config.Config
-	RetryCount        int
-	IsConnected       bool
-	CancelFunc        context.CancelFunc
+	Client             *mongo.Client
+	DB                 *mongo.Database
+	ProfileColl        *mongo.Collection
+	ProfileVersionColl *mongo.Collection
+	UserColl           *mongo.Collection
+	SessionConfigColl  *mongo.Collection
+	SessionColl        *mongo.Collection
+	RuntimeColl        *mongo.Collection
+	LegalColl          *mongo.Collection
+	AuditColl          *mongo.Collection
+	Config             *config.Config
+	RetryCount         int
+	IsConnected        bool
+	CancelFunc         context.CancelFunc
 }
 
 // NewMongoDB creates a new MongoDB connection
@@ -89,6 +90,7 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	m.Client = client
 	m.DB = client.Database("nauthilus-ui")
 	m.ProfileColl = m.DB.Collection("profiles")
+	m.ProfileVersionColl = m.DB.Collection("profile_versions")
 	m.UserColl = m.DB.Collection("users")
 	m.SessionConfigColl = m.DB.Collection("sessionconfig")
 	m.SessionColl = m.DB.Collection("sessions")
@@ -136,6 +138,11 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 
 	// Initialize runtime collection
 	if err := m.initializeRuntimeCollection(ctx); err != nil {
+		return err
+	}
+
+	// Initialize profile version collection indexes
+	if err := m.initializeProfileVersionCollection(ctx); err != nil {
 		return err
 	}
 
@@ -271,6 +278,43 @@ func (m *MongoDB) initializeRuntimeCollection(ctx context.Context) error {
 	}
 
 	slog.Info("Runtime collection initialized", "documents", runtimeCount)
+	return nil
+}
+
+// initializeProfileVersionCollection creates indexes for immutable profile snapshots.
+func (m *MongoDB) initializeProfileVersionCollection(ctx context.Context) error {
+	if m.ProfileVersionColl == nil {
+		return nil
+	}
+
+	_, err := m.ProfileVersionColl.Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{
+			Keys: bson.D{
+				{Key: "userId", Value: 1},
+				{Key: "profileName", Value: 1},
+				{Key: "version", Value: 1},
+			},
+			Options: options.Index().SetUnique(true).SetName("profile_version_unique"),
+		},
+		{
+			Keys: bson.D{
+				{Key: "userId", Value: 1},
+				{Key: "profileName", Value: 1},
+				{Key: "version", Value: -1},
+			},
+			Options: options.Index().SetName("profile_version_lookup"),
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	count, err := m.ProfileVersionColl.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	slog.Info("Profile version collection initialized", "documents", count)
 	return nil
 }
 

@@ -14,6 +14,12 @@ interface ConfigProfile {
   config: NauthilusConfig;
 }
 
+export interface ProfileVersionContextPayload {
+  source?: string;
+  comment?: string;
+  metadata?: Record<string, unknown>;
+}
+
 interface LoadedProfileState {
   profilesArray: ConfigProfile[];
   currentProfile: string;
@@ -31,7 +37,7 @@ interface ConfigContextType {
   refreshConfig: () => Promise<void>;
   updateConfig: (config: NauthilusConfig) => Promise<void>;
   updateConfigSection: (section: string, data: any) => Promise<void>;
-  uploadConfig: (file: File, profileName?: string) => Promise<void>;
+  uploadConfig: (file: File, profileName?: string, versionContext?: ProfileVersionContextPayload) => Promise<void>;
   downloadConfig: (format?: ConfigDownloadFormat) => Promise<void>;
   resetConfig: () => Promise<void>;
   loadConfigFromBackend: (connectionConfig: any) => Promise<void>;
@@ -610,7 +616,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
   };
 
   // Function to upload a configuration file
-  const uploadConfig = useCallback(async (file: File, profileName?: string) => {
+  const uploadConfig = useCallback(async (file: File, profileName?: string, versionContext?: ProfileVersionContextPayload) => {
     await withErrorHandling(async () => {
       let newConfig = await parseUploadedConfigFile(file) as NauthilusConfig;
 
@@ -671,7 +677,8 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       try {
         await axios.post(`/api/profiles/${userId}`, {
           profiles: updatedProfiles,
-          currentProfileName: targetProfileName === currentProfileName ? currentProfileName : targetProfileName
+          currentProfileName: targetProfileName === currentProfileName ? currentProfileName : targetProfileName,
+          ...(versionContext ? { versionContext } : {})
         });
       } catch (error) {
         console.error('Failed to save profiles to API:', error);

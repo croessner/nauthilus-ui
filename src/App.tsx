@@ -62,7 +62,8 @@ import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArro
 import PeopleIcon from '@mui/icons-material/People';
 import LogoutIcon from '@mui/icons-material/Logout';
 import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import { ConfigProvider, useConfig } from './contexts/ConfigContext';
+import HistoryIcon from '@mui/icons-material/History';
+import { ConfigProvider, useConfig, type ProfileVersionContextPayload } from './contexts/ConfigContext';
 import { RuntimeProvider, useRuntime, getCurrentUserId } from './contexts/RuntimeContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { UserProvider, useUser } from './contexts/UserContext';
@@ -104,6 +105,16 @@ interface GitCapabilities {
   passphraseCacheSeconds: number;
   defaultBranch: string;
   defaultFilePath: string;
+}
+
+interface ProfileVersionItem {
+  profileName: string;
+  version: number;
+  createdAt: string;
+  createdBy: string;
+  source: string;
+  comment?: string;
+  metadata?: Record<string, unknown>;
 }
 
 const ServerConfig = lazy(() => import('./components/ServerConfig'));
@@ -168,6 +179,11 @@ const MainContent = (): React.JSX.Element => {
   const [gitPassphraseInput, setGitPassphraseInput] = useState('');
   const [pendingGitAction, setPendingGitAction] = useState<'pull' | 'push' | null>(null);
   const [gitNotice, setGitNotice] = useState<string | null>(null);
+  const [profileVersionsDialogOpen, setProfileVersionsDialogOpen] = useState(false);
+  const [profileVersions, setProfileVersions] = useState<ProfileVersionItem[]>([]);
+  const [profileVersionsLoading, setProfileVersionsLoading] = useState(false);
+  const [profileVersionActionBusy, setProfileVersionActionBusy] = useState(false);
+  const [manualSnapshotComment, setManualSnapshotComment] = useState('');
   // Profile state variables removed as we now use a dedicated page
 
   // Global session-expired dialog state
@@ -285,6 +301,7 @@ const MainContent = (): React.JSX.Element => {
     hasUnsavedChanges, 
     profiles, 
     currentProfileName, 
+    refreshConfig,
     uploadConfig, 
     downloadConfig, 
     resetConfig, 
@@ -617,10 +634,30 @@ const MainContent = (): React.JSX.Element => {
       }
 
       if (action === 'pull') {
-        const payload = await response.json() as { content?: string };
+        const payload = await response.json() as {
+          content?: string;
+          branch?: string;
+          filePath?: string;
+          commitHash?: string;
+        };
         const content = String(payload?.content || '');
         const uploadedFile = new File([content], 'nauthilus.yml', { type: 'text/yaml' });
-        await uploadConfig(uploadedFile, currentProfileName);
+        const resolvedBranch = String(payload?.branch || branch);
+        const resolvedFilePath = String(payload?.filePath || filePath);
+        const resolvedCommitHash = String(payload?.commitHash || '');
+        const versionContext: ProfileVersionContextPayload = {
+          source: 'git_pull',
+          comment: resolvedCommitHash
+            ? `Git pull ${resolvedBranch}:${resolvedFilePath}@${resolvedCommitHash}`
+            : `Git pull ${resolvedBranch}:${resolvedFilePath}`,
+          metadata: {
+            repositoryUrl,
+            branch: resolvedBranch,
+            filePath: resolvedFilePath,
+            commitHash: resolvedCommitHash,
+          },
+        };
+        await uploadConfig(uploadedFile, currentProfileName, versionContext);
       } else {
         const payload = await response.json().catch(() => ({} as { tagName?: string; tagAlreadyExists?: boolean }));
         if (payload?.tagAlreadyExists && payload?.tagName) {
@@ -786,6 +823,122 @@ const MainContent = (): React.JSX.Element => {
         // ignore delete errors for now
       }
       setDeleteProfileDialogOpen(false);
+    }
+  };
+
+  const loadProfileVersions = async (): Promise<void> => {
+    setProfileVersionsLoading(true);
+    try {
+      const userId = await getCurrentUserId();
+      const response = await authenticatedFetch(
+        `/api/profiles/${encodeURIComponent(userId)}/${encodeURIComponent(currentProfileName)}/versions?limit=200`,
+      );
+      if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(message || 'Failed to load profile versions');
+      }
+
+      const payload = await response.json().catch(() => ({ items: [] as ProfileVersionItem[] }));
+      const items = Array.isArray(payload?.items) ? payload.items as ProfileVersionItem[] : [];
+      setProfileVersions(items);
+    } finally {
+      setProfileVersionsLoading(false);
+    }
+  };
+
+  const handleProfileVersionsClick = () => {
+    setProfileVersionsDialogOpen(true);
+    setManualSnapshotComment('');
+    handleProfileMenuClose();
+    void loadProfileVersions().catch((error) => {
+      setError(error instanceof Error ? error.message : String(error));
+    });
+  };
+
+  const handleCreateManualSnapshot = async (): Promise<void> => {
+    setProfileVersionActionBusy(true);
+    try {
+      const userId = await getCurrentUserId();
+      const response = await authenticatedFetch(
+        `/api/profiles/${encodeURIComponent(userId)}/${encodeURIComponent(currentProfileName)}/versions/snapshots`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ comment: manualSnapshotComment.trim() }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(message || 'Failed to create profile snapshot');
+      }
+
+      setManualSnapshotComment('');
+      await loadProfileVersions();
+      setGitNotice(`Snapshot for profile "${currentProfileName}" created.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProfileVersionActionBusy(false);
+    }
+  };
+
+  const handleRestoreProfileVersion = async (version: number): Promise<void> => {
+    const restoreComment = window.prompt('Optional restore comment:', '') || '';
+    const confirmRestore = window.confirm(`Restore profile "${currentProfileName}" from version ${version}?`);
+    if (!confirmRestore) {
+      return;
+    }
+
+    setProfileVersionActionBusy(true);
+    try {
+      const userId = await getCurrentUserId();
+      const response = await authenticatedFetch(
+        `/api/profiles/${encodeURIComponent(userId)}/${encodeURIComponent(currentProfileName)}/versions/${version}/restore`,
+        {
+          method: 'POST',
+          body: JSON.stringify({ comment: restoreComment.trim() }),
+        },
+      );
+      if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(message || 'Failed to restore profile version');
+      }
+
+      await refreshConfig();
+      await loadProfileVersions();
+      setGitNotice(`Profile "${currentProfileName}" restored from version ${version}.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProfileVersionActionBusy(false);
+    }
+  };
+
+  const handleDeleteProfileVersion = async (version: number): Promise<void> => {
+    const confirmDelete = window.confirm(`Delete version ${version} for profile "${currentProfileName}" permanently?`);
+    if (!confirmDelete) {
+      return;
+    }
+
+    setProfileVersionActionBusy(true);
+    try {
+      const userId = await getCurrentUserId();
+      const response = await authenticatedFetch(
+        `/api/profiles/${encodeURIComponent(userId)}/${encodeURIComponent(currentProfileName)}/versions/${version}`,
+        {
+          method: 'DELETE',
+        },
+      );
+      if (!response.ok) {
+        const message = await response.text().catch(() => response.statusText);
+        throw new Error(message || 'Failed to delete profile version');
+      }
+
+      await loadProfileVersions();
+      setGitNotice(`Version ${version} deleted.`);
+    } catch (error) {
+      setError(error instanceof Error ? error.message : String(error));
+    } finally {
+      setProfileVersionActionBusy(false);
     }
   };
 
@@ -1229,6 +1382,10 @@ const MainContent = (): React.JSX.Element => {
               <MenuItem onClick={handleCreateProfileClick}>Create New Profile</MenuItem>
               <MenuItem onClick={handleRenameProfileClick}>Rename Current Profile</MenuItem>
               <MenuItem onClick={handleDeleteProfileClick}>Delete Current Profile</MenuItem>
+              <MenuItem onClick={handleProfileVersionsClick}>
+                <HistoryIcon fontSize="small" sx={{ mr: 1 }} />
+                Profile Versions
+              </MenuItem>
               <MenuItem onClick={handleUploadWithProfileClick}>Upload to New Profile</MenuItem>
             </Menu>
           </Box>
@@ -1663,6 +1820,110 @@ const MainContent = (): React.JSX.Element => {
         <DialogActions>
           <Button onClick={() => setDeleteProfileDialogOpen(false)}>Cancel</Button>
           <Button onClick={handleDeleteProfileConfirm} color="error">Delete</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog
+        open={profileVersionsDialogOpen}
+        onClose={() => setProfileVersionsDialogOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Profile Versions: {currentProfileName}</DialogTitle>
+        <DialogContent>
+          <DialogContentText sx={{ mb: 2 }}>
+            Create manual snapshots, restore older versions, or hard-delete versions.
+          </DialogContentText>
+          <Box sx={{ display: 'flex', gap: 1, mb: 2, alignItems: 'center' }}>
+            <TextField
+              fullWidth
+              size="small"
+              label="Snapshot Comment (optional)"
+              value={manualSnapshotComment}
+              onChange={(event) => setManualSnapshotComment(event.target.value)}
+            />
+            <Button
+              variant="contained"
+              onClick={() => void handleCreateManualSnapshot()}
+              disabled={profileVersionActionBusy || profileVersionsLoading}
+            >
+              Snapshot
+            </Button>
+          </Box>
+          {profileVersionsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}>
+              <CircularProgress size={24} />
+            </Box>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, maxHeight: 420, overflowY: 'auto', pr: 0.5 }}>
+              {profileVersions.length === 0 && (
+                <Alert severity="info">No versions available for this profile yet.</Alert>
+              )}
+              {profileVersions.map((profileVersion) => {
+                const metadata = profileVersion.metadata || {};
+                const branch = String((metadata as any).branch || '');
+                const filePath = String((metadata as any).filePath || (metadata as any).file_path || '');
+                const commitHash = String((metadata as any).commitHash || (metadata as any).commit_hash || '');
+                const repositoryUrl = String((metadata as any).repositoryUrl || (metadata as any).repository_url || '');
+                const renderedDate = profileVersion.createdAt
+                  ? new Date(profileVersion.createdAt).toLocaleString()
+                  : 'n/a';
+
+                return (
+                  <Box
+                    key={profileVersion.version}
+                    sx={{
+                      border: (theme) => `1px solid ${theme.palette.divider}`,
+                      borderRadius: 1,
+                      p: 1.5,
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 1,
+                    }}
+                  >
+                    <Typography variant="subtitle2">
+                      Version {profileVersion.version} • {profileVersion.source || 'auto'}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Created: {renderedDate} by {profileVersion.createdBy || 'system'}
+                    </Typography>
+                    {profileVersion.comment && (
+                      <Typography variant="body2" color="text.secondary">
+                        Comment: {profileVersion.comment}
+                      </Typography>
+                    )}
+                    {(branch || filePath || commitHash || repositoryUrl) && (
+                      <Typography variant="body2" color="text.secondary">
+                        Git: {branch || '-'} {filePath ? `• ${filePath}` : ''} {commitHash ? `• ${commitHash}` : ''} {repositoryUrl ? `• ${repositoryUrl}` : ''}
+                      </Typography>
+                    )}
+                    <Box sx={{ display: 'flex', gap: 1, justifyContent: 'flex-end' }}>
+                      <Button
+                        size="small"
+                        variant="outlined"
+                        onClick={() => void handleRestoreProfileVersion(profileVersion.version)}
+                        disabled={profileVersionActionBusy}
+                      >
+                        Restore
+                      </Button>
+                      <Button
+                        size="small"
+                        color="error"
+                        variant="outlined"
+                        onClick={() => void handleDeleteProfileVersion(profileVersion.version)}
+                        disabled={profileVersionActionBusy}
+                      >
+                        Delete
+                      </Button>
+                    </Box>
+                  </Box>
+                );
+              })}
+            </Box>
+          )}
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setProfileVersionsDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
 
