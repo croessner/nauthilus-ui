@@ -7,6 +7,10 @@ This stack runs a full demo environment for `nauthilus-ui` with:
 - `nauthilus:v2.0.17` (CSV-backed test backend)
 - `valkey`
 - `clickhouse` (LTS server + schema init job)
+- `tempo` (trace storage + OTLP ingest)
+- `loki` (log storage)
+- `grafana-alloy` (Docker log collector to Loki)
+- `grafana` (pre-provisioned with Tempo + Loki datasources)
 - `gitea` + automatic bootstrap
 
 The bootstrap job generates an SSH key at deployment time, stores it in a shared Docker volume, adds the key to Gitea user `gitadmin`, creates a demo repository, and seeds `nauthilus.yml`.
@@ -31,6 +35,10 @@ docker compose -f contrib/demo-stack/docker-compose.yml logs gitea-bootstrap
 - Gitea Web: http://localhost:3003
 - Nauthilus API: http://localhost:8080
 - ClickHouse HTTP: http://localhost:8123
+- Grafana: http://localhost:3004
+- Tempo HTTP API: http://localhost:3200
+- Loki HTTP API: http://localhost:3100
+- Alloy UI: http://localhost:12345
 - Gitea SSH: `localhost:2222`
 
 ## Demo Credentials
@@ -41,6 +49,9 @@ docker compose -f contrib/demo-stack/docker-compose.yml logs gitea-bootstrap
 - Gitea login:
   - username: `gitadmin`
   - password: `gitadmin`
+- Grafana login:
+  - username: `admin`
+  - password: `admin`
 - Nauthilus CSV demo user:
   - username: `demo-user`
   - password: `demo-password`
@@ -104,6 +115,65 @@ curl -sS -u demo-backchannel:demoBackchannelPass01 \
 ```bash
 curl -sS "http://localhost:8123/?user=nauthilus&password=nauthilus_clickhouse_password&query=SELECT%20count()%20FROM%20nauthilus.logins"
 ```
+
+## Tracing Demo Flow (Grafana + Tempo)
+
+Nauthilus is preconfigured with:
+
+- `server.insights.tracing.enabled: true`
+- `server.insights.tracing.exporter: otlphttp`
+- `server.insights.tracing.endpoint: tempo:4318`
+
+1. Generate a few requests against Nauthilus (this creates spans):
+
+```bash
+./contrib/demo-stack/scripts/auth-json-demo-user.sh
+./contrib/demo-stack/scripts/auth-json-invalid-user.sh
+```
+
+2. Open Grafana at http://localhost:3004 and login with `admin` / `admin`.
+
+3. Open `Explore`, select datasource `Tempo`, and run a TraceQL query like:
+
+```traceql
+{ resource.service.name = "nauthilus-demo" }
+```
+
+If you deployed runtime config from Git repository, service name is:
+
+```text
+nauthilus-demo-from-git
+```
+
+## Logs Demo Flow (Grafana + Loki + Alloy)
+
+Grafana Alloy is preconfigured to scrape Docker logs from these Compose services:
+
+- `nauthilus`
+- `nauthilus-ui`
+
+and forwards them to Loki.
+
+1. Trigger runtime activity to generate logs:
+
+```bash
+./contrib/demo-stack/scripts/auth-json-demo-user.sh
+./contrib/demo-stack/scripts/auth-json-invalid-user.sh
+```
+
+2. Open Grafana at http://localhost:3004 and login with `admin` / `admin`.
+
+3. Open `Explore`, select datasource `Loki`, and run one of these LogQL queries:
+
+```logql
+{service="nauthilus"}
+```
+
+```logql
+{service="nauthilus-ui"}
+```
+
+Optional: check Alloy target/debug state at http://localhost:12345.
 
 ## Stop And Remove
 

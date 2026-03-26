@@ -11,6 +11,16 @@ server:
   keep_alive:
     enabled: true
 
+  insights:
+    tracing:
+      enabled: true
+      exporter: otlphttp
+      endpoint: tempo:4318
+      sampler_ratio: 1.0
+      service_name: "nauthilus-demo-from-git"
+      propagators: [ tracecontext, baggage ]
+      enable_redis: true
+
   dedup:
     in_process_enabled: true
 
