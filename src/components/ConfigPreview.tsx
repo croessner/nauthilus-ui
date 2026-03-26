@@ -1,19 +1,16 @@
 import React from 'react';
 import { Box, Paper, Typography, useTheme, Alert, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
-import { formatConfigAsYaml } from '../utils/yamlUtils';
 import { useConfig } from '../contexts/ConfigContext';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
-import { validateEssentialConfigSettings } from '../utils/configPreviewValidation';
+import { validateConfigForExport } from '../utils/configPreviewValidation';
 
 const ConfigPreview = (): React.JSX.Element => {
-  const { config, validateConfigSection } = useConfig();
+  const { config } = useConfig();
   const theme = useTheme();
 
-  // Convert config to YAML
-  const yamlContent = config ? formatConfigAsYaml(config) : '';
-
-  const validationResult = validateEssentialConfigSettings(config, validateConfigSection, formatConfigAsYaml);
+  const validationResult = validateConfigForExport(config);
+  const yamlContent = validationResult.yamlContent;
 
   return (
     <Box sx={{ width: '100%', mt: 2 }}>
@@ -37,14 +34,14 @@ const ConfigPreview = (): React.JSX.Element => {
           </Alert>
         )}
 
-        {validationResult.errors.length > 0 && (
+        {validationResult.blockingFindings.length > 0 && (
           <List dense>
-            {validationResult.errors.map((error, index) => (
+            {validationResult.blockingFindings.map((error, index) => (
               <ListItem key={index}>
                 <ListItemIcon>
                   <ErrorOutlineIcon color="error" />
                 </ListItemIcon>
-                <ListItemText primary={error} />
+                <ListItemText primary={`${error.path}: ${error.message}`} />
               </ListItem>
             ))}
           </List>
@@ -75,7 +72,7 @@ const ConfigPreview = (): React.JSX.Element => {
 
         <Alert severity="info" sx={{ mt: 2 }}>
           <Typography variant="body2">
-            This preview shows the current configuration and validates essential settings required for operation.
+            This preview uses the same sanitizer and validation pipeline as download and Git push.
           </Typography>
         </Alert>
       </Box>

@@ -1,12 +1,14 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { NauthilusConfig, LuaHooksConfig } from '../types/config';
 import yaml from 'js-yaml';
-import { formatConfigAsYaml } from '../utils/yamlUtils';
 import { buildConfigBundleZip, ConfigDownloadFormat, parseUploadedConfigFile } from '../utils/configArchive';
 import axios from '../utils/axiosConfig';
 import { withErrorHandling as apiWithErrorHandling, buildBackendAuthHeaders, getProxyOrigin, authenticatedFetch } from '../utils/apiUtils';
 import { getCurrentUserId } from '../utils/currentUser';
 import { hasServerFeature } from '../utils/featureFlags';
+import { sanitizeDisabledEndpoints } from '../utils/serverConfigNormalization';
+import { generateConfigSecret } from '../utils/configSecrets';
+import { validateConfigForExport } from '../utils/configPreviewValidation';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -56,22 +58,25 @@ const ConfigContext = createContext<ConfigContextType | undefined>(undefined);
 // Storage keys for the configuration (kept for backward compatibility)
 const DEFAULT_PROFILE_NAME = 'Default';
 
-// Default empty configuration
-const DEFAULT_CONFIG: NauthilusConfig = {
-  server: {
-    address: '127.0.0.1:8080',
-    instance_name: 'nauthilus',
-    max_concurrent_requests: 100,
-    max_password_history_entries: 10,
-    backends: ['cache'],
-    redis: {
-      database_number: 0,
-      prefix: 'nt:',
-      master: {
-        address: '127.0.0.1:6379'
+const createDefaultConfig = (): NauthilusConfig => {
+  return {
+    server: {
+      address: '127.0.0.1:8080',
+      instance_name: 'nauthilus',
+      max_concurrent_requests: 100,
+      max_password_history_entries: 10,
+      backends: ['cache'],
+      redis: {
+        database_number: 0,
+        prefix: 'nt:',
+        password_nonce: generateConfigSecret(),
+        encryption_secret: generateConfigSecret(),
+        master: {
+          address: '127.0.0.1:6379'
+        }
       }
     }
-  }
+  };
 };
 
 let initialConfigLoadPromise: Promise<LoadedProfileState> | null = null;
@@ -316,7 +321,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         console.log('Failed to load from API, creating default profile:', error);
 
         // Create a default profile if none exists
-        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: DEFAULT_CONFIG }];
+        profilesArray = [{ name: DEFAULT_PROFILE_NAME, config: createDefaultConfig() }];
         currentProfile = DEFAULT_PROFILE_NAME;
 
         // Save to API for future use
@@ -437,6 +442,13 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       normalizedConfig.server.oidc_auth = {
         enabled: Boolean(legacyJwtAuth?.enabled)
       };
+    }
+
+    const sanitizedDisabledEndpoints = sanitizeDisabledEndpoints(config.server.disabled_endpoints);
+    if (sanitizedDisabledEndpoints) {
+      normalizedConfig.server.disabled_endpoints = sanitizedDisabledEndpoints;
+    } else {
+      delete (normalizedConfig.server as any).disabled_endpoints;
     }
 
     // Drop removed dedup settings so deprecated backend-only keys are not shown in UI.
@@ -718,10 +730,12 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         return;
       }
 
-      // Validate required fields before allowing download
-      const validationErrors = validateConfig(config);
-      if (validationErrors.length > 0) {
-        setError(`Cannot download configuration: ${validationErrors.join(', ')}`);
+      const exportValidation = validateConfigForExport(config);
+      if (!exportValidation.isValid) {
+        const details = exportValidation.blockingFindings.map((finding) => `${finding.path}: ${finding.message}`);
+        const summary = details.slice(0, 5).join(', ');
+        const suffix = details.length > 5 ? ` (+${details.length - 5} more)` : '';
+        setError(`Cannot download configuration: ${summary}${suffix}`);
         return;
       }
 
@@ -731,12 +745,13 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
 
       let blob: Blob;
       let filename: string;
+      const sanitizedConfig = exportValidation.normalizedConfig || config;
 
       if (format === 'zip') {
-        blob = await buildConfigBundleZip(config, currentProfileName);
+        blob = await buildConfigBundleZip(sanitizedConfig, currentProfileName);
         filename = `nauthilus-${normalizedProfileName}.zip`;
       } else {
-        const yamlContent = formatConfigAsYaml(config);
+        const yamlContent = exportValidation.yamlContent;
         const contentWithComment = `${profileComment}\n\n${yamlContent}`;
         blob = new Blob([contentWithComment], { type: 'text/yaml' });
         filename = `nauthilus-${normalizedProfileName}.yml`;
@@ -757,13 +772,13 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       setError('Failed to download configuration.');
       console.error('Error downloading configuration:', err);
     }
-  }, [config, hasUnsavedChanges, validateConfig, currentProfileName, setError]);
+  }, [config, hasUnsavedChanges, currentProfileName, setError]);
 
   // Function to reset the configuration to default
   const resetConfig = useCallback(async () => {
     // Reset only the current profile by default
     await withErrorHandling(
-      () => updateProfilesWithConfig(DEFAULT_CONFIG),
+      () => updateProfilesWithConfig(createDefaultConfig()),
       'Failed to reset configuration. Please try again.'
     );
   }, [withErrorHandling, updateProfilesWithConfig]);
@@ -779,7 +794,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       // Create new profile with provided config or default
       const newProfile: ConfigProfile = {
         name,
-        config: configData || DEFAULT_CONFIG
+        config: configData || createDefaultConfig()
       };
 
       // Add a new profile to the list

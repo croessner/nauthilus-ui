@@ -25,6 +25,7 @@ import {
 } from '@mui/material';
 import * as ConfigContext from '../contexts/ConfigContext';
 import { NauthilusConfig, BackendConfig } from '../types/config';
+import { generateConfigSecret } from '../utils/configSecrets';
 import PasswordField from './common/PasswordField';
 const { useConfig } = ConfigContext;
 
@@ -50,6 +51,8 @@ const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): React.JSX.Elemen
   const [redisMasterAddress, setRedisMasterAddress] = useState('localhost:6379');
   const [redisUsername, setRedisUsername] = useState('');
   const [redisPassword, setRedisPassword] = useState('');
+  const [redisPasswordNonce] = useState(() => config?.server?.redis?.password_nonce || generateConfigSecret());
+  const [redisEncryptionSecret] = useState(() => config?.server?.redis?.encryption_secret || generateConfigSecret());
   const [redisDatabaseNumber, setRedisDatabaseNumber] = useState(0);
 
   // Redis replica configuration - using default values
@@ -129,6 +132,8 @@ const ConfigWizard = ({ autoOpen = false }: ConfigWizardProps): React.JSX.Elemen
       newConfig.server.redis = {};
     }
     newConfig.server.redis.database_number = redisDatabaseNumber;
+    newConfig.server.redis.password_nonce = redisPasswordNonce;
+    newConfig.server.redis.encryption_secret = redisEncryptionSecret;
 
     // Clear any existing Redis configuration
     newConfig.server.redis.master = undefined;

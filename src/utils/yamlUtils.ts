@@ -1,5 +1,6 @@
 import yaml from 'js-yaml';
 import type { NauthilusConfig } from '../types/config';
+import { sanitizeDisabledEndpoints } from './serverConfigNormalization';
 
 const DEFAULT_YAML_FLOW_LEVEL = 3;
 const MIN_YAML_FLOW_LEVEL = -1;
@@ -219,6 +220,16 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   // Drop legacy auth config after migration to server.oidc_auth
   if (configCopy.server?.jwt_auth) {
     delete configCopy.server.jwt_auth;
+  }
+
+  // Keep only currently supported endpoint toggle keys.
+  if (configCopy.server) {
+    const sanitizedDisabledEndpoints = sanitizeDisabledEndpoints(configCopy.server.disabled_endpoints);
+    if (sanitizedDisabledEndpoints) {
+      configCopy.server.disabled_endpoints = sanitizedDisabledEndpoints;
+    } else {
+      delete configCopy.server.disabled_endpoints;
+    }
   }
 
   // Preserve admin-defined bucket order for preview/download/git export.

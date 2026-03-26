@@ -73,7 +73,7 @@ import LoginPage from './components/LoginPage';
 import MFAPage from './components/MFAPage';
 import OIDCCallback from './components/OIDCCallback';
 import { authenticatedFetch, resetSettingsState, loadSettings as loadSettingsUtil } from './utils/apiUtils';
-import { formatConfigAsYaml } from './utils/yamlUtils';
+import { validateConfigForExport } from './utils/configPreviewValidation';
 import { cacheSSHPassphrase, clearCachedSSHPassphrase, readCachedSSHPassphrase } from './utils/sshPassphraseCache';
 import CookieBanner from './components/CookieBanner';
 import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
@@ -607,7 +607,17 @@ const MainContent = (): React.JSX.Element => {
         if (!config) {
           throw new Error('No configuration available for Git export.');
         }
-        body.content = formatConfigAsYaml(config);
+
+        const exportValidation = validateConfigForExport(config);
+        if (!exportValidation.isValid) {
+          const details = exportValidation.blockingFindings.map((finding) => `${finding.path}: ${finding.message}`);
+          const summary = details.slice(0, 5).join(', ');
+          const suffix = details.length > 5 ? ` (+${details.length - 5} more)` : '';
+          setError(`Cannot push configuration: ${summary}${suffix}`);
+          return;
+        }
+
+        body.content = exportValidation.yamlContent;
         body.commitMessage = `nauthilus-ui: update profile ${currentProfileName}`;
       }
 

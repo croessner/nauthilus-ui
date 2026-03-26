@@ -1,38 +1,6 @@
 server:
-  address: "0.0.0.0:8080"
-  max_concurrent_requests: 512
-  instance_name: "nauthilus-demo"
-
-  log:
-    level: "info"
-    add_source: true
-    json: false
-
-  keep_alive:
-    enabled: true
-
-  insights:
-    tracing:
-      enabled: true
-      exporter: otlphttp
-      endpoint: tempo:4318
-      sampler_ratio: 1.0
-      service_name: "nauthilus-demo"
-      propagators: [ tracecontext, baggage ]
-      enable_redis: true
-
-  brute_force_protocols: [ imap, pop3, smtp, http ]
-  backends: [ cache, lua ]
-  features: [ lua, brute_force ]
-  basic_auth:
-    enabled: true
-    username: "demo-backchannel"
-    password: "demoBackchannelPass01"
-
   redis:
-    master:
-      address: "valkey:6379"
-
+    master: {"address": "valkey:6379"}
     database_number: 0
     prefix: "nt:"
     pool_size: 64
@@ -41,47 +9,152 @@ server:
     negative_cache_ttl: 120
     password_nonce: "demoPasswordNonceValue01"
     encryption_secret: "demoEncryptionSecret01"
+    batching: {"enabled": true}
 
-    batching:
-      enabled: true
+  address: "0.0.0.0:8080"
+  max_concurrent_requests: 512
+
+  basic_auth:
+    enabled: true
+    username: "demo-backchannel"
+    password: "demoBackchannelPass01"
+
+  instance_name: "nauthilus-demo"
+
+  log:
+    json: false
+    color: true
+    level: "notice"
+    debug_modules: []
+    add_source: false
+
+  backends:
+    - "cache"
+    - "lua"
+
+  features:
+    - "lua"
+    - "brute_force"
+
+  brute_force_protocols:
+    - "imap"
+    - "pop3"
+    - "smtp"
+    - "http"
+
+  insights:
+    tracing: {"enabled": true, "exporter": "otlphttp", "endpoint": "tempo:4318", "sampler_ratio": 1, "service_name": "nauthilus-demo-from-git", "propagators": ["tracecontext", "baggage"], "enable_redis": true}
+
+  keep_alive:
+    enabled: true
+    timeout: "60s"
+    max_idle_connections: 100
+    max_idle_connections_per_host: 10
+
+  max_password_history_entries: 100
+  rate_limit_per_second: 100
+  rate_limit_burst: 200
+  http3: false
+  haproxy_v2: false
+  trusted_proxies: []
+
+  tls:
+    enabled: false
+    skip_verify: false
+    min_tls_version: "TLS1.2"
+    cipher_suites: []
+
+  disabled_endpoints:
+    auth_header: false
+    auth_json: false
+    auth_basic: false
+    auth_nginx: false
+    auth_jwt: false
+    custom_hooks: false
+    configuration: false
+
+  default_http_request_header: {}
+
+  compression:
+    enabled: false
+    algorithms: ["br", "zstd", "gzip"]
+    level_brotli: 0
+    level_zstd: 0
+    level_gzip: 5
+    min_length: 1024
+    content_types: []
+
+  timeouts:
+    redis_read: "1s"
+    redis_write: "2s"
+    ldap_search: "3s"
+    ldap_bind: "3s"
+    ldap_modify: "5s"
+    singleflight_work: "3s"
+    lua_backend: "5s"
+    lua_script: "3s"
+
+  middlewares:
+    logging: true
+    limit: true
+    recovery: true
+    trusted_proxies: true
+    request_decompression: true
+    response_compression: true
+    metrics: true
+    rate: true
+
+  http_client:
+    max_connections_per_host: 100
+    max_idle_connections: 100
+    max_idle_connections_per_host: 10
+    idle_connection_timeout: "90s"
+    tls: {"enabled": false, "skip_verify": false, "min_tls_version": "TLS1.2", "cipher_suites": []}
+
+  dns:
+    timeout: "5s"
+    resolve_client_ip: false
+
+  master_user:
+    enabled: false
+    delimiter: "%"
 
 brute_force:
   pw_history_for_known_accounts: false
   tolerate_percent: 10
-  tolerate_ttl: 10m
+  tolerate_ttl: "10m"
   adaptive_toleration: true
   min_tolerate_percent: 3
   max_tolerate_percent: 50
 
   buckets:
-    - { name: b_1m_ipv4_32_http, period: 1m, cidr: 32, ipv4: true, failed_requests: 20, filter_by_protocol: [ http ] }
+    - {"name": "b_1m_ipv4_32_http", "period": "1m", "cidr": 32, "ipv4": true, "failed_requests": 20, "filter_by_protocol": ["http"]}
+
+  ip_whitelist: []
+  soft_whitelist: {}
+  custom_tolerations: []
 
 lua:
-  actions:
-    - type: post
-      name: clickhouse
-      script_path: "server/lua-plugins.d/actions/clickhouse.lua"
-
-  custom_hooks:
-    - http_location: "clickhouse-query"
-      http_method: "GET"
-      script_path: "server/lua-plugins.d/hooks/clickhouse-query.lua"
-
-  search:
-    - protocol: [ imap, pop3, smtp, http ]
-      cache_name: default
-
   config:
     backend_script_path: "server/lua-plugins.d/backend/testing_csv_backend.lua"
-    init_script_paths:
-      - "server/lua-plugins.d/init/testing_csv_loader.lua"
+    init_script_paths: ["server/lua-plugins.d/init/testing_csv_loader.lua", "server/lua-plugins.d/init/init.lua"]
     package_path: "server/lua-plugins.d/share/?.lua;server/lua-plugins.d/backend/?.lua;server/lua-plugins.d/init/?.lua"
-
     backend_number_of_workers: 8
     action_number_of_workers: 8
-
     feature_vm_pool_size: 16
     filter_vm_pool_size: 16
     hook_vm_pool_size: 16
-
     queue_length: 0
+
+  actions:
+    - {"type": "post", "name": "clickhouse", "script_path": "server/lua-plugins.d/actions/clickhouse.lua"}
+
+  custom_hooks:
+    - {"http_location": "clickhouse-query", "http_method": "GET", "script_path": "server/lua-plugins.d/hooks/clickhouse-query.lua", "scopes": []}
+
+  search:
+    - {"protocol": ["imap", "pop3", "smtp", "http"], "cache_name": "default"}
+
+  features: []
+  filters: []
+  optional_lua_backends: {}
