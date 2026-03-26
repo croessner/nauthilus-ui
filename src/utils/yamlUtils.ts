@@ -1,5 +1,65 @@
 import yaml from 'js-yaml';
-import { NauthilusConfig } from '../types/config';
+import type { NauthilusConfig } from '../types/config';
+
+/**
+ * Preserves the admin-defined bucket order during export operations.
+ * This is intentionally defensive: even if intermediate transformations
+ * change array ordering, we restore the original bucket sequence here.
+ */
+const preserveBruteForceBucketOrder = (
+  sourceConfig: NauthilusConfig,
+  targetConfig: NauthilusConfig,
+): void => {
+  const sourceBuckets = sourceConfig.brute_force?.buckets;
+  const targetBuckets = targetConfig.brute_force?.buckets;
+
+  if (!Array.isArray(sourceBuckets) || !Array.isArray(targetBuckets)) {
+    return;
+  }
+
+  if (sourceBuckets.length !== targetBuckets.length) {
+    return;
+  }
+
+  if (sourceBuckets.length <= 1) {
+    return;
+  }
+
+  const bucketsByName = new Map<string, any[]>();
+  targetBuckets.forEach((bucket) => {
+    const name = typeof bucket?.name === 'string' ? bucket.name : '';
+    const existing = bucketsByName.get(name);
+    if (existing) {
+      existing.push(bucket);
+      return;
+    }
+    bucketsByName.set(name, [bucket]);
+  });
+
+  const usedBuckets = new Set<any>();
+  const orderedBuckets: any[] = [];
+
+  sourceBuckets.forEach((sourceBucket) => {
+    const name = typeof sourceBucket?.name === 'string' ? sourceBucket.name : '';
+    const candidates = bucketsByName.get(name);
+    const next = candidates?.shift();
+    if (next !== undefined) {
+      orderedBuckets.push(next);
+      usedBuckets.add(next);
+      return;
+    }
+
+    const fallback = targetBuckets.find((bucket) => !usedBuckets.has(bucket));
+    if (fallback !== undefined) {
+      orderedBuckets.push(fallback);
+      usedBuckets.add(fallback);
+    }
+  });
+
+  if (orderedBuckets.length === targetBuckets.length && targetConfig.brute_force) {
+    targetConfig.brute_force.buckets = orderedBuckets;
+  }
+};
 
 export const orderTopLevelConfigKeys = (config: Record<string, any>): string[] => {
   const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
@@ -78,6 +138,9 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   if (configCopy.server?.jwt_auth) {
     delete configCopy.server.jwt_auth;
   }
+
+  // Preserve admin-defined bucket order for preview/download/git export.
+  preserveBruteForceBucketOrder(config, configCopy);
 
   // --- Sort the object keys ---
   const sortedConfig: any = {};
