@@ -24,10 +24,17 @@ FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS go-build
 # Add build arguments for multi-architecture support
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
+ARG UPX_ENABLED=true
+ARG UPX_FLAGS="-1"
 RUN echo "Building on $BUILDPLATFORM for $TARGETPLATFORM"
 
-# Install UPX for compression and Git for version info
-RUN apk --no-cache add upx git
+# Install Git for version info and optionally UPX for binary compression.
+# Default UPX mode is "-1" (fast) to keep build times low.
+RUN if [ "$UPX_ENABLED" = "true" ]; then \
+      apk --no-cache add git upx; \
+    else \
+      apk --no-cache add git; \
+    fi
 
 WORKDIR /app
 
@@ -54,7 +61,13 @@ RUN GIT_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v0.0.0") && \
       *) GOARCH=amd64 ;; \
     esac && \
     CGO_ENABLED=0 GOOS=$GOOS GOARCH=$GOARCH go build -mod=vendor -ldflags="-s -w -X main.version=$VERSION" -o server . && \
-    upx --best server
+    if [ "$UPX_ENABLED" = "true" ]; then \
+      echo "Compressing server binary with UPX flags: $UPX_FLAGS"; \
+      set -- $UPX_FLAGS; \
+      upx "$@" server; \
+    else \
+      echo "Skipping UPX compression (UPX_ENABLED=$UPX_ENABLED)"; \
+    fi
 
 # Production stage
 FROM alpine:3.22
