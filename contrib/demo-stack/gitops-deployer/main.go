@@ -35,6 +35,8 @@ const (
 	defaultTagRegex        = "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
 	defaultMaxConfigBytes  = 1 * 1024 * 1024
 	maxWebhookBodyBytes    = 2 * 1024 * 1024
+	containerReadyTimeout  = 20 * time.Second
+	containerPollInterval  = 1 * time.Second
 )
 
 // Config contains all runtime options for the deployer service.
@@ -165,6 +167,11 @@ type GitContentFetcher struct {
 	sshKnownHostsPath  string
 }
 
+// ConfigContentFetcher abstracts repository content retrieval.
+type ConfigContentFetcher interface {
+	FetchByTag(ctx context.Context, tagName string) ([]byte, error)
+}
+
 // NewGitContentFetcher creates a fetcher for repository content.
 func NewGitContentFetcher(cfg Config) *GitContentFetcher {
 	return &GitContentFetcher{
@@ -264,6 +271,12 @@ type DockerRestarter struct {
 	httpClient    *http.Client
 }
 
+// ContainerController handles container lifecycle operations needed by deployment.
+type ContainerController interface {
+	Restart(ctx context.Context) error
+	WaitReady(ctx context.Context) error
+}
+
 // NewDockerRestarter creates a Docker API client for container restart operations.
 func NewDockerRestarter(socketPath, containerName string) *DockerRestarter {
 	dialer := &net.Dialer{Timeout: 5 * time.Second}
@@ -308,6 +321,94 @@ func (r *DockerRestarter) Restart(ctx context.Context) error {
 	return nil
 }
 
+// WaitReady polls Docker inspect until the container is running and healthy (if health checks exist).
+func (r *DockerRestarter) WaitReady(ctx context.Context) error {
+	deadlineCtx, cancel := context.WithTimeout(ctx, containerReadyTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(containerPollInterval)
+	defer ticker.Stop()
+
+	var lastState dockerContainerState
+
+	for {
+		state, err := r.inspectState(deadlineCtx)
+		if err != nil {
+			return err
+		}
+
+		lastState = state
+		if state.Running && (state.Health == "" || state.Health == "healthy") {
+			return nil
+		}
+
+		if state.Status == "exited" || state.Status == "dead" {
+			return fmt.Errorf("container entered non-running state: status=%q health=%q running=%t", state.Status, state.Health, state.Running)
+		}
+
+		select {
+		case <-deadlineCtx.Done():
+			return fmt.Errorf("container did not become ready within %s: status=%q health=%q running=%t: %w",
+				containerReadyTimeout, lastState.Status, lastState.Health, lastState.Running, deadlineCtx.Err())
+		case <-ticker.C:
+		}
+	}
+}
+
+type dockerInspectResponse struct {
+	State struct {
+		Status  string `json:"Status"`
+		Running bool   `json:"Running"`
+		Health  *struct {
+			Status string `json:"Status"`
+		} `json:"Health"`
+	} `json:"State"`
+}
+
+type dockerContainerState struct {
+	Status  string
+	Running bool
+	Health  string
+}
+
+func (r *DockerRestarter) inspectState(ctx context.Context) (dockerContainerState, error) {
+	target := fmt.Sprintf("http://docker/containers/%s/json", url.PathEscape(r.containerName))
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
+	if err != nil {
+		return dockerContainerState{}, fmt.Errorf("failed to build Docker inspect request: %w", err)
+	}
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return dockerContainerState{}, fmt.Errorf("docker inspect request failed: %w", err)
+	}
+
+	defer func() {
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode >= http.StatusBadRequest {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return dockerContainerState{}, fmt.Errorf("docker inspect returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+
+	var payload dockerInspectResponse
+	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
+		return dockerContainerState{}, fmt.Errorf("failed to decode Docker inspect response: %w", err)
+	}
+
+	health := ""
+	if payload.State.Health != nil {
+		health = strings.TrimSpace(payload.State.Health.Status)
+	}
+
+	return dockerContainerState{
+		Status:  strings.TrimSpace(payload.State.Status),
+		Running: payload.State.Running,
+		Health:  health,
+	}, nil
+}
+
 // TagDeployer performs deployment operations for a single Git tag.
 type TagDeployer interface {
 	DeployTag(ctx context.Context, tagName string) error
@@ -315,8 +416,8 @@ type TagDeployer interface {
 
 // DeploymentService fetches, writes and applies repository configuration.
 type DeploymentService struct {
-	fetcher   *GitContentFetcher
-	restarter *DockerRestarter
+	fetcher   ConfigContentFetcher
+	container ContainerController
 	logger    *slog.Logger
 	target    string
 	maxBytes  int
@@ -324,10 +425,10 @@ type DeploymentService struct {
 }
 
 // NewDeploymentService creates a new deployer service.
-func NewDeploymentService(cfg Config, fetcher *GitContentFetcher, restarter *DockerRestarter, logger *slog.Logger) *DeploymentService {
+func NewDeploymentService(cfg Config, fetcher ConfigContentFetcher, container ContainerController, logger *slog.Logger) *DeploymentService {
 	return &DeploymentService{
 		fetcher:   fetcher,
-		restarter: restarter,
+		container: container,
 		logger:    logger,
 		target:    cfg.TargetFile,
 		maxBytes:  cfg.MaxConfigBytes,
@@ -354,17 +455,66 @@ func (s *DeploymentService) DeployTag(ctx context.Context, tagName string) error
 		return fmt.Errorf("configuration file exceeds maximum size of %d bytes", s.maxBytes)
 	}
 
+	previousConfig, hadPreviousConfig, err := readExistingFile(s.target)
+	if err != nil {
+		return err
+	}
+
 	if err := writeFileAtomically(s.target, content, 0o600); err != nil {
 		return err
 	}
 
-	if err := s.restarter.Restart(ctx); err != nil {
-		return err
+	if err := s.container.Restart(ctx); err != nil {
+		return s.rollbackToPreviousConfig(ctx, previousConfig, hadPreviousConfig, fmt.Errorf("failed to restart container after writing new config: %w", err))
+	}
+
+	if err := s.container.WaitReady(ctx); err != nil {
+		return s.rollbackToPreviousConfig(ctx, previousConfig, hadPreviousConfig, fmt.Errorf("container failed readiness check after restart: %w", err))
 	}
 
 	s.logger.Info("Deployment completed", "tag", tagName, "bytes", len(content))
 
 	return nil
+}
+
+func readExistingFile(targetPath string) ([]byte, bool, error) {
+	data, err := os.ReadFile(targetPath)
+	if err == nil {
+		return data, true, nil
+	}
+
+	if errors.Is(err, os.ErrNotExist) {
+		return nil, false, nil
+	}
+
+	return nil, false, fmt.Errorf("failed to read existing target file before deployment: %w", err)
+}
+
+func (s *DeploymentService) rollbackToPreviousConfig(
+	ctx context.Context,
+	previousConfig []byte,
+	hadPreviousConfig bool,
+	cause error,
+) error {
+	if !hadPreviousConfig {
+		return fmt.Errorf("%w; rollback failed: no previous config file exists", cause)
+	}
+
+	if err := writeFileAtomically(s.target, previousConfig, 0o600); err != nil {
+		return fmt.Errorf("%w; rollback failed while restoring previous config: %v", cause, err)
+	}
+
+	if err := s.container.Restart(ctx); err != nil {
+		return fmt.Errorf("%w; rollback failed while restarting container: %v", cause, err)
+	}
+
+	if err := s.container.WaitReady(ctx); err != nil {
+		return fmt.Errorf("%w; rollback restart failed readiness check: %v", cause, err)
+	}
+
+	s.logger.Warn("Rollback completed after failed deployment attempt")
+
+	return cause
 }
 
 func writeFileAtomically(targetPath string, content []byte, permission os.FileMode) error {

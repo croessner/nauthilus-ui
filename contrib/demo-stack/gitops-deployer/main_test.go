@@ -6,6 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"io"
 	"log/slog"
 	"net/http"
@@ -108,6 +109,164 @@ func TestWriteFileAtomically(t *testing.T) {
 
 	if !bytes.Equal(data, content) {
 		t.Fatalf("unexpected file content: got %q, want %q", string(data), string(content))
+	}
+}
+
+type fakeConfigFetcher struct {
+	content   []byte
+	err       error
+	lastTag   string
+	callCount int
+}
+
+func (f *fakeConfigFetcher) FetchByTag(_ context.Context, tagName string) ([]byte, error) {
+	f.callCount++
+	f.lastTag = tagName
+
+	if f.err != nil {
+		return nil, f.err
+	}
+
+	return append([]byte(nil), f.content...), nil
+}
+
+type fakeContainerController struct {
+	restartErrs []error
+	waitErrs    []error
+	restarts    int
+	waits       int
+}
+
+func (f *fakeContainerController) Restart(_ context.Context) error {
+	f.restarts++
+	return popFirstError(&f.restartErrs)
+}
+
+func (f *fakeContainerController) WaitReady(_ context.Context) error {
+	f.waits++
+	return popFirstError(&f.waitErrs)
+}
+
+func popFirstError(list *[]error) error {
+	if len(*list) == 0 {
+		return nil
+	}
+
+	err := (*list)[0]
+	*list = (*list)[1:]
+
+	return err
+}
+
+func TestDeploymentServiceDeployTagWritesAndRestarts(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "nauthilus.yml")
+	if err := os.WriteFile(targetPath, []byte("server:\n  instance_name: old\n"), 0o600); err != nil {
+		t.Fatalf("failed to seed target file: %v", err)
+	}
+
+	fetcher := &fakeConfigFetcher{content: []byte("server:\n  instance_name: new\n")}
+	container := &fakeContainerController{}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	service := NewDeploymentService(
+		Config{TargetFile: targetPath, MaxConfigBytes: 1024},
+		fetcher,
+		container,
+		logger,
+	)
+
+	if err := service.DeployTag(context.Background(), "v1.2.3"); err != nil {
+		t.Fatalf("DeployTag returned error: %v", err)
+	}
+
+	got, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("failed to read target file: %v", err)
+	}
+
+	if string(got) != "server:\n  instance_name: new\n" {
+		t.Fatalf("unexpected target content: %q", string(got))
+	}
+
+	if container.restarts != 1 || container.waits != 1 {
+		t.Fatalf("unexpected container calls: restarts=%d waits=%d", container.restarts, container.waits)
+	}
+
+	if fetcher.callCount != 1 || fetcher.lastTag != "v1.2.3" {
+		t.Fatalf("unexpected fetch calls: calls=%d tag=%q", fetcher.callCount, fetcher.lastTag)
+	}
+}
+
+func TestDeploymentServiceDeployTagRollsBackAfterReadinessFailure(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "nauthilus.yml")
+	previous := []byte("server:\n  instance_name: stable\n")
+	if err := os.WriteFile(targetPath, previous, 0o600); err != nil {
+		t.Fatalf("failed to seed target file: %v", err)
+	}
+
+	fetcher := &fakeConfigFetcher{content: []byte("server:\n  instance_name: broken\n")}
+	container := &fakeContainerController{
+		waitErrs: []error{errors.New("container exited"), nil},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	service := NewDeploymentService(
+		Config{TargetFile: targetPath, MaxConfigBytes: 1024},
+		fetcher,
+		container,
+		logger,
+	)
+
+	err := service.DeployTag(context.Background(), "v1.2.3")
+	if err == nil {
+		t.Fatal("expected DeployTag to fail when readiness check fails")
+	}
+
+	if !strings.Contains(err.Error(), "container failed readiness check after restart") {
+		t.Fatalf("unexpected DeployTag error: %v", err)
+	}
+
+	got, readErr := os.ReadFile(targetPath)
+	if readErr != nil {
+		t.Fatalf("failed to read target file: %v", readErr)
+	}
+
+	if !bytes.Equal(got, previous) {
+		t.Fatalf("expected rollback to restore previous content, got %q", string(got))
+	}
+
+	if container.restarts != 2 || container.waits != 2 {
+		t.Fatalf("expected restart+wait for deploy and rollback, got restarts=%d waits=%d", container.restarts, container.waits)
+	}
+}
+
+func TestDeploymentServiceDeployTagFailsWhenRollbackHasNoPreviousConfig(t *testing.T) {
+	tempDir := t.TempDir()
+	targetPath := filepath.Join(tempDir, "nauthilus.yml")
+
+	fetcher := &fakeConfigFetcher{content: []byte("server:\n  instance_name: broken\n")}
+	container := &fakeContainerController{
+		waitErrs: []error{errors.New("container exited")},
+	}
+	logger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	service := NewDeploymentService(
+		Config{TargetFile: targetPath, MaxConfigBytes: 1024},
+		fetcher,
+		container,
+		logger,
+	)
+
+	err := service.DeployTag(context.Background(), "v1.2.3")
+	if err == nil {
+		t.Fatal("expected DeployTag to fail")
+	}
+
+	if !strings.Contains(err.Error(), "rollback failed: no previous config file exists") {
+		t.Fatalf("unexpected DeployTag error: %v", err)
+	}
+
+	if container.restarts != 1 || container.waits != 1 {
+		t.Fatalf("unexpected container calls without rollback: restarts=%d waits=%d", container.restarts, container.waits)
 	}
 }
 
