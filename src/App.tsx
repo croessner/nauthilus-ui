@@ -17,6 +17,8 @@ import {
   CircularProgress,
   Button,
   Tooltip,
+  Alert,
+  Snackbar,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -158,12 +160,14 @@ const MainContent = (): React.JSX.Element => {
   const [gitRepositoryUrl, setGitRepositoryUrl] = useState('');
   const [gitBranch, setGitBranch] = useState('');
   const [gitFilePath, setGitFilePath] = useState('');
+  const [gitTagName, setGitTagName] = useState('');
   const [gitUseSSH, setGitUseSSH] = useState(false);
   const [gitHttpsUsername, setGitHttpsUsername] = useState('');
   const [gitHttpsPassword, setGitHttpsPassword] = useState('');
   const [gitPassphraseDialogOpen, setGitPassphraseDialogOpen] = useState(false);
   const [gitPassphraseInput, setGitPassphraseInput] = useState('');
   const [pendingGitAction, setPendingGitAction] = useState<'pull' | 'push' | null>(null);
+  const [gitNotice, setGitNotice] = useState<string | null>(null);
   // Profile state variables removed as we now use a dedicated page
 
   // Global session-expired dialog state
@@ -567,6 +571,7 @@ const MainContent = (): React.JSX.Element => {
 
     setGitBusy(true);
     setError(null);
+    setGitNotice(null);
 
     try {
       const endpoint = action === 'pull' ? '/api/git/pull' : '/api/git/push';
@@ -574,6 +579,7 @@ const MainContent = (): React.JSX.Element => {
         repositoryUrl,
         branch,
         filePath,
+        tagName: action === 'push' ? gitTagName.trim() : '',
         auth: buildGitAuthPayload(passphraseOverride),
       };
 
@@ -616,7 +622,10 @@ const MainContent = (): React.JSX.Element => {
         const uploadedFile = new File([content], 'nauthilus.yml', { type: 'text/yaml' });
         await uploadConfig(uploadedFile, currentProfileName);
       } else {
-        await response.json().catch(() => ({}));
+        const payload = await response.json().catch(() => ({} as { tagName?: string; tagAlreadyExists?: boolean }));
+        if (payload?.tagAlreadyExists && payload?.tagName) {
+          setGitNotice(`Tag "${payload.tagName}" already existed and was left unchanged.`);
+        }
       }
 
       setGitDialogOpen(false);
@@ -1753,6 +1762,16 @@ const MainContent = (): React.JSX.Element => {
             onChange={(e) => setGitFilePath(e.target.value)}
             placeholder="nauthilus.yml"
           />
+          <TextField
+            margin="dense"
+            label="Tag (optional)"
+            fullWidth
+            variant="outlined"
+            value={gitTagName}
+            onChange={(e) => setGitTagName(e.target.value)}
+            placeholder="v1.2.3"
+            helperText="Optional lightweight tag set on the pushed commit."
+          />
           <FormControl fullWidth margin="dense">
             <InputLabel id="git-auth-mode-label">Auth Mode</InputLabel>
             <Select
@@ -1850,6 +1869,17 @@ const MainContent = (): React.JSX.Element => {
           </Button>
         </DialogActions>
       </Dialog>
+
+      <Snackbar
+        open={Boolean(gitNotice)}
+        autoHideDuration={4000}
+        onClose={() => setGitNotice(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setGitNotice(null)} severity="info" sx={{ width: '100%' }}>
+          {gitNotice}
+        </Alert>
+      </Snackbar>
 
       {/* User Profile Dialog removed - now using a dedicated page */}
     </Box>

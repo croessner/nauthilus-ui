@@ -20,6 +20,7 @@ func TestMapGitError(t *testing.T) {
 	}{
 		{name: "integration disabled", err: gitops.ErrIntegrationDisabled, wantStatus: http.StatusForbidden, wantCode: "git_integration_disabled"},
 		{name: "invalid repository", err: gitops.ErrInvalidRepositoryURL, wantStatus: http.StatusBadRequest, wantCode: "git_invalid_repository_url"},
+		{name: "invalid tag", err: gitops.ErrInvalidTag, wantStatus: http.StatusBadRequest, wantCode: "git_invalid_tag"},
 		{name: "missing https credentials", err: gitops.ErrMissingHTTPSCredentials, wantStatus: http.StatusBadRequest, wantCode: "git_missing_https_credentials"},
 		{name: "ssh mapping missing", err: sshprovider.ErrUserNotMapped, wantStatus: http.StatusForbidden, wantCode: "ssh_mapping_missing"},
 		{name: "ssh passphrase required", err: sshprovider.ErrPassphraseRequired, wantStatus: http.StatusBadRequest, wantCode: "ssh_passphrase_required"},

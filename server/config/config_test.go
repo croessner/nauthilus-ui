@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -221,5 +222,28 @@ database:
 
 	if !strings.Contains(err.Error(), "duplicate username") {
 		t.Fatalf("expected duplicate username validation error, got %v", err)
+	}
+}
+
+func TestLoadConfigLoadsDemoStackConfig(t *testing.T) {
+	_, currentFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatal("runtime.Caller failed")
+	}
+
+	path := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", "contrib", "demo-stack", "nauthilus-ui", "config.yaml"))
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("demo stack config is not accessible at %s: %v", path, err)
+	}
+
+	t.Setenv(envPrefix+"_CONFIG_FILE", path)
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig returned error for demo stack config: %v", err)
+	}
+
+	if cfg.Server.Frontend.Port != 3001 {
+		t.Fatalf("expected demo frontend port 3001, got %d", cfg.Server.Frontend.Port)
 	}
 }

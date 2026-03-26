@@ -1,0 +1,77 @@
+server:
+  frontend:
+    address: 0.0.0.0
+    port: 3001
+  trusted_proxies: []
+
+database:
+  mongodb:
+    uri: mongodb://nauthilus:nauthilus_password@mongodb:27017/nauthilus-ui?authSource=admin
+
+session:
+  token_expiry_seconds: 3600
+  refresh_token_expiry_seconds: 86400
+  remember_me_expiry_seconds: 86400
+  sync_remember_me_from_config_on_boot: false
+
+ui:
+  cookie_banner_reshow_days: -1
+  raw_json_max_bytes: 8192
+
+identity:
+  oidc:
+    enabled: false
+    issuer: ""
+    client_id: ""
+    client_secret: ""
+    scopes: "openid profile email"
+    role_claim: "roles"
+    username_claim: "preferred_username"
+  webauthn:
+    rp_id: ""
+    rp_display_name: "Nauthilus UI Demo"
+    rp_origins: []
+
+security:
+  cors:
+    allowed_origins: []
+  recaptcha:
+    secret: ""
+    site_key: ""
+    min_score: 0.0
+    threshold: 3
+
+audit:
+  retention_days: 0
+  cleanup_interval_hours: 6
+  policy:
+    include_get_requests: false
+    dedup_window_seconds: 30
+    force_path_regex: ""
+
+integrations:
+  ipapi:
+    api_key: ""
+  report:
+    chrome_path: ""
+  git:
+    enabled: true
+    default_branch: "main"
+    default_file_path: "nauthilus.yml"
+    operation_timeout_seconds: 30
+    max_file_bytes: 1048576
+    passphrase_cache_seconds: 3600
+    ssh:
+      users:
+        - username: "admin"
+          ssh_user: "git"
+          private_key_path: "/demo/ssh/admin_id_ed25519"
+          known_hosts_path: "/demo/ssh/gitea_known_hosts"
+  runtime:
+    ssh:
+      passphrase_cache_seconds: 3600
+      users:
+        - username: "admin"
+          ssh_user: "git"
+          private_key_path: "/demo/ssh/admin_id_ed25519"
+          known_hosts_path: "/demo/ssh/gitea_known_hosts"

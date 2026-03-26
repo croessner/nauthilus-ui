@@ -287,6 +287,7 @@ Security and behavior notes:
 - `private_key_path` and `known_hosts_path` must be absolute filesystem paths.
 - Host key verification is strict and always uses the configured `known_hosts_path`.
 - On Unix-like systems, private keys must use restrictive file permissions (for example `0600`), otherwise SSH operations are denied.
+- Git push supports an optional lightweight tag (`tagName`) that is created for the pushed commit. If the remote tag already exists, push remains successful and returns `tagAlreadyExists: true`.
 - Browser passphrase caching is session-based and scoped separately for Git and Runtime usage.
 - `passphrase_cache_seconds: -1` disables browser caching and forces passphrase entry on each use.
 - Runtime saves with `connection.ssh_tunnel.enabled: true` are rejected if no Runtime SSH mapping exists for the user.

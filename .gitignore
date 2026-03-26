@@ -2,6 +2,7 @@
 node_modules/
 .env
 config.yaml
+!contrib/demo-stack/nauthilus-ui/config.yaml
 build/
 /quality/eslint-report.json
 /quality/typescript-errors.txt

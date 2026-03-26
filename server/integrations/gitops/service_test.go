@@ -90,3 +90,46 @@ func TestSanitizeCommitIdentity(t *testing.T) {
 		t.Fatalf("expected fallback identity nauthilus-ui, got %q", got)
 	}
 }
+
+func TestNormalizeTagName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		input   string
+		want    string
+		wantErr bool
+	}{
+		{name: "empty is allowed", input: "", want: "", wantErr: false},
+		{name: "semver style", input: "v1.2.3", want: "v1.2.3", wantErr: false},
+		{name: "folder style", input: "release/2026-03-26", want: "release/2026-03-26", wantErr: false},
+		{name: "contains space", input: "release candidate", wantErr: true},
+		{name: "starts with dash", input: "-bad", wantErr: true},
+		{name: "contains traversal marker", input: "v1..2", wantErr: true},
+		{name: "contains forbidden sequence", input: "v1@{bad}", wantErr: true},
+		{name: "contains lock suffix", input: "refs.lock", wantErr: true},
+		{name: "contains wildcard", input: "release/*", wantErr: true},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			got, err := normalizeTagName(tc.input)
+			if tc.wantErr {
+				if !errors.Is(err, ErrInvalidTag) {
+					t.Fatalf("expected ErrInvalidTag, got %v", err)
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("expected no error, got %v", err)
+			}
+			if got != tc.want {
+				t.Fatalf("expected %q, got %q", tc.want, got)
+			}
+		})
+	}
+}

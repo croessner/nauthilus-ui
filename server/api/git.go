@@ -52,6 +52,7 @@ type gitPushRequest struct {
 	Branch        string         `json:"branch"`
 	FilePath      string         `json:"filePath"`
 	CommitMessage string         `json:"commitMessage"`
+	TagName       string         `json:"tagName"`
 	Content       string         `json:"content"`
 	Auth          gitAuthRequest `json:"auth"`
 }
@@ -130,6 +131,7 @@ func (h *GitHandler) Push(ctx *gin.Context) {
 		Branch:        request.Branch,
 		FilePath:      request.FilePath,
 		CommitMessage: request.CommitMessage,
+		TagName:       request.TagName,
 		Content:       request.Content,
 		Auth: gitops.AuthOptions{
 			UseSSH:     request.Auth.UseSSH,
@@ -147,10 +149,12 @@ func (h *GitHandler) Push(ctx *gin.Context) {
 		Action: "git.push",
 		Target: utils.RedactURLString(request.RepositoryURL),
 		Details: map[string]interface{}{
-			"branch":      strings.TrimSpace(result.Branch),
-			"file_path":   strings.TrimSpace(result.FilePath),
-			"commit_hash": strings.TrimSpace(result.CommitHash),
-			"no_changes":  result.NoChanges,
+			"branch":             strings.TrimSpace(result.Branch),
+			"file_path":          strings.TrimSpace(result.FilePath),
+			"commit_hash":        strings.TrimSpace(result.CommitHash),
+			"no_changes":         result.NoChanges,
+			"tag_name":           strings.TrimSpace(result.TagName),
+			"tag_already_exists": result.TagAlreadyExists,
 		},
 	})
 
@@ -185,6 +189,8 @@ func mapGitError(err error) (int, string, string) {
 		return http.StatusBadRequest, "git_invalid_repository_url", "Repository URL is invalid or unsupported"
 	case errors.Is(err, gitops.ErrInvalidBranch):
 		return http.StatusBadRequest, "git_invalid_branch", "Branch is invalid"
+	case errors.Is(err, gitops.ErrInvalidTag):
+		return http.StatusBadRequest, "git_invalid_tag", "Tag is invalid"
 	case errors.Is(err, gitops.ErrInvalidFilePath):
 		return http.StatusBadRequest, "git_invalid_file_path", "File path is invalid"
 	case errors.Is(err, gitops.ErrMissingHTTPSCredentials):

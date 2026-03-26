@@ -23,6 +23,8 @@ var (
 	ErrInvalidRepositoryURL = errors.New("repository_url is invalid or unsupported")
 	// ErrInvalidBranch indicates an invalid Git branch value.
 	ErrInvalidBranch = errors.New("branch is invalid")
+	// ErrInvalidTag indicates an invalid Git tag value.
+	ErrInvalidTag = errors.New("tag is invalid")
 	// ErrInvalidFilePath indicates path traversal or absolute profile file paths.
 	ErrInvalidFilePath = errors.New("file_path is invalid")
 	// ErrMissingHTTPSCredentials indicates missing username/password when HTTPS auth is selected.
@@ -89,16 +91,19 @@ type PushRequest struct {
 	Branch        string
 	FilePath      string
 	CommitMessage string
+	TagName       string
 	Content       string
 	Auth          AuthOptions
 }
 
 // PushResult contains commit metadata for exported configuration data.
 type PushResult struct {
-	Branch     string `json:"branch"`
-	FilePath   string `json:"filePath"`
-	CommitHash string `json:"commitHash"`
-	NoChanges  bool   `json:"noChanges"`
+	Branch           string `json:"branch"`
+	FilePath         string `json:"filePath"`
+	CommitHash       string `json:"commitHash"`
+	NoChanges        bool   `json:"noChanges"`
+	TagName          string `json:"tagName,omitempty"`
+	TagAlreadyExists bool   `json:"tagAlreadyExists"`
 }
 
 // NewService creates a new Git service.
@@ -214,6 +219,11 @@ func (s *Service) Push(ctx context.Context, actor string, request PushRequest) (
 		return nil, fmt.Errorf("content exceeds maximum size of %d bytes", s.settings.MaxFileBytes)
 	}
 
+	resolvedTagName, err := normalizeTagName(request.TagName)
+	if err != nil {
+		return nil, err
+	}
+
 	resolved, err := s.resolveAndValidateRequest(actor, request.RepositoryURL, request.Branch, request.FilePath, request.Auth)
 	if err != nil {
 		return nil, err
@@ -246,43 +256,32 @@ func (s *Service) Push(ctx context.Context, actor string, request PushRequest) (
 		return nil, statusErr
 	}
 
-	if strings.TrimSpace(statusOutput) == "" {
-		commitHash, hashErr := getHeadCommitHash(opCtx, repoDir)
-		if hashErr != nil {
-			return nil, hashErr
+	noChanges := strings.TrimSpace(statusOutput) == ""
+	if !noChanges {
+		message := strings.TrimSpace(request.CommitMessage)
+		if message == "" {
+			message = fmt.Sprintf("nauthilus-ui: update %s", resolved.FilePath)
 		}
 
-		return &PushResult{
-			Branch:     resolved.Branch,
-			FilePath:   resolved.FilePath,
-			CommitHash: commitHash,
-			NoChanges:  true,
-		}, nil
-	}
+		safeActor := sanitizeCommitIdentity(actor)
+		_, addErr := runGitCommand(opCtx, repoDir, resolved.Env, "add", "--", resolved.FilePath)
+		if addErr != nil {
+			return nil, addErr
+		}
 
-	message := strings.TrimSpace(request.CommitMessage)
-	if message == "" {
-		message = fmt.Sprintf("nauthilus-ui: update %s", resolved.FilePath)
-	}
+		_, commitErr := runGitCommand(opCtx, repoDir, resolved.Env,
+			"-c", "user.name="+safeActor,
+			"-c", "user.email="+safeActor+"@nauthilus-ui.local",
+			"commit", "-m", message,
+		)
+		if commitErr != nil {
+			return nil, commitErr
+		}
 
-	safeActor := sanitizeCommitIdentity(actor)
-	_, addErr := runGitCommand(opCtx, repoDir, resolved.Env, "add", "--", resolved.FilePath)
-	if addErr != nil {
-		return nil, addErr
-	}
-
-	_, commitErr := runGitCommand(opCtx, repoDir, resolved.Env,
-		"-c", "user.name="+safeActor,
-		"-c", "user.email="+safeActor+"@nauthilus-ui.local",
-		"commit", "-m", message,
-	)
-	if commitErr != nil {
-		return nil, commitErr
-	}
-
-	_, pushErr := runGitCommand(opCtx, repoDir, resolved.Env, "push", "origin", "HEAD:"+resolved.Branch)
-	if pushErr != nil {
-		return nil, pushErr
+		_, pushErr := runGitCommand(opCtx, repoDir, resolved.Env, "push", "origin", "HEAD:"+resolved.Branch)
+		if pushErr != nil {
+			return nil, pushErr
+		}
 	}
 
 	commitHash, hashErr := getHeadCommitHash(opCtx, repoDir)
@@ -290,11 +289,21 @@ func (s *Service) Push(ctx context.Context, actor string, request PushRequest) (
 		return nil, hashErr
 	}
 
+	tagAlreadyExists := false
+	if resolvedTagName != "" {
+		tagAlreadyExists, err = ensureRemoteTag(opCtx, repoDir, resolved.Env, resolvedTagName, commitHash)
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return &PushResult{
-		Branch:     resolved.Branch,
-		FilePath:   resolved.FilePath,
-		CommitHash: commitHash,
-		NoChanges:  false,
+		Branch:           resolved.Branch,
+		FilePath:         resolved.FilePath,
+		CommitHash:       commitHash,
+		NoChanges:        noChanges,
+		TagName:          resolvedTagName,
+		TagAlreadyExists: tagAlreadyExists,
 	}, nil
 }
 
@@ -418,6 +427,35 @@ func getHeadCommitHash(ctx context.Context, repoDir string) (string, error) {
 	return strings.TrimSpace(output), nil
 }
 
+func ensureRemoteTag(ctx context.Context, repoDir string, extraEnv []string, tagName, commitHash string) (bool, error) {
+	tagRef := "refs/tags/" + tagName
+	tagListing, listErr := runGitCommand(ctx, repoDir, extraEnv, "ls-remote", "--tags", "--refs", "origin", tagRef)
+	if listErr != nil {
+		return false, listErr
+	}
+
+	if strings.TrimSpace(tagListing) != "" {
+		return true, nil
+	}
+
+	_, tagErr := runGitCommand(ctx, repoDir, extraEnv, "tag", tagName, commitHash)
+	if tagErr != nil {
+		return false, tagErr
+	}
+
+	_, pushErr := runGitCommand(ctx, repoDir, extraEnv, "push", "origin", tagRef+":"+tagRef)
+	if pushErr != nil {
+		latestListing, latestErr := runGitCommand(ctx, repoDir, extraEnv, "ls-remote", "--tags", "--refs", "origin", tagRef)
+		if latestErr == nil && strings.TrimSpace(latestListing) != "" {
+			return true, nil
+		}
+
+		return false, pushErr
+	}
+
+	return false, nil
+}
+
 func normalizeRepositoryURL(raw string, auth AuthOptions) (string, error) {
 	repositoryURL := strings.TrimSpace(raw)
 	if repositoryURL == "" {
@@ -488,6 +526,44 @@ func normalizeRepositoryFilePath(input, fallback string) (string, error) {
 	}
 
 	return cleaned, nil
+}
+
+func normalizeTagName(input string) (string, error) {
+	candidate := strings.TrimSpace(input)
+	if candidate == "" {
+		return "", nil
+	}
+
+	if strings.ContainsAny(candidate, "\x00\t\r\n ") {
+		return "", ErrInvalidTag
+	}
+
+	if strings.ContainsAny(candidate, "~^:?*[\\") {
+		return "", ErrInvalidTag
+	}
+
+	if strings.HasPrefix(candidate, "/") || strings.HasSuffix(candidate, "/") || strings.HasPrefix(candidate, ".") || strings.HasSuffix(candidate, ".") || strings.HasPrefix(candidate, "-") {
+		return "", ErrInvalidTag
+	}
+
+	if strings.Contains(candidate, "..") || strings.Contains(candidate, "//") || strings.Contains(candidate, "@{") {
+		return "", ErrInvalidTag
+	}
+
+	parts := strings.Split(candidate, "/")
+	for _, part := range parts {
+		if part == "" || part == "." || part == ".." || strings.HasSuffix(part, ".lock") {
+			return "", ErrInvalidTag
+		}
+	}
+
+	for _, r := range candidate {
+		if r < 0x20 || r == 0x7f {
+			return "", ErrInvalidTag
+		}
+	}
+
+	return candidate, nil
 }
 
 func resolveRepositoryFilePath(repoDir, relativePath string) (string, error) {
