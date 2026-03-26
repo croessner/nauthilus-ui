@@ -75,6 +75,10 @@ const toList = (value: unknown): unknown[] => {
   return [value];
 };
 
+const toObjectList = (value: unknown): Record<string, unknown>[] => {
+  return toList(value).filter((entry): entry is Record<string, unknown> => isObject(entry));
+};
+
 const hasAnyKeys = (value: unknown): boolean => {
   return isObject(value) && Object.keys(value).length > 0;
 };
@@ -308,7 +312,7 @@ const validateLDAP = (config: NauthilusConfig, findings: ConfigValidationFinding
     });
   }
 
-  const searches = Array.isArray(config.ldap.search) ? config.ldap.search : [];
+  const searches = toObjectList(config.ldap.search);
   searches.forEach((search, index) => {
     const basePath = `ldap.search[${index}]`;
     if (toTextList(search.protocol).length === 0) {
@@ -416,7 +420,7 @@ const validateLua = (config: NauthilusConfig, findings: ConfigValidationFinding[
     return;
   }
 
-  if (backends.includes('lua') && (!Array.isArray(lua.search) || lua.search.length === 0)) {
+  if (backends.includes('lua') && toObjectList(lua.search).length === 0) {
     pushFinding(
       findings,
       'required.lua.search',
@@ -445,12 +449,8 @@ const validateLua = (config: NauthilusConfig, findings: ConfigValidationFinding[
       }
     });
 
-  const validateScriptEntries = (entries: any[] | undefined, pathRoot: string): void => {
-    if (!Array.isArray(entries)) {
-      return;
-    }
-
-    entries.forEach((entry, index) => {
+  const validateScriptEntries = (entries: unknown, pathRoot: string): void => {
+    toObjectList(entries).forEach((entry, index) => {
       const basePath = `${pathRoot}[${index}]`;
       if (!hasText(entry?.name)) {
         pushFinding(
@@ -478,8 +478,7 @@ const validateLua = (config: NauthilusConfig, findings: ConfigValidationFinding[
   validateScriptEntries(lua.features, 'lua.features');
   validateScriptEntries(lua.filters, 'lua.filters');
 
-  if (Array.isArray(lua.custom_hooks)) {
-    lua.custom_hooks.forEach((hook, index) => {
+  toObjectList(lua.custom_hooks).forEach((hook, index) => {
       const basePath = `lua.custom_hooks[${index}]`;
       if (!hasText(hook?.http_location)) {
         pushFinding(
@@ -509,7 +508,6 @@ const validateLua = (config: NauthilusConfig, findings: ConfigValidationFinding[
         );
       }
     });
-  }
 
   if (hasAnyKeys(lua.optional_lua_backends)) {
     Object.entries(lua.optional_lua_backends ?? {}).forEach(([backendName, backendConfig]) => {
@@ -533,7 +531,7 @@ const validateFeatureDependentSections = (config: NauthilusConfig, findings: Con
   }
 
   if (hasServerFeature(serverFeatures, 'rbl')) {
-    if (!config.realtime_blackhole_lists || toTextList(config.realtime_blackhole_lists.lists).length === 0) {
+    if (!config.realtime_blackhole_lists || toObjectList(config.realtime_blackhole_lists.lists).length === 0) {
       pushFinding(
         findings,
         'required.realtime_blackhole_lists.lists',
@@ -557,7 +555,7 @@ const validateFeatureDependentSections = (config: NauthilusConfig, findings: Con
   }
 
   if (hasServerFeature(serverFeatures, 'brute_force')) {
-    if (!config.brute_force || !Array.isArray(config.brute_force.buckets) || config.brute_force.buckets.length === 0) {
+    if (!config.brute_force || toObjectList(config.brute_force.buckets).length === 0) {
       pushFinding(
         findings,
         'required.brute_force.buckets',
@@ -593,38 +591,38 @@ const validateIDP = (config: NauthilusConfig, findings: ConfigValidationFinding[
     );
   }
 
-  if (Array.isArray(oidc?.custom_scopes)) {
-    oidc?.custom_scopes.forEach((scope, index) => {
-      const basePath = `idp.oidc.custom_scopes[${index}]`;
-      if (!hasText(scope?.name)) {
-        pushFinding(
-          findings,
-          'required.idp.oidc.custom_scopes.name',
-          `${basePath}.name`,
-          'OIDC custom scope requires name.',
-          'required_tag',
-        );
-      }
-      if (!hasText(scope?.description)) {
-        pushFinding(
-          findings,
-          'required.idp.oidc.custom_scopes.description',
-          `${basePath}.description`,
-          'OIDC custom scope requires description.',
-          'required_tag',
-        );
-      }
-      if (toTextList(scope?.claims).length === 0) {
-        pushFinding(
-          findings,
-          'required.idp.oidc.custom_scopes.claims',
-          `${basePath}.claims`,
-          'OIDC custom scope requires at least one claim.',
-          'required_tag',
-        );
-      }
-    });
-  }
+  const customScopes = toList(oidc?.custom_scopes);
+  customScopes.forEach((scope, index) => {
+    const normalizedScope = isObject(scope) ? scope : {};
+    const basePath = `idp.oidc.custom_scopes[${index}]`;
+    if (!hasText(normalizedScope.name)) {
+      pushFinding(
+        findings,
+        'required.idp.oidc.custom_scopes.name',
+        `${basePath}.name`,
+        'OIDC custom scope requires name.',
+        'required_tag',
+      );
+    }
+    if (!hasText(normalizedScope.description)) {
+      pushFinding(
+        findings,
+        'required.idp.oidc.custom_scopes.description',
+        `${basePath}.description`,
+        'OIDC custom scope requires description.',
+        'required_tag',
+      );
+    }
+    if (toObjectList(normalizedScope.claims).length === 0) {
+      pushFinding(
+        findings,
+        'required.idp.oidc.custom_scopes.claims',
+        `${basePath}.claims`,
+        'OIDC custom scope requires at least one claim.',
+        'required_tag',
+      );
+    }
+  });
 
   const saml2 = config.idp?.saml2;
   if (saml2?.enabled) {

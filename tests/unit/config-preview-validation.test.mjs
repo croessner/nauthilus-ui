@@ -100,7 +100,24 @@ test('accepts scalar string values for feature-dependent string lists', () => {
   assert.ok(!report.blockingFindings.some((finding) => finding.path === 'relay_domains.static'));
 });
 
-test('accepts scalar string values for OIDC custom scope claims', () => {
+test('accepts scalar object value for RBL lists', () => {
+  const config = validBaseConfig();
+  config.server.features = 'rbl';
+  config.realtime_blackhole_lists = {
+    lists: {
+      name: 'spamhaus',
+      rbl: 'zen.spamhaus.org',
+      return_codes: ['127.0.0.2'],
+    },
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'realtime_blackhole_lists.lists'));
+});
+
+test('accepts scalar object value for OIDC custom scope claims', () => {
   const config = validBaseConfig();
   config.idp = {
     oidc: {
@@ -108,7 +125,10 @@ test('accepts scalar string values for OIDC custom scope claims', () => {
         {
           name: 'profile',
           description: 'Profile scope',
-          claims: 'sub',
+          claims: {
+            name: 'sub',
+            type: 'string',
+          },
         },
       ],
     },
@@ -118,4 +138,76 @@ test('accepts scalar string values for OIDC custom scope claims', () => {
 
   assert.equal(report.isValid, true);
   assert.ok(!report.blockingFindings.some((finding) => finding.path === 'idp.oidc.custom_scopes[0].claims'));
+});
+
+test('accepts scalar object value for LDAP search list', () => {
+  const config = validBaseConfig();
+  config.server.backends = 'ldap';
+  config.ldap = {
+    config: {
+      lookup_pool_size: 2,
+      server_uri: 'ldap://127.0.0.1:389',
+    },
+    search: {
+      protocol: 'imap',
+      cache_name: 'default',
+      base_dn: 'dc=example,dc=org',
+      filter: { user: '(uid=%s)' },
+      mapping: { account_field: 'uid' },
+      attribute: 'mail',
+    },
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'ldap.search[0].protocol'));
+});
+
+test('accepts scalar object values for Lua list fields', () => {
+  const config = validBaseConfig();
+  config.server.backends = 'lua';
+  config.lua = {
+    search: {
+      protocol: 'imap',
+      cache_name: 'lua-default',
+      backend_name: 'main',
+    },
+    actions: {
+      name: 'allow',
+      script_path: '/opt/lua/actions/allow.lua',
+      type: 'allow',
+    },
+    custom_hooks: {
+      http_location: '/api/v1/custom/demo',
+      http_method: 'POST',
+      script_path: '/opt/lua/hooks/demo.lua',
+    },
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'lua.search'));
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'lua.actions[0].name'));
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'lua.custom_hooks[0].script_path'));
+});
+
+test('accepts scalar object value for brute force buckets list', () => {
+  const config = validBaseConfig();
+  config.server.features = 'brute_force';
+  config.brute_force = {
+    buckets: {
+      name: 'b_1m_ipv4',
+      period: '1m',
+      cidr: 32,
+      failed_requests: 10,
+      ipv4: true,
+    },
+  };
+
+  const report = validateConfigForExport(config);
+
+  assert.equal(report.isValid, true);
+  assert.ok(!report.blockingFindings.some((finding) => finding.path === 'brute_force.buckets'));
 });
