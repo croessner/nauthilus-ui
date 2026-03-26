@@ -9,6 +9,8 @@ import { hasServerFeature } from '../utils/featureFlags';
 import { sanitizeDisabledEndpoints } from '../utils/serverConfigNormalization';
 import { generateConfigSecret } from '../utils/configSecrets';
 import { validateConfigForExport } from '../utils/configPreviewValidation';
+import { prependYamlExportComment } from '../utils/yamlExportComment';
+import { fetchLatestYamlExportProfileVersion } from '../utils/profileVersions';
 
 // Interface for configuration profiles
 interface ConfigProfile {
@@ -739,21 +741,22 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         return;
       }
 
-      // Add a profile name as a comment in the YAML
-      const profileComment = `# Profile: ${currentProfileName}`;
       const normalizedProfileName = currentProfileName.toLowerCase().replace(/\s+/g, '-');
 
       let blob: Blob;
       let filename: string;
       const sanitizedConfig = exportValidation.normalizedConfig || config;
+      const latestProfileVersion = await fetchLatestYamlExportProfileVersion(currentProfileName).catch(() => null);
 
       if (format === 'zip') {
-        blob = await buildConfigBundleZip(sanitizedConfig, currentProfileName);
+        blob = await buildConfigBundleZip(sanitizedConfig, currentProfileName, latestProfileVersion);
         filename = `nauthilus-${normalizedProfileName}.zip`;
       } else {
-        const yamlContent = exportValidation.yamlContent;
-        const contentWithComment = `${profileComment}\n\n${yamlContent}`;
-        blob = new Blob([contentWithComment], { type: 'text/yaml' });
+        const yamlContent = prependYamlExportComment(exportValidation.yamlContent, {
+          profileName: currentProfileName,
+          profileVersion: latestProfileVersion,
+        });
+        blob = new Blob([yamlContent], { type: 'text/yaml' });
         filename = `nauthilus-${normalizedProfileName}.yml`;
       }
 

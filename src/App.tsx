@@ -74,7 +74,13 @@ import MFAPage from './components/MFAPage';
 import OIDCCallback from './components/OIDCCallback';
 import { authenticatedFetch, resetSettingsState, loadSettings as loadSettingsUtil } from './utils/apiUtils';
 import { validateConfigForExport } from './utils/configPreviewValidation';
+import {
+  fetchLatestYamlExportProfileVersion,
+  fetchProfileVersions,
+  type ProfileVersionItem,
+} from './utils/profileVersions';
 import { cacheSSHPassphrase, clearCachedSSHPassphrase, readCachedSSHPassphrase } from './utils/sshPassphraseCache';
+import { prependYamlExportComment } from './utils/yamlExportComment';
 import CookieBanner from './components/CookieBanner';
 import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
 
@@ -105,16 +111,6 @@ interface GitCapabilities {
   passphraseCacheSeconds: number;
   defaultBranch: string;
   defaultFilePath: string;
-}
-
-interface ProfileVersionItem {
-  profileName: string;
-  version: number;
-  createdAt: string;
-  createdBy: string;
-  source: string;
-  comment?: string;
-  metadata?: Record<string, unknown>;
 }
 
 const ServerConfig = lazy(() => import('./components/ServerConfig'));
@@ -617,7 +613,11 @@ const MainContent = (): React.JSX.Element => {
           return;
         }
 
-        body.content = exportValidation.yamlContent;
+        const latestProfileVersion = await fetchLatestYamlExportProfileVersion(currentProfileName).catch(() => null);
+        body.content = prependYamlExportComment(exportValidation.yamlContent, {
+          profileName: currentProfileName,
+          profileVersion: latestProfileVersion,
+        });
         body.commitMessage = `nauthilus-ui: update profile ${currentProfileName}`;
       }
 
@@ -842,17 +842,7 @@ const MainContent = (): React.JSX.Element => {
   const loadProfileVersions = async (): Promise<void> => {
     setProfileVersionsLoading(true);
     try {
-      const userId = await getCurrentUserId();
-      const response = await authenticatedFetch(
-        `/api/profiles/${encodeURIComponent(userId)}/${encodeURIComponent(currentProfileName)}/versions?limit=200`,
-      );
-      if (!response.ok) {
-        const message = await response.text().catch(() => response.statusText);
-        throw new Error(message || 'Failed to load profile versions');
-      }
-
-      const payload = await response.json().catch(() => ({ items: [] as ProfileVersionItem[] }));
-      const items = Array.isArray(payload?.items) ? payload.items as ProfileVersionItem[] : [];
+      const items = await fetchProfileVersions(currentProfileName, 200);
       setProfileVersions(items);
     } finally {
       setProfileVersionsLoading(false);

@@ -1,16 +1,47 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Box, Paper, Typography, useTheme, Alert, List, ListItem, ListItemIcon, ListItemText, Divider } from '@mui/material';
 import { useConfig } from '../contexts/ConfigContext';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { validateConfigForExport } from '../utils/configPreviewValidation';
+import { prependYamlExportComment, type YamlExportProfileVersion } from '../utils/yamlExportComment';
+import { fetchLatestYamlExportProfileVersion } from '../utils/profileVersions';
 
 const ConfigPreview = (): React.JSX.Element => {
-  const { config } = useConfig();
+  const { config, currentProfileName, hasUnsavedChanges } = useConfig();
   const theme = useTheme();
+  const [latestProfileVersion, setLatestProfileVersion] = useState<YamlExportProfileVersion | null>(null);
+
+  useEffect(() => {
+    let isActive = true;
+    if (hasUnsavedChanges) {
+      return () => {
+        isActive = false;
+      };
+    }
+
+    void fetchLatestYamlExportProfileVersion(currentProfileName)
+      .then((profileVersion) => {
+        if (isActive) {
+          setLatestProfileVersion(profileVersion);
+        }
+      })
+      .catch(() => {
+        if (isActive) {
+          setLatestProfileVersion(null);
+        }
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [currentProfileName, hasUnsavedChanges, config]);
 
   const validationResult = validateConfigForExport(config);
-  const yamlContent = validationResult.yamlContent;
+  const yamlContent = prependYamlExportComment(validationResult.yamlContent, {
+    profileName: currentProfileName,
+    profileVersion: latestProfileVersion,
+  });
 
   return (
     <Box sx={{ width: '100%', mt: 2 }}>
