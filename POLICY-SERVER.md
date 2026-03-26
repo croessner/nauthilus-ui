@@ -14,9 +14,8 @@ This policy applies to all changes in:
 - Go 1.26
 - Gin HTTP framework
 - MongoDB persistence
-- Two server listeners in one binary:
-  - frontend/API server (`FRONTEND_PORT`, default `3001`)
-  - proxy server (`PROXY_PORT`, default `3002`)
+- One unified server listener in one binary:
+  - frontend/API/proxy server (`FRONTEND_PORT`, default `3001`)
 
 ## 3. OOP Rules (MUST)
 

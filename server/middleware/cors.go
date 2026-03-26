@@ -19,7 +19,6 @@ const (
 	corsMaxAge        = "86400"
 	defaultVitePort   = "3000"
 	defaultAPIPort    = "3001"
-	defaultProxyPort  = "3002"
 )
 
 // CORSHandler handles CORS (Cross-Origin Resource Sharing).
@@ -111,7 +110,7 @@ func originFromParts(scheme, host, port string) string {
 
 func deriveDefaultOrigins(cfg *config.Config) []string {
 	hosts := []string{"localhost", "127.0.0.1", "[::1]"}
-	for _, host := range []string{cfg.Server.Frontend.Address, cfg.Server.Proxy.Address} {
+	for _, host := range []string{cfg.Server.Frontend.Address} {
 		normalized := normalizeHostForOrigin(host)
 		switch normalized {
 		case "", "localhost", "127.0.0.1", "[::1]":
@@ -125,8 +124,6 @@ func deriveDefaultOrigins(cfg *config.Config) []string {
 	ports := []string{
 		defaultVitePort,
 		portOrDefault(cfg.Server.Frontend.Port, defaultAPIPort),
-		portOrDefault(cfg.Server.Proxy.Port, defaultProxyPort),
-		portOrDefault(cfg.Server.Proxy.PublicPort, portOrDefault(cfg.Server.Proxy.Port, defaultProxyPort)),
 	}
 
 	origins := make([]string, 0, len(hosts)*len(ports))

@@ -11,26 +11,17 @@
 # Environment overrides:
 #   - Prefix: NAUTHILUS_UI
 #   - Key mapping: dots become underscores
-#   - Example: server.proxy.public_port -> NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT
+#   - Example: server.frontend.port -> NAUTHILUS_UI_SERVER_FRONTEND_PORT
 #
 # IMPORTANT:
 #   - Keep secrets out of Git.
 #   - Use dedicated secrets management in production.
 
 server:
-  # Frontend/API listener
+  # Unified HTTP listener for frontend, API, and proxy routes.
   frontend:
     address: 0.0.0.0
     port: 3001
-
-  # Dedicated proxy listener
-  proxy:
-    address: 0.0.0.0
-    port: 3002
-
-    # Browser-facing proxy port used in frontend runtime config.
-    # Set this to 443 when the UI is published behind TLS reverse proxies.
-    public_port: 3002
 
   # Reverse proxies whose Forwarded/X-Forwarded-* headers are trusted.
   # Empty means "trust none" (secure default).

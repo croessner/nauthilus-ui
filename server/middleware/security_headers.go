@@ -1,14 +1,10 @@
 package middleware
 
 import (
-	"net"
 	"net/http"
-	"strconv"
 	"strings"
 
 	"github.com/gin-gonic/gin"
-
-	"nauthilus-ui/server/config"
 	"nauthilus-ui/server/requestmeta"
 )
 
@@ -22,92 +18,27 @@ const (
 )
 
 // SecurityHeadersHandler applies baseline browser security headers.
-type SecurityHeadersHandler struct {
-	cfg *config.Config
-}
+type SecurityHeadersHandler struct{}
 
 // NewSecurityHeadersHandler creates a new security header middleware.
-func NewSecurityHeadersHandler(cfg *config.Config) *SecurityHeadersHandler {
-	if cfg == nil {
-		cfg = &config.Config{}
-	}
-
-	return &SecurityHeadersHandler{cfg: cfg}
+func NewSecurityHeadersHandler() *SecurityHeadersHandler {
+	return &SecurityHeadersHandler{}
 }
 
 // RegisterMiddleware registers the security header middleware.
 func (h *SecurityHeadersHandler) RegisterMiddleware(router *gin.Engine) {
 	router.Use(func(ctx *gin.Context) {
-		applySecurityHeaders(ctx.Writer.Header(), requestmeta.IsSecureRequest(ctx.Request), ctx.Request, h.cfg)
+		applySecurityHeaders(ctx.Writer.Header(), requestmeta.IsSecureRequest(ctx.Request))
 		ctx.Next()
 	})
 }
 
-func normalizeRequestHost(hostport string) string {
-	hostport = strings.TrimSpace(hostport)
-	if hostport == "" {
-		return ""
-	}
-
-	host, _, err := net.SplitHostPort(hostport)
-	if err == nil {
-		return host
-	}
-
-	return hostport
-}
-
-func normalizeOriginHost(host string) string {
-	host = strings.TrimSpace(host)
-	if host == "" {
-		return ""
-	}
-
-	if strings.Contains(host, ":") && !strings.HasPrefix(host, "[") {
-		return "[" + host + "]"
-	}
-
-	return host
-}
-
-func buildProxyConnectOrigin(req *http.Request, cfg *config.Config, secure bool) string {
-	if req == nil || cfg == nil {
-		return ""
-	}
-
-	publicPort := cfg.Server.Proxy.PublicPort
-	if publicPort <= 0 {
-		return ""
-	}
-
-	host := normalizeOriginHost(normalizeRequestHost(req.Host))
-	if host == "" {
-		return ""
-	}
-
-	scheme := "http"
-	if secure {
-		scheme = "https"
-	}
-
-	isDefaultPort := (scheme == "http" && publicPort == 80) || (scheme == "https" && publicPort == 443)
-	if isDefaultPort {
-		return scheme + "://" + host
-	}
-
-	return scheme + "://" + host + ":" + strconv.Itoa(publicPort)
-}
-
-func buildContentSecurityPolicy(req *http.Request, cfg *config.Config, secure bool) string {
+func buildContentSecurityPolicy() string {
 	connectSources := []string{
 		"'self'",
 		"https://cdn.jsdelivr.net",
 		"https://www.google.com/recaptcha/",
 		"https://www.gstatic.com/recaptcha/",
-	}
-
-	if proxyOrigin := buildProxyConnectOrigin(req, cfg, secure); proxyOrigin != "" {
-		connectSources = append(connectSources, proxyOrigin)
 	}
 
 	directives := []string{
@@ -128,8 +59,8 @@ func buildContentSecurityPolicy(req *http.Request, cfg *config.Config, secure bo
 	return strings.Join(directives, "; ")
 }
 
-func applySecurityHeaders(header http.Header, secure bool, req *http.Request, cfg *config.Config) {
-	header.Set("Content-Security-Policy", buildContentSecurityPolicy(req, cfg, secure))
+func applySecurityHeaders(header http.Header, secure bool) {
+	header.Set("Content-Security-Policy", buildContentSecurityPolicy())
 	header.Set("Permissions-Policy", permissionsPolicyValue)
 	header.Set("Referrer-Policy", referrerPolicyValue)
 	header.Set("X-Content-Type-Options", "nosniff")

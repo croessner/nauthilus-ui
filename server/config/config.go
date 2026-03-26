@@ -39,10 +39,9 @@ type Config struct {
 	Integrations IntegrationsConfig `mapstructure:"integrations" validate:"required"`
 }
 
-// ServerConfig contains listener and proxy-related settings.
+// ServerConfig contains listener and reverse-proxy trust settings.
 type ServerConfig struct {
 	Frontend       ListenerConfig `mapstructure:"frontend" validate:"required"`
-	Proxy          ProxyConfig    `mapstructure:"proxy" validate:"required"`
 	TrustedProxies []string       `mapstructure:"trusted_proxies"`
 }
 
@@ -50,13 +49,6 @@ type ServerConfig struct {
 type ListenerConfig struct {
 	Address string `mapstructure:"address" validate:"required"`
 	Port    int    `mapstructure:"port" validate:"required,min=1,max=65535"`
-}
-
-// ProxyConfig defines proxy listener and externally visible port for browser calls.
-type ProxyConfig struct {
-	Address    string `mapstructure:"address" validate:"required"`
-	Port       int    `mapstructure:"port" validate:"required,min=1,max=65535"`
-	PublicPort int    `mapstructure:"public_port" validate:"required,min=1,max=65535"`
 }
 
 // DatabaseConfig contains persistence related settings.
@@ -315,10 +307,6 @@ func (c *Config) normalize() {
 	c.Integrations.Git.SSH.Users = normalizeSSHUsers(c.Integrations.Git.SSH.Users)
 	c.Integrations.Runtime.SSH.Users = normalizeSSHUsers(c.Integrations.Runtime.SSH.Users)
 
-	if c.Server.Proxy.PublicPort == 0 {
-		c.Server.Proxy.PublicPort = c.Server.Proxy.Port
-	}
-
 	if strings.TrimSpace(c.Identity.WebAuthn.RPID) == "" {
 		frontendAddress := strings.TrimSpace(c.Server.Frontend.Address)
 		switch frontendAddress {
@@ -343,12 +331,9 @@ func (c *Config) normalize() {
 
 func configureDefaults(v *viper.Viper) {
 	defaults := map[string]any{
-		"server.frontend.address":  "0.0.0.0",
-		"server.frontend.port":     3001,
-		"server.proxy.address":     "0.0.0.0",
-		"server.proxy.port":        3002,
-		"server.proxy.public_port": 3002,
-		"server.trusted_proxies":   []string{},
+		"server.frontend.address": "0.0.0.0",
+		"server.frontend.port":    3001,
+		"server.trusted_proxies":  []string{},
 
 		"database.mongodb.uri": "mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin",
 
@@ -410,9 +395,6 @@ func configureEnvironment(v *viper.Viper) {
 	keys := []string{
 		"server.frontend.address",
 		"server.frontend.port",
-		"server.proxy.address",
-		"server.proxy.port",
-		"server.proxy.public_port",
 		"server.trusted_proxies",
 		"database.mongodb.uri",
 		"session.token_expiry_seconds",

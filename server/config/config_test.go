@@ -41,14 +41,6 @@ database:
 		t.Fatalf("expected frontend port 3101, got %d", cfg.Server.Frontend.Port)
 	}
 
-	if cfg.Server.Proxy.Port != 3002 {
-		t.Fatalf("expected default proxy port 3002, got %d", cfg.Server.Proxy.Port)
-	}
-
-	if cfg.Server.Proxy.PublicPort != 3002 {
-		t.Fatalf("expected default proxy public port 3002, got %d", cfg.Server.Proxy.PublicPort)
-	}
-
 	if cfg.Identity.WebAuthn.RPID != "127.0.0.1" {
 		t.Fatalf("expected derived WebAuthn rp_id 127.0.0.1, got %q", cfg.Identity.WebAuthn.RPID)
 	}
@@ -60,16 +52,13 @@ database:
 
 func TestLoadConfigAppliesEnvOverridesWithPrefix(t *testing.T) {
 	path := writeTempConfigFile(t, `
-server:
-  proxy:
-    public_port: 3002
 database:
   mongodb:
     uri: mongodb://nauthilus:nauthilus_password@localhost:27017/nauthilus-ui?authSource=admin
 `)
 
 	t.Setenv(envPrefix+"_CONFIG_FILE", path)
-	t.Setenv(envPrefix+"_SERVER_PROXY_PUBLIC_PORT", "8443")
+	t.Setenv(envPrefix+"_SERVER_FRONTEND_PORT", "8443")
 	t.Setenv(envPrefix+"_SECURITY_CORS_ALLOWED_ORIGINS", "https://ui.example.com,https://admin.example.com")
 	t.Setenv(envPrefix+"_IDENTITY_OIDC_ENABLED", "true")
 	t.Setenv(envPrefix+"_IDENTITY_OIDC_ISSUER", "https://id.example.com/realms/ui")
@@ -80,8 +69,8 @@ database:
 		t.Fatalf("LoadConfig returned error: %v", err)
 	}
 
-	if cfg.Server.Proxy.PublicPort != 8443 {
-		t.Fatalf("expected proxy public port 8443, got %d", cfg.Server.Proxy.PublicPort)
+	if cfg.Server.Frontend.Port != 8443 {
+		t.Fatalf("expected frontend port 8443, got %d", cfg.Server.Frontend.Port)
 	}
 
 	if len(cfg.Security.CORS.AllowedOrigins) != 2 {

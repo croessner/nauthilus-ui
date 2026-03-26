@@ -53,7 +53,6 @@ func (h *StaticHandler) EnvConfigHandler(ctx *gin.Context) {
 		"REACT_APP_REFRESH_TOKEN_EXPIRY":      fmt.Sprintf("%d", h.Config.Session.RefreshTokenExpirySeconds),
 		"REACT_APP_REMEMBER_ME_EXPIRY":        fmt.Sprintf("%d", h.Config.Session.RememberMeExpirySeconds),
 		"REACT_APP_COOKIE_BANNER_RESHOW_DAYS": fmt.Sprintf("%d", h.Config.UI.CookieBannerReshowDays),
-		"REACT_APP_PROXY_PORT":                fmt.Sprintf("%d", h.Config.Server.Proxy.PublicPort),
 		"REACT_APP_RAW_JSON_MAX_BYTES":        fmt.Sprintf("%d", h.Config.UI.RawJSONMaxBytes),
 		// Whitelisted OIDC-related variables needed in the frontend
 		"REACT_APP_OIDC_ENABLED":        fmt.Sprintf("%t", h.Config.Identity.OIDC.Enabled),

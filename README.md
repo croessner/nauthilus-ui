@@ -97,7 +97,7 @@ ui/
    - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
    - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
    - The Go backend only allows cross-origin requests from an explicit allowlist
-   - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+   - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000` and `3001` are allowed
    - `Forwarded` / `X-Forwarded-*` headers are ignored unless the reverse proxy IP/CIDR is listed in `server.trusted_proxies`
    - In production, the Go server serves the built static files from the `build/` directory and provides runtime configuration via `/env-config.js`
 
@@ -319,7 +319,7 @@ Security and behavior notes:
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
   - Cross-origin requests are allowed only for the configured CORS allowlist
-  - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+  - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000` and `3001` are allowed
   - In non-local deployments, set `security.cors.allowed_origins` explicitly to the UI origin(s)
   - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_ui_csrf_token`)
 - In production, the Docker setup includes:
@@ -465,7 +465,7 @@ Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localh
 ```
 
 **Solution**:
-1. Check that the browser origin is included in `security.cors.allowed_origins`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
+1. Check that the browser origin is included in `security.cors.allowed_origins`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000` and `3001`)
 2. Check that the CORS middleware is properly registered in the Go server
 3. Verify that the React development server is correctly proxying requests to the Go server
 4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `security.cors.allowed_origins`
@@ -654,7 +654,7 @@ ui/
    - Vite's dev server proxies API requests to the Go backend (see vite.config.ts)
    - The earlier CRA-specific `src/setupProxy.js` is no longer used by the dev server
    - The Go backend only allows cross-origin requests from an explicit allowlist
-   - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+   - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000` and `3001` are allowed
    - In production, the Go server serves the built static files from the `build/` directory and provides runtime configuration via `/env-config.js`
 
 6. For production deployment, use Docker Compose:
@@ -875,7 +875,7 @@ Security and behavior notes:
   - Health checks and monitoring
 - In development mode, the Go server runs separately from the React development server
   - Cross-origin requests are allowed only for the configured CORS allowlist
-  - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000`, `3001`, and `3002` are allowed
+  - If `security.cors.allowed_origins` is unset, only local dev origins on `localhost`/`127.0.0.1` for ports `3000` and `3001` are allowed
   - In non-local deployments, set `security.cors.allowed_origins` explicitly to the UI origin(s)
   - Cookie-authenticated mutating requests require Origin/Referer validation plus a double-submit CSRF token (`X-CSRF-Token` + `nauthilus_ui_csrf_token`)
 - In production, the Docker setup includes:
@@ -1021,7 +1021,7 @@ Access to fetch at 'http://localhost:3001/api/health' from origin 'http://localh
 ```
 
 **Solution**:
-1. Check that the browser origin is included in `security.cors.allowed_origins`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000`, `3001`, `3002`)
+1. Check that the browser origin is included in `security.cors.allowed_origins`, or use the local dev defaults (`localhost`/`127.0.0.1` on ports `3000` and `3001`)
 2. Check that the CORS middleware is properly registered in the Go server
 3. Verify that the React development server is correctly proxying requests to the Go server
 4. If you deploy behind a reverse proxy or TLS terminator, configure the final browser-facing origin explicitly in `security.cors.allowed_origins`

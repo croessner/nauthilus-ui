@@ -8,11 +8,9 @@ services:
     restart: unless-stopped
     environment:
       - NAUTHILUS_UI_CONFIG_FILE=/app/config.yaml
-      - NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT=443
       - NAUTHILUS_UI_DATABASE_MONGODB_URI=mongodb://${MONGODB_ROOT_USER:-nauthilus}:${MONGODB_ROOT_PASSWORD:-nauthilus_password}@mongo:27017/nauthilus-ui?authSource=admin
     ports:
       - "3001:3001"
-      - "3002:3002"
     volumes:
       - ./config.yaml:/app/config.yaml:ro
     depends_on:

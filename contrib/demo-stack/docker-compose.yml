@@ -10,10 +10,8 @@ services:
     environment:
       NAUTHILUS_UI_CONFIG_FILE: /app/config.yaml
       NAUTHILUS_UI_DATABASE_MONGODB_URI: mongodb://nauthilus:nauthilus_password@mongodb:27017/nauthilus-ui?authSource=admin
-      NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT: 3002
     ports:
       - "3001:3001"
-      - "3002:3002"
     volumes:
       - ./nauthilus-ui/config.yaml:/app/config.yaml:ro
       - demo_ssh:/demo/ssh:ro

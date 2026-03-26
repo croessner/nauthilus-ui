@@ -26,8 +26,7 @@ For full-stack changes, both policies apply.
 - Database: MongoDB
 - Runtime:
   - Vite dev server on `3000`
-  - Go frontend/API server on `3001`
-  - Go proxy server on `3002`
+  - Go frontend/API/proxy server on `3001`
 - Production artifact:
   - `npm run build` creates `build/`
   - Go server serves static assets from `build/`

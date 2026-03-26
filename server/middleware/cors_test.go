@@ -94,7 +94,6 @@ func TestCORSAllowsLocalDefaults(t *testing.T) {
 	NewCORSHandler(&config.Config{
 		Server: config.ServerConfig{
 			Frontend: config.ListenerConfig{Port: 3001},
-			Proxy:    config.ProxyConfig{Port: 3002},
 		},
 	}).RegisterMiddleware(router)
 	router.OPTIONS("/proxy/test", func(ctx *gin.Context) {

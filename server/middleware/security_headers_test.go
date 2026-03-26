@@ -15,11 +15,7 @@ func TestSecurityHeadersSetBaselinePolicies(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewSecurityHeadersHandler(&config.Config{
-		Server: config.ServerConfig{
-			Proxy: config.ProxyConfig{PublicPort: 3002},
-		},
-	}).RegisterMiddleware(router)
+	NewSecurityHeadersHandler().RegisterMiddleware(router)
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
 	})
@@ -67,14 +63,9 @@ func TestSecurityHeadersIgnoreUntrustedForwardedProto(t *testing.T) {
 	NewRequestContextHandler(&config.Config{
 		Server: config.ServerConfig{
 			TrustedProxies: []string{"127.0.0.1"},
-			Proxy:          config.ProxyConfig{PublicPort: 3002},
 		},
 	}).RegisterMiddleware(router)
-	NewSecurityHeadersHandler(&config.Config{
-		Server: config.ServerConfig{
-			Proxy: config.ProxyConfig{PublicPort: 3002},
-		},
-	}).RegisterMiddleware(router)
+	NewSecurityHeadersHandler().RegisterMiddleware(router)
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
 	})
@@ -97,14 +88,9 @@ func TestSecurityHeadersSetHSTSForTrustedSecureRequests(t *testing.T) {
 	NewRequestContextHandler(&config.Config{
 		Server: config.ServerConfig{
 			TrustedProxies: []string{"127.0.0.1"},
-			Proxy:          config.ProxyConfig{PublicPort: 3002},
 		},
 	}).RegisterMiddleware(router)
-	NewSecurityHeadersHandler(&config.Config{
-		Server: config.ServerConfig{
-			Proxy: config.ProxyConfig{PublicPort: 3002},
-		},
-	}).RegisterMiddleware(router)
+	NewSecurityHeadersHandler().RegisterMiddleware(router)
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
 	})
@@ -120,15 +106,11 @@ func TestSecurityHeadersSetHSTSForTrustedSecureRequests(t *testing.T) {
 	}
 }
 
-func TestSecurityHeadersAllowProxyOriginInConnectSrc(t *testing.T) {
+func TestSecurityHeadersConnectSrcRemainsSameOrigin(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
 	router := gin.New()
-	NewSecurityHeadersHandler(&config.Config{
-		Server: config.ServerConfig{
-			Proxy: config.ProxyConfig{PublicPort: 3002},
-		},
-	}).RegisterMiddleware(router)
+	NewSecurityHeadersHandler().RegisterMiddleware(router)
 	router.GET("/", func(ctx *gin.Context) {
 		ctx.Status(http.StatusNoContent)
 	})
@@ -143,7 +125,7 @@ func TestSecurityHeadersAllowProxyOriginInConnectSrc(t *testing.T) {
 		t.Fatalf("expected CSP to contain connect-src directive, got %q", csp)
 	}
 
-	if !strings.Contains(csp, "http://localhost:3002") {
-		t.Fatalf("expected CSP connect-src to allow proxy origin, got %q", csp)
+	if !strings.Contains(csp, "connect-src 'self'") {
+		t.Fatalf("expected CSP connect-src to include same-origin only, got %q", csp)
 	}
 }

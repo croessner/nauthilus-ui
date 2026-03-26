@@ -5,57 +5,16 @@ import { attachCSRFHeader, isMutatingMethod } from './csrf';
 import { readCachedSSHPassphrase } from './sshPassphraseCache';
 
 /**
- * Retrieves the proxy origin URL based on the current environment configuration.
- *
- * In Vite development mode we intentionally route proxy calls through the UI
- * origin (`/proxy`) so requests stay on the same backend instance as `/api`.
- *
- * Outside Vite dev mode the function checks the following sources in order of priority:
- * 1. `window._env_?.REACT_APP_PROXY_PORT` - If available, this port value is used.
- * 2. `process.env.REACT_APP_PROXY_PORT` - If running in a Node.js-like environment, this port value is used.
- * 3. Fallback to the default port `3002` if neither of the above are defined.
- *
- * A debug message is logged for each source used.
- *
- * @returns {string} The generated proxy origin URL based on the chosen port.
+ * Returns the same-origin base URL for proxy endpoints.
+ * API and proxy routes are served by the same backend listener.
  */
 export const getProxyOrigin = (): string => {
-  if (isViteDevelopmentRuntime()) {
-    console.debug('[getProxyOrigin] Source: vite-dev same-origin');
-    return window.location.origin;
+  if (typeof window === 'undefined') {
+    return 'http://localhost';
   }
 
-  if (window._env_?.REACT_APP_PROXY_PORT) {
-    console.debug('[getProxyOrigin] Source: window._env_, Port:', window._env_.REACT_APP_PROXY_PORT);
-    return buildUrl(window._env_.REACT_APP_PROXY_PORT);
-  }
-
-  if (typeof process !== 'undefined' && process.env.REACT_APP_PROXY_PORT) {
-    console.debug('[getProxyOrigin] Source: process.env, Port:', process.env.REACT_APP_PROXY_PORT);
-    return buildUrl(process.env.REACT_APP_PROXY_PORT);
-  }
-
-  console.debug('[getProxyOrigin] Source: Fallback, Port: 3002');
-  return buildUrl('3002');
+  return window.location.origin;
 };
-
-function isViteDevelopmentRuntime(): boolean {
-  return Boolean(import.meta.env?.DEV);
-}
-
-/**
- * Constructs a URL based on the provided port and current window location details.
- *
- * @param {string} port - The port to use when building the URL. If the port is "443" and the protocol is "https:", the port is omitted from the URL.
- * @return {string} The constructed URL as a string.
- */
-function buildUrl(port: string): string {
-  const { protocol, hostname } = window.location;
-  const normalizedHostname = protocol === 'http:' && hostname === 'localhost' ? '127.0.0.1' : hostname;
-  return port === '443' && protocol === 'https:'
-      ? `${protocol}//${normalizedHostname}`
-      : `${protocol}//${normalizedHostname}:${port}`;
-}
 
 /**
  * Browser authentication is cookie-only. This helper remains for compatibility

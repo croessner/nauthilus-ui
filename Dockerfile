@@ -102,8 +102,8 @@ COPY --from=react-build /app/build ./build
 # Copy the Go binary from the Go build stage
 COPY --from=go-build /app/server ./
 
-# Expose the server port
-EXPOSE 3001 3002
+# Expose the unified server port
+EXPOSE 3001
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \

@@ -34,9 +34,7 @@ The first existing file is used:
 ## Most Used Settings
 
 - `database.mongodb.uri`: MongoDB connection string.
-- `server.frontend.address` / `server.frontend.port`: API/frontend listener.
-- `server.proxy.address` / `server.proxy.port`: Proxy listener.
-- `server.proxy.public_port`: Port exposed to the browser (often `443` behind TLS reverse proxies).
+- `server.frontend.address` / `server.frontend.port`: Unified frontend/API/proxy listener.
 - `security.cors.allowed_origins`: Explicit browser origin allowlist.
 - `server.trusted_proxies`: Reverse-proxy IPs/CIDRs whose forwarded headers are trusted.
 - `identity.oidc.*`: Optional OIDC login settings.
@@ -52,7 +50,7 @@ If needed, individual keys can be overridden via environment variables:
 
 Examples:
 
-- `server.proxy.public_port` -> `NAUTHILUS_UI_SERVER_PROXY_PUBLIC_PORT`
+- `server.frontend.port` -> `NAUTHILUS_UI_SERVER_FRONTEND_PORT`
 - `database.mongodb.uri` -> `NAUTHILUS_UI_DATABASE_MONGODB_URI`
 
 For list values, use comma-separated strings:

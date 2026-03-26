@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -122,6 +123,12 @@ func registerAPIHandlers(
 	// Create a custom middleware that strictly enforces authenticated sessions.
 	strictSessionMiddleware := func(ctx *gin.Context) {
 		path := ctx.Request.URL.Path
+		if strings.HasPrefix(path, "/proxy/") && utils.HasLegacyAuthQueryParams(ctx.Request) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Backend auth must be sent via x-auth-type/x-auth-value headers"})
+			ctx.Abort()
+			return
+		}
+
 		if middleware.IsPublicPath(path) {
 			ctx.Next()
 
@@ -199,14 +206,19 @@ func registerAPIHandlers(
 	}, gitSSHProvider)
 	gitHandler := api.NewGitHandler(gitService, mongoDB)
 	gitHandler.RegisterRoutes(r)
+
+	// Register proxy endpoints on the same API/UI listener.
+	proxyHandler := proxy.NewProxyHandler(mongoDB)
+	proxyHandler.SSH = runtimeSSHProvider
+	proxyHandler.RegisterRoutes(r)
 }
 
-// registerMiddleware registers all middleware with the router
-func registerMiddleware(r *gin.Engine, cfg *config.Config, _ *db.MongoDB) {
+// registerMiddleware registers all middleware with the router.
+func registerMiddleware(r *gin.Engine, cfg *config.Config) {
 	requestContext := middleware.NewRequestContextHandler(cfg)
 	requestContext.RegisterMiddleware(r)
 
-	securityHeaders := middleware.NewSecurityHeadersHandler(cfg)
+	securityHeaders := middleware.NewSecurityHeadersHandler()
 	securityHeaders.RegisterMiddleware(r)
 
 	// Register CORS middleware first (should be registered before other middleware)
@@ -230,46 +242,22 @@ type Server struct {
 	Name string
 }
 
-// startFrontendServer starts the frontend HTTP server and returns it
+// startFrontendServer starts the unified frontend/API/proxy HTTP server and returns it.
 func startFrontendServer(cfg *config.Config, router *gin.Engine) *Server {
 	srv := &Server{
 		Server: &http.Server{
 			Addr:    fmt.Sprintf("%s:%d", cfg.Server.Frontend.Address, cfg.Server.Frontend.Port),
 			Handler: router,
 		},
-		Name: "Frontend",
+		Name: "Frontend/API",
 	}
 
 	// Start the server in a goroutine
 	go func() {
-		slog.Info("Frontend server running", "address", cfg.Server.Frontend.Address, "port", cfg.Server.Frontend.Port, "version", version)
+		slog.Info("Frontend/API server running", "address", cfg.Server.Frontend.Address, "port", cfg.Server.Frontend.Port, "version", version)
 
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			slog.Error("Failed to start frontend server", "error", err)
-
-			os.Exit(1)
-		}
-	}()
-
-	return srv
-}
-
-// startProxyServer starts the proxy HTTP server and returns it
-func startProxyServer(cfg *config.Config, proxyRouter *gin.Engine) *Server {
-	srv := &Server{
-		Server: &http.Server{
-			Addr:    fmt.Sprintf("%s:%d", cfg.Server.Proxy.Address, cfg.Server.Proxy.Port),
-			Handler: proxyRouter,
-		},
-		Name: "Proxy",
-	}
-
-	// Start the server in a goroutine
-	go func() {
-		slog.Info("Proxy server running", "address", cfg.Server.Proxy.Address, "port", cfg.Server.Proxy.Port, "version", version)
-
-		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
-			slog.Error("Failed to start proxy server", "error", err)
 
 			os.Exit(1)
 		}
@@ -310,7 +298,7 @@ func performGracefulShutdown(rootCtx context.Context, servers []*Server, mongoDB
 	slog.Info("All servers exited")
 }
 
-// setupFrontendRouter creates and configures the Gin router for frontend with API routes and middleware
+// setupFrontendRouter creates and configures the Gin router for frontend with API/proxy routes and middleware.
 func setupFrontendRouter(
 	cfg *config.Config,
 	mongoDB *db.MongoDB,
@@ -327,66 +315,11 @@ func setupFrontendRouter(
 	r.Use(middleware.Logger())
 
 	// Register middleware
-	registerMiddleware(r, cfg, mongoDB)
+	registerMiddleware(r, cfg)
 
 	// Register API handlers after global middleware so request metadata, CORS, CSRF and headers
 	// are applied to every endpoint.
 	registerAPIHandlers(r, cfg, mongoDB, gitSSHProvider, runtimeSSHProvider)
-
-	return r
-}
-
-// setupProxyRouter creates and configures the Gin router for proxy with proxy routes
-func setupProxyRouter(cfg *config.Config, mongoDB *db.MongoDB, runtimeSSHProvider *sshprovider.Provider) *gin.Engine {
-	r := gin.New()
-	if err := r.SetTrustedProxies(cfg.Server.TrustedProxies); err != nil {
-		slog.Error("Failed to configure trusted proxies for proxy router; falling back to trust-none mode", "error", err)
-		_ = r.SetTrustedProxies(nil)
-	}
-	// Use recovery and our custom slog-based logger to replace Gin's default logger
-	r.Use(gin.Recovery())
-	r.Use(middleware.Logger())
-	requestContext := middleware.NewRequestContextHandler(cfg)
-	requestContext.RegisterMiddleware(r)
-	securityHeaders := middleware.NewSecurityHeadersHandler(cfg)
-	securityHeaders.RegisterMiddleware(r)
-	originPolicy := middleware.NewOriginPolicy(cfg)
-	csrfProtection := middleware.NewCSRFProtection(cfg)
-
-	r.Use(func(ctx *gin.Context) {
-		if ok := originPolicy.Apply(ctx, middleware.CORSExposeHeaders); !ok {
-			ctx.AbortWithStatus(http.StatusForbidden)
-			return
-		}
-
-		if ctx.Request.Method == http.MethodOptions {
-			ctx.AbortWithStatus(http.StatusNoContent)
-			return
-		}
-
-		ctx.Next()
-	})
-	r.Use(csrfProtection.Middleware())
-
-	// Strict session middleware for proxy routes.
-	strictProxySessionMiddleware := func(ctx *gin.Context) {
-		if utils.HasLegacyAuthQueryParams(ctx.Request) {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Backend auth must be sent via x-auth-type/x-auth-value headers"})
-			ctx.Abort()
-			return
-		}
-
-		// Delegate session validation to the standard cookie-based middleware.
-		middleware.SessionAuthMiddleware(mongoDB)(ctx)
-	}
-
-	// Apply strict proxy middleware
-	r.Use(strictProxySessionMiddleware)
-
-	// Register proxy handlers
-	proxyHandler := proxy.NewProxyHandler(mongoDB)
-	proxyHandler.SSH = runtimeSSHProvider
-	proxyHandler.RegisterRoutes(r)
 
 	return r
 }
@@ -437,21 +370,15 @@ func main() {
 	// Start audit cleanup scheduler (if enabled)
 	startAuditCleanupScheduler(cfg, mongoDB)
 
-	// Setup frontend router with API routes and middleware
+	// Setup unified router with frontend, API, and proxy routes.
 	frontendRouter := setupFrontendRouter(cfg, mongoDB, gitSSHProvider, runtimeSSHProvider)
 
-	// Setup proxy router with proxy routes
-	proxyRouter := setupProxyRouter(cfg, mongoDB, runtimeSSHProvider)
-
-	// Start the frontend server
+	// Start the server.
 	frontendSrv := startFrontendServer(cfg, frontendRouter)
-
-	// Start the proxy server
-	proxySrv := startProxyServer(cfg, proxyRouter)
 
 	// Wait for shutdown signal
 	waitForShutdownSignal()
 
-	// Perform graceful shutdown for both servers
-	performGracefulShutdown(rootCtx, []*Server{frontendSrv, proxySrv}, mongoDB)
+	// Perform graceful shutdown.
+	performGracefulShutdown(rootCtx, []*Server{frontendSrv}, mongoDB)
 }

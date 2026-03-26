@@ -12,10 +12,6 @@ const API_ADDRESS = process.env.FRONTEND_ADDRESS || '0.0.0.0';
 const API_PORT = process.env.FRONTEND_PORT || '3001';
 const API_HOST = API_ADDRESS === '0.0.0.0' || API_ADDRESS === 'localhost' ? '127.0.0.1' : API_ADDRESS;
 const API_TARGET = `http://${API_HOST}:${API_PORT}`;
-const PROXY_ADDRESS = process.env.PROXY_ADDRESS || '0.0.0.0';
-const PROXY_PORT = process.env.PROXY_PORT || '3002';
-const PROXY_HOST = PROXY_ADDRESS === '0.0.0.0' || PROXY_ADDRESS === 'localhost' ? '127.0.0.1' : PROXY_ADDRESS;
-const PROXY_TARGET = `http://${PROXY_HOST}:${PROXY_PORT}`;
 
 // Absolute aliases to force a single instance of Emotion at build time
 const __filename = fileURLToPath(import.meta.url);
@@ -59,48 +55,10 @@ export default defineConfig({
         target: API_TARGET,
         changeOrigin: true,
       },
-      // Enhanced proxy for /proxy/* endpoints with header injection logic
+      // Proxy /proxy endpoints to the same Go listener as /api
       '/proxy': {
-        target: PROXY_TARGET,
+        target: API_TARGET,
         changeOrigin: true,
-        configure: (proxy) => {
-          proxy.on('proxyReq', (proxyReq: any, req: any) => {
-            try {
-              const url = new URL(req.url || '', 'http://localhost');
-              const q = Object.fromEntries(url.searchParams.entries());
-
-              // Forward target URL and optional auth meta for backend usage
-              if (q.url) {
-                proxyReq.setHeader('x-target-url', q.url);
-              }
-              if (q.authType) {
-                proxyReq.setHeader('x-auth-type', q.authType);
-              }
-              if (q.authValue) {
-                proxyReq.setHeader('x-auth-value', q.authValue);
-              }
-
-              // Mirror authUtils behavior for Authorization header when requested
-              if (q.authType === 'basic' && q.authValue) {
-                proxyReq.setHeader('Authorization', `Basic ${q.authValue}`);
-              } else if (q.authType === 'bearer' && q.authValue) {
-                proxyReq.setHeader('Authorization', `Bearer ${q.authValue}`);
-              }
-
-              // Ensure JSON content type for POST/PUT when not explicitly set
-              const method = (req.method || 'GET').toUpperCase();
-              if ((method === 'POST' || method === 'PUT' || method === 'PATCH') && !proxyReq.getHeader('Content-Type')) {
-                proxyReq.setHeader('Content-Type', 'application/json');
-              }
-            } catch (e) {
-              // ignore parse errors
-            }
-          });
-
-          proxy.on('error', (err) => {
-            console.error('Vite proxy error:', err);
-          });
-        },
       },
     },
   },
