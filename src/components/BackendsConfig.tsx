@@ -130,13 +130,21 @@ const BackendsConfig = (): React.JSX.Element => {
                     <List>
                       {values.backends.map((backend, index) => (
                         <ListItem key={index} divider={index < values.backends.length - 1}>
-                          <Grid container spacing={2} alignItems="center">
-                            <Grid size={8}>
+                          <Box
+                            sx={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              width: '100%',
+                              gap: 2,
+                              flexWrap: { xs: 'wrap', md: 'nowrap' },
+                            }}
+                          >
+                            <Box sx={{ flexGrow: 1, minWidth: { xs: '100%', md: 0 } }}>
                               <FormControl fullWidth>
                                 <InputLabel id={`backend-type-label-${index}`}>
-                                                                  Backend Type
-                                                                  <InfoTooltip title="Select which backend to use at this position. Order defines processing sequence." />
-                                                                </InputLabel>
+                                  Backend Type
+                                  <InfoTooltip title="Select which backend to use at this position. Order defines processing sequence." />
+                                </InputLabel>
                                 <Select
                                   labelId={`backend-type-label-${index}`}
                                   id={`backend-type-${index}`}
@@ -148,9 +156,9 @@ const BackendsConfig = (): React.JSX.Element => {
                                     setFieldValue('backends', newBackends)
                                         .then(() => setHasUnsavedChanges(true));
                                   }}
-                                  error={touched.backends !== undefined && errors.backends !== undefined && 
+                                  error={touched.backends !== undefined && errors.backends !== undefined &&
                                     Array.isArray(touched.backends) && Array.isArray(errors.backends) &&
-                                    index < touched.backends.length && index < errors.backends.length && 
+                                    index < touched.backends.length && index < errors.backends.length &&
                                     Boolean(touched.backends[index]) && Boolean(errors.backends[index])}
                                 >
                                   {availableBackendTypes.map((type) => (
@@ -160,55 +168,64 @@ const BackendsConfig = (): React.JSX.Element => {
                                   ))}
                                 </Select>
                               </FormControl>
-                            </Grid>
-                            <Grid size={4}>
-                              <Box sx={{ display: 'flex', justifyContent: 'flex-end' }}>
-                                <IconButton
-                                  color="primary"
-                                  onClick={() => {
-                                    if (index > 0) {
-                                      const newBackends = [...values.backends];
-                                      const temp = newBackends[index];
-                                      newBackends[index] = newBackends[index - 1];
-                                      newBackends[index - 1] = temp;
-                                      setFieldValue('backends', newBackends)
-                                          .then(() => setHasUnsavedChanges(true));
-                                    }
-                                  }}
-                                  disabled={index === 0}
-                                >
-                                  <ArrowUpwardIcon />
-                                </IconButton>
-                                <IconButton
-                                  color="primary"
-                                  onClick={() => {
-                                    if (index < values.backends.length - 1) {
-                                      const newBackends = [...values.backends];
-                                      const temp = newBackends[index];
-                                      newBackends[index] = newBackends[index + 1];
-                                      newBackends[index + 1] = temp;
-                                      setFieldValue('backends', newBackends)
-                                          .then(() => setHasUnsavedChanges(true));
-                                    }
-                                  }}
-                                  disabled={index === values.backends.length - 1}
-                                >
-                                  <ArrowDownwardIcon />
-                                </IconButton>
-                                <IconButton
-                                  color="error"
-                                  onClick={() => {
+                            </Box>
+                            <Box
+                              data-testid={`backend-actions-${index}`}
+                              sx={{
+                                display: 'flex',
+                                justifyContent: 'flex-end',
+                                flexShrink: 0,
+                                width: { xs: '100%', md: 'auto' },
+                              }}
+                            >
+                              <IconButton
+                                aria-label={`Move backend at position ${index + 1} up`}
+                                color="primary"
+                                onClick={() => {
+                                  if (index > 0) {
                                     const newBackends = [...values.backends];
-                                    newBackends.splice(index, 1);
+                                    const temp = newBackends[index];
+                                    newBackends[index] = newBackends[index - 1];
+                                    newBackends[index - 1] = temp;
                                     setFieldValue('backends', newBackends)
                                         .then(() => setHasUnsavedChanges(true));
-                                  }}
-                                >
-                                  <DeleteIcon />
-                                </IconButton>
-                              </Box>
-                            </Grid>
-                          </Grid>
+                                  }
+                                }}
+                                disabled={index === 0}
+                              >
+                                <ArrowUpwardIcon />
+                              </IconButton>
+                              <IconButton
+                                aria-label={`Move backend at position ${index + 1} down`}
+                                color="primary"
+                                onClick={() => {
+                                  if (index < values.backends.length - 1) {
+                                    const newBackends = [...values.backends];
+                                    const temp = newBackends[index];
+                                    newBackends[index] = newBackends[index + 1];
+                                    newBackends[index + 1] = temp;
+                                    setFieldValue('backends', newBackends)
+                                        .then(() => setHasUnsavedChanges(true));
+                                  }
+                                }}
+                                disabled={index === values.backends.length - 1}
+                              >
+                                <ArrowDownwardIcon />
+                              </IconButton>
+                              <IconButton
+                                aria-label={`Remove backend at position ${index + 1}`}
+                                color="error"
+                                onClick={() => {
+                                  const newBackends = [...values.backends];
+                                  newBackends.splice(index, 1);
+                                  setFieldValue('backends', newBackends)
+                                      .then(() => setHasUnsavedChanges(true));
+                                }}
+                              >
+                                <DeleteIcon />
+                              </IconButton>
+                            </Box>
+                          </Box>
                         </ListItem>
                       ))}
                     </List>

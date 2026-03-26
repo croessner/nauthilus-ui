@@ -305,6 +305,44 @@ test('OIDC clients and SAML service providers are editable via selectors', async
   await expect(page.getByRole('option', { name: 'SP Beta (sp-beta-entity)' })).toBeVisible();
 });
 
+test('backend action buttons stay right aligned and outside the backend selector field', async ({ page }) => {
+  await loginAsAdmin(page);
+  await clickMenu(page, 'Backends');
+  await expect(page.getByText('Backends Configuration', { exact: false }).first()).toBeVisible();
+
+  const firstBackendSelector = page.locator('#backend-type-0').first();
+  if (await firstBackendSelector.count() === 0) {
+    await page.getByRole('button', { name: 'Add Backend' }).click();
+  }
+
+  const selector = page.locator('#backend-type-0').first();
+  const actions = page.getByTestId('backend-actions-0');
+  const row = actions.locator('xpath=ancestor::li[1]');
+
+  await expect(selector).toBeVisible();
+  await expect(actions).toBeVisible();
+  await expect(row).toBeVisible();
+
+  const selectorBox = await selector.boundingBox();
+  const actionsBox = await actions.boundingBox();
+  const rowBox = await row.boundingBox();
+
+  expect(selectorBox).not.toBeNull();
+  expect(actionsBox).not.toBeNull();
+  expect(rowBox).not.toBeNull();
+
+  if (!selectorBox || !actionsBox || !rowBox) {
+    return;
+  }
+
+  const selectorRightEdge = selectorBox.x + selectorBox.width;
+  const actionsLeftEdge = actionsBox.x;
+  const actionsRightGap = (rowBox.x + rowBox.width) - (actionsBox.x + actionsBox.width);
+
+  expect(actionsLeftEdge).toBeGreaterThan(selectorRightEdge - 4);
+  expect(actionsRightGap).toBeLessThan(40);
+});
+
 test('runtime OIDC token is refreshed automatically when expired', async ({ page }) => {
   const refreshedTokenValue = 'runtime-fresh-token';
   const seenAuthValues: string[] = [];
