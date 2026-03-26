@@ -207,14 +207,21 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   const isExpanded = useCallback((k: string) => expandedKeys.has(k), [expandedKeys]);
   // Keep a snapshot of row data when expanded to avoid flicker during refresh
   const expandedSnapshotsRef = useRef<Map<string, Row>>(new Map());
+  // Track the row that the user most recently expanded/collapsed to avoid scroll jumps.
+  const lastInteractedExpandedKeyRef = useRef<string | null>(null);
   const toggleExpanded = useCallback((k:string, row?: Row)=>{
     setExpandedKeys(prev => {
       const next = new Set(prev);
       if (next.has(k)) {
         next.delete(k);
         try { expandedSnapshotsRef.current.delete(k); } catch {}
+        if (lastInteractedExpandedKeyRef.current === k) {
+          const firstRemaining = next.values().next().value;
+          lastInteractedExpandedKeyRef.current = typeof firstRemaining === 'string' ? firstRemaining : null;
+        }
       } else {
         next.add(k);
+        lastInteractedExpandedKeyRef.current = k;
         if (row) {
           try { expandedSnapshotsRef.current.set(k, row); } catch {}
         }
@@ -1077,18 +1084,21 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Scroll stabilization: keep expanded row roughly in view
   useEffect(() => {
     if (!expandedKeys.size) return;
+    const targetKey = (
+      lastInteractedExpandedKeyRef.current && expandedKeys.has(lastInteractedExpandedKeyRef.current)
+    )
+      ? lastInteractedExpandedKeyRef.current
+      : Array.from(expandedKeys)[0];
+    if (!targetKey) return;
     const present = new Set(rows.map(r => rowKey(r)));
-    for (const k of expandedKeys) {
-      if (!present.has(k)) continue;
-      const el = rowRefs.current[k];
-      if (!el) continue;
-      const rect = el.getBoundingClientRect();
-      const vh = window.innerHeight || document.documentElement.clientHeight;
-      const partiallyVisible = rect.top < vh && rect.bottom > 0;
-      if (!partiallyVisible) {
-        try { el.scrollIntoView({ block: 'nearest' }); } catch {}
-      }
-      break; // only the first expanded row
+    if (!present.has(targetKey)) return;
+    const el = rowRefs.current[targetKey];
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    const vh = window.innerHeight || document.documentElement.clientHeight;
+    const partiallyVisible = rect.top < vh && rect.bottom > 0;
+    if (!partiallyVisible) {
+      try { el.scrollIntoView({ block: 'nearest' }); } catch {}
     }
   }, [rows, expandedKeys, rowKey]);
 

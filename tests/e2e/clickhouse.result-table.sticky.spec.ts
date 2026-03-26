@@ -258,3 +258,28 @@ test('expanded panel stays right of sticky column when table has no horizontal o
   expect(layout.hasHorizontalOverflow).toBe(false);
   expect(layout.gapPx).toBeGreaterThanOrEqual(6);
 });
+
+test('expanding a row after scrolling does not jump back to the first expanded row', async ({ page }) => {
+  const columns = ['ts', 'client_ip', 'username'];
+  const rows: ClickhouseRow[] = Array.from({ length: 90 }, (_, i) => ({
+    ts: `2026-03-25 16:${String(59 - Math.floor(i / 2)).padStart(2, '0')}:${String(i % 60).padStart(2, '0')}.000`,
+    client_ip: `203.0.113.${(i % 200) + 1}`,
+    username: `user-${String(i).padStart(3, '0')}`,
+  }));
+
+  await mockClickhouseRoutes(page, columns, rows);
+  await openClickhouseAndRefresh(page, 'user-000');
+
+  await page.getByRole('button', { name: 'Expand row' }).first().click();
+  await expect(page.getByTestId('clickhouse-expanded-panel').first()).toBeVisible();
+
+  const targetRow = page.locator('tbody tr', { hasText: 'user-070' }).first();
+  await targetRow.scrollIntoViewIfNeeded();
+  const scrollBefore = await page.evaluate(() => window.scrollY);
+
+  await targetRow.getByRole('button', { name: 'Expand row' }).click();
+  await expect(targetRow).toBeVisible();
+
+  const scrollAfter = await page.evaluate(() => window.scrollY);
+  expect(Math.abs(scrollAfter - scrollBefore)).toBeLessThan(220);
+});
