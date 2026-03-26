@@ -439,6 +439,8 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
       };
     }
 
+    // Drop removed dedup settings so deprecated backend-only keys are not shown in UI.
+    delete (normalizedConfig.server as any).dedup;
     delete (normalizedConfig.server as any).jwt_auth;
 
     return normalizedConfig;
@@ -471,8 +473,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         'redis', 'master_user', 'frontend', 'prometheus_timer',
         'default_http_request_header', 'http_client', 'compression', 'keep_alive',
         'middlewares', 'timeouts', 'trusted_proxies',
-        'run_as_user', 'run_as_group', 'chroot',
-        'dedup'
+        'run_as_user', 'run_as_group', 'chroot'
       ];
 
       serverProps.forEach(prop => {

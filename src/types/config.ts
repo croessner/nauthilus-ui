@@ -39,7 +39,6 @@ export interface ServerConfig {
   redis: RedisConfig;
   master_user?: MasterUserConfig;
   frontend?: FrontendConfig;
-  dedup?: DedupConfig; // Deprecated backend compatibility only
   prometheus_timer?: PrometheusTimerConfig;
   default_http_request_header?: DefaultHTTPRequestHeaderConfig;
   http_client?: HTTPClientConfig;
@@ -202,11 +201,6 @@ export interface MiddlewaresConfig {
 export interface MasterUserConfig {
   enabled?: boolean;
   delimiter?: string;
-}
-
-export interface DedupConfig {
-  distributed_enabled?: boolean; // Deprecated backend compatibility only
-  in_process_enabled?: boolean; // Deprecated backend compatibility only
 }
 
 export interface FrontendConfig {

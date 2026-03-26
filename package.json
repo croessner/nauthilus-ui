@@ -41,6 +41,7 @@
     "start-dev": "vite",
     "build": "vite build",
     "config:parity": "node scripts/check-config-parity.mjs",
+    "test:deprecated-dedup": "node scripts/regression.deprecated-dedup.test.mjs",
     "preview": "vite preview",
     "test": "echo \"No test runner configured with Vite yet\" && exit 0",
     "e2e": "playwright test",

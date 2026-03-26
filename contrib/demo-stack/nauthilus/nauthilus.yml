@@ -21,9 +21,6 @@ server:
       propagators: [ tracecontext, baggage ]
       enable_redis: true
 
-  dedup:
-    in_process_enabled: true
-
   brute_force_protocols: [ imap, pop3, smtp, http ]
   backends: [ cache, lua ]
   features: [ lua, brute_force ]
