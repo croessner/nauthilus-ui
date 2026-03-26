@@ -11,6 +11,8 @@ GITEA_USERNAME="gitadmin"
 GITEA_PASSWORD="gitadmin"
 REPO_OWNER="${GITEA_USERNAME}"
 REPO_NAME="nauthilus-config-demo"
+WEBHOOK_URL="http://nauthilus-gitops-deployer:8090/webhook"
+WEBHOOK_SECRET="${GITEA_WEBHOOK_SECRET:-demo-gitops-webhook-secret}"
 
 log() {
   printf '[demo-bootstrap] %s\n' "$*"
@@ -88,6 +90,27 @@ ensure_repo() {
     "${GITEA_API}/user/repos" >/dev/null
 }
 
+ensure_repo_webhook() {
+  local token="$1"
+  local hooks_json
+
+  hooks_json="$(curl -fsS \
+    -H "Authorization: token ${token}" \
+    "${GITEA_API}/repos/${REPO_OWNER}/${REPO_NAME}/hooks")"
+
+  if grep -F "\"url\":\"${WEBHOOK_URL}\"" <<<"${hooks_json}" >/dev/null; then
+    log "Repository webhook for tag deployment already exists"
+    return 0
+  fi
+
+  log "Creating repository webhook for tag deployment"
+  curl -fsS -X POST \
+    -H "Authorization: token ${token}" \
+    -H "Content-Type: application/json" \
+    -d "{\"type\":\"gitea\",\"config\":{\"url\":\"${WEBHOOK_URL}\",\"content_type\":\"json\",\"secret\":\"${WEBHOOK_SECRET}\"},\"events\":[\"push\"],\"active\":true}" \
+    "${GITEA_API}/repos/${REPO_OWNER}/${REPO_NAME}/hooks" >/dev/null
+}
+
 ensure_user_ssh_key() {
   local token="$1"
   local pub_key
@@ -154,6 +177,7 @@ main() {
 
   token="$(generate_admin_token)"
   ensure_repo "${token}"
+  ensure_repo_webhook "${token}"
   ensure_user_ssh_key "${token}"
   seed_repo_file
 

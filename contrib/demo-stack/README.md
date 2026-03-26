@@ -12,8 +12,9 @@ This stack runs a full demo environment for `nauthilus-ui` with:
 - `grafana-alloy` (Docker log collector to Loki)
 - `grafana` (pre-provisioned with Tempo + Loki datasources)
 - `gitea` + automatic bootstrap
+- `nauthilus-gitops-deployer` (Gitea webhook listener for tag-based runtime deploy)
 
-The bootstrap job generates an SSH key at deployment time, stores it in a shared Docker volume, adds the key to Gitea user `gitadmin`, creates a demo repository, and seeds `nauthilus.yml`.
+The bootstrap job generates an SSH key at deployment time, stores it in a shared Docker volume, adds the key to Gitea user `gitadmin`, creates a demo repository, seeds `nauthilus.yml`, and configures a repository webhook for tag-triggered deployment.
 
 ## Start
 
@@ -79,6 +80,39 @@ The UI config already maps the generated key for user `admin` in both:
 
 - `integrations.git.ssh.users`
 - `integrations.runtime.ssh.users`
+
+## Tag-Based Runtime Deploy
+
+The demo stack includes an internal webhook service (`nauthilus-gitops-deployer`) that listens for Gitea push events.
+
+- Non-tag pushes (`refs/heads/...`) are ignored.
+- Tag pushes (`refs/tags/...`) are processed only if the tag matches `^v[0-9]+\.[0-9]+\.[0-9]+$`.
+- On accepted tag:
+  - `nauthilus.yml` is fetched from that exact tag in `gitadmin/nauthilus-config-demo`
+  - `contrib/demo-stack/nauthilus/nauthilus.yml` is replaced atomically
+  - container `nauthilus-ui-demo-nauthilus` is restarted via Docker API
+
+Practical flow:
+
+1. Push updated config from UI with a tag like `v1.0.0`.
+2. Check deployer logs:
+
+```bash
+docker compose -f contrib/demo-stack/docker-compose.yml logs -f nauthilus-gitops-deployer
+```
+
+3. Verify Nauthilus restart:
+
+```bash
+docker compose -f contrib/demo-stack/docker-compose.yml ps nauthilus
+```
+
+Security notes:
+
+- Webhook payloads are protected by HMAC (`X-Gitea-Signature`).
+- Keep `DEPLOYER_WEBHOOK_SECRET` private and rotate it for non-demo setups.
+- Configure protected tags in Gitea (e.g. `v*`) so only trusted users can deploy.
+- Gitea must allow internal webhook destinations. This demo sets `GITEA__webhook__ALLOWED_HOST_LIST=private`.
 
 ## ClickHouse Demo Flow
 

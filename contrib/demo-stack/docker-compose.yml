@@ -202,6 +202,36 @@ services:
     networks:
       - demo-net
 
+  nauthilus-gitops-deployer:
+    build:
+      context: ./gitops-deployer
+      dockerfile: Dockerfile
+    container_name: nauthilus-ui-demo-gitops-deployer
+    restart: unless-stopped
+    environment:
+      DEPLOYER_LISTEN_ADDR: ":8090"
+      DEPLOYER_REPO_URL: ssh://git@gitea:22/gitadmin/nauthilus-config-demo.git
+      DEPLOYER_REPO_FILE_PATH: nauthilus.yml
+      DEPLOYER_TARGET_FILE: /deploy/nauthilus.yml
+      DEPLOYER_TARGET_CONTAINER: nauthilus-ui-demo-nauthilus
+      DEPLOYER_DOCKER_SOCKET: /var/run/docker.sock
+      DEPLOYER_SSH_PRIVATE_KEY: /demo/ssh/admin_id_ed25519
+      DEPLOYER_SSH_KNOWN_HOSTS: /demo/ssh/gitea_known_hosts
+      DEPLOYER_TAG_REGEX: "^v[0-9]+\\.[0-9]+\\.[0-9]+$"
+      DEPLOYER_MAX_CONFIG_BYTES: "1048576"
+      DEPLOYER_WEBHOOK_SECRET: demo-gitops-webhook-secret
+    depends_on:
+      gitea-bootstrap:
+        condition: service_completed_successfully
+      nauthilus:
+        condition: service_started
+    volumes:
+      - demo_ssh:/demo/ssh:ro
+      - ./nauthilus:/deploy
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - demo-net
+
   gitea:
     image: gitea/gitea:1.22.6
     container_name: nauthilus-ui-demo-gitea
@@ -221,6 +251,7 @@ services:
       GITEA__server__START_SSH_SERVER: "false"
       GITEA__server__SSH_LISTEN_PORT: "22"
       GITEA__server__DISABLE_SSH: "false"
+      GITEA__webhook__ALLOWED_HOST_LIST: "private"
     ports:
       - "3003:3000"
       - "2222:22"
@@ -242,6 +273,8 @@ services:
       gitea:
         condition: service_healthy
     entrypoint: ["/bin/bash", "/demo/bootstrap/bootstrap-gitea.sh"]
+    environment:
+      GITEA_WEBHOOK_SECRET: demo-gitops-webhook-secret
     volumes:
       - gitea_data:/data
       - demo_ssh:/demo/ssh
