@@ -218,6 +218,31 @@ type RuntimeSettingsResponse struct {
 	Hooks      map[string]interface{} `json:"hooks"`
 }
 
+// GitSettings stores persisted Git dialog settings per user profile.
+// Sensitive credentials must never be stored here.
+type GitSettings struct {
+	UserID         string `bson:"userId" json:"userId"`
+	ProfileName    string `bson:"profileName" json:"profileName"`
+	RepositoryURL  string `bson:"repositoryUrl" json:"repositoryUrl"`
+	Branch         string `bson:"branch" json:"branch"`
+	FilePath       string `bson:"filePath" json:"filePath"`
+	TagName        string `bson:"tagName" json:"tagName"`
+	UseSSH         bool   `bson:"useSsh" json:"useSsh"`
+	HTTPSUsername  string `bson:"httpsUsername" json:"httpsUsername"`
+	LastModifiedBy string `bson:"lastModifiedBy" json:"lastModifiedBy"`
+	UpdatedAt      string `bson:"updatedAt" json:"updatedAt"`
+}
+
+// GitSettingsResponse defines the API payload for persisted Git settings.
+type GitSettingsResponse struct {
+	RepositoryURL string `json:"repositoryUrl"`
+	Branch        string `json:"branch"`
+	FilePath      string `json:"filePath"`
+	TagName       string `json:"tagName"`
+	UseSSH        bool   `json:"useSsh"`
+	HTTPSUsername string `json:"httpsUsername"`
+}
+
 // MFARequiredResponse represents a response indicating that MFA is required
 // When both methods are available, MFAType may be "choice" to let the client decide.
 type MFARequiredResponse struct {

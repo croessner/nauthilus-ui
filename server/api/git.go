@@ -1,17 +1,30 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 
 	"nauthilus-ui/server/db"
 	"nauthilus-ui/server/integrations/gitops"
 	"nauthilus-ui/server/integrations/sshprovider"
 	"nauthilus-ui/server/models"
 	"nauthilus-ui/server/utils"
+)
+
+const (
+	maxGitRepositoryURLLength = 2048
+	maxGitBranchLength        = 255
+	maxGitFilePathLength      = 1024
+	maxGitTagLength           = 255
+	maxGitUsernameLength      = 255
 )
 
 // GitHandler exposes secure Git integration endpoints.
@@ -29,6 +42,8 @@ func NewGitHandler(service *gitops.Service, mongoDB *db.MongoDB) *GitHandler {
 func (h *GitHandler) RegisterRoutes(router *gin.Engine) {
 	apiGroup := router.Group("/api/git")
 	apiGroup.GET("/capabilities", h.GetCapabilities)
+	apiGroup.GET("/settings/:profileName", h.GetSettings)
+	apiGroup.POST("/settings/:profileName", h.SaveSettings)
 	apiGroup.POST("/pull", h.Pull)
 	apiGroup.POST("/push", h.Push)
 }
@@ -55,6 +70,168 @@ type gitPushRequest struct {
 	TagName       string         `json:"tagName"`
 	Content       string         `json:"content"`
 	Auth          gitAuthRequest `json:"auth"`
+}
+
+type gitSettingsRequest struct {
+	RepositoryURL string `json:"repositoryUrl"`
+	Branch        string `json:"branch"`
+	FilePath      string `json:"filePath"`
+	TagName       string `json:"tagName"`
+	UseSSH        bool   `json:"useSsh"`
+	HTTPSUsername string `json:"httpsUsername"`
+}
+
+func trimToMax(raw string, maxLen int) string {
+	trimmed := strings.TrimSpace(raw)
+	if maxLen <= 0 || len(trimmed) <= maxLen {
+		return trimmed
+	}
+
+	return trimmed[:maxLen]
+}
+
+func normalizeGitSettingsPayload(raw gitSettingsRequest) models.GitSettingsResponse {
+	return models.GitSettingsResponse{
+		RepositoryURL: trimToMax(raw.RepositoryURL, maxGitRepositoryURLLength),
+		Branch:        trimToMax(raw.Branch, maxGitBranchLength),
+		FilePath:      trimToMax(raw.FilePath, maxGitFilePathLength),
+		TagName:       trimToMax(raw.TagName, maxGitTagLength),
+		UseSSH:        raw.UseSSH,
+		HTTPSUsername: trimToMax(raw.HTTPSUsername, maxGitUsernameLength),
+	}
+}
+
+func resolveGitSettingsProfileName(ctx *gin.Context) (string, bool) {
+	profileName := strings.TrimSpace(ctx.Param("profileName"))
+	if profileName == "" {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Profile name is required"})
+		return "", false
+	}
+
+	return profileName, true
+}
+
+func mapGitSettingsDocument(document models.GitSettings) models.GitSettingsResponse {
+	return models.GitSettingsResponse{
+		RepositoryURL: strings.TrimSpace(document.RepositoryURL),
+		Branch:        strings.TrimSpace(document.Branch),
+		FilePath:      strings.TrimSpace(document.FilePath),
+		TagName:       strings.TrimSpace(document.TagName),
+		UseSSH:        document.UseSSH,
+		HTTPSUsername: strings.TrimSpace(document.HTTPSUsername),
+	}
+}
+
+func (h *GitHandler) saveGitSettingsDocument(
+	ctx context.Context,
+	userID, profileName string,
+	payload models.GitSettingsResponse,
+) (models.GitSettings, error) {
+	filter := bson.M{"userId": userID, "profileName": profileName}
+	now := time.Now().Format(time.RFC3339)
+	update := bson.M{
+		"$set": bson.M{
+			"userId":         userID,
+			"profileName":    profileName,
+			"repositoryUrl":  payload.RepositoryURL,
+			"branch":         payload.Branch,
+			"filePath":       payload.FilePath,
+			"tagName":        payload.TagName,
+			"useSsh":         payload.UseSSH,
+			"httpsUsername":  payload.HTTPSUsername,
+			"lastModifiedBy": userID,
+			"updatedAt":      now,
+		},
+	}
+
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	var persisted models.GitSettings
+	err := h.mongoDB.GitSettingsColl.FindOneAndUpdate(ctx, filter, update, opts).Decode(&persisted)
+
+	return persisted, err
+}
+
+// GetSettings loads persisted Git dialog settings for the authenticated user and target profile.
+func (h *GitHandler) GetSettings(ctx *gin.Context) {
+	userID := strings.TrimSpace(CurrentUsername(ctx))
+	if userID == "" {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authentication required"})
+		return
+	}
+
+	profileName, ok := resolveGitSettingsProfileName(ctx)
+	if !ok {
+		return
+	}
+
+	if h.mongoDB == nil || !h.mongoDB.IsConnected || h.mongoDB.GitSettingsColl == nil {
+		ctx.JSON(http.StatusOK, models.GitSettingsResponse{})
+		return
+	}
+
+	var document models.GitSettings
+	err := h.mongoDB.GitSettingsColl.FindOne(
+		ctx.Request.Context(),
+		bson.M{"userId": userID, "profileName": profileName},
+	).Decode(&document)
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			ctx.JSON(http.StatusOK, models.GitSettingsResponse{})
+			return
+		}
+
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to load Git settings"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, mapGitSettingsDocument(document))
+}
+
+// SaveSettings persists Git dialog settings per authenticated user and profile.
+func (h *GitHandler) SaveSettings(ctx *gin.Context) {
+	userID := strings.TrimSpace(CurrentUsername(ctx))
+	if userID == "" {
+		ctx.JSON(http.StatusUnauthorized, models.ErrorResponse{Error: "Authentication required"})
+		return
+	}
+
+	profileName, ok := resolveGitSettingsProfileName(ctx)
+	if !ok {
+		return
+	}
+
+	var request gitSettingsRequest
+	if err := ctx.ShouldBindJSON(&request); err != nil {
+		ctx.JSON(http.StatusBadRequest, models.ErrorResponse{Error: "Invalid request body"})
+		return
+	}
+
+	payload := normalizeGitSettingsPayload(request)
+	if h.mongoDB == nil || !h.mongoDB.IsConnected || h.mongoDB.GitSettingsColl == nil {
+		ctx.JSON(http.StatusOK, payload)
+		return
+	}
+
+	persisted, err := h.saveGitSettingsDocument(ctx.Request.Context(), userID, profileName, payload)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to save Git settings"})
+		return
+	}
+
+	WriteAudit(ctx, h.mongoDB, models.AuditLogEntry{
+		Action: "git.settings.update",
+		Target: userID + "/" + profileName,
+		Details: map[string]interface{}{
+			"repository_url": utils.RedactURLString(persisted.RepositoryURL),
+			"branch":         strings.TrimSpace(persisted.Branch),
+			"file_path":      strings.TrimSpace(persisted.FilePath),
+			"tag_name":       strings.TrimSpace(persisted.TagName),
+			"use_ssh":        persisted.UseSSH,
+			"https_username": strings.TrimSpace(persisted.HTTPSUsername),
+		},
+	})
+
+	ctx.JSON(http.StatusOK, mapGitSettingsDocument(persisted))
 }
 
 // GetCapabilities returns Git/SSH capabilities for the current user.

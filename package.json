@@ -45,7 +45,8 @@
     "test:disabled-endpoints": "node scripts/regression.disabled-endpoints.test.mjs",
     "test:empty-strings-export": "node scripts/regression.empty-strings-export.test.mjs",
     "preview": "vite preview",
-    "test": "echo \"No test runner configured with Vite yet\" && exit 0",
+    "test": "npm run test:unit",
+    "test:unit": "node --import tsx --test tests/unit/*.test.mjs",
     "e2e": "playwright test",
     "e2e:smoke": "playwright test tests/e2e/smoke.spec.ts",
     "smoke:auth": "node scripts/smoke.auth-endpoints.test.mjs",
@@ -102,6 +103,7 @@
     "playwright": "^1.58.2",
     "rimraf": "^6.0.1",
     "svgo": "4.0.1",
+    "tsx": "^4.21.0",
     "vite": "7.1.11"
   }
 }

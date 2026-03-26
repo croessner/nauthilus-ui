@@ -83,6 +83,7 @@ import { cacheSSHPassphrase, clearCachedSSHPassphrase, readCachedSSHPassphrase }
 import { prependYamlExportComment } from './utils/yamlExportComment';
 import CookieBanner from './components/CookieBanner';
 import { NotifyEvents, SessionExpiredDetail } from './utils/notify';
+import { normalizeGitDialogSettings, type GitDialogSettings } from './utils/gitDialogSettings';
 
 // Define drawer widths for different modes
 const fullDrawerWidth = 260;
@@ -163,6 +164,7 @@ const MainContent = (): React.JSX.Element => {
   const [downloadDialogOpen, setDownloadDialogOpen] = useState(false);
   const [gitDialogOpen, setGitDialogOpen] = useState(false);
   const [gitBusy, setGitBusy] = useState(false);
+  const [gitSettingsBusy, setGitSettingsBusy] = useState(false);
   const [gitCapabilities, setGitCapabilities] = useState<GitCapabilities | null>(null);
   const [gitRepositoryUrl, setGitRepositoryUrl] = useState('');
   const [gitBranch, setGitBranch] = useState('');
@@ -533,14 +535,102 @@ const MainContent = (): React.JSX.Element => {
     setDownloadDialogOpen(false);
   };
 
+  const gitDialogBusy = gitBusy || gitSettingsBusy;
+
+  const applyGitDialogSettings = (settings: Partial<GitDialogSettings>): void => {
+    const normalized = normalizeGitDialogSettings(settings);
+    setGitRepositoryUrl(normalized.repositoryUrl);
+    setGitBranch(normalized.branch || gitCapabilities?.defaultBranch || 'main');
+    setGitFilePath(normalized.filePath || gitCapabilities?.defaultFilePath || 'nauthilus.yml');
+    setGitTagName(normalized.tagName);
+    setGitUseSSH(normalized.useSsh);
+    setGitHttpsUsername(normalized.httpsUsername);
+    // Passwords are intentionally never loaded from persisted settings.
+    setGitHttpsPassword('');
+  };
+
+  const loadGitDialogSettings = async (): Promise<void> => {
+    if (!currentProfileName) {
+      return;
+    }
+
+    setGitSettingsBusy(true);
+    try {
+      const response = await authenticatedFetch(`/api/git/settings/${encodeURIComponent(currentProfileName)}`);
+      if (!response.ok) {
+        applyGitDialogSettings({});
+        return;
+      }
+
+      const payload = normalizeGitDialogSettings(await response.json().catch(() => ({} as Partial<GitDialogSettings>)));
+      applyGitDialogSettings(payload);
+    } catch {
+      applyGitDialogSettings({});
+    } finally {
+      setGitSettingsBusy(false);
+    }
+  };
+
+  const saveGitDialogSettings = async (showNotice: boolean): Promise<boolean> => {
+    if (!currentProfileName) {
+      return false;
+    }
+
+    const payload = normalizeGitDialogSettings({
+      repositoryUrl: gitRepositoryUrl,
+      branch: gitBranch,
+      filePath: gitFilePath,
+      tagName: gitTagName,
+      useSsh: gitUseSSH,
+      httpsUsername: gitHttpsUsername,
+    });
+
+    setGitSettingsBusy(true);
+    if (showNotice) {
+      setGitNotice(null);
+      setError(null);
+    }
+
+    try {
+      const response = await authenticatedFetch(`/api/git/settings/${encodeURIComponent(currentProfileName)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        if (showNotice) {
+          const errorPayload = await response.json().catch(() => ({} as { error?: string }));
+          const backendError = String(errorPayload?.error || response.statusText || 'Failed to save Git settings');
+          setError(`[${response.status} ${response.statusText}] ${backendError}`);
+        }
+        return false;
+      }
+
+      const persistedPayload = normalizeGitDialogSettings(await response.json().catch(() => payload));
+      applyGitDialogSettings(persistedPayload);
+      if (showNotice) {
+        setGitNotice(`Git settings for profile "${currentProfileName}" saved.`);
+      }
+      return true;
+    } catch (error) {
+      if (showNotice) {
+        setError(error instanceof Error ? error.message : String(error));
+      }
+      return false;
+    } finally {
+      setGitSettingsBusy(false);
+    }
+  };
+
   const openGitDialog = () => {
-    setGitBranch((prev) => prev || gitCapabilities?.defaultBranch || 'main');
-    setGitFilePath((prev) => prev || gitCapabilities?.defaultFilePath || 'nauthilus.yml');
+    applyGitDialogSettings({});
     setGitDialogOpen(true);
+    void loadGitDialogSettings();
   };
 
   const handleGitDialogClose = () => {
-    if (gitBusy) {
+    if (gitDialogBusy) {
       return;
     }
     setGitDialogOpen(false);
@@ -678,6 +768,7 @@ const MainContent = (): React.JSX.Element => {
         }
       }
 
+      void saveGitDialogSettings(false);
       setGitDialogOpen(false);
     } catch (error) {
       setError(error instanceof Error ? error.message : String(error));
@@ -2146,19 +2237,25 @@ const MainContent = (): React.JSX.Element => {
           )}
         </DialogContent>
         <DialogActions>
+          <Button
+            onClick={() => void saveGitDialogSettings(true)}
+            disabled={gitDialogBusy}
+          >
+            Save Settings
+          </Button>
           {gitUseSSH && (
             <Button
               onClick={() => clearCachedSSHPassphrase('git')}
-              disabled={gitBusy}
+              disabled={gitDialogBusy}
             >
               Clear Cached Passphrase
             </Button>
           )}
-          <Button onClick={handleGitDialogClose} disabled={gitBusy}>Cancel</Button>
-          <Button onClick={() => void executeGitAction('pull')} disabled={gitBusy}>
+          <Button onClick={handleGitDialogClose} disabled={gitDialogBusy}>Cancel</Button>
+          <Button onClick={() => void executeGitAction('pull')} disabled={gitDialogBusy}>
             {gitBusy ? 'Working...' : 'Pull from Git'}
           </Button>
-          <Button onClick={() => void executeGitAction('push')} color="primary" variant="contained" disabled={gitBusy}>
+          <Button onClick={() => void executeGitAction('push')} color="primary" variant="contained" disabled={gitDialogBusy}>
             {gitBusy ? 'Working...' : 'Push to Git'}
           </Button>
         </DialogActions>

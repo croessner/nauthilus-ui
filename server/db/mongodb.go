@@ -45,6 +45,7 @@ type MongoDB struct {
 	SessionConfigColl  *mongo.Collection
 	SessionColl        *mongo.Collection
 	RuntimeColl        *mongo.Collection
+	GitSettingsColl    *mongo.Collection
 	LegalColl          *mongo.Collection
 	AuditColl          *mongo.Collection
 	Config             *config.Config
@@ -95,6 +96,7 @@ func (m *MongoDB) Connect(ctx context.Context) error {
 	m.SessionConfigColl = m.DB.Collection("sessionconfig")
 	m.SessionColl = m.DB.Collection("sessions")
 	m.RuntimeColl = m.DB.Collection("runtime")
+	m.GitSettingsColl = m.DB.Collection("git_settings")
 	m.LegalColl = m.DB.Collection("legal")
 	m.AuditColl = m.DB.Collection("auditlog")
 	m.IsConnected = true
@@ -138,6 +140,11 @@ func (m *MongoDB) InitializeDatabase(ctx context.Context) error {
 
 	// Initialize runtime collection
 	if err := m.initializeRuntimeCollection(ctx); err != nil {
+		return err
+	}
+
+	// Initialize git settings collection indexes
+	if err := m.initializeGitSettingsCollection(ctx); err != nil {
 		return err
 	}
 
@@ -278,6 +285,32 @@ func (m *MongoDB) initializeRuntimeCollection(ctx context.Context) error {
 	}
 
 	slog.Info("Runtime collection initialized", "documents", runtimeCount)
+	return nil
+}
+
+// initializeGitSettingsCollection creates indexes for per-profile Git dialog settings.
+func (m *MongoDB) initializeGitSettingsCollection(ctx context.Context) error {
+	if m.GitSettingsColl == nil {
+		return nil
+	}
+
+	_, err := m.GitSettingsColl.Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys: bson.D{
+			{Key: "userId", Value: 1},
+			{Key: "profileName", Value: 1},
+		},
+		Options: options.Index().SetUnique(true).SetName("git_settings_user_profile_unique"),
+	})
+	if err != nil {
+		return err
+	}
+
+	count, err := m.GitSettingsColl.CountDocuments(ctx, bson.M{})
+	if err != nil {
+		return err
+	}
+
+	slog.Info("Git settings collection initialized", "documents", count)
 	return nil
 }
 
