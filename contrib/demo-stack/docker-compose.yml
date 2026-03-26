@@ -175,6 +175,15 @@ services:
     networks:
       - demo-net
 
+  nauthilus-config-bootstrap:
+    image: alpine:3.22
+    container_name: nauthilus-ui-demo-nauthilus-config-bootstrap
+    restart: "no"
+    entrypoint: ["/bin/sh", "/demo/bootstrap/init-nauthilus-config.sh"]
+    volumes:
+      - ./scripts/init-nauthilus-config.sh:/demo/bootstrap/init-nauthilus-config.sh:ro
+      - ./nauthilus:/demo/nauthilus
+
   nauthilus:
     image: ghcr.io/croessner/nauthilus:v2.0.17
     container_name: nauthilus-ui-demo-nauthilus
@@ -192,10 +201,12 @@ services:
         condition: service_healthy
       clickhouse-init:
         condition: service_completed_successfully
+      nauthilus-config-bootstrap:
+        condition: service_completed_successfully
       tempo:
         condition: service_started
     volumes:
-      - ./nauthilus/nauthilus.yml:/etc/nauthilus/nauthilus.yml:ro
+      - ./nauthilus/nauthilus.runtime.yml:/etc/nauthilus/nauthilus.yml:ro
       - ./nauthilus/logins.csv:/etc/nauthilus/client/logins.csv:ro
     ports:
       - "8080:8080"
@@ -212,7 +223,7 @@ services:
       DEPLOYER_LISTEN_ADDR: ":8090"
       DEPLOYER_REPO_URL: ssh://git@gitea:22/gitadmin/nauthilus-config-demo.git
       DEPLOYER_REPO_FILE_PATH: nauthilus.yml
-      DEPLOYER_TARGET_FILE: /deploy/nauthilus.yml
+      DEPLOYER_TARGET_FILE: /deploy/nauthilus.runtime.yml
       DEPLOYER_TARGET_CONTAINER: nauthilus-ui-demo-nauthilus
       DEPLOYER_DOCKER_SOCKET: /var/run/docker.sock
       DEPLOYER_SSH_PRIVATE_KEY: /demo/ssh/admin_id_ed25519

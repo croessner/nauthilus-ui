@@ -15,6 +15,7 @@ This stack runs a full demo environment for `nauthilus-ui` with:
 - `nauthilus-gitops-deployer` (Gitea webhook listener for tag-based runtime deploy)
 
 The bootstrap job generates an SSH key at deployment time, stores it in a shared Docker volume, adds the key to Gitea user `gitadmin`, creates a demo repository, seeds `nauthilus.yml`, and configures a repository webhook for tag-triggered deployment.
+The tracked seed file `contrib/demo-stack/nauthilus/nauthilus.yml` is copied once to local runtime file `contrib/demo-stack/nauthilus/nauthilus.runtime.yml` (git-ignored).
 
 ## Start
 
@@ -89,8 +90,10 @@ The demo stack includes an internal webhook service (`nauthilus-gitops-deployer`
 - Tag pushes (`refs/tags/...`) are processed only if the tag matches `^v[0-9]+\.[0-9]+\.[0-9]+$`.
 - On accepted tag:
   - `nauthilus.yml` is fetched from that exact tag in `gitadmin/nauthilus-config-demo`
-  - `contrib/demo-stack/nauthilus/nauthilus.yml` is replaced atomically
+  - `contrib/demo-stack/nauthilus/nauthilus.runtime.yml` is replaced atomically
   - container `nauthilus-ui-demo-nauthilus` is restarted via Docker API
+
+This keeps the repository seed file stable while allowing local runtime updates during demo usage.
 
 Practical flow:
 
