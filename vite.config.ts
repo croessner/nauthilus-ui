@@ -12,6 +12,10 @@ const API_ADDRESS = process.env.FRONTEND_ADDRESS || '0.0.0.0';
 const API_PORT = process.env.FRONTEND_PORT || '3001';
 const API_HOST = API_ADDRESS === '0.0.0.0' || API_ADDRESS === 'localhost' ? '127.0.0.1' : API_ADDRESS;
 const API_TARGET = `http://${API_HOST}:${API_PORT}`;
+const PROXY_ADDRESS = process.env.PROXY_ADDRESS || '0.0.0.0';
+const PROXY_PORT = process.env.PROXY_PORT || '3002';
+const PROXY_HOST = PROXY_ADDRESS === '0.0.0.0' || PROXY_ADDRESS === 'localhost' ? '127.0.0.1' : PROXY_ADDRESS;
+const PROXY_TARGET = `http://${PROXY_HOST}:${PROXY_PORT}`;
 
 // Absolute aliases to force a single instance of Emotion at build time
 const __filename = fileURLToPath(import.meta.url);
@@ -57,7 +61,7 @@ export default defineConfig({
       },
       // Enhanced proxy for /proxy/* endpoints with header injection logic
       '/proxy': {
-        target: API_TARGET,
+        target: PROXY_TARGET,
         changeOrigin: true,
         configure: (proxy) => {
           proxy.on('proxyReq', (proxyReq: any, req: any) => {

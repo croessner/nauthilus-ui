@@ -4,10 +4,19 @@ let initialized = false;
 let lastCheck = 0;
 const CHECK_DEBOUNCE_MS = 1500;
 
+function isPublicAuthPath(pathname: string): boolean {
+  return pathname === '/login' || pathname === '/mfa' || pathname === '/oidc/callback' || pathname === '/oidc/callback/';
+}
+
 async function checkAndRefreshSession(): Promise<void> {
   const now = Date.now();
   if (now - lastCheck < CHECK_DEBOUNCE_MS) return;
   lastCheck = now;
+
+  // Skip background probes on public auth pages to avoid false-expiry UX.
+  if (isPublicAuthPath(window.location.pathname)) {
+    return;
+  }
 
   try {
     await axios.get('/api/auth/me', { withCredentials: true });
@@ -24,13 +33,9 @@ async function checkAndRefreshSession(): Promise<void> {
       await axios.post('/api/auth/refresh', {}, { withCredentials: true });
       return; // refreshed successfully
     } catch {
-      // Inform user with unified dialog
-      try {
-        const { notifySessionExpired } = await import('./notify');
-        notifySessionExpired('Your session has expired. Please sign in again.');
-      } catch {
-        window.alert('Your session has expired. Please sign in again.');
-      }
+      // Keep this probe silent. Real user-triggered API calls will surface
+      // session-expiry notifications through the centralized interceptors.
+      return;
     }
   }
 }

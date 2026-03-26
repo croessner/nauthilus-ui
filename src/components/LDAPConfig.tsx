@@ -33,7 +33,6 @@ const LDAPConfigSchema = Yup.object().shape({
       filter: Yup.object().shape({
         user: Yup.string(),
         list_accounts: Yup.string(),
-        webauthn_credentials: Yup.string(),
       }),
       mapping: Yup.object().shape({
         account_field: Yup.string().required('Account field is required'),
@@ -1238,26 +1237,6 @@ const LDAPConfig = (): React.JSX.Element => {
                               rows={3}
                             />
                           </Grid>
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <TextField
-                              fullWidth
-                              label="WebAuthn Credentials Filter"
-                              name={`search[${index}].filter.webauthn_credentials`}
-                              value={searchProtocol.filter?.webauthn_credentials || ''}
-                              onChange={handleChange}
-                              error={Boolean(
-                                getIn(touched, `search[${index}].filter.webauthn_credentials`) &&
-                                getIn(errors, `search[${index}].filter.webauthn_credentials`)
-                              )}
-                              helperText={
-                                (getIn(touched, `search[${index}].filter.webauthn_credentials`) &&
-                                getIn(errors, `search[${index}].filter.webauthn_credentials`)) ||
-                                "Filter used to resolve stored WebAuthn credentials. Supports the same macros as the other LDAP filters."
-                              }
-                              multiline
-                              rows={3}
-                            />
-                          </Grid>
                         </Grid>
 
                         <Typography variant="subtitle2" sx={{ mt: 2, mb: 2 }}>Attribute Mapping</Typography>
@@ -1442,7 +1421,6 @@ const LDAPConfig = (): React.JSX.Element => {
                           filter: {
                             user: '',
                             list_accounts: '',
-                            webauthn_credentials: '',
                           },
                           mapping: {
                             account_field: '',

@@ -141,6 +141,119 @@ test('admin can log in and open critical routes', async ({ page }, testInfo) => 
   ).toEqual([]);
 });
 
+test('auth probe 401 on focus stays silent and does not force session-expired dialog', async ({ page }) => {
+  await loginAsAdmin(page);
+
+  let forcedMeFailures = 0;
+  let refreshAttempts = 0;
+
+  await page.route('**/api/auth/me', async (route) => {
+    if (forcedMeFailures === 0) {
+      forcedMeFailures += 1;
+      await route.fulfill({
+        status: 401,
+        contentType: 'application/json',
+        headers: {
+          'x-nauthilus-auth-required': '1',
+        },
+        body: JSON.stringify({ error: 'Not authenticated' }),
+      });
+      return;
+    }
+
+    await route.continue();
+  });
+
+  await page.route('**/api/auth/refresh', async (route) => {
+    refreshAttempts += 1;
+    await route.fulfill({
+      status: 401,
+      contentType: 'application/json',
+      body: JSON.stringify({ error: 'Refresh session required' }),
+    });
+  });
+
+  // Wait past debounce and trigger the focus probe explicitly.
+  await page.waitForTimeout(1700);
+  await page.evaluate(() => {
+    window.dispatchEvent(new Event('focus'));
+  });
+
+  await expect.poll(() => forcedMeFailures, { timeout: 10_000 }).toBe(1);
+  await expect.poll(() => refreshAttempts, { timeout: 10_000 }).toBe(1);
+  await expect(page.getByRole('heading', { name: 'Session expired' })).toHaveCount(0);
+});
+
+test('dev proxy requests stay on the UI origin to avoid split-session backends', async ({ page }) => {
+  const seenProxyOrigins = new Set<string>();
+
+  await page.route('**/api/runtime/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        connection: {
+          backend_url: 'https://runtime.example.invalid',
+          basic_auth: {
+            enabled: false,
+            username: '',
+            password: '',
+          },
+          oidc_auth: {
+            enabled: false,
+            client_id: '',
+            client_secret: '',
+            token: '',
+            expires_at: 0,
+          },
+        },
+        hooks: {},
+      }),
+    });
+  });
+
+  await page.route('**/proxy/**', async (route) => {
+    const requestURL = route.request().url();
+    seenProxyOrigins.add(new URL(requestURL).origin);
+
+    const pathname = new URL(requestURL).pathname;
+    if (pathname.endsWith('/proxy/ping')) {
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ status: 'ok' }),
+      });
+      return;
+    }
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({}),
+    });
+  });
+
+  await loginAsAdmin(page);
+  const uiOrigin = new URL(page.url()).origin;
+  await clickMenu(page, 'Connection');
+
+  await expect.poll(() => seenProxyOrigins.size, { timeout: 10_000 }).toBeGreaterThan(0);
+  expect(Array.from(seenProxyOrigins)).toEqual([uiOrigin]);
+});
+
+test('LDAP search protocols no longer show the removed webauthn credentials filter', async ({ page }) => {
+  await loginAsAdmin(page);
+  await clickMenu(page, 'LDAP');
+  await expect(page.getByText('LDAP Configuration', { exact: false }).first()).toBeVisible();
+
+  await page.getByRole('tab', { name: 'Search Protocols' }).click();
+  await page.getByRole('button', { name: 'Add Search Protocol' }).click();
+
+  await expect(page.getByLabel('User Filter').first()).toBeVisible();
+  await expect(page.getByLabel('List Accounts Filter').first()).toBeVisible();
+  await expect(page.getByLabel('WebAuthn Credentials Filter')).toHaveCount(0);
+});
+
 test('OIDC clients and SAML service providers are editable via selectors', async ({ page }) => {
   await loginAsAdmin(page);
   await clickMenu(page, 'Frontend');

@@ -431,7 +431,6 @@ export interface LDAPSearchProtocolConfig {
 export interface LDAPFilterConfig {
   user?: string;
   list_accounts?: string;
-  webauthn_credentials?: string;
 }
 
 export interface LDAPAttributeMappingConfig {

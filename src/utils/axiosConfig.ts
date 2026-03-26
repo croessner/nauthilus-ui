@@ -105,7 +105,8 @@ axios.interceptors.response.use(
       !url ||
       url.includes('/api/auth/login') ||
       url.includes('/api/auth/refresh') ||
-      url.includes('/api/auth/logout')
+      url.includes('/api/auth/logout') ||
+      url.includes('/api/auth/me')
     ) {
       // Do not attempt refresh for auth endpoints themselves
       return Promise.reject(error);
