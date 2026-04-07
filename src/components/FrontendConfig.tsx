@@ -107,6 +107,7 @@ const defaultValues: FrontendPageValues = {
     remember_me_ttl: '',
     terms_of_service_url: '',
     privacy_policy_url: '',
+    password_forgotten_url: '',
     webauthn: {
       rp_display_name: '',
       rp_id: '',
@@ -924,14 +925,17 @@ const FrontendConfig = (): React.JSX.Element => {
                     <Typography variant="h6">IdP Global</Typography>
                   </Grid>
 
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={{ xs: 12, md: 3 }}>
                     <Field as={TextField} fullWidth name="idp.remember_me_ttl" label="Remember Me TTL" onChange={handleChange} helperText="Duration like 24h" />
                   </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={{ xs: 12, md: 3 }}>
                     <Field as={TextField} fullWidth name="idp.terms_of_service_url" label="Terms of Service URL" onChange={handleChange} />
                   </Grid>
-                  <Grid size={{ xs: 12, md: 4 }}>
+                  <Grid size={{ xs: 12, md: 3 }}>
                     <Field as={TextField} fullWidth name="idp.privacy_policy_url" label="Privacy Policy URL" onChange={handleChange} />
+                  </Grid>
+                  <Grid size={{ xs: 12, md: 3 }}>
+                    <Field as={TextField} fullWidth name="idp.password_forgotten_url" label="Forgot Password URL" onChange={handleChange} />
                   </Grid>
 
                   <Grid size={12}>

@@ -1,103 +1,109 @@
-# Dependency Updates Guide (Vite/React)
+# Dependency Updates Guide (Hardened npm Workflow)
 
-This guide explains how to check for deprecated/outdated packages and safely update dependencies in this Vite/React project. It also covers the provided automation script.
+This project uses a hardened dependency-update workflow to reduce supply-chain risk on developer machines.
 
 Audience: Developers maintaining this repository.
 
 
+## Security Goals
+
+- Do not execute dependency helper tools directly from the network (`npx`, `pnpm dlx`).
+- Use reproducible installs from `package-lock.json` (`npm ci`).
+- Prefer update execution in a disposable Docker sandbox.
+- Keep audit output visible, but do not confuse audit findings with complete malware protection.
+
+
 ## Prerequisites
-- Node.js 18+ (Node 20+ recommended)
-- npm 9/10 (or pnpm if you prefer; the script auto-detects)
-- A clean working tree (commit your changes before running bulk updates)
+
+- Node.js 24+ (aligned with Docker/build image)
+- npm 10+
+- Docker (recommended for sandbox mode)
+- Clean working tree before bulk updates
 
 
-## Quick commands
-- Overview health check: npm run deps:check
-- Safe (minor/patch) upgrades: npm run deps:safe-upgrade
-- Latest (including majors): npm run deps:upgrade:latest
-- Interactive majors: npm run deps:upgrade:i
-- Full helper script (recommmended): npm run deps:update
+## Quick Commands
+
+- Reproducible install: `npm run deps:install:ci`
+- Reproducible install without dependency lifecycle scripts: `npm run deps:install:ci:safe`
+- Dependency status and audit checks: `npm run deps:check`
+- Security gate against new high findings (prod tree): `npm run deps:audit:gate:prod`
+- Security gate against new high findings (full tree): `npm run deps:audit:gate:full`
+- Safe minor/patch update + lock refresh: `npm run deps:safe-upgrade`
+- Full sandboxed updater (default): `npm run deps:update`
+- Full updater on host (explicit unsafe override): `npm run deps:update:host:unsafe`
+- Sandboxed updater with interactive majors: `npm run deps:update:major`
 
 
-## The helper script: scripts/update-deps.sh
-The script automates a common, safe flow. It will:
-1) Detect your package manager (pnpm preferred if installed, otherwise npm)
-2) Show status (outdated, deprecated, audit)
-3) Optional: run depcheck for unused dependencies
-4) Upgrade only minor/patch versions
-5) Build the app to catch issues early
-6) Offer an interactive step to choose major upgrades
+## Update Script
 
-Run it from the repo root:
+`scripts/update-deps.sh` runs this flow:
 
-```bash
-npm run deps:update
-# or directly
-bash scripts/update-deps.sh
-```
+1. Start in Docker sandbox by default (`node:24-bookworm`, ephemeral container, dropped Linux caps).
+2. Install from lockfile with `npm ci --legacy-peer-deps --ignore-scripts`.
+3. Run health checks (`npm outdated`, `ncu --deprecated`, `npm audit`).
+4. Run `depcheck` as optional informational check.
+5. Apply minor/patch upgrades using local `ncu` binary from `node_modules/.bin`.
+6. Refresh lockfile with `npm install --package-lock-only`.
+7. Re-install reproducibly with `npm ci`.
+8. Run `npm run quality-check` and `npm run build`.
 
-What to expect:
-- Deprecation warnings from transitive packages are informational
-- After minor/patch upgrades, a production build is executed (vite build)
-- For major upgrades, accept changes interactively and re-build
+Major updates are only executed when explicitly requested (`--interactive-majors`).
+
+Host-mode updates are policy-disabled unless explicitly overridden with `NAUTHILUS_ALLOW_HOST_DEP_UPDATES=1`.
 
 
-## Recommended workflow
-1) Create a branch
-```bash
-git checkout -b chore/deps-YYYYMMDD
-```
+## Why `npm ci` Instead of `npm install`
 
-2) Check current status
-```bash
-npm run deps:check
-```
+- `npm ci` installs exactly what is in `package-lock.json`.
+- It fails when `package.json` and lockfile diverge.
+- It avoids drift between machines and CI.
+- It is faster and more deterministic for automation.
 
-3) Apply minor/patch upgrades and build
-```bash
-npm run deps:safe-upgrade
-```
-
-4) Major upgrades (interactive)
-```bash
-npm run deps:upgrade:i
-npm i
-npm run build
-```
-
-Tips:
-- Upgrade majors in sensible batches (e.g., tooling → UI libs → router)
-- Read migration notes for big stacks (Vite, React Router, MUI, TypeScript)
-- After each batch, build and smoke test
+Use `npm install` only when intentionally changing dependency definitions and lockfile resolution.
 
 
-## Common issues and fixes
-- Peer dependency conflicts: Prefer removing dev‑only helpers that pin old majors, or upgrade them. Avoid --legacy-peer-deps unless necessary.
-- Vite build fails on non-module scripts in index.html: Add type="module" or use a data-src + inline loader with data-vite-ignore.
-- React Router 7: Remove old future props; standard <BrowserRouter> works.
-- QR code component (qrcode.react >= v4): Use named export (QRCodeCanvas or QRCodeSVG) instead of default export.
+## What `npm audit` Does (and Does Not)
+
+`npm audit` checks installed package versions against the npm advisory database and reports known CVEs/security advisories.
+
+Important limitations:
+
+- It does not detect unknown zero-day malware.
+- It does not prove package maintainer trustworthiness.
+- It does not replace sandboxing, lockfiles, review, and least-privilege runtime controls.
+
+Treat `npm audit` as one signal in a layered defense model.
+
+To avoid permanently red pipelines for known legacy findings, this repository enforces a baseline gate for production dependencies:
+
+- Baseline file: `security/npm-audit-baseline.json`
+- Gate script: `scripts/audit-gate.mjs`
+- CI check: `.github/workflows/dependency-security.yml`
+
+The gate fails on new high/critical advisories that are not yet in the baseline.
+
+For the full dependency tree (including dev dependencies), an additional baseline and gate are enabled:
+
+- Baseline file: `security/npm-audit-baseline-full.json`
+- Command: `npm run deps:audit:gate:full`
 
 
-## CI/Automation
-Consider enabling Renovate or Dependabot to keep dependencies fresh. Policy suggestion:
-- Auto-merge patch/minor updates
-- Open PRs for majors with migration checklists
+## Recommended Operating Model
+
+1. Run dependency updates in Docker sandbox (`npm run deps:update`).
+2. Keep lockfile in version control and review lockfile diffs.
+3. Keep update helper tools pinned in `devDependencies`.
+4. Run required quality gates after updates.
+5. Use small update batches and short-lived branches.
 
 
 ## Rollback
-If an upgrade breaks the build and you need to revert quickly:
+
+If an upgrade breaks:
+
 ```bash
-git restore package.json
-rm -f package-lock.json
-npm i
+git restore package.json package-lock.json
+npm run deps:install:ci
 ```
-Then redo upgrades selectively.
 
-
-## Support
-If a dependency is deprecated or no longer supported:
-1) Replace it with an actively maintained alternative
-2) Upgrade to the project’s successor if one exists
-3) As a last resort, vendor a minimal replacement or fork and patch
-
-Open an issue with the package name and error output if you need help deciding the path forward.
+Then retry with smaller upgrade batches.

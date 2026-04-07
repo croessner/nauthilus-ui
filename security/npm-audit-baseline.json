@@ -1,0 +1,23 @@
+{
+  "version": 1,
+  "scope": "prod",
+  "updatedAt": "2026-04-07",
+  "allowedHighOrCriticalAdvisories": [
+    {
+      "id": "GHSA-2w69-qvjg-hvjx",
+      "reason": "Transitive via react-router; update planned in dependency rollout."
+    },
+    {
+      "id": "GHSA-36jr-mh4h-2g58",
+      "reason": "Transitive via react-simple-maps legacy chain."
+    },
+    {
+      "id": "GHSA-8v8x-cx79-35w7",
+      "reason": "Transitive via react-router; update planned in dependency rollout."
+    },
+    {
+      "id": "GHSA-r5fr-rjxr-66jc",
+      "reason": "Transitive lodash/lodash-es advisory currently in baseline."
+    }
+  ]
+}

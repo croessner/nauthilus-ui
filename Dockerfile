@@ -8,9 +8,9 @@ WORKDIR /app
 # Copy package.json and package-lock.json
 COPY package*.json ./
 
-# Install dependencies (use install to align updated semver across Emotion packages)
-# Use legacy peer deps to avoid strict ERESOLVE failures in CI/build images
-RUN npm install --legacy-peer-deps
+# Install dependencies reproducibly from package-lock.json.
+# Keep legacy peer deps for the current React/react-simple-maps conflict.
+RUN npm ci --legacy-peer-deps --no-audit --no-fund
 
 # Copy the rest of the code
 COPY . .

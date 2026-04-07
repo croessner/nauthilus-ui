@@ -1,0 +1,51 @@
+name: Dependency Security Gate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  npm-audit-gate-prod:
+    name: npm audit gate (prod)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Reproducible install (safe mode)
+        run: npm run deps:install:ci:safe
+
+      - name: Enforce npm audit gate
+        run: npm run deps:audit:gate:prod
+
+  npm-audit-gate-full:
+    name: npm audit gate (full)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+
+      - name: Reproducible install (safe mode)
+        run: npm run deps:install:ci:safe
+
+      - name: Enforce npm audit gate (full tree)
+        run: npm run deps:audit:gate:full

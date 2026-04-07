@@ -136,7 +136,7 @@ Use this mode if you want to run the frontend and backend separately during deve
 #### Start the frontend
 
 ```bash
-npm install
+npm run deps:install:ci
 npm run dev
 ```
 
@@ -302,7 +302,7 @@ Checks:
 1. Install frontend dependencies:
 
 ```bash
-npm install
+npm run deps:install:ci
 ```
 
 2. Start the frontend:
@@ -337,6 +337,10 @@ Frontend and repository-level commands:
 
 - `npm run dev` - start the Vite development server
 - `npm run build` - create the production frontend in `build/`
+- `npm run deps:install:ci` - reproducible dependency install from `package-lock.json`
+- `npm run deps:update` - run sandboxed dependency update workflow
+- `npm run deps:audit:gate:prod` - fail on new high/critical npm advisories in production dependencies
+- `npm run deps:audit:gate:full` - fail on new high/critical npm advisories in full dependency tree
 - `npm run quality-check` - run ESLint and TypeScript checks through the project quality script
 - `npm test` - run the current unit-style frontend tests
 - `npm run smoke:auth` - run authentication smoke checks
