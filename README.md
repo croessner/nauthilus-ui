@@ -104,8 +104,10 @@ It is intended for users who want to explore the UI together with supporting ser
 Start it with:
 
 ```bash
-docker compose -f contrib/demo-stack/docker-compose.yml up --build -d
+docker compose -f contrib/demo-stack/docker-compose.yml up -d
 ```
+
+The demo stack uses the published UI image `ghcr.io/croessner/nauthilus-ui:v2.1.0` by default.
 
 The demo stack includes:
 

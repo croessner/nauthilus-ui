@@ -57,8 +57,8 @@ Container/deployment:
   - prerequisite: free ports `3000` and `3001`
   - Playwright is configured with `reuseExistingServer: false`
 - Demo integration stack is available in `contrib/demo-stack`
-  - start with: `docker compose -f contrib/demo-stack/docker-compose.yml up --build -d`
-  - includes: `nauthilus-ui`, `mongodb`, `nauthilus:v2.0.17`, `valkey`, `gitea` (with automatic SSH key/bootstrap)
+  - start with: `docker compose -f contrib/demo-stack/docker-compose.yml up -d`
+  - includes: `nauthilus-ui` (`ghcr.io/croessner/nauthilus-ui:v2.1.0` by default), `mongodb`, `nauthilus:v2.1.0`, `valkey`, `gitea` (with automatic SSH key/bootstrap)
   - use for manual end-to-end checks of UI login, Runtime connection setup, and Git SSH integration
 
 ## 5. Mandatory Rules for All AI Agents
