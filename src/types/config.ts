@@ -508,6 +508,7 @@ export interface LuaScriptConfig {
   // Core paths
   package_path?: string;
   backend_script_path?: string;
+  cache_flush_script_path?: string;
   init_script_path?: string;
   init_script_paths?: string[];
 
@@ -622,6 +623,7 @@ export interface IdPConfig {
   remember_me_ttl?: string;
   terms_of_service_url?: string;
   privacy_policy_url?: string;
+  password_forgotten_url?: string;
 }
 
 export interface IdPWebAuthnConfig {

@@ -65,6 +65,7 @@ function buildFixtureConfig() {
     lua: {
       config: {
         backend_script_path: '',
+        cache_flush_script_path: '',
         number_of_workers: 4,
       },
       search: [

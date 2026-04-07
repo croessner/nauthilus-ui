@@ -12,9 +12,9 @@ Audience: senior engineers contributing to this repository. This file captures p
 - Local development (no Docker)
   - Install Node and Go:
     - Recommended: Node 20+ (Node 24 is used in Docker). npm 10+.
-    - Go 1.25+ (Docker uses 1.25-alpine with vendored modules).
+    - Go 1.26+ (Docker uses 1.26-alpine with vendored modules).
   - Install web dependencies:
-    - npm install
+    - npm run deps:install:ci
   - Start the Vite dev server (port 3000 by default):
     - npm run dev
   - Start the Go API server in another terminal (defaults to 3001):
@@ -42,8 +42,8 @@ Audience: senior engineers contributing to this repository. This file captures p
   - Multi-arch build and push via Buildx and docker-bake.hcl:
     - docker buildx bake --push
   - The Dockerfile uses:
-    - node:24-alpine to build the UI (vite build)
-    - golang:1.25-alpine to build a static server binary (-mod=vendor, ldflags for version), compressed with upx
+    - node:24-alpine to build the UI (npm ci + vite build)
+    - golang:1.26-alpine to build a static server binary (-mod=vendor, ldflags for version), compressed with upx
     - alpine:3.22 runtime image with Chromium installed for server-side PDF rendering (CHROME_PATH/CHROME_BIN envs are provisioned)
 
 2. Testing information
@@ -59,6 +59,19 @@ There is intentionally no heavyweight frontend unit test runner configured. The 
   - Standard Go tests can be added under ./server using *_test.go and executed with:
     - make test
     - or: cd server && go test -v ./...
+
+- Dependency security gates and baseline hygiene (mandatory for dependency/tooling changes)
+  - Run both gates:
+    - npm run deps:audit:gate:prod
+    - npm run deps:audit:gate:full
+  - Baseline files:
+    - security/npm-audit-baseline.json
+    - security/npm-audit-baseline-full.json
+  - Rules:
+    - First try to remediate new advisories by updating/replacing dependencies.
+    - Only if remediation is not currently possible, add advisory IDs to baseline with a concrete reason.
+    - Remove baseline entries as soon as advisories disappear after upgrades.
+    - Never add blanket bypasses or disable the gate.
 
 - Minimal smoke tests for the repo (recommended pattern)
   - Given the absence of a frontend test runner, use lightweight Node-based smoke tests to validate critical invariants across the monorepo. Example test below is self-contained and dependency-free.

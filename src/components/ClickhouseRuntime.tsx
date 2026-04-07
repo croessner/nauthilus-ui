@@ -302,7 +302,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
   // Column selection
   const DEFAULT_COLUMNS = useMemo(() => ['ts','client_ip','username','service','features','proto','method','authenticated','latency','http_status','dyn_threat'], []);
   const KNOWN_FIELDS = useMemo(() => [
-    'ts','session','service','features','client_ip','client_port','client_net','client_id','hostname','proto','method','user_agent','local_ip','local_port','display_name','account','username','password_hash','pwnd_info','brute_force_bucket','brute_force_counter','oidc_cid','failed_login_count','failed_login_rank','failed_login_recognized','geoip_guid','geoip_country','geoip_iso_codes','geoip_status','gp_attempts','gp_unique_ips','gp_unique_users','gp_ips_per_user','prot_active','prot_reason','prot_backoff','prot_delay_ms','dyn_threat','dyn_response','repeating','user_found','authenticated','xssl_protocol','xssl_cipher','ssl_fingerprint','latency','http_status','status_msg'
+    'ts','session','service','features','client_ip','client_port','client_net','client_id','hostname','proto','method','user_agent','local_ip','local_port','display_name','account','username','password_hash','pwnd_info','brute_force_bucket','brute_force_counter','oidc_cid','saml_entity_id','grant_type','mfa_method','failed_login_count','failed_login_rank','failed_login_recognized','geoip_guid','geoip_country','geoip_iso_codes','geoip_status','gp_attempts','gp_unique_ips','gp_unique_users','gp_ips_per_user','prot_active','prot_reason','prot_backoff','prot_delay_ms','dyn_threat','dyn_response','repeating','user_found','authenticated','xssl_protocol','xssl_cipher','ssl_fingerprint','latency','http_status','status_msg'
   ], []);
   const [availableFields, setAvailableFields] = useState<string[]>(KNOWN_FIELDS);
   const [selectedFields, setSelectedFields] = useState<string[]>([]);
@@ -1133,7 +1133,7 @@ const ClickhouseRuntime = (): React.JSX.Element => {
       'session','service','features','client_ip','client_net','client_id',
       'hostname','proto','method','user_agent','local_ip',
       'display_name','account','username','password_hash',
-      'pwnd_info','brute_force_bucket','oidc_cid',
+      'pwnd_info','brute_force_bucket','oidc_cid','saml_entity_id','grant_type','mfa_method',
       'geoip_guid','geoip_country','geoip_iso_codes','geoip_status',
       'dyn_threat','dyn_response','xssl_protocol','xssl_cipher','ssl_fingerprint','status_msg','prot_reason'
     ];

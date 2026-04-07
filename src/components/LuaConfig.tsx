@@ -56,6 +56,7 @@ const LuaConfigSchema = Yup.object().shape({
     number_of_workers: Yup.number().min(1, 'Must be at least 1'),
     package_path: Yup.string(),
     backend_script_path: Yup.string(),
+    cache_flush_script_path: Yup.string(),
     init_script_path: Yup.string(),
     init_script_paths: Yup.array().of(Yup.string()),
     // Tuning fields (optional)
@@ -166,6 +167,7 @@ const LuaConfig = (): React.JSX.Element => {
       number_of_workers: 10,
       package_path: '',
       backend_script_path: '',
+      cache_flush_script_path: '',
       init_script_path: '',
       init_script_paths: [],
       backend_number_of_workers: undefined,
@@ -1081,6 +1083,26 @@ const LuaConfig = (): React.JSX.Element => {
                       }
                       InputProps={{ endAdornment: (
                         <InputAdornment position="end"><InfoTooltip title="Main Lua backend script path for the global configuration." /></InputAdornment>
+                      ) }}
+                    />
+                  </Grid>
+                  <Grid size={12}>
+                    <TextField
+                      fullWidth
+                      label="Cache Flush Script Path"
+                      name="config.cache_flush_script_path"
+                      value={values.config.cache_flush_script_path || ''}
+                      onChange={handleChange}
+                      error={Boolean(
+                        getIn(touched, 'config.cache_flush_script_path') &&
+                        getIn(errors, 'config.cache_flush_script_path')
+                      )}
+                      helperText={
+                        getIn(touched, 'config.cache_flush_script_path') &&
+                        getIn(errors, 'config.cache_flush_script_path')
+                      }
+                      InputProps={{ endAdornment: (
+                        <InputAdornment position="end"><InfoTooltip title="Optional Lua script executed by nauthilus_cache_flush()." /></InputAdornment>
                       ) }}
                     />
                   </Grid>

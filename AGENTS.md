@@ -35,7 +35,7 @@ For full-stack changes, both policies apply.
 
 Local development:
 
-1. `npm install`
+1. `npm run deps:install:ci`
 2. `npm run dev` (UI)
 3. `cd server && go run .` (API + proxy)
 
@@ -51,14 +51,14 @@ Container/deployment:
 
 - Go unit tests exist (`server/**/*_test.go`)
 - Confirmed runnable: `cd server && go test ./...`
-- Frontend unit runner is currently **not** configured (`npm test` is a placeholder)
+- Frontend unit tests are runnable via `npm test`
 - Repo smoke check exists: `npm run smoke:auth`
 - E2E smoke exists: `npm run e2e:smoke` (Playwright)
   - prerequisite: free ports `3000` and `3001`
   - Playwright is configured with `reuseExistingServer: false`
 - Demo integration stack is available in `contrib/demo-stack`
-  - start with: `docker compose -f contrib/demo-stack/docker-compose.yml up --build -d`
-  - includes: `nauthilus-ui`, `mongodb`, `nauthilus:v2.0.17`, `valkey`, `gitea` (with automatic SSH key/bootstrap)
+  - start with: `docker compose -f contrib/demo-stack/docker-compose.yml up -d`
+  - includes: `nauthilus-ui` (`ghcr.io/croessner/nauthilus-ui:v2.1.0` by default), `mongodb`, `nauthilus:v2.1.0`, `valkey`, `gitea` (with automatic SSH key/bootstrap)
   - use for manual end-to-end checks of UI login, Runtime connection setup, and Git SSH integration
 
 ## 5. Mandatory Rules for All AI Agents
@@ -88,18 +88,36 @@ Container/deployment:
    - validate and sanitize all untrusted input
    - never expose secrets, tokens, or sensitive internals in logs/responses
    - keep existing security controls intact (auth, CSRF, CORS, SSRF protections)
+10. npm dependency security baseline maintenance is mandatory:
+   - when dependency files or npm toolchain scripts are changed (`package.json`, `package-lock.json`, `scripts/update-deps.sh`, CI workflows), run:
+     - `npm run deps:audit:gate:prod`
+     - `npm run deps:audit:gate:full`
+   - baselines must be actively maintained:
+     - production baseline: `security/npm-audit-baseline.json`
+     - full-tree baseline: `security/npm-audit-baseline-full.json`
+   - if a new high/critical advisory appears, first attempt remediation (upgrade/replace/patch). Baseline expansion is allowed only with an explicit reason in the baseline entry.
+   - if an advisory is fixed, remove the stale baseline entry in the same change set.
+   - do not add wildcard or blanket bypasses that hide future advisories.
 
 ## 6. Minimum Gates by Change Type
 
 - UI only:
   - `npm run quality-check`
   - `npm run build`
+  - `npm test`
   - `npm run smoke:auth`
 - Server only:
   - `cd server && go test ./...`
 - Auth/session/proxy/navigation:
   - all UI and server gates
   - plus `npm run e2e:smoke` (if environment is available)
+- Dependency/tooling/security-baseline changes:
+  - `npm run deps:install:ci:safe`
+  - `npm run deps:audit:gate:prod`
+  - `npm run deps:audit:gate:full`
+  - `npm run quality-check`
+  - `npm run build`
+  - `npm run smoke:auth`
 
 ## 7. Definition of Done (DoD)
 
@@ -112,3 +130,4 @@ An AI change is done only when:
 5. required build/tests are green
 6. code documentation is present and comments are in English
 7. security-by-design constraints are applied and security controls remain intact
+8. for dependency/tooling changes, audit gates pass and both npm baselines are reviewed and updated (add/remove entries) as needed
