@@ -44,6 +44,7 @@ export interface ServerConfig {
   http_client?: HTTPClientConfig;
   compression?: CompressionConfig;
   keep_alive?: KeepAliveConfig;
+  cors?: CORSConfig;
   // New: server.middlewares (feature switches for HTTP middlewares)
   middlewares?: MiddlewaresConfig;
   timeouts?: TimeoutsConfig;
@@ -214,15 +215,40 @@ export interface FrontendConfig {
   security_headers?: FrontendSecurityHeadersConfig;
 }
 
+export type StringOrStringList = string | string[];
+
+export interface ContentSecurityPolicyObjectConfig {
+  directives?: Record<string, StringOrStringList>;
+  form_action_optional_uris?: StringOrStringList;
+  [key: string]: unknown;
+}
+
+export interface StrictTransportSecurityObjectConfig {
+  max_age?: string | number;
+  include_subdomains?: boolean;
+  preload?: boolean;
+  extra_tokens?: StringOrStringList;
+  [key: string]: unknown;
+}
+
+export interface PermissionsPolicyObjectConfig {
+  features?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+export type ContentSecurityPolicyConfig = StringOrStringList | ContentSecurityPolicyObjectConfig;
+export type StrictTransportSecurityConfig = StringOrStringList | StrictTransportSecurityObjectConfig;
+export type PermissionsPolicyConfig = StringOrStringList | PermissionsPolicyObjectConfig;
+
 export interface FrontendSecurityHeadersConfig {
   enabled?: boolean;
-  content_security_policy?: string;
+  content_security_policy?: ContentSecurityPolicyConfig;
   content_security_policy_report_only?: boolean;
-  strict_transport_security?: string;
+  strict_transport_security?: StrictTransportSecurityConfig;
   x_content_type_options?: string;
   x_frame_options?: string;
   referrer_policy?: string;
-  permissions_policy?: string;
+  permissions_policy?: PermissionsPolicyConfig;
   cross_origin_opener_policy?: string;
   cross_origin_resource_policy?: string;
   cross_origin_embedder_policy?: string;
@@ -291,6 +317,23 @@ export interface KeepAliveConfig {
   timeout?: string;
   max_idle_connections?: number;
   max_idle_connections_per_host?: number;
+}
+
+export interface CORSConfig {
+  enabled?: boolean;
+  policies?: CORSPolicyConfig[];
+}
+
+export interface CORSPolicyConfig {
+  name?: string;
+  enabled?: boolean;
+  path_prefixes?: string[];
+  allow_origins?: string[];
+  allow_methods?: string[];
+  allow_headers?: string[];
+  expose_headers?: string[];
+  allow_credentials?: boolean;
+  max_age?: number;
 }
 
 export interface TimeoutsConfig {
@@ -728,6 +771,7 @@ export interface IdPOIDCClientConfig {
   optional_scopes?: string[];
   skip_consent?: boolean;
   delayed_response?: boolean;
+  allow_refresh_token_combined_client_auth?: boolean;
   frontchannel_logout_session_required?: boolean;
 }
 

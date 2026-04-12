@@ -162,3 +162,49 @@ test('quotes string values while keeping numbers and booleans native', () => {
     assert.equal(typeof parsed.custom_feature.bool_string, 'string');
   });
 });
+
+test('exports frontend security headers object partials even for legacy string input', () => {
+  withYamlFlowLevelEnv(null, () => {
+    const config = {
+      server: {
+        address: '127.0.0.1:8080',
+        instance_name: 'nauthilus',
+        max_concurrent_requests: 100,
+        max_password_history_entries: 10,
+        backends: ['cache'],
+        redis: {
+          database_number: 0,
+          prefix: 'nt:',
+          master: { address: '127.0.0.1:6379' },
+        },
+        frontend: {
+          security_headers: {
+            enabled: true,
+            content_security_policy: "default-src 'none'; connect-src 'self' https://api.example.test",
+            strict_transport_security: 'max-age=86400; preload',
+            permissions_policy: 'geolocation=(), camera=()',
+          },
+        },
+      },
+    };
+
+    const yamlContent = formatConfigAsYaml(config);
+    const parsed = yaml.load(yamlContent);
+    const securityHeaders = parsed?.server?.frontend?.security_headers;
+
+    assert.equal(typeof securityHeaders?.content_security_policy, 'object');
+    assert.equal(typeof securityHeaders?.strict_transport_security, 'object');
+    assert.equal(typeof securityHeaders?.permissions_policy, 'object');
+
+    assert.deepEqual(securityHeaders?.content_security_policy?.directives?.['default-src'], ["'none'"]);
+    assert.deepEqual(securityHeaders?.content_security_policy?.directives?.['connect-src'], ["'self'", 'https://api.example.test']);
+
+    assert.equal(securityHeaders?.strict_transport_security?.max_age, '86400');
+    assert.equal(securityHeaders?.strict_transport_security?.include_subdomains, true);
+    assert.equal(securityHeaders?.strict_transport_security?.preload, true);
+
+    assert.equal(securityHeaders?.permissions_policy?.features?.geolocation, '()');
+    assert.equal(securityHeaders?.permissions_policy?.features?.camera, '()');
+    assert.equal(securityHeaders?.permissions_policy?.features?.microphone, '()');
+  });
+});

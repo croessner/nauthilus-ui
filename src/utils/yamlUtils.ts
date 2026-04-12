@@ -1,6 +1,7 @@
 import yaml from 'js-yaml';
 import type { NauthilusConfig } from '../types/config';
 import { sanitizeDisabledEndpoints } from './serverConfigNormalization';
+import { toObjectBasedFrontendSecurityHeaders } from './securityHeaders';
 
 const DEFAULT_YAML_FLOW_LEVEL = 3;
 const MIN_YAML_FLOW_LEVEL = -1;
@@ -230,6 +231,13 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
     } else {
       delete configCopy.server.disabled_endpoints;
     }
+  }
+
+  // Always export frontend security header partials in object form.
+  if (configCopy.server?.frontend?.security_headers) {
+    configCopy.server.frontend.security_headers = toObjectBasedFrontendSecurityHeaders(
+      configCopy.server.frontend.security_headers,
+    );
   }
 
   // Preserve admin-defined bucket order for preview/download/git export.

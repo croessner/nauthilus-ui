@@ -486,7 +486,7 @@ export const ConfigProvider = ({ children }: ConfigProviderProps): React.JSX.Ele
         'brute_force_protocols', 'dns', 'insights',
         'redis', 'master_user', 'frontend', 'prometheus_timer',
         'default_http_request_header', 'http_client', 'compression', 'keep_alive',
-        'middlewares', 'timeouts', 'trusted_proxies',
+        'cors', 'middlewares', 'timeouts', 'trusted_proxies',
         'run_as_user', 'run_as_group', 'chroot'
       ];
 
