@@ -151,6 +151,24 @@ const ServerConfigSchema = Yup.object().shape({
     max_idle_connections_per_host: Yup.number().min(0, 'Must be at least 0'),
   }),
 
+  // Centralized CORS validation
+  cors: Yup.object().shape({
+    enabled: Yup.boolean(),
+    policies: Yup.array().of(
+      Yup.object().shape({
+        name: Yup.string(),
+        enabled: Yup.boolean(),
+        path_prefixes: Yup.array().of(Yup.string()),
+        allow_origins: Yup.array().of(Yup.string()),
+        allow_methods: Yup.array().of(Yup.string()),
+        allow_headers: Yup.array().of(Yup.string()),
+        expose_headers: Yup.array().of(Yup.string()),
+        allow_credentials: Yup.boolean(),
+        max_age: Yup.number().min(0, 'Must be at least 0').max(86400, 'Must be at most 86400'),
+      })
+    ),
+  }),
+
   // HTTP Client validation
   http_client: Yup.object().shape({
     max_connections_per_host: Yup.number().min(1, 'Must be at least 1'),
@@ -222,6 +240,30 @@ const backendProtocolFields = [
     portTooltip: 'Port for the optional POP3 backend host.',
   },
 ] as const;
+
+const defaultCORSPathPrefixes = ['/.well-known/'];
+const defaultCORSAllowMethods = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'];
+const defaultCORSAllowHeaders = ['Authorization', 'Content-Type', 'X-CSRF-Token'];
+const defaultCORSMaxAge = 600;
+
+const createDefaultCORSPolicy = () => ({
+  name: 'frontend',
+  enabled: true,
+  path_prefixes: [...defaultCORSPathPrefixes],
+  allow_origins: [],
+  allow_methods: [...defaultCORSAllowMethods],
+  allow_headers: [...defaultCORSAllowHeaders],
+  expose_headers: [],
+  allow_credentials: false,
+  max_age: defaultCORSMaxAge,
+});
+
+const splitCommaSeparated = (value: string): string[] => (
+  value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter((entry) => entry !== '')
+);
 
 const ServerConfig = (): React.JSX.Element | null => {
   const { config, updateConfigSection, hasUnsavedChanges, setHasUnsavedChanges } = useConfig();
@@ -335,6 +377,25 @@ const ServerConfig = (): React.JSX.Element | null => {
       max_idle_connections_per_host: config.server.keep_alive?.max_idle_connections_per_host || 10,
     },
 
+    // Initialize centralized CORS configuration
+    cors: {
+      enabled: config.server.cors?.enabled ?? false,
+      policies: (config.server.cors?.policies?.length
+        ? config.server.cors.policies
+        : [createDefaultCORSPolicy()]
+      ).map((policy) => ({
+        name: policy.name || '',
+        enabled: policy.enabled ?? true,
+        path_prefixes: policy.path_prefixes?.length ? policy.path_prefixes : [...defaultCORSPathPrefixes],
+        allow_origins: policy.allow_origins || [],
+        allow_methods: policy.allow_methods?.length ? policy.allow_methods : [...defaultCORSAllowMethods],
+        allow_headers: policy.allow_headers?.length ? policy.allow_headers : [...defaultCORSAllowHeaders],
+        expose_headers: policy.expose_headers || [],
+        allow_credentials: policy.allow_credentials ?? false,
+        max_age: policy.max_age ?? defaultCORSMaxAge,
+      })),
+    },
+
     // Initialize timeouts configuration
     timeouts: {
       redis_read: config.server.timeouts?.redis_read || '1s',
@@ -419,6 +480,7 @@ const ServerConfig = (): React.JSX.Element | null => {
         default_http_request_header: values.default_http_request_header,
         compression: values.compression,
         keep_alive: values.keep_alive,
+        cors: values.cors,
         http_client: values.http_client,
         log: values.log,
         brute_force_protocols: values.brute_force_protocols,
@@ -758,6 +820,255 @@ const ServerConfig = (): React.JSX.Element | null => {
                 />
               </Grid>
             </Grid>
+          </CollapsibleFormSection>
+
+          <CollapsibleFormSection
+            title="CORS Configuration"
+            description="Configure centralized CORS handling. Policies are evaluated in order and the first matching path prefix is used."
+            defaultExpanded={false}
+          >
+            <Grid container spacing={3}>
+              <Grid size={12}>
+                <FormControlLabel
+                  control={
+                    <Switch
+                      checked={values.cors?.enabled || false}
+                      onChange={(e) => {
+                        void setFieldValue('cors.enabled', e.target.checked);
+                        setHasUnsavedChanges(true);
+                      }}
+                      name="cors.enabled"
+                    />
+                  }
+                  label={<Box sx={{ display: 'inline-flex', alignItems: 'center' }}>Enable Centralized CORS<InfoTooltip title="Maps to server.cors.enabled. Disabled by default." /></Box>}
+                />
+              </Grid>
+            </Grid>
+
+            {values.cors?.enabled && (
+              <Box sx={{ mt: 2 }}>
+                {(values.cors?.policies || []).map((policy, index) => (
+                  <Box
+                    key={`cors-policy-${index}`}
+                    sx={{
+                      p: 2,
+                      mb: 2,
+                      border: 1,
+                      borderColor: 'divider',
+                      borderRadius: 2,
+                      backgroundColor: 'background.paper',
+                    }}
+                  >
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12 }}>
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, flexWrap: 'wrap' }}>
+                          <Typography variant="subtitle2">Policy #{index + 1}</Typography>
+                          <Stack direction="row" spacing={1}>
+                            <IconButton
+                              size="small"
+                              aria-label={`move cors policy ${index + 1} up`}
+                              disabled={index === 0}
+                              onClick={() => {
+                                const policies = [...(values.cors?.policies || [])];
+                                const previous = policies[index - 1];
+                                policies[index - 1] = policies[index];
+                                policies[index] = previous;
+                                void setFieldValue('cors.policies', policies);
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              <ArrowUpwardIcon fontSize="inherit" />
+                            </IconButton>
+                            <IconButton
+                              size="small"
+                              aria-label={`move cors policy ${index + 1} down`}
+                              disabled={index === (values.cors?.policies?.length || 0) - 1}
+                              onClick={() => {
+                                const policies = [...(values.cors?.policies || [])];
+                                const next = policies[index + 1];
+                                policies[index + 1] = policies[index];
+                                policies[index] = next;
+                                void setFieldValue('cors.policies', policies);
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              <ArrowDownwardIcon fontSize="inherit" />
+                            </IconButton>
+                            <Button
+                              variant="outlined"
+                              color="error"
+                              size="small"
+                              onClick={() => {
+                                const policies = [...(values.cors?.policies || [])];
+                                policies.splice(index, 1);
+                                void setFieldValue('cors.policies', policies);
+                                setHasUnsavedChanges(true);
+                              }}
+                            >
+                              Remove
+                            </Button>
+                          </Stack>
+                        </Box>
+                      </Grid>
+
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].name`}
+                          label="Policy Name"
+                          variant="outlined"
+                          error={Boolean(getIn(touched, `cors.policies[${index}].name`) && getIn(errors, `cors.policies[${index}].name`))}
+                          helperText={(getIn(touched, `cors.policies[${index}].name`) && getIn(errors, `cors.policies[${index}].name`)) || 'Optional name for policy readability.'}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            handleChange(e);
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 3 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].max_age`}
+                          label="Max Age (seconds)"
+                          variant="outlined"
+                          type="number"
+                          InputProps={{ inputProps: { min: 0, max: 86400 } }}
+                          error={Boolean(getIn(touched, `cors.policies[${index}].max_age`) && getIn(errors, `cors.policies[${index}].max_age`))}
+                          helperText={(getIn(touched, `cors.policies[${index}].max_age`) && getIn(errors, `cors.policies[${index}].max_age`)) || '0..86400'}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            handleChange(e);
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 3 }}>
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={policy.enabled ?? true}
+                              onChange={(e) => {
+                                void setFieldValue(`cors.policies[${index}].enabled`, e.target.checked);
+                                setHasUnsavedChanges(true);
+                              }}
+                            />
+                          }
+                          label={<Typography>Enabled</Typography>}
+                        />
+                        <FormControlLabel
+                          control={
+                            <Switch
+                              checked={policy.allow_credentials ?? false}
+                              onChange={(e) => {
+                                void setFieldValue(`cors.policies[${index}].allow_credentials`, e.target.checked);
+                                setHasUnsavedChanges(true);
+                              }}
+                            />
+                          }
+                          label={<Typography>Allow Credentials</Typography>}
+                        />
+                      </Grid>
+
+                      <Grid size={{ xs: 12 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].path_prefixes`}
+                          label="Path Prefixes (comma-separated)"
+                          variant="outlined"
+                          value={(policy.path_prefixes || []).join(', ')}
+                          error={Boolean(getIn(touched, `cors.policies[${index}].path_prefixes`) && getIn(errors, `cors.policies[${index}].path_prefixes`))}
+                          helperText={(getIn(touched, `cors.policies[${index}].path_prefixes`) && getIn(errors, `cors.policies[${index}].path_prefixes`)) || 'Empty means match all paths. Example: /.well-known/, /api/v1/'}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            void setFieldValue(`cors.policies[${index}].path_prefixes`, splitCommaSeparated(e.target.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].allow_origins`}
+                          label="Allow Origins (comma-separated)"
+                          variant="outlined"
+                          value={(policy.allow_origins || []).join(', ')}
+                          error={Boolean(getIn(touched, `cors.policies[${index}].allow_origins`) && getIn(errors, `cors.policies[${index}].allow_origins`))}
+                          helperText={(getIn(touched, `cors.policies[${index}].allow_origins`) && getIn(errors, `cors.policies[${index}].allow_origins`)) || 'Use explicit origins like https://ui.example.com. Use * for wildcard.'}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            void setFieldValue(`cors.policies[${index}].allow_origins`, splitCommaSeparated(e.target.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].expose_headers`}
+                          label="Expose Headers (comma-separated)"
+                          variant="outlined"
+                          value={(policy.expose_headers || []).join(', ')}
+                          error={Boolean(getIn(touched, `cors.policies[${index}].expose_headers`) && getIn(errors, `cors.policies[${index}].expose_headers`))}
+                          helperText={getIn(touched, `cors.policies[${index}].expose_headers`) && getIn(errors, `cors.policies[${index}].expose_headers`)}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            void setFieldValue(`cors.policies[${index}].expose_headers`, splitCommaSeparated(e.target.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].allow_methods`}
+                          label="Allow Methods (comma-separated)"
+                          variant="outlined"
+                          value={(policy.allow_methods || []).join(', ')}
+                          error={Boolean(getIn(touched, `cors.policies[${index}].allow_methods`) && getIn(errors, `cors.policies[${index}].allow_methods`))}
+                          helperText={(getIn(touched, `cors.policies[${index}].allow_methods`) && getIn(errors, `cors.policies[${index}].allow_methods`)) || 'Default: GET, POST, PUT, PATCH, DELETE, OPTIONS'}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            void setFieldValue(`cors.policies[${index}].allow_methods`, splitCommaSeparated(e.target.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12, md: 6 }}>
+                        <Field
+                          as={TextField}
+                          fullWidth
+                          name={`cors.policies[${index}].allow_headers`}
+                          label="Allow Headers (comma-separated)"
+                          variant="outlined"
+                          value={(policy.allow_headers || []).join(', ')}
+                          error={Boolean(getIn(touched, `cors.policies[${index}].allow_headers`) && getIn(errors, `cors.policies[${index}].allow_headers`))}
+                          helperText={(getIn(touched, `cors.policies[${index}].allow_headers`) && getIn(errors, `cors.policies[${index}].allow_headers`)) || 'Default: Authorization, Content-Type, X-CSRF-Token'}
+                          onChange={(e: React.ChangeEvent<any>) => {
+                            void setFieldValue(`cors.policies[${index}].allow_headers`, splitCommaSeparated(e.target.value));
+                            setHasUnsavedChanges(true);
+                          }}
+                        />
+                      </Grid>
+                    </Grid>
+                  </Box>
+                ))}
+
+                <Button
+                  variant="outlined"
+                  onClick={() => {
+                    const policies = [...(values.cors?.policies || [])];
+                    policies.push(createDefaultCORSPolicy());
+                    void setFieldValue('cors.policies', policies);
+                    setHasUnsavedChanges(true);
+                  }}
+                >
+                  Add CORS Policy
+                </Button>
+              </Box>
+            )}
           </CollapsibleFormSection>
 
           <CollapsibleFormSection

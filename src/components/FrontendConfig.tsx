@@ -36,6 +36,12 @@ import ValidationErrors from './common/ValidationErrors';
 import CollapsibleFormSection from './common/CollapsibleFormSection';
 import { FrontendConfig as FrontendConfigType, IdPConfig, NauthilusConfig } from '../types/config';
 import { useConfig } from '../contexts/ConfigContext';
+import {
+  CspDirectiveNames,
+  DefaultPermissionsPolicyFeatures,
+  normalizeFrontendSecurityHeaders,
+  toObjectBasedFrontendSecurityHeaders,
+} from '../utils/securityHeaders';
 
 type FrontendPageValues = {
   frontend: FrontendConfigType;
@@ -87,21 +93,7 @@ const defaultValues: FrontendPageValues = {
     default_language: '',
     totp_issuer: '',
     totp_skew: 0,
-    security_headers: {
-      enabled: true,
-      content_security_policy: '',
-      content_security_policy_report_only: false,
-      strict_transport_security: '',
-      x_content_type_options: '',
-      x_frame_options: '',
-      referrer_policy: '',
-      permissions_policy: '',
-      cross_origin_opener_policy: '',
-      cross_origin_resource_policy: '',
-      cross_origin_embedder_policy: '',
-      x_permitted_cross_domain_policies: '',
-      x_dns_prefetch_control: '',
-    },
+    security_headers: toObjectBasedFrontendSecurityHeaders(undefined),
   },
   idp: {
     remember_me_ttl: '',
@@ -273,6 +265,8 @@ const samlNameIdFormatOptions: SelectOption[] = [
   { value: 'urn:oasis:names:tc:SAML:2.0:nameid-format:entity', label: 'Entity' },
 ];
 
+const permissionsPolicyDefaultFeatureNames = Object.keys(DefaultPermissionsPolicyFeatures);
+
 const mergeSelectOptions = (
   baseOptions: SelectOption[],
   currentValues?: string | string[] | null
@@ -346,10 +340,7 @@ const FrontendConfig = (): React.JSX.Element => {
     frontend: {
       ...defaultValues.frontend,
       ...(config?.server?.frontend || {}),
-      security_headers: {
-        ...(defaultValues.frontend.security_headers || {}),
-        ...(config?.server?.frontend?.security_headers || {}),
-      },
+      security_headers: toObjectBasedFrontendSecurityHeaders(config?.server?.frontend?.security_headers),
     },
     idp: {
       ...defaultValues.idp,
@@ -390,6 +381,10 @@ const FrontendConfig = (): React.JSX.Element => {
 
     const currentServer: Record<string, unknown> = { ...(config.server as Record<string, unknown>) };
     const nextIdP: IdPConfig = { ...(values.idp || {}) };
+    const nextFrontend: FrontendConfigType = {
+      ...(values.frontend || {}),
+      security_headers: toObjectBasedFrontendSecurityHeaders(values.frontend?.security_headers),
+    };
 
     const oidcAny = nextIdP.oidc as Record<string, any> | undefined;
     if (oidcAny && Array.isArray(oidcAny.clients)) {
@@ -419,7 +414,7 @@ const FrontendConfig = (): React.JSX.Element => {
       ...(config as NauthilusConfig),
       server: {
         ...(currentServer as any),
-        frontend: values.frontend,
+        frontend: nextFrontend,
       },
       idp: nextIdP,
     };
@@ -786,6 +781,94 @@ const FrontendConfig = (): React.JSX.Element => {
             );
           };
 
+          const normalizedSecurityHeaders = normalizeFrontendSecurityHeaders(values.frontend?.security_headers);
+          const permissionsPolicyFeaturesPath = 'frontend.security_headers.permissions_policy.features';
+          const permissionsPolicyDefaultFeatureSet = new Set(permissionsPolicyDefaultFeatureNames);
+
+          const getCurrentPermissionsPolicyFeatures = (): Record<string, string> => {
+            const current = getIn(values, permissionsPolicyFeaturesPath);
+            if (current && typeof current === 'object' && !Array.isArray(current)) {
+              return { ...(current as Record<string, string>) };
+            }
+
+            return { ...normalizedSecurityHeaders.permissions_policy.features };
+          };
+
+          const setPermissionsPolicyFeatures = (nextFeatures: Record<string, string>) => {
+            const cleanedFeatures: Record<string, string> = {};
+
+            Object.entries(nextFeatures).forEach(([featureName, featureValue]) => {
+              const normalizedFeatureName = featureName.trim().toLowerCase();
+              if (!normalizedFeatureName || typeof featureValue !== 'string') {
+                return;
+              }
+
+              cleanedFeatures[normalizedFeatureName] = featureValue;
+            });
+
+            updateField(permissionsPolicyFeaturesPath, cleanedFeatures);
+          };
+
+          const updatePermissionsPolicyFeatureValue = (featureName: string, featureValue: string) => {
+            const currentFeatures = getCurrentPermissionsPolicyFeatures();
+            currentFeatures[featureName] = featureValue;
+            setPermissionsPolicyFeatures(currentFeatures);
+          };
+
+          const removePermissionsPolicyFeature = (featureName: string) => {
+            const currentFeatures = getCurrentPermissionsPolicyFeatures();
+            delete currentFeatures[featureName];
+            setPermissionsPolicyFeatures(currentFeatures);
+          };
+
+          const renamePermissionsPolicyFeature = (currentName: string, requestedName: string) => {
+            if (permissionsPolicyDefaultFeatureSet.has(currentName)) {
+              return;
+            }
+
+            const nextName = requestedName.trim().toLowerCase();
+            if (!nextName || nextName === currentName) {
+              return;
+            }
+
+            const currentFeatures = getCurrentPermissionsPolicyFeatures();
+            if (Object.prototype.hasOwnProperty.call(currentFeatures, nextName)) {
+              return;
+            }
+
+            const currentValue = currentFeatures[currentName] || '';
+            const reorderedFeatures: Record<string, string> = {};
+
+            Object.entries(currentFeatures).forEach(([featureName, featureValue]) => {
+              if (featureName === currentName) {
+                reorderedFeatures[nextName] = currentValue;
+                return;
+              }
+
+              reorderedFeatures[featureName] = featureValue;
+            });
+
+            setPermissionsPolicyFeatures(reorderedFeatures);
+          };
+
+          const addPermissionsPolicyFeature = () => {
+            const currentFeatures = getCurrentPermissionsPolicyFeatures();
+            let suffix = 1;
+            let candidateName = `feature_${suffix}`;
+
+            while (Object.prototype.hasOwnProperty.call(currentFeatures, candidateName)) {
+              suffix += 1;
+              candidateName = `feature_${suffix}`;
+            }
+
+            currentFeatures[candidateName] = '()';
+            setPermissionsPolicyFeatures(currentFeatures);
+          };
+
+          const currentPermissionsPolicyFeatures = getCurrentPermissionsPolicyFeatures();
+          const customPermissionsPolicyFeatureEntries = Object.entries(currentPermissionsPolicyFeatures)
+            .filter(([featureName]) => !permissionsPolicyDefaultFeatureSet.has(featureName));
+
           return (
             <Form>
               <DirtyStateBridge dirty={dirty} setHasUnsavedChanges={setHasUnsavedChanges} />
@@ -876,22 +959,202 @@ const FrontendConfig = (): React.JSX.Element => {
                             <FormControlLabel
                               control={
                                 <Switch
-                                  checked={values.frontend?.security_headers?.enabled ?? true}
+                                  checked={getIn(values, 'frontend.security_headers.enabled') ?? normalizedSecurityHeaders.enabled}
                                   onChange={(e) => {
-                                    setFieldValue('frontend.security_headers.enabled', e.target.checked).then(() => setHasUnsavedChanges(true));
+                                    updateField('frontend.security_headers.enabled', e.target.checked);
                                   }}
                                 />
                               }
                               label="Enable Security Headers"
                             />
                           </Grid>
+
+                          <Grid size={12}>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={getIn(values, 'frontend.security_headers.content_security_policy_report_only') ?? normalizedSecurityHeaders.content_security_policy_report_only}
+                                  onChange={(e) => {
+                                    updateField('frontend.security_headers.content_security_policy_report_only', e.target.checked);
+                                  }}
+                                />
+                              }
+                              label="CSP Report-Only"
+                            />
+                          </Grid>
+
+                          <Grid size={12}>
+                            <Divider sx={{ my: 0.5 }} />
+                            <Typography variant="subtitle1">Content-Security-Policy (Object Partials)</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              Supported directives map 1:1 to nauthilus object keys. Missing directives keep secure defaults.
+                            </Typography>
+                          </Grid>
+
+                          {CspDirectiveNames.map((directiveName) => (
+                            <Grid size={{ xs: 12, md: 6 }} key={`csp-${directiveName}`}>
+                              {renderStringArrayEditor(
+                                `frontend.security_headers.content_security_policy.directives.${directiveName}`,
+                                directiveName,
+                                directiveName === 'default-src' ? "Use sources like 'self', https:, data:." : undefined,
+                              )}
+                            </Grid>
+                          ))}
+
+                          <Grid size={12}>
+                            {renderStringArrayEditor(
+                              'frontend.security_headers.content_security_policy.form_action_optional_uris',
+                              'Optional form-action URI',
+                              'Additional URIs appended to form-action and deduplicated.',
+                            )}
+                          </Grid>
+
+                          <Grid size={12}>
+                            <Divider sx={{ my: 0.5 }} />
+                            <Typography variant="subtitle1">Strict-Transport-Security (Object Partials)</Typography>
+                          </Grid>
+
+                          <Grid size={{ xs: 12, md: 4 }}>
+                            <TextField
+                              fullWidth
+                              label="max_age"
+                              value={getIn(values, 'frontend.security_headers.strict_transport_security.max_age') ?? normalizedSecurityHeaders.strict_transport_security.max_age}
+                              onChange={(e) => {
+                                updateField('frontend.security_headers.strict_transport_security.max_age', e.target.value);
+                              }}
+                              helperText="Default: 31536000 (seconds)."
+                            />
+                          </Grid>
+
+                          <Grid size={{ xs: 12, md: 4 }}>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={getIn(values, 'frontend.security_headers.strict_transport_security.include_subdomains') ?? normalizedSecurityHeaders.strict_transport_security.include_subdomains}
+                                  onChange={(e) => {
+                                    updateField('frontend.security_headers.strict_transport_security.include_subdomains', e.target.checked);
+                                  }}
+                                />
+                              }
+                              label="include_subdomains"
+                            />
+                          </Grid>
+
+                          <Grid size={{ xs: 12, md: 4 }}>
+                            <FormControlLabel
+                              control={
+                                <Switch
+                                  checked={getIn(values, 'frontend.security_headers.strict_transport_security.preload') ?? normalizedSecurityHeaders.strict_transport_security.preload}
+                                  onChange={(e) => {
+                                    updateField('frontend.security_headers.strict_transport_security.preload', e.target.checked);
+                                  }}
+                                />
+                              }
+                              label="preload"
+                            />
+                          </Grid>
+
+                          <Grid size={12}>
+                            {renderStringArrayEditor(
+                              'frontend.security_headers.strict_transport_security.extra_tokens',
+                              'HSTS extra token',
+                              'Optional additional tokens for Strict-Transport-Security.',
+                            )}
+                          </Grid>
+
+                          <Grid size={12}>
+                            <Divider sx={{ my: 0.5 }} />
+                            <Typography variant="subtitle1">Permissions-Policy (Object Partials)</Typography>
+                            <Typography variant="body2" color="text.secondary">
+                              `features` map with secure defaults pre-filled. You can add custom feature entries.
+                            </Typography>
+                          </Grid>
+
+                          {permissionsPolicyDefaultFeatureNames.map((featureName) => (
+                            <Grid size={{ xs: 12, md: 6 }} key={`permissions-default-${featureName}`}>
+                              <TextField
+                                fullWidth
+                                label={`Feature: ${featureName}`}
+                                value={currentPermissionsPolicyFeatures[featureName] ?? ''}
+                                onChange={(e) => {
+                                  updatePermissionsPolicyFeatureValue(featureName, e.target.value);
+                                }}
+                                helperText={featureName === permissionsPolicyDefaultFeatureNames[0]
+                                  ? 'Backend secure defaults are prefilled and can be adjusted.'
+                                  : undefined}
+                              />
+                            </Grid>
+                          ))}
+
+                          <Grid size={12}>
+                            <Typography variant="subtitle2">Additional permissions-policy features</Typography>
+                          </Grid>
+
+                          {customPermissionsPolicyFeatureEntries.length > 0 ? (
+                            customPermissionsPolicyFeatureEntries.map(([featureName, featureValue], index) => (
+                              <Grid size={12} key={`permissions-custom-${featureName}-${index}`}>
+                                <Grid container spacing={1}>
+                                  <Grid size={{ xs: 12, md: 4 }}>
+                                    <TextField
+                                      fullWidth
+                                      defaultValue={featureName}
+                                      label="Feature"
+                                      onBlur={(e) => {
+                                        renamePermissionsPolicyFeature(featureName, e.target.value);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid size={{ xs: 12, md: 7 }}>
+                                    <TextField
+                                      fullWidth
+                                      label="Value"
+                                      value={featureValue}
+                                      onChange={(e) => {
+                                        updatePermissionsPolicyFeatureValue(featureName, e.target.value);
+                                      }}
+                                    />
+                                  </Grid>
+                                  <Grid size={{ xs: 12, md: 1 }}>
+                                    <IconButton
+                                      color="error"
+                                      onClick={() => {
+                                        removePermissionsPolicyFeature(featureName);
+                                      }}
+                                    >
+                                      <DeleteIcon />
+                                    </IconButton>
+                                  </Grid>
+                                </Grid>
+                              </Grid>
+                            ))
+                          ) : (
+                            <Grid size={12}>
+                              <Typography color="text.secondary">No custom permissions-policy features configured.</Typography>
+                            </Grid>
+                          )}
+
+                          <Grid size={12}>
+                            <Button
+                              startIcon={<AddIcon />}
+                              variant="outlined"
+                              size="small"
+                              onClick={() => {
+                                addPermissionsPolicyFeature();
+                              }}
+                            >
+                              Add Permissions-Policy Feature
+                            </Button>
+                          </Grid>
+
+                          <Grid size={12}>
+                            <Divider sx={{ my: 0.5 }} />
+                            <Typography variant="subtitle1">Additional Security Header Strings</Typography>
+                          </Grid>
+
                           {[
-                            ['content_security_policy', 'Content Security Policy'],
-                            ['strict_transport_security', 'Strict Transport Security'],
                             ['x_content_type_options', 'X-Content-Type-Options'],
                             ['x_frame_options', 'X-Frame-Options'],
-                            ['referrer_policy', 'Referrer Policy'],
-                            ['permissions_policy', 'Permissions Policy'],
+                            ['referrer_policy', 'Referrer-Policy'],
                             ['cross_origin_opener_policy', 'Cross-Origin-Opener-Policy'],
                             ['cross_origin_resource_policy', 'Cross-Origin-Resource-Policy'],
                             ['cross_origin_embedder_policy', 'Cross-Origin-Embedder-Policy'],
@@ -902,19 +1165,6 @@ const FrontendConfig = (): React.JSX.Element => {
                               <Field as={TextField} fullWidth name={`frontend.security_headers.${key}`} label={label} onChange={handleChange} />
                             </Grid>
                           ))}
-                          <Grid size={{ xs: 12, md: 6 }}>
-                            <FormControlLabel
-                              control={
-                                <Switch
-                                  checked={values.frontend?.security_headers?.content_security_policy_report_only || false}
-                                  onChange={(e) => {
-                                    setFieldValue('frontend.security_headers.content_security_policy_report_only', e.target.checked).then(() => setHasUnsavedChanges(true));
-                                  }}
-                                />
-                              }
-                              label="CSP Report-Only"
-                            />
-                          </Grid>
                         </Grid>
                       </AccordionDetails>
                     </Accordion>
@@ -1136,6 +1386,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                               <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.skip_consent`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.skip_consent`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Skip Consent" /></Grid>
                                               <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
                                               <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Frontchannel Logout Session Required" /></Grid>
+                                              <Grid size={{ xs: 12, md: 12 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.allow_refresh_token_combined_client_auth`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.allow_refresh_token_combined_client_auth`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Allow Refresh Token Combined Client Auth" /></Grid>
 
                                               <Grid size={12}><Typography variant="subtitle2">Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.redirect_uris`, 'Redirect URI')}</Grid>
                                               <Grid size={12}><Typography variant="subtitle2">Post Logout Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.post_logout_redirect_uris`, 'Post Logout Redirect URI')}</Grid>
@@ -1221,6 +1472,7 @@ const FrontendConfig = (): React.JSX.Element => {
                                           skip_consent: false,
                                           delayed_response: false,
                                           frontchannel_logout_session_required: false,
+                                          allow_refresh_token_combined_client_auth: false,
                                         });
                                         if (clients.length === 0) {
                                           setSelectedOidcClientIndex(0);
