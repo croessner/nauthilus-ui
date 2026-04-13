@@ -25,10 +25,10 @@ From repository root:
 docker compose -f contrib/demo-stack/docker-compose.yml up -d
 ```
 
-`nauthilus-ui` image tag is configurable via `NAUTHILUS_UI_IMAGE_TAG` (default: `v2.1.0`):
+`nauthilus-ui` image tag is configurable via `NAUTHILUS_UI_IMAGE_TAG` (default: `v2.1.2`):
 
 ```bash
-NAUTHILUS_UI_IMAGE_TAG=v2.1.0 docker compose -f contrib/demo-stack/docker-compose.yml up -d
+NAUTHILUS_UI_IMAGE_TAG=v2.1.2 docker compose -f contrib/demo-stack/docker-compose.yml up -d
 ```
 
 Optional local build for `nauthilus-ui`:
