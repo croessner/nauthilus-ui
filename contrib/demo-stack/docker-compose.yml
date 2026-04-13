@@ -2,7 +2,7 @@ name: nauthilus-ui-demo
 
 services:
   nauthilus-ui:
-    image: ghcr.io/croessner/nauthilus-ui:${NAUTHILUS_UI_IMAGE_TAG:-v2.1.0}
+    image: ghcr.io/croessner/nauthilus-ui:${NAUTHILUS_UI_IMAGE_TAG:-v2.1.2}
     build:
       context: ../..
       dockerfile: Dockerfile
