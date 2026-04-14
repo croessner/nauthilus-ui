@@ -462,6 +462,7 @@ export interface LDAPSearchProtocolConfig {
   filter: LDAPFilterConfig;
   mapping: LDAPAttributeMappingConfig;
   attribute: string[];
+  groups?: LDAPGroupsConfig;
 }
 
 export interface LDAPFilterConfig {
@@ -479,6 +480,17 @@ export interface LDAPAttributeMappingConfig {
   webauthn_credential_field?: string;
   webauthn_object_class?: string;
   unique_user_id_field?: string;
+}
+
+export interface LDAPGroupsConfig {
+  strategy?: string;
+  attribute?: string;
+  base_dn?: string;
+  scope?: string;
+  filter?: string;
+  name_attribute?: string;
+  recursive?: boolean;
+  max_depth?: number;
 }
 
 // Lua Configuration
@@ -702,6 +714,7 @@ export interface IdPOIDCConfig {
   access_token_type?: string;
   default_access_token_lifetime?: string;
   default_refresh_token_lifetime?: string;
+  revoke_refresh_token?: boolean;
   consent_ttl?: string;
   consent_mode?: string;
   token_endpoint_allow_get?: boolean;
@@ -732,6 +745,7 @@ export interface IdPOIDCCustomClaimConfig {
 export interface IdPOIDCClaimMappingConfig {
   claim?: string;
   attribute?: string;
+  from?: string;
   type?: string;
 }
 
@@ -749,6 +763,8 @@ export interface IdPOIDCClientConfig {
   client_secret?: string;
   redirect_uris?: string[];
   scopes?: string[];
+  implied_scopes?: string[];
+  custom_scopes?: IdPOIDCCustomScopeConfig[];
   grant_types?: string[];
   require_mfa?: string[];
   supported_mfa?: string[];
@@ -765,6 +781,7 @@ export interface IdPOIDCClientConfig {
   access_token_claims?: IdPOIDCAccessTokenClaimsConfig;
   access_token_lifetime?: string;
   refresh_token_lifetime?: string;
+  revoke_refresh_token?: boolean;
   consent_ttl?: string;
   consent_mode?: string;
   required_scopes?: string[];

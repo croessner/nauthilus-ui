@@ -539,6 +539,56 @@ const FrontendConfig = (): React.JSX.Element => {
             );
           };
 
+          const renderBooleanOverrideField = (
+            name: string,
+            label: string,
+            inheritedValue: boolean,
+            helperText?: string,
+          ) => {
+            const currentValue = getIn(values, name) as boolean | undefined;
+            const effectiveValue = currentValue ?? inheritedValue;
+            const selectValue = currentValue === undefined ? '' : currentValue ? 'true' : 'false';
+            const fieldId = name.replace(/[^a-zA-Z0-9_-]/g, '-');
+            const labelId = `${fieldId}-label`;
+            const inheritedLabel = inheritedValue ? 'Enabled' : 'Disabled';
+
+            return (
+              <FormControl fullWidth>
+                <InputLabel id={labelId} shrink>
+                  {label}
+                </InputLabel>
+                <Select
+                  id={fieldId}
+                  labelId={labelId}
+                  label={label}
+                  value={selectValue}
+                  notched
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+
+                    if (nextValue === '') {
+                      updateField(name, undefined);
+
+                      return;
+                    }
+
+                    updateField(name, nextValue === 'true');
+                  }}
+                >
+                  <MenuItem value="">
+                    <ListItemText
+                      primary={`Inherit global setting (${inheritedLabel})`}
+                      secondary={`Effective value: ${effectiveValue ? 'enabled' : 'disabled'}`}
+                    />
+                  </MenuItem>
+                  <MenuItem value="true">Enabled</MenuItem>
+                  <MenuItem value="false">Disabled</MenuItem>
+                </Select>
+                {helperText && <FormHelperText>{helperText}</FormHelperText>}
+              </FormControl>
+            );
+          };
+
           const renderMultiSelectField = (
             name: string,
             label: string,
@@ -1244,6 +1294,7 @@ const FrontendConfig = (): React.JSX.Element => {
                         <Grid size={{ xs: 12, md: 4 }}><Field as={TextField} fullWidth name="idp.oidc.device_code_expiry" label="Device Code Expiry" onChange={handleChange} /></Grid>
 
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.auto_key_rotation || false} onChange={(e) => setFieldValue('idp.oidc.auto_key_rotation', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Auto Key Rotation" /></Grid>
+                        <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.revoke_refresh_token ?? true} onChange={(e) => setFieldValue('idp.oidc.revoke_refresh_token', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Revoke Refresh Token" /></Grid>
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.token_endpoint_allow_get || false} onChange={(e) => setFieldValue('idp.oidc.token_endpoint_allow_get', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Token Endpoint Allow GET" /></Grid>
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.front_channel_logout_supported ?? true} onChange={(e) => setFieldValue('idp.oidc.front_channel_logout_supported', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Front Channel Logout Supported" /></Grid>
                         <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={values.idp?.oidc?.front_channel_logout_session_supported || false} onChange={(e) => setFieldValue('idp.oidc.front_channel_logout_session_supported', e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Front Channel Logout Session Supported" /></Grid>
@@ -1386,7 +1437,8 @@ const FrontendConfig = (): React.JSX.Element => {
                                               <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.skip_consent`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.skip_consent`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Skip Consent" /></Grid>
                                               <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.delayed_response`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.delayed_response`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Delayed Response" /></Grid>
                                               <Grid size={{ xs: 12, md: 4 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.frontchannel_logout_session_required`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Frontchannel Logout Session Required" /></Grid>
-                                              <Grid size={{ xs: 12, md: 12 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.allow_refresh_token_combined_client_auth`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.allow_refresh_token_combined_client_auth`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Allow Refresh Token Combined Client Auth" /></Grid>
+                                              <Grid size={{ xs: 12, md: 6 }}>{renderBooleanOverrideField(`idp.oidc.clients.${cIdx}.revoke_refresh_token`, 'Revoke Refresh Token', values.idp?.oidc?.revoke_refresh_token ?? true, 'Leave empty to inherit the global refresh-token rotation setting.')}</Grid>
+                                              <Grid size={{ xs: 12, md: 6 }}><FormControlLabel control={<Switch checked={Boolean(getIn(values, `idp.oidc.clients.${cIdx}.allow_refresh_token_combined_client_auth`))} onChange={(e) => setFieldValue(`idp.oidc.clients.${cIdx}.allow_refresh_token_combined_client_auth`, e.target.checked).then(() => setHasUnsavedChanges(true))} />} label="Allow Refresh Token Combined Client Auth" /></Grid>
 
                                               <Grid size={12}><Typography variant="subtitle2">Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.redirect_uris`, 'Redirect URI')}</Grid>
                                               <Grid size={12}><Typography variant="subtitle2">Post Logout Redirect URIs</Typography>{renderStringArrayEditor(`idp.oidc.clients.${cIdx}.post_logout_redirect_uris`, 'Post Logout Redirect URI')}</Grid>
