@@ -72,10 +72,6 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
 
   // Initialize the user state
   useEffect(() => {
-    // Skip initial auth check on public auth routes to avoid 401 spam on Login/MFA pages
-    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-    const isPublicAuthPath = pathname === '/login' || pathname === '/mfa' || pathname === '/oidc/callback' || pathname === '/oidc/callback/';
-
     // Prevent duplicate checks in React StrictMode (DEV)
     const hasRun = typeof window !== 'undefined' ? (window as any).__userInitRan : false;
     if (hasRun) {
@@ -87,13 +83,6 @@ export const UserProvider = ({ children }: UserProviderProps): React.JSX.Element
 
     const checkAuth = async () => {
       try {
-        if (isPublicAuthPath) {
-          // On login/MFA/OIDC pages, do not ping /api/auth/me pre-auth
-          setIsAuthenticated(false);
-          setUser(null);
-          return;
-        }
-
         const currentUser = await userManager.getCurrentUser();
         setIsAuthenticated(!!currentUser);
         setUser(currentUser);

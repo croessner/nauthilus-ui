@@ -114,11 +114,12 @@ const LoginPage = (): React.JSX.Element => {
 
     if (isValid) {
       try {
-        // Establish the authenticated session first.
-        await authLogin(username, password, rememberMe);
+        const loginResult = await authLogin(username, password, rememberMe);
 
-        // Then hydrate the current user from the session cookie without re-authenticating.
-        await syncSession();
+        // Only hydrate the user context after a fully authenticated login.
+        if (loginResult === 'success') {
+          await syncSession();
+        }
       } catch (error) {
         console.error('Login error:', error);
       }

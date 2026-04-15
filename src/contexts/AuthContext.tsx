@@ -19,7 +19,7 @@ interface AuthState {
 // Define the context type
 interface AuthContextType {
   auth: AuthState;
-  login: (username: string, password: string, rememberMe?: boolean) => Promise<void>;
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<'success' | 'mfaRequired' | 'captchaRequired' | 'error'>;
   loginWithOIDC: () => Promise<void>;
   logout: () => Promise<void>;
   completeMfaLogin: (username: string, rememberMe?: boolean) => Promise<{ success: true } | null>;
@@ -91,10 +91,6 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
 
   // Check if the user is already authenticated on the mount
   useEffect(() => {
-    // Skip initial auth check on public auth routes to avoid 401 spam on Login/MFA pages
-    const pathname = typeof window !== 'undefined' ? window.location.pathname : '';
-    const isPublicAuthPath = pathname === '/login' || pathname === '/mfa' || pathname === '/oidc/callback' || pathname === '/oidc/callback/';
-
     // Prevent duplicate checks in React StrictMode (DEV)
     const hasRun = typeof window !== 'undefined' ? (window as any).__authInitRan : false;
     if (hasRun) {
@@ -106,17 +102,6 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
 
     const checkAuth = async () => {
       try {
-        if (isPublicAuthPath) {
-          // On login/MFA/OIDC pages, do not ping /api/auth/me pre-auth
-          setAuth({
-            isAuthenticated: false,
-            username: null,
-            loading: false,
-            error: null,
-          });
-          return;
-        }
-
         const currentUser = await userManager.getCurrentUser();
         if (currentUser) {
           setAuth({
@@ -184,7 +169,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
                   captchaRequired: undefined,
                   recaptchaSiteKey: undefined,
                 }));
-                return;
+                return 'mfaRequired';
               } else if ('success' in retry) {
                 setAuth({
                   isAuthenticated: true,
@@ -193,7 +178,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
                   error: null,
                 });
                 void initializeProtectedState();
-                return;
+                return 'success';
               }
             }
           }
@@ -205,7 +190,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             captchaRequired: true,
             recaptchaSiteKey: siteKey,
           }));
-          return;
+          return 'captchaRequired';
         }
         // Check if MFA is required
         if ('mfaRequired' in result && result.mfaRequired) {
@@ -225,6 +210,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
 
           // We don't redirect to MFA pages, instead we let the UI components
           // handle the display of MFA verification UI based on the auth state
+          return 'mfaRequired';
         } else if ('success' in result) {
           // Normal authentication success
           setAuth({
@@ -234,7 +220,10 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
             error: null,
           });
           void initializeProtectedState();
+          return 'success';
         }
+
+        return 'error';
       } else {
         console.error('Invalid username or password');
         setAuth(prev => ({
@@ -242,6 +231,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
           loading: false,
           error: 'Invalid username or password',
         }));
+        return 'error';
       }
     } catch (err) {
       setAuth(prev => ({
@@ -250,6 +240,7 @@ export const AuthProvider = ({ children }: AuthProviderProps): React.JSX.Element
         error: 'Invalid username or password',
       }));
       console.error('Login error:', err);
+      return 'error';
     }
   };
 
