@@ -161,8 +161,7 @@ func (h *AuthHandler) Login(ctx *gin.Context) {
 	hasWebAuthn := user.WebAuthnEnabled && len(user.WebAuthnDevices) > 0
 
 	if hasTOTP || hasWebAuthn {
-		clearPendingMFASession(ctx)
-		if err := createPendingMFASession(ctx, user.Username, loginRequest.RememberMe); err != nil {
+		if err := startPendingMFALogin(ctx, h.MongoDB, user.Username, loginRequest.RememberMe); err != nil {
 			slog.Error("Failed to create pending MFA session", "username", user.Username, "error", err)
 			ctx.JSON(http.StatusInternalServerError, models.ErrorResponse{Error: "Failed to start MFA challenge"})
 			return
