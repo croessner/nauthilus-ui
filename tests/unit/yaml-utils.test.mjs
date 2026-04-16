@@ -208,3 +208,49 @@ test('exports frontend security headers object partials even for legacy string i
     assert.equal(securityHeaders?.permissions_policy?.features?.microphone, '()');
   });
 });
+
+test('preserves multiline strings as YAML block scalars in nested flow-prone sections', () => {
+  withYamlFlowLevelEnv(null, () => {
+    const config = {
+      server: {
+        address: '127.0.0.1:8080',
+        instance_name: 'nauthilus',
+        max_concurrent_requests: 100,
+        max_password_history_entries: 10,
+        backends: ['ldap'],
+        redis: {
+          database_number: 0,
+          prefix: 'nt:',
+          master: { address: '127.0.0.1:6379' },
+        },
+      },
+      ldap: {
+        config: {
+          lookup_pool_size: 2,
+          server_uri: 'ldap://127.0.0.1:389',
+        },
+        search: [
+          {
+            protocol: 'imap',
+            cache_name: 'default',
+            base_dn: 'dc=example,dc=org',
+            filter: {
+              user: '(&(objectClass=person)\n(uid=%s))',
+            },
+            mapping: {
+              account_field: 'uid',
+            },
+            attribute: 'mail',
+          },
+        ],
+      },
+    };
+
+    const yamlContent = formatConfigAsYaml(config);
+    const parsed = yaml.load(yamlContent);
+
+    assert.match(yamlContent, /filter:\n\s+user: \|-/);
+    assert.ok(!yamlContent.includes('"(&(objectClass=person)\\n(uid=%s))"'));
+    assert.equal(parsed?.ldap?.search?.[0]?.filter?.user, '(&(objectClass=person)\n(uid=%s))');
+  });
+});
