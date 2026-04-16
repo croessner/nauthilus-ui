@@ -7,6 +7,14 @@ const DEFAULT_YAML_FLOW_LEVEL = 3;
 const MIN_YAML_FLOW_LEVEL = -1;
 const MAX_YAML_FLOW_LEVEL = 10;
 const YAML_FLOW_LEVEL_ENV_KEY = 'REACT_APP_YAML_FLOW_LEVEL';
+const YAML_DUMP_OPTIONS = {
+  indent: 2,
+  lineWidth: -1,
+  noRefs: true,
+  sortKeys: false,
+  forceQuotes: true,
+  quotingType: '"' as const,
+};
 
 const parseYamlFlowLevel = (rawValue: unknown): number | null => {
   if (rawValue === undefined || rawValue === null || rawValue === '') {
@@ -143,6 +151,148 @@ const pruneEmptyStrings = (value: any): any => {
   return value;
 };
 
+const isObjectRecord = (value: unknown): value is Record<string, unknown> => {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+};
+
+const hasMultilineString = (value: unknown): boolean => {
+  if (typeof value === 'string') {
+    return value.includes('\n');
+  }
+
+  if (Array.isArray(value)) {
+    return value.some((entry) => hasMultilineString(entry));
+  }
+
+  if (isObjectRecord(value)) {
+    return Object.values(value).some((entry) => hasMultilineString(entry));
+  }
+
+  return false;
+};
+
+const dumpInlineYaml = (value: unknown): string => {
+  return yaml.dump(value, {
+    ...YAML_DUMP_OPTIONS,
+    flowLevel: 0,
+  }).trimEnd();
+};
+
+const dumpScalarYaml = (value: unknown): string => {
+  return yaml.dump(value, {
+    ...YAML_DUMP_OPTIONS,
+    flowLevel: -1,
+  }).trimEnd();
+};
+
+const dumpMultilineScalar = (value: string): string[] => {
+  const dumped = yaml.dump(value, {
+    indent: 2,
+    lineWidth: -1,
+    noRefs: true,
+    sortKeys: false,
+    forceQuotes: false,
+    quotingType: '"',
+  }).trimEnd();
+
+  const [header, ...content] = dumped.split('\n');
+  return [header, ...content.map((line) => (line.startsWith('  ') ? line.slice(2) : line))];
+};
+
+const shouldUseFlowCollection = (value: unknown, depth: number, yamlFlowLevel: number): boolean => {
+  if (yamlFlowLevel < 0) {
+    return false;
+  }
+
+  return depth >= yamlFlowLevel && !hasMultilineString(value);
+};
+
+const renderYamlCollection = (value: unknown, depth: number, indentSpaces: number, yamlFlowLevel: number): string => {
+  if (Array.isArray(value)) {
+    return renderYamlSequence(value, depth, indentSpaces, yamlFlowLevel);
+  }
+
+  return renderYamlMapping(value as Record<string, unknown>, depth, indentSpaces, yamlFlowLevel);
+};
+
+const renderYamlMapping = (
+  value: Record<string, unknown>,
+  depth: number,
+  indentSpaces: number,
+  yamlFlowLevel: number,
+): string => {
+  const lines: string[] = [];
+
+  Object.entries(value).forEach(([key, child]) => {
+    const prefix = `${' '.repeat(indentSpaces)}${key}:`;
+
+    if (typeof child === 'string' && child.includes('\n')) {
+      const [header, ...content] = dumpMultilineScalar(child);
+      lines.push(`${prefix} ${header}`);
+      content.forEach((line) => {
+        lines.push(`${' '.repeat(indentSpaces + 2)}${line}`);
+      });
+      return;
+    }
+
+    if (Array.isArray(child) || isObjectRecord(child)) {
+      if (shouldUseFlowCollection(child, depth + 1, yamlFlowLevel)) {
+        lines.push(`${prefix} ${dumpInlineYaml(child)}`);
+        return;
+      }
+
+      lines.push(prefix);
+      lines.push(renderYamlCollection(child, depth + 1, indentSpaces + 2, yamlFlowLevel));
+      return;
+    }
+
+    lines.push(`${prefix} ${dumpScalarYaml(child)}`);
+  });
+
+  return lines.join('\n');
+};
+
+const renderYamlSequence = (
+  value: unknown[],
+  depth: number,
+  indentSpaces: number,
+  yamlFlowLevel: number,
+): string => {
+  const lines: string[] = [];
+
+  value.forEach((entry) => {
+    const prefix = `${' '.repeat(indentSpaces)}-`;
+
+    if (typeof entry === 'string' && entry.includes('\n')) {
+      const [header, ...content] = dumpMultilineScalar(entry);
+      lines.push(`${prefix} ${header}`);
+      content.forEach((line) => {
+        lines.push(`${' '.repeat(indentSpaces + 2)}${line}`);
+      });
+      return;
+    }
+
+    if (Array.isArray(entry) || isObjectRecord(entry)) {
+      if (shouldUseFlowCollection(entry, depth + 1, yamlFlowLevel)) {
+        lines.push(`${prefix} ${dumpInlineYaml(entry)}`);
+        return;
+      }
+
+      const nested = renderYamlCollection(entry, depth + 1, indentSpaces + 2, yamlFlowLevel).split('\n');
+      const nestedIndent = ' '.repeat(indentSpaces + 2);
+      const [firstLine, ...remainingLines] = nested;
+
+      lines.push(`${prefix} ${firstLine.startsWith(nestedIndent) ? firstLine.slice(nestedIndent.length) : firstLine}`);
+      lines.push(...remainingLines);
+      return;
+    }
+
+    lines.push(`${prefix} ${dumpScalarYaml(entry)}`);
+  });
+
+  return lines.join('\n');
+};
+
 export const orderTopLevelConfigKeys = (config: Record<string, any>): string[] => {
   const fixedKeys = ['server', 'backend_server_monitoring', 'brute_force', 'idp', 'lua', 'ldap'];
   const featureKeys = Object.keys(config)
@@ -269,15 +419,7 @@ export const formatConfigAsYaml = (config: NauthilusConfig): string => {
   });
 
   // --- Dump to YAML ---
-  const yamlString = yaml.dump(sortedConfig, {
-    indent: 2,
-    flowLevel: yamlFlowLevel,
-    lineWidth: -1, // Disable line wrapping
-    noRefs: true,  // Prevent aliases/anchors
-    sortKeys: false, // We handled sorting manually
-    forceQuotes: true, // Keep all string values explicitly quoted
-    quotingType: '"'
-  });
+  const yamlString = renderYamlMapping(sortedConfig, 0, 0, yamlFlowLevel);
 
   // --- Post-process: Insert empty lines between sections and second-level elements ---
   const lines = yamlString.split('\n');
