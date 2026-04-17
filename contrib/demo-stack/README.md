@@ -2,9 +2,9 @@
 
 This stack runs a full demo environment for `nauthilus-ui` with:
 
-- `nauthilus-ui` (`ghcr.io/croessner/nauthilus-ui:v2.1.0` by default)
+- `nauthilus-ui` (`ghcr.io/croessner/nauthilus-ui:v2.1.3` by default)
 - `mongodb` (UI data store)
-- `nauthilus:v2.1.0` (CSV-backed test backend)
+- `nauthilus:v2.1.3` (CSV-backed test backend)
 - `valkey`
 - `clickhouse` (LTS server + schema init job)
 - `tempo` (trace storage + OTLP ingest)
@@ -25,17 +25,10 @@ From repository root:
 docker compose -f contrib/demo-stack/docker-compose.yml up -d
 ```
 
-`nauthilus-ui` image tag is configurable via `NAUTHILUS_UI_IMAGE_TAG` (default: `v2.1.2`):
+`nauthilus-ui` image tag is configurable via `NAUTHILUS_UI_IMAGE_TAG` (default: `v2.1.3`):
 
 ```bash
-NAUTHILUS_UI_IMAGE_TAG=v2.1.2 docker compose -f contrib/demo-stack/docker-compose.yml up -d
-```
-
-Optional local build for `nauthilus-ui`:
-
-```bash
-docker compose -f contrib/demo-stack/docker-compose.yml build nauthilus-ui
-docker compose -f contrib/demo-stack/docker-compose.yml up -d
+NAUTHILUS_UI_IMAGE_TAG=v2.1.3 docker compose -f contrib/demo-stack/docker-compose.yml up -d
 ```
 
 Check bootstrap logs once:
