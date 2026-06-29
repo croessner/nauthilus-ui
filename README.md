@@ -2,10 +2,19 @@
 
 Web-based configuration and operations UI for Nauthilus.
 
+## Maintenance Status
+
+This repository is no longer maintained.
+
+Nauthilus UI, the React-based administration application for Nauthilus, has been discontinued. The repository is kept for historical reference only and is expected to be archived/read-only. No new features, bug fixes, security fixes, releases, or support are planned.
+
+This notice applies only to this UI repository. It does not announce the discontinuation of Nauthilus itself.
+
 Nauthilus UI lets administrators manage Nauthilus profiles and related runtime settings through a browser instead of editing YAML by hand. The project consists of a React frontend and a Go server that provides the API, authentication, persistence, and production asset delivery.
 
 ## Table of Contents
 
+- [Maintenance Status](#maintenance-status)
 - [User Documentation](#user-documentation)
   - [What This Project Is](#what-this-project-is)
   - [Core Capabilities](#core-capabilities)
